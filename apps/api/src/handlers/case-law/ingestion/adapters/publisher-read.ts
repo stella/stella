@@ -102,7 +102,15 @@ export type PublisherReadInit = PublisherFetchInit & {
   refusalMode?: "stop-refusal" | undefined;
   /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
   refusalScope?: ReadRefusalScope | undefined;
+  /**
+   * When true (with `redirect: "manual"`), 301/302/303/307/308 answers are
+   * returned as `present` so callers can inspect and validate the `Location`
+   * header instead of classifying the redirect as `unavailable`.
+   */
+  acceptRedirect?: boolean | undefined;
 };
+
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 type GatedReadOptions = {
   /** The request, already behind its publisher's gate. */
@@ -110,6 +118,7 @@ type GatedReadOptions = {
   signal: AbortSignal | undefined;
   /** What a 401, 403 or 451 answer withholds. */
   refusalScope: ReadRefusalScope;
+  acceptRedirect?: boolean | undefined;
 };
 
 /**
@@ -121,12 +130,16 @@ const readGatedResponse = async ({
   request,
   signal,
   refusalScope,
+  acceptRedirect,
 }: GatedReadOptions): Promise<ReadOutcome<Response>> => {
   const fetched = await readStep(request, signal);
   if (Result.isError(fetched)) {
     return fetched.error;
   }
   const response = fetched.value;
+  if (acceptRedirect === true && REDIRECT_STATUSES.has(response.status)) {
+    return readPresent(response);
+  }
   const outcome = readOutcomeOfStatus(
     response.status,
     refusalScope,
@@ -222,7 +235,12 @@ export const readBodyText = async (
 
 const sharedGateRead = (
   url: string | URL,
-  { refusalScope = "document", refusalMode, ...init }: PublisherReadInit,
+  {
+    acceptRedirect,
+    refusalScope = "document",
+    refusalMode,
+    ...init
+  }: PublisherReadInit,
 ): GatedReadOptions => ({
   request: async () =>
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher, readPublisherBytes or readPublisherText is called
@@ -232,6 +250,7 @@ const sharedGateRead = (
     }),
   signal: init.signal ?? undefined,
   refusalScope,
+  acceptRedirect,
 });
 
 /** One publisher request, typed by what its answer established. */

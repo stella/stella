@@ -18,15 +18,15 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import {
-  fetchAtFindokWithRetry,
   FINDOK_REQUEST_INTERVAL_MS,
+  readAtFindok,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PublisherPageError,
   validatePublisherPage,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   listFindokDocumentFields,
@@ -187,13 +187,13 @@ type CrawlCursor =
 
 export type AtFindokDependencies = {
   now: () => Date;
-  request: typeof fetchWithRetry;
+  request: typeof readAtFindok;
   sleep: (ms: number) => Promise<void>;
 };
 
 const DEFAULT_DEPENDENCIES: AtFindokDependencies = {
   now: () => new Date(),
-  request: fetchAtFindokWithRetry,
+  request: readAtFindok,
   sleep: Bun.sleep,
 };
 
@@ -447,27 +447,40 @@ const createManifestLoader = (
         publisherRequest: PUBLISHER_REQUEST.NONE,
       };
     }
-    const response = await dependencies.request(
+    const outcome = await dependencies.request(
       COLLECTIONS[collection].manifestUrl,
       {
         headers: { Accept: "application/gzip, application/json" },
         redirect: "error",
-      },
-      {
         fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.AT_FINDOK,
-        baseDelayMs: FINDOK_REQUEST_INTERVAL_MS,
         signal,
         timeoutMs: ADAPTER_TIMEOUT.LIST,
       },
     );
-    if (!response.ok || response.body === null) {
-      throw new AdapterFetchError({
-        message: `Findok manifest request failed: ${response.status}`,
-        adapterKey: ADAPTER_KEYS.AT_FINDOK,
-        cursor: null,
-        httpStatus: response.status,
-      });
+    if (outcome.type !== "present") {
+      return await Promise.reject(
+        unreadPublisherError({
+          outcome,
+          adapterKey: ADAPTER_KEYS.AT_FINDOK,
+          cursor: null,
+          message: "Findok manifest request failed",
+        }),
+      );
+    }
+    const response = outcome.value;
+    if (response.body === null) {
+      return await Promise.reject(
+        unreadPublisherError({
+          outcome: {
+            type: "unavailable",
+            cause: { kind: "empty-body", status: response.status },
+          },
+          adapterKey: ADAPTER_KEYS.AT_FINDOK,
+          cursor: null,
+          message: "Findok manifest request failed",
+        }),
+      );
     }
     const responseBytes = await readStreamBounded(
       response.body,
@@ -822,29 +835,56 @@ const buildDecision = async ({
     return listing;
   }
   await dependencies.sleep(FINDOK_REQUEST_INTERVAL_MS);
-  const response = await dependencies.request(
-    artifactUrl(item.pathZip),
-    { headers: { Accept: "application/zip" }, redirect: "error" },
-    {
-      fetchStage: "document",
-      adapterKey: ADAPTER_KEYS.AT_FINDOK,
-      baseDelayMs: FINDOK_REQUEST_INTERVAL_MS,
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-    },
-  );
-  if (response.status === 404 || response.status === 410) {
-    return buildListingOnly(payload, `detail-http-${response.status}`);
+  const outcome = await dependencies.request(artifactUrl(item.pathZip), {
+    headers: { Accept: "application/zip" },
+    redirect: "error",
+    fetchStage: "document",
+    adapterKey: ADAPTER_KEYS.AT_FINDOK,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+  });
+  if (outcome.type === "absent") {
+    const status = outcome.evidence === "http-410" ? 410 : 404;
+    return buildListingOnly(payload, `detail-http-${status}`);
   }
-  if (!response.ok || response.body === null) {
-    throw new AdapterFetchError({
-      message: `Findok detail request failed: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.AT_FINDOK,
-      cursor,
-      httpStatus: response.status,
-    });
+  if (outcome.type !== "present") {
+    return await Promise.reject(
+      unreadPublisherError({
+        outcome,
+        adapterKey: ADAPTER_KEYS.AT_FINDOK,
+        cursor,
+        message: "Findok detail request failed",
+      }),
+    );
+  }
+  const response = outcome.value;
+  if (response.body === null) {
+    return await Promise.reject(
+      unreadPublisherError({
+        outcome: {
+          type: "unavailable",
+          cause: { kind: "empty-body", status: response.status },
+        },
+        adapterKey: ADAPTER_KEYS.AT_FINDOK,
+        cursor,
+        message: "Findok detail request failed",
+      }),
+    );
   }
   const compressed = await readStreamBounded(response.body, MAX_ARCHIVE_BYTES);
+  if (compressed.byteLength === 0) {
+    return await Promise.reject(
+      unreadPublisherError({
+        outcome: {
+          type: "unavailable",
+          cause: { kind: "empty-body", status: response.status },
+        },
+        adapterKey: ADAPTER_KEYS.AT_FINDOK,
+        cursor,
+        message: "Findok detail request failed",
+      }),
+    );
+  }
   const validatedPage = validatePublisherPage({
     body: compressed,
     headers: response.headers,
@@ -1555,9 +1595,14 @@ const createFindokPageFetcher =
               if (publisherRequest !== PUBLISHER_REQUEST.ANSWERED) {
                 publisherRequest = PUBLISHER_REQUEST.FAILED;
               }
-              const response = await dependencies.request(...args);
-              publisherRequest = PUBLISHER_REQUEST.ANSWERED;
-              return response;
+              const outcome = await dependencies.request(...args);
+              if (!(
+                outcome.type === "unavailable" &&
+                outcome.cause.kind === "thrown"
+              )) {
+                publisherRequest = PUBLISHER_REQUEST.ANSWERED;
+              }
+              return outcome;
             },
           };
           if (

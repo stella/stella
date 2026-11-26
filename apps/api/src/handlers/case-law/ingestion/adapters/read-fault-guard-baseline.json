@@ -5,7 +5,6 @@
     "at-bks::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "at-bvwg::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "at-courts::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
-    "at-findok::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "at-lvwg::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "at-ubas::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "at-umse::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
@@ -19,8 +18,6 @@
     "pl-kio::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-kis::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-ncourt::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
-    "pl-nsa::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
-    "pl-sn::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-tk::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-uodo::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-uokik::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven."
