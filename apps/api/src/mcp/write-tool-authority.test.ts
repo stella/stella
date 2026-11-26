@@ -716,6 +716,7 @@ describe("write tool account access", () => {
       "create_organization:account-control",
       "fill_template:standard",
       "mint_web_handoff:standard",
+      "reformat_into_template:standard",
       "remove_matter_member:standard",
       "save_filled_template:standard",
       "set_practice_jurisdictions:standard",
