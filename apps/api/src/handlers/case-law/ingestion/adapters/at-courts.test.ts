@@ -966,15 +966,7 @@ describe("Austrian RIS typed publisher read outcomes", () => {
       readText: faulted.readText,
       sleep: async () => {},
     });
-    const faultedDecision = (await faultedAdapter.fetchPage(null, {})).unwrap()
-      .decisions[0];
-    expect(faultedDecision?.isListingOnly).not.toBe(true);
-    expect(faultedDecision?.metadata["headnotes"]).toEqual([]);
-    expect(faultedDecision?.metadata["headnotesReadOutcome"]).toEqual({
-      type: "unavailable",
-      scope: "part",
-      cause: { kind: "status", status: 500 },
-      consecutiveCycles: 1,
-    });
+    const faultedResult = await faultedAdapter.fetchPage(null, {});
+    expect(faultedResult.isErr()).toBe(true);
   });
 });

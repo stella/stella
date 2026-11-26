@@ -48,7 +48,6 @@ import {
   READ_OUTCOME_METADATA_KEY,
   type ReadOutcome,
   type StoredReadOutcome,
-  storedReadUnavailable,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -1233,12 +1232,14 @@ const buildDecision = async ({
         headnotesReadOutcome = headnotes;
         break;
       case "unavailable":
-        headnotesReadOutcome = storedReadUnavailable({
-          cause: headnotes.cause,
-          scope: "part",
-          consecutiveCycles: 1,
-        });
-        break;
+        return await Promise.reject(
+          unreadPublisherError({
+            outcome: headnotes,
+            message: "RIS headnote listing request failed",
+            adapterKey: source.key,
+            cursor,
+          }),
+        );
       default:
         headnotes satisfies never;
         return panic(
