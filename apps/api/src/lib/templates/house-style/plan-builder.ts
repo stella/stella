@@ -45,6 +45,7 @@ import type {
   LabelEntry,
   LabelIndex,
 } from "@/api/lib/templates/house-style/label-index";
+import { readLetterHead } from "@/api/lib/templates/house-style/letter-head";
 import {
   levelsInLanguage,
   numberPlacements,
@@ -257,6 +258,15 @@ export type FormattingNoteItem =
    *  text of table cells. The template's text styles set every line at the
    *  left. */
   | { kind: "alignmentsKept"; blocks: number }
+  /** The letterhead the template keeps: `filled` cells took the letter's
+   *  own addressee, date or reference; `left` cells still show the
+   *  template's sample text, because the letter states nothing for them,
+   *  and have to be filled in by hand. */
+  | {
+      kind: "letterheadFilled";
+      filled: ("addressee" | "date" | "reference")[];
+      left: ("addressee" | "date" | "reference")[];
+    }
   /** `blocks` paragraphs whose number the source types with a blank
    *  between its parts (`1. 1.`) are numbered by the list, which prints the
    *  number closed up (`1.1.`). */
@@ -417,6 +427,9 @@ type Context = {
   /** Blocks placed under a role the template has no style for. */
   stylelessRoles: Map<HouseStyleRole, number>;
   items: FormattingNoteItem[];
+  /** What goes into the template's letterhead; null without one or
+   *  without a letter. */
+  headerFill: HeaderFill | null;
 };
 
 type KeptSections = {
@@ -1981,6 +1994,13 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       region: "keepBefore",
       blockIds: keepBefore,
     });
+    for (const slot of context.headerFill?.slots ?? []) {
+      body.push({ kind: "slot", ...slot });
+    }
+    if (context.headerFill !== null) {
+      const { filled, left } = context.headerFill;
+      items.push({ kind: "letterheadFilled", filled, left });
+    }
   }
   const opensBody = (role: HouseStyleRole): boolean =>
     role === "articleHeading" ||
@@ -2036,6 +2056,90 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
   }
   return { body, placedCount, contentsKept };
 };
+
+type HeaderField = "addressee" | "date" | "reference";
+
+type HeaderFill = {
+  slots: { templateBlockId: string; sourceBlockIds: string[] }[];
+  /** Sample lines of the addressee the letter has no line for. */
+  emptied: string[];
+  filled: HeaderField[];
+  /** Cells of the letterhead the letter states nothing for: they keep the
+   *  template's sample text. */
+  left: HeaderField[];
+};
+
+/**
+ * Puts the head of a letter into the letterhead the template keeps: each
+ * line of the addressee into a sample line, further lines into the last
+ * one, the date and the reference into their paragraphs. Sample lines of
+ * the addressee the letter does not need are emptied. A cell the letter
+ * states nothing for keeps the template's sample and is named in the note.
+ * Null when the template keeps no letterhead or the document is no letter.
+ */
+const fillHeader = ({ profile, topLevel }: Context): HeaderFill | null => {
+  const { header } = profile;
+  if (header === undefined) {
+    return null;
+  }
+  const head = readLetterHead(topLevel);
+  const fill: HeaderFill = { slots: [], emptied: [], filled: [], left: [] };
+  const cells = header.addressee;
+  const lines = head?.addressee ?? [];
+  if (cells.length > 0 && lines.length > 0) {
+    for (const [position, templateBlockId] of cells.entries()) {
+      const last = position === cells.length - 1;
+      const sourceBlockIds = last
+        ? lines.slice(position)
+        : lines.slice(position, position + 1);
+      if (sourceBlockIds.length === 0) {
+        fill.emptied.push(templateBlockId);
+      } else {
+        fill.slots.push({ templateBlockId, sourceBlockIds });
+      }
+    }
+    fill.filled.push("addressee");
+  } else if (cells.length > 0) {
+    fill.left.push("addressee");
+  }
+  for (const field of ["date", "reference"] as const) {
+    const templateBlockId = header[field];
+    const line = head?.[field] ?? null;
+    if (templateBlockId === null) {
+      continue;
+    }
+    if (line === null) {
+      fill.left.push(field);
+    } else {
+      fill.slots.push({ templateBlockId, sourceBlockIds: [line] });
+      fill.filled.push(field);
+    }
+  }
+  return fill;
+};
+
+/**
+ * A letter's own head goes into the template's letterhead; its lines are
+ * then no paragraphs of the body.
+ */
+const takeHeaderLines = (context: Context): void => {
+  context.headerFill = fillHeader(context);
+  if (context.headerFill === null) {
+    return;
+  }
+  const slotted = new Set(
+    context.headerFill.slots.flatMap(({ sourceBlockIds }) => sourceBlockIds),
+  );
+  context.topLevel = context.topLevel.filter(({ id }) => !slotted.has(id));
+};
+
+/** The plan option that empties sample lines of the letterhead. */
+const emptiedOf = ({
+  headerFill,
+}: Context): Pick<TemplatePlan, "emptyTemplateBlockIds"> =>
+  headerFill === null || headerFill.emptied.length === 0
+    ? {}
+    : { emptyTemplateBlockIds: headerFill.emptied };
 
 const JUSTIFIED: ReadonlySet<string> = new Set(["both", "distribute"]);
 
@@ -2769,7 +2873,9 @@ export const buildTemplatePlan = ({
     },
     stylelessRoles: new Map(),
     items: [],
+    headerFill: null,
   };
+  takeHeaderLines(context);
 
   context.keptSections = sectionsToKeep(context);
   const placed = placeParagraphs(context);
@@ -2856,6 +2962,7 @@ export const buildTemplatePlan = ({
       : { trackedChanges: manifest.trackedChangesResolved.view }),
     body,
     omit: [...placed.omitted].map(([blockId, reason]) => ({ blockId, reason })),
+    ...emptiedOf(context),
     ...(patches.length === 0 ? {} : { numberingPatches: patches }),
     ...(marks.references.length === 0 ? {} : { references: marks.references }),
     ...(marks.highlights.length === 0 ? {} : { highlights: marks.highlights }),

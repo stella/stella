@@ -246,6 +246,84 @@ describe("buildTemplatePlan, a number typed with a blank between its parts", () 
   });
 });
 
+describe("buildTemplatePlan, a letter on a template with a letterhead", () => {
+  const letterhead = {
+    ...PROFILE,
+    regions: { ...PROFILE.regions, keepBefore: ["t90"] },
+    header: {
+      addressee: ["h1", "h2", "h3", "h4"],
+      date: "h5",
+      reference: "h6",
+    },
+  };
+  const slotsOf = (plan: TemplatePlan) =>
+    plan.body.flatMap((item) =>
+      item.kind === "slot"
+        ? [[item.templateBlockId, item.sourceBlockIds] as const]
+        : [],
+    );
+
+  test("the addressee, the date and the reference go into the letterhead's cells", () => {
+    const letter = manifestOf([
+      "Alfa Dodávky s.r.o.",
+      "Dlouhá 12",
+      "110 00 Praha 1",
+      "V Brně dne 6. 1. 2026",
+      "Vážená paní,",
+      "obracíme se na Vás ve věci neuhrazené faktury.",
+    ]);
+    const { plan, note } = build(letter, "keepSource", { profile: letterhead });
+    // Three lines for four sample lines: the fourth is emptied. No
+    // reference in the letter: that cell keeps the template's sample.
+    expect(slotsOf(plan)).toEqual([
+      ["h1", ["p0"]],
+      ["h2", ["p1"]],
+      ["h3", ["p2"]],
+      ["h5", ["p3"]],
+    ]);
+    expect(plan.emptyTemplateBlockIds).toEqual(["h4"]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual([
+      "p4",
+      "p5",
+    ]);
+    expect(note.items).toContainEqual({
+      kind: "letterheadFilled",
+      filled: ["addressee", "date"],
+      left: ["reference"],
+    });
+  });
+
+  test("more lines than sample lines end up in the last one; a document that is no letter leaves every cell", () => {
+    const long = manifestOf([
+      "Beta Holdings Ltd",
+      "Legal Department",
+      "Attn. Ms Jane Roe",
+      "Tower House",
+      "1 Long Street",
+      "London SW1A 1AA",
+      "Dear Ms Roe,",
+      "We write further to your letter.",
+    ]);
+    expect(
+      slotsOf(build(long, "keepSource", { profile: letterhead }).plan),
+    ).toEqual([
+      ["h1", ["p0"]],
+      ["h2", ["p1"]],
+      ["h3", ["p2"]],
+      ["h4", ["p3", "p4", "p5"]],
+    ]);
+    const memo = manifestOf(["Shrnutí", "Text bez oslovení a bez adresy."]);
+    const built = build(memo, "keepSource", { profile: letterhead });
+    expect(slotsOf(built.plan)).toEqual([]);
+    expect(built.plan).not.toHaveProperty("emptyTemplateBlockIds");
+    expect(built.note.items).toContainEqual({
+      kind: "letterheadFilled",
+      filled: [],
+      left: ["addressee", "date", "reference"],
+    });
+  });
+});
+
 describe("buildTemplatePlan, headings without a number", () => {
   const manifest = manifestOf([
     "SMLOUVA",

@@ -139,6 +139,44 @@ describe("inferTemplateProfile", () => {
     ).toBeNull();
   });
 
+  test("reads the cells of a kept letterhead: the addressee's sample lines, the date, the file number", () => {
+    const template = contractTemplate({
+      front: [
+        { id: "t90", cells: ["p91", "p95"] },
+        { id: "p91", text: "Company", styleId: "Normal" },
+        { id: "p92", text: "Street 1", styleId: "Normal" },
+        { id: "p93", text: "City", styleId: "Normal" },
+        { id: "p94", text: "File number:", styleId: "Normal" },
+        { id: "p95", text: "4 September 2026", styleId: "Normal" },
+      ],
+    });
+    // The first cell holds the address and the file number, the second
+    // the date.
+    const blocks = template.blocks.map((block) =>
+      block.id === "t90"
+        ? {
+            ...block,
+            cells: [
+              { row: 0, col: 0, blockIds: ["p91", "p92", "p93", "p94"] },
+              { row: 0, col: 1, blockIds: ["p95"] },
+            ],
+          }
+        : block,
+    );
+    const profile = inferTemplateProfile({ ...template, blocks });
+    expect(profile.regions.keepBefore).toContain("t90");
+    expect(profile.header).toEqual({
+      addressee: ["p91", "p92", "p93"],
+      date: "p95",
+      reference: "p94",
+    });
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    // A template that keeps no table in front has no such cells.
+    expect(inferTemplateProfile(contractTemplate()).header).toBeUndefined();
+  });
+
   test("reads the style of a heading without a number: named for the preamble, in no list", () => {
     const template = contractTemplate();
     // The fixture's only style of that name numbers its recitals.

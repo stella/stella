@@ -374,6 +374,9 @@ export type TemplatePlan = {
   /** The section the body ends with, when its page is another than the
    *  template's. */
   lastSection?: TemplatePlanSection;
+  /** Paragraphs inside kept template tables written without their text.
+   *  An engine that does not know the option leaves them as they are. */
+  emptyTemplateBlockIds?: string[];
   /** The view of a source with tracked changes the plan is made for. The
    *  output carries no revision. */
   trackedChanges?: TrackedChangesView;

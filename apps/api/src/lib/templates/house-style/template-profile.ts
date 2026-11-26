@@ -138,6 +138,11 @@ export type TemplateProfile = {
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
   tableText?: { styleId: string };
+  /** The cells of a kept letterhead that a letter's own head goes into:
+   *  the sample lines of the addressee, the paragraph that shows the date,
+   *  the one that names the file. Absent when the template keeps no such
+   *  table, and from a profile made before this was read. */
+  header?: TemplateHeader;
   fields: {
     /** Kinds replaced by their shown text: they prompt, or change on open. */
     freezeKinds: string[];
@@ -727,6 +732,62 @@ const readStructure = (blocks: readonly DocxBlock[]): Structure => {
   };
 };
 
+export type TemplateHeader = {
+  /** The sample lines of the addressee, in order: block ids. */
+  addressee: string[];
+  date: string | null;
+  reference: string | null;
+};
+
+const HEADER_REFERENCE =
+  /^(?:file (?:no|number)|reference|our ref|č\.[ \u00A0]?j\.|sp\.[ \u00A0]?zn\.|spisová značka|naše značka|aktenzeichen|unser zeichen)/iu;
+const HEADER_DATE =
+  /^\d{1,2}\.?[ \u00A0]+\p{L}{3,}[ \u00A0]+\d{4}$|^\d{1,2}\.[ \u00A0]?\d{1,2}\.[ \u00A0]?\d{4}$|^\p{L}{3,}[ \u00A0]+\d{1,2},[ \u00A0]+\d{4}$/u;
+const HEADER_ADDRESSEE_MAX = 6;
+
+/**
+ * Reads the letterhead a template keeps: the first kept table. The lines
+ * its first cell opens with, up to the first line that is a label
+ * (`Via post / E-mail:`), are the sample of an addressee; a paragraph that
+ * is a date and one that names the file are the cells for those.
+ */
+const inferHeader = (
+  { topLevel, nestedOf }: Structure,
+  keepBefore: readonly string[],
+): TemplateHeader | undefined => {
+  const table = topLevel.find(
+    ({ id, kind }) => kind === "table" && keepBefore.includes(id),
+  );
+  const nested = table === undefined ? undefined : nestedOf.get(table.id);
+  if (table === undefined || nested === undefined) {
+    return undefined;
+  }
+  const shown = nested.filter(
+    ({ kind, text }) => kind === "paragraph" && text.trim() !== "",
+  );
+  const firstCell = new Set(table.cells?.at(0)?.blockIds);
+  const opening = shown.filter(({ id }) => firstCell.has(id));
+  const label = opening.findIndex(({ text }) => text.trim().endsWith(":"));
+  const sample = label === -1 ? opening : opening.slice(0, label);
+  const addressee =
+    sample.length >= 2 && sample.length <= HEADER_ADDRESSEE_MAX
+      ? sample.map(({ id }) => id)
+      : [];
+  const date = shown.find(({ text }) => HEADER_DATE.test(text.trim()));
+  const reference = shown.find(({ text }) =>
+    HEADER_REFERENCE.test(text.trim()),
+  );
+  // A header of label and value cells (a memo's `From:`, `To:`) has no
+  // sample of an addressee and no date of its own: its labels stay.
+  return addressee.length === 0 && date === undefined
+    ? undefined
+    : {
+        addressee,
+        date: date?.id ?? null,
+        reference: reference?.id ?? null,
+      };
+};
+
 type RegionOptions = {
   inspection: TemplateInspection;
   structure: Structure;
@@ -1220,6 +1281,8 @@ export const inferTemplateProfile = (
       ),
     ),
   );
+  const regions = inferRegions({ inspection, structure, roles });
+  const header = inferHeader(structure, regions.regions.keepBefore);
   const pageBeforeArticle = startsPageBeforeArticle(
     structure.topLevel,
     roles.articleHeading,
@@ -1235,7 +1298,7 @@ export const inferTemplateProfile = (
     roles,
     spareLevels,
     markLevels,
-    ...inferRegions({ inspection, structure, roles }),
+    ...regions,
     headings: {
       article: joinOf(
         samplesOf(roles.articleHeading).filter(({ label }) => label !== null),
@@ -1246,6 +1309,7 @@ export const inferTemplateProfile = (
       ? {}
       : { frontMatterEndsPage: pageBeforeArticle }),
     ...(tableText === undefined ? {} : { tableText }),
+    ...(header === undefined ? {} : { header }),
     fields: {
       freezeKinds: kinds
         .filter((kind) => VOLATILE_FIELD_KINDS.has(kind))
@@ -1534,6 +1598,13 @@ const profileSchema = v.strictObject({
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
   frontMatterEndsPage: v.exactOptional(v.boolean()),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
+  header: v.exactOptional(
+    v.strictObject({
+      addressee: v.pipe(v.array(idSchema), v.maxLength(HEADER_ADDRESSEE_MAX)),
+      date: v.nullable(idSchema),
+      reference: v.nullable(idSchema),
+    }),
+  ),
   fields: v.strictObject({
     freezeKinds: fieldKindsSchema,
     liveKinds: fieldKindsSchema,
