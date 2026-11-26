@@ -165,10 +165,44 @@ export type ReformatNote = {
 
 type NoteSource = FormattingNote["items"][number];
 
+/** The note items this layer words. The formatter grows its note; a kind it
+ *  adds reaches the caller as `other` with its name until it is read here. */
+const KNOWN_NOTE_KINDS = [
+  "referenceUnlinked",
+  "referenceSuspected",
+  "labelKeptAsText",
+  "labelConvertedToText",
+  "roleWithoutStyle",
+  "articlesSetAsText",
+  "pageStartNotKept",
+  "pageStartMoved",
+  "sectionLayoutNotKept",
+  "lineBreakSpacingKept",
+  "invisibleEffectsRemoved",
+  "templateBlocksKept",
+] as const satisfies readonly NoteSource["kind"][];
+
+type KnownNoteSource = Extract<
+  NoteSource,
+  { kind: (typeof KNOWN_NOTE_KINDS)[number] }
+>;
+
+const isKnownNoteSource = (item: NoteSource): item is KnownNoteSource =>
+  KNOWN_NOTE_KINDS.some((kind) => kind === item.kind);
+
+/** A finding this layer does not word yet, by its name and block. */
+const unreadNoteItem = (item: { kind: string }): ReformatNoteItem =>
+  "blockId" in item && typeof item.blockId === "string"
+    ? { kind: "other", reason: item.kind, blockId: item.blockId }
+    : { kind: "other", reason: item.kind };
+
 const noteItemOf = (
   item: NoteSource,
   blocks: ReadonlyMap<string, DocxBlock>,
 ): ReformatNoteItem => {
+  if (!isKnownNoteSource(item)) {
+    return unreadNoteItem(item);
+  }
   const textOf = (blockId: string, start?: number, end?: number) => {
     const block = blocks.get(blockId);
     if (block === undefined) {

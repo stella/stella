@@ -33,6 +33,9 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
   "line_break_spacing_kept",
   "invisible_effects_removed",
   "template_blocks_kept",
+  /** A finding of the formatter this tool does not word yet; `reason`
+   *  names it. */
+  "other",
 ] as const;
 
 export const REFORMAT_TEMPLATE_HEALTH_KINDS = [
