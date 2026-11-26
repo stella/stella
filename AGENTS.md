@@ -323,7 +323,9 @@ other release architectures, and the mobile, Windows, and desktop Rust checks
 run only in the merge queue.
 `--all` checks every package instead of only those affected vs `origin/main`.
 For fast local pre-push loops on narrow edits, `bun run check:pr-guards` runs
-the path-scoped policy, snapshot, and rollout guards.
+the path-scoped policy, snapshot, and rollout guards, and
+`bun run typecheck:changed` runs file-scoped typechecking on modified TypeScript
+files.
 
 The scoped test run is filtered by `scripts/test-scope.ts`, not `--affected`: a
 suite that reads files outside its own package declares them as
