@@ -272,10 +272,15 @@ const subscribeClock = (intervalMs: number) => {
  * The current time in epoch milliseconds, redrawn every `intervalMs` while the
  * component is mounted: for elapsed times and relative timestamps. Replaces
  * an effect that sets "now" on mount and on every tick.
+ *
+ * A server-rendered component that shows the time passes `serverNow`, the
+ * timestamp the server rendered with (serialized into the page): the server
+ * render and hydration both use it, so they match, and the live clock takes
+ * over once the component subscribes.
  */
-export const useNow = (intervalMs: number): number =>
+export const useNow = (intervalMs: number, serverNow?: number): number =>
   useSyncExternalStore(
     subscribeClock(intervalMs),
     () => readClock(intervalMs),
-    () => readClock(intervalMs),
+    () => serverNow ?? readClock(intervalMs),
   );

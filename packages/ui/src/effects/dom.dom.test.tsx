@@ -15,18 +15,21 @@ const {
   createOscillationBreaker,
   flatEqual,
   useLayoutMeasurement,
+  useElementSize,
   useObjectUrl,
   useObservedValue,
 } = await import("./dom");
 
 // A ResizeObserver the test drives by hand.
 const observers = new Set<() => void>();
+const observedBoxes: ResizeObserverBoxOptions[] = [];
 class ResizeObserverStub {
   readonly #callback: () => void;
   constructor(callback: () => void) {
     this.#callback = callback;
   }
-  observe() {
+  observe(_target: Element, options?: ResizeObserverOptions) {
+    observedBoxes.push(options?.box ?? "content-box");
     observers.add(this.#callback);
   }
   disconnect() {
@@ -199,5 +202,18 @@ describe("useObservedValue", () => {
     } finally {
       globalThis.reportError = originalReportError;
     }
+  });
+});
+
+describe("useElementSize", () => {
+  test("follows the border box it measures", () => {
+    observedBoxes.length = 0;
+    const Sized = () => {
+      const [element, setElement] = useState<HTMLDivElement | null>(null);
+      const size = useElementSize(element);
+      return <div data-width={size?.width ?? -1} ref={setElement} />;
+    };
+    render(<Sized />);
+    expect(observedBoxes).toEqual(["border-box"]);
   });
 });

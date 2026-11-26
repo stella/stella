@@ -144,7 +144,8 @@ export const useObservedValue = <E extends Element, T extends Flat>(
 /**
  * `measure(element)` before the first paint and again whenever the element
  * resizes. `measure` must only read the DOM. Round fractional pixels when
- * sub-pixel jitter is not meaningful to the caller.
+ * sub-pixel jitter is not meaningful to the caller. Resizes are those of the
+ * content box; `useElementSize` follows the border box.
  */
 export const useLayoutMeasurement = <E extends Element, T extends Flat>(
   element: E | null,
@@ -177,11 +178,24 @@ type ElementSize = { readonly width: number; readonly height: number };
 
 /** The element's rendered size in CSS pixels, or `null` without an element. */
 export const useElementSize = (element: Element | null): ElementSize | null =>
-  useLayoutMeasurement<Element, ElementSize | null>(
+  useObservedValue<Element, ElementSize | null>(
     element,
-    (observed) => {
-      const { width, height } = observed.getBoundingClientRect();
-      return { width, height };
+    (observed, emit) => {
+      const measure = () => {
+        const { width, height } = observed.getBoundingClientRect();
+        emit({ width, height });
+      };
+      measure();
+      if (typeof ResizeObserver === "undefined") {
+        return () => undefined;
+      }
+      // The bounding rectangle is the border box: padding and border
+      // changes resize it without resizing the content box.
+      const observer = new ResizeObserver(measure);
+      observer.observe(observed, { box: "border-box" });
+      return () => {
+        observer.disconnect();
+      };
     },
     [],
     null,
