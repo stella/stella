@@ -842,10 +842,8 @@ const levelsSetApart = (
 ): TemplateHealthFinding[] => {
   const lookOf = (styleId: string | undefined): Look | null => {
     const style = styles.find((candidate) => candidate.styleId === styleId);
-    if (style === undefined || style.bold === undefined) {
-      return null;
-    }
-    return { bold: style.bold, size: style.size ?? null };
+    const bold = style?.bold;
+    return bold === undefined ? null : { bold, size: style?.size ?? null };
   };
   const levels = LEVEL_ROLES.flatMap((role, depth) => {
     const styleId = roles[role]?.styleId;
