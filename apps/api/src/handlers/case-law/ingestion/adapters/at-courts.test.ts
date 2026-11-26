@@ -911,8 +911,10 @@ describe("Austrian RIS typed publisher read outcomes", () => {
     const page = (await adapter.fetchPage(null, {})).unwrap();
     const decision = page.decisions[0];
     expect(decision?.isListingOnly).toBe(true);
-    expect<unknown>(decision?.metadata["detailStatus"]).toBe("detail-http-403");
-    expect<unknown>(decision?.metadata[READ_OUTCOME_METADATA_KEY]).toEqual({
+    const detailStatus: unknown = decision?.metadata["detailStatus"];
+    const readOutcome: unknown = decision?.metadata[READ_OUTCOME_METADATA_KEY];
+    expect(detailStatus).toBe("detail-http-403");
+    expect(readOutcome).toEqual({
       type: "refused",
       status: 403,
       scope: "document",
@@ -951,7 +953,9 @@ describe("Austrian RIS typed publisher read outcomes", () => {
       .decisions[0];
     expect(refusedDecision?.isListingOnly).not.toBe(true);
     expect(refusedDecision?.metadata["headnotes"]).toEqual([]);
-    expect<unknown>(refusedDecision?.metadata["headnotesReadOutcome"]).toEqual({
+    const headnotesReadOutcome: unknown =
+      refusedDecision?.metadata["headnotesReadOutcome"];
+    expect(headnotesReadOutcome).toEqual({
       type: "refused",
       status: 403,
       scope: "part",
