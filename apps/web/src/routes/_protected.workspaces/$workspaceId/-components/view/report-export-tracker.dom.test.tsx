@@ -1,14 +1,12 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, spyOn, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/exports" });
 const { cleanup, render, waitFor } = await import("@testing-library/react");
-const { act } = await import("react");
 const { IntlProvider } = await import("use-intl");
 const { QueryClient, QueryClientProvider, onlineManager } =
   await import("@tanstack/react-query");
@@ -22,9 +20,6 @@ const { useReportExportTrackingStore } =
 
 afterAll(async () => {
   cleanup();
-  await act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 

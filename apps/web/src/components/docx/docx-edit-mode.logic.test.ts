@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import {
   aggregateAnonymizationMatches,
   buildAnonymizationDetectionKey,
@@ -15,7 +13,11 @@ import {
 } from "./docx-edit-mode.logic";
 
 /** Resolve every queued microtask (and the current macrotask). */
-const tick = async () => sleep(0);
+const tick = async () => {
+  for (let i = 0; i < 4; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 type Gate = {
   promise: Promise<void>;

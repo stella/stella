@@ -149,18 +149,18 @@ const nextNavigation = async (
       publicHref: `${location.pathname}${hash === "" ? "" : `#${hash}`}`,
     },
   });
-  const pending = Promise.withResolvers<"pending">();
-  const timeout = setTimeout(() => {
-    pending.resolve("pending");
-  }, 20);
-  const result = await Promise.race([
-    guard.then(
-      () => "stay" as const,
-      (error: unknown) => (isRedirect(error) ? ("redirect" as const) : error),
-    ),
-    pending.promise,
-  ]);
-  clearTimeout(timeout);
+  let result: "stay" | "redirect" | "pending" | unknown = "pending";
+  void (async () => {
+    try {
+      await guard;
+      result = "stay";
+    } catch (error: unknown) {
+      result = isRedirect(error) ? "redirect" : error;
+    }
+  })();
+  for (let i = 0; i < 4; i += 1) {
+    await Promise.resolve();
+  }
   return result;
 };
 

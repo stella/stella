@@ -1,10 +1,11 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type {
   AnalysisQueryResult,
@@ -41,6 +42,18 @@ afterEach(() => {
   clients.length = 0;
   globalThis.fetch = originalFetch;
 });
+const advancePastPollInterval = async () => {
+  jest.useFakeTimers();
+  try {
+    await act(async () => {
+      jest.advanceTimersByTime(2500);
+      await Promise.resolve();
+    });
+  } finally {
+    restoreRealTimers();
+  }
+};
+
 afterAll(async () => {
   await unregisterDomEnvironment();
 });
@@ -421,9 +434,7 @@ describe("shared lazy decision analysis", () => {
         client.getQueryData(decisionAnalysisOptions(key).queryKey),
       ),
     ).toBe(true);
-    await act(async () => {
-      await Bun.sleep(2500);
-    });
+    await advancePastPollInterval();
     expect(requests.length).toBe(1);
 
     await act(async () => {

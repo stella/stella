@@ -1,8 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 GlobalRegistrator.register();
 const { act } = await import("react");
@@ -56,7 +61,7 @@ test("permanent rejections show each safe reason without a Retry action", async 
         throw new Error("permanent files must not be retried");
       },
     });
-    await sleep(20);
+    await flushMicrotasks();
   });
 
   expect(view.getByText("contract.exe").parentElement?.textContent).toContain(
@@ -132,7 +137,7 @@ test("a mixed upload batch explains an empty file without presigning or retrying
       },
       onRetry: () => queue.retryFailed(),
     });
-    await sleep(20);
+    await flushMicrotasks();
   });
 
   expect(view.getByText("empty.pdf").parentElement?.textContent).toContain(
@@ -173,7 +178,7 @@ test("a batch refused only by action admission keeps the refusal notice", async 
         throw new Error("refused files must not be retried");
       },
     });
-    await sleep(20);
+    await flushMicrotasks();
   });
 
   const refusalMessages = Object.values(messages.errors.actionAdmission);
@@ -205,7 +210,7 @@ test("same-named files from different folders each keep their own row", async ()
       },
       onRetry: () => undefined,
     });
-    await sleep(20);
+    await flushMicrotasks();
   });
 
   const rows = view.getAllByText("contract.pdf");

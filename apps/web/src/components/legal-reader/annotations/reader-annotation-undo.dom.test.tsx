@@ -4,7 +4,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { CreateAnnotationInput } from "@/components/legal-reader/annotations/annotation-types";
@@ -12,6 +11,12 @@ import type { GuestAnnotationStore } from "@/components/legal-reader/annotations
 import type { ReaderAnnotationWrites } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
 
 import type { ReaderAnnotationController } from "./use-reader-annotation-history";
+
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 GlobalRegistrator.register({ url: "https://app.example.test/reader" });
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =
@@ -234,7 +239,7 @@ test("Mod+Z inside a text field leaves the marks alone", async () => {
   field.focus();
   await act(async () => {
     undoChord(field);
-    await sleep(20);
+    await flushMicrotasks();
   });
   expect(calls).toHaveLength(1);
 
@@ -277,7 +282,7 @@ test("Mod+Z after pressing outside the reader does not reach its marks", async (
   fireEvent.pointerDown(document.body, { button: 0 });
   await act(async () => {
     undoChord(document.body);
-    await sleep(20);
+    await flushMicrotasks();
   });
   expect(calls).toHaveLength(1);
 });

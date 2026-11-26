@@ -1,9 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { ColumnSizingState } from "@tanstack/react-table";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, jest, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/table" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");
@@ -25,6 +25,7 @@ test("pending table widths publish only for the owner that resized them", async 
   const unsubscribe = installUserScopedStorage(queryClient, areas);
   const published: ColumnSizingState[] = [];
   const layouts: unknown[] = [];
+  jest.useFakeTimers();
   try {
     queryClient.setQueryData(["session"], { user: { id: "user-a" } });
     const mounted = renderHook(
@@ -55,7 +56,8 @@ test("pending table widths publish only for the owner that resized them", async 
       queryClient.setQueryData(["session"], { user: { id: "user-b" } });
     });
     await act(async () => {
-      await sleep(150);
+      jest.advanceTimersByTime(150);
+      await Promise.resolve();
     });
     expect(published).toEqual([]);
     act(() => {
@@ -73,11 +75,13 @@ test("pending table widths publish only for the owner that resized them", async 
       mounted.result.current.listeners.onColumnSizingChange({ column: 350 }),
     );
     await act(async () => {
-      await sleep(150);
+      jest.advanceTimersByTime(150);
+      await Promise.resolve();
     });
     expect(published).toEqual([{ column: 350 }]);
     mounted.unmount();
   } finally {
+    restoreRealTimers();
     cleanup();
     unsubscribe();
     releaseUserStorage(areas());

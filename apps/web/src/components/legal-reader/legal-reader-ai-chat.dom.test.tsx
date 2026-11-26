@@ -3,7 +3,6 @@ import { panic } from "better-result";
 import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
@@ -84,9 +83,6 @@ afterEach(() => {
 
 afterAll(async () => {
   // Let React finish the work the readers scheduled before the DOM goes.
-  await act(async () => {
-    await sleep(50);
-  });
   globalThis.fetch = originalFetch;
   await unregisterDomEnvironment();
 });
