@@ -853,6 +853,19 @@
     },
     "showPane": "Show pane",
     "swapViews": "Swap main and side views",
-    "title": "Inspector"
+    "title": "Inspector",
+    "transcribe": {
+      "action": "Transcribe",
+      "failed": {
+        "changed": "The recording changed while it was being transcribed. Try again.",
+        "generic": "The recording couldn't be transcribed. Try again.",
+        "noSpeech": "No speech was found in this recording.",
+        "provider": "No transcription model is available to your organization. Ask an admin to set one up in AI settings.",
+        "tooLong": "This recording is too long to transcribe.",
+        "unsupported": "This recording's format can't be transcribed."
+      },
+      "progress": "Transcribing… {percent, number}%",
+      "saved": "Transcript saved as {fileName}"
+    }
   }
 }

@@ -714,6 +714,16 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.ENTITY, RESOURCE_TYPE.LEGAL_LIST],
   },
+  startRecordingTranscription: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/workspaces/:workspaceId/recording-transcriptions/runs",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY],
+  },
   createListItemSource: {
     writes: [
       {

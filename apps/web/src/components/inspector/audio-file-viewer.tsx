@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { DefaultPendingComponent } from "@/components/default-pending";
 import { FilePreviewUnavailable } from "@/components/inspector/inspector-pdf-error-fallback";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
+import { TranscribeRecording } from "@/components/inspector/transcribe-recording";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import { useObjectUrl } from "@/hooks/use-object-url";
 import { fileOptions } from "@/lib/files/queries";
@@ -29,17 +30,28 @@ const AudioPlayer = ({ onDownload, tab }: AudioFileViewerProps) => {
   const src = useObjectUrl(new Blob([data.buffer], { type: data.mimeType }));
   const [unplayable, setUnplayable] = useState(false);
 
+  const transcribe = (
+    <TranscribeRecording
+      entityId={tab.entityId}
+      fieldId={tab.id}
+      workspaceId={tab.workspaceId}
+    />
+  );
+
   if (unplayable) {
     return (
-      <FilePreviewUnavailable
-        message={t("inspector.audioUnplayable")}
-        onDownload={onDownload}
-      />
+      <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center pb-6">
+        <FilePreviewUnavailable
+          message={t("inspector.audioUnplayable")}
+          onDownload={onDownload}
+        />
+        {transcribe}
+      </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 items-center justify-center p-6">
+    <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6">
       {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- a recording has no captions until it is transcribed */}
       <audio
         aria-label={data.fileName}
@@ -48,6 +60,7 @@ const AudioPlayer = ({ onDownload, tab }: AudioFileViewerProps) => {
         onError={() => setUnplayable(true)}
         src={src}
       />
+      {transcribe}
     </div>
   );
 };

@@ -853,6 +853,19 @@
     },
     "showPane": "Zobraziť panel",
     "swapViews": "Vymeniť hlavné zobrazenie a bočný panel",
-    "title": "Inšpektor"
+    "title": "Inšpektor",
+    "transcribe": {
+      "action": "Prepísať",
+      "failed": {
+        "changed": "Nahrávka sa počas prepisu zmenila. Skúste to znova.",
+        "generic": "Nahrávku sa nepodarilo prepísať. Skúste to znova.",
+        "noSpeech": "V nahrávke sa nenašla žiadna reč.",
+        "provider": "Vaša organizácia nemá k dispozícii žiadny model na prepis. Požiadajte správcu, aby ho nastavil v nastaveniach AI.",
+        "tooLong": "Nahrávka je na prepis príliš dlhá.",
+        "unsupported": "Formát tejto nahrávky sa nedá prepísať."
+      },
+      "progress": "Prepisuje sa… {percent, number} %",
+      "saved": "Prepis uložený ako {fileName}"
+    }
   }
 }

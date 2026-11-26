@@ -853,6 +853,19 @@
     },
     "showPane": "Bereich anzeigen",
     "swapViews": "Hauptansicht und Seitenleiste tauschen",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "transcribe": {
+      "action": "Transkribieren",
+      "failed": {
+        "changed": "Die Aufnahme hat sich während der Transkription geändert. Versuchen Sie es erneut.",
+        "generic": "Die Aufnahme konnte nicht transkribiert werden. Versuchen Sie es erneut.",
+        "noSpeech": "In dieser Aufnahme wurde keine Sprache gefunden.",
+        "provider": "Ihrer Organisation steht kein Transkriptionsmodell zur Verfügung. Bitten Sie einen Admin, eines in den KI-Einstellungen einzurichten.",
+        "tooLong": "Diese Aufnahme ist zu lang für eine Transkription.",
+        "unsupported": "Das Format dieser Aufnahme kann nicht transkribiert werden."
+      },
+      "progress": "Wird transkribiert… {percent, number} %",
+      "saved": "Transkript gespeichert als {fileName}"
+    }
   }
 }

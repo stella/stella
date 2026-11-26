@@ -853,6 +853,19 @@
     },
     "showPane": "Mostrar panel",
     "swapViews": "Intercambiar la vista principal y el panel lateral",
-    "title": "Panel de inspección"
+    "title": "Panel de inspección",
+    "transcribe": {
+      "action": "Transcribir",
+      "failed": {
+        "changed": "La grabación cambió mientras se transcribía. Inténtelo de nuevo.",
+        "generic": "No se pudo transcribir la grabación. Inténtelo de nuevo.",
+        "noSpeech": "No se encontró voz en esta grabación.",
+        "provider": "Su organización no tiene ningún modelo de transcripción disponible. Pida a un administrador que configure uno en los ajustes de IA.",
+        "tooLong": "Esta grabación es demasiado larga para transcribirla.",
+        "unsupported": "El formato de esta grabación no se puede transcribir."
+      },
+      "progress": "Transcribiendo… {percent, number} %",
+      "saved": "Transcripción guardada como {fileName}"
+    }
   }
 }

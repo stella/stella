@@ -853,6 +853,19 @@
     },
     "showPane": "Panel megjelenítése",
     "swapViews": "A fő nézet és az oldalsó panel felcserélése",
-    "title": "Ellenőrző panel"
+    "title": "Ellenőrző panel",
+    "transcribe": {
+      "action": "Átírás",
+      "failed": {
+        "changed": "A felvétel megváltozott az átírás közben. Próbálja újra.",
+        "generic": "A felvételt nem sikerült átírni. Próbálja újra.",
+        "noSpeech": "Ebben a felvételben nem található beszéd.",
+        "provider": "A szervezete számára nem érhető el átírási modell. Kérje meg egy adminisztrátort, hogy állítson be egyet az AI-beállításokban.",
+        "tooLong": "Ez a felvétel túl hosszú az átíráshoz.",
+        "unsupported": "Ennek a felvételnek a formátuma nem írható át."
+      },
+      "progress": "Átírás folyamatban… {percent, number}%",
+      "saved": "Az átirat mentve: {fileName}"
+    }
   }
 }

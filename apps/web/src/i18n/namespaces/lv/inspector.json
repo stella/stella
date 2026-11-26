@@ -853,6 +853,19 @@
     },
     "showPane": "Rādīt paneli",
     "swapViews": "Apmainīt galveno skatu un sānu paneli",
-    "title": "Inspektors"
+    "title": "Inspektors",
+    "transcribe": {
+      "action": "Transkribēt",
+      "failed": {
+        "changed": "Ieraksts mainījās transkribēšanas laikā. Mēģiniet vēlreiz.",
+        "generic": "Ierakstu neizdevās transkribēt. Mēģiniet vēlreiz.",
+        "noSpeech": "Šajā ierakstā netika atrasta runa.",
+        "provider": "Jūsu organizācijai nav pieejams neviens transkribēšanas modelis. Lūdziet administratoram to iestatīt AI iestatījumos.",
+        "tooLong": "Šis ieraksts ir pārāk garš transkribēšanai.",
+        "unsupported": "Šī ieraksta formātu nevar transkribēt."
+      },
+      "progress": "Notiek transkribēšana… {percent, number}%",
+      "saved": "Transkripcija saglabāta kā {fileName}"
+    }
   }
 }

@@ -853,6 +853,19 @@
     },
     "showPane": "Mostrar painel",
     "swapViews": "Trocar a visualização principal e o painel lateral",
-    "title": "Inspetor"
+    "title": "Inspetor",
+    "transcribe": {
+      "action": "Transcrever",
+      "failed": {
+        "changed": "A gravação mudou durante a transcrição. Tente novamente.",
+        "generic": "Não foi possível transcrever a gravação. Tente novamente.",
+        "noSpeech": "Nenhuma fala foi encontrada nesta gravação.",
+        "provider": "Nenhum modelo de transcrição está disponível para sua organização. Peça a um administrador para configurar um nas configurações de IA.",
+        "tooLong": "Esta gravação é longa demais para ser transcrita.",
+        "unsupported": "O formato desta gravação não pode ser transcrito."
+      },
+      "progress": "Transcrevendo… {percent, number}%",
+      "saved": "Transcrição salva como {fileName}"
+    }
   }
 }
