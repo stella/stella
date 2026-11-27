@@ -759,8 +759,9 @@ type Placed = {
   closingLines: Set<string>;
   /** The tab stops placed paragraphs get of their own. */
   tabStops: Map<string, number[]>;
-  /** Where the lines of a paragraph set under an item start. */
-  itemIndents: Map<string, number>;
+  /** The indent of a paragraph set under an item: where its lines start,
+   *  and how far a mark of its own hangs in front of them. */
+  itemIndents: Map<string, TemplatePlanIndent>;
   /** The alignment placed paragraphs keep from the source. */
   alignments: Map<string, TemplatePlanAlignment>;
 };
@@ -1576,6 +1577,20 @@ const standsUnder = (line: Placement, item: Placement): boolean => {
 };
 
 /**
+ * The indent of a line set under an item whose text starts at `start`. A
+ * line that hangs a mark of its own in front of its text (a typed dash, a
+ * box) keeps that hanging: the mark stands where the item's text starts,
+ * the line's text one hanging step further in, as in the source.
+ */
+const underItemIndent = (
+  start: number,
+  { block }: Placement,
+): TemplatePlanIndent => {
+  const hanging = -(block.indent?.firstLine ?? 0);
+  return hanging > 0 ? { left: start + hanging, hanging } : { left: start };
+};
+
+/**
  * Sets the unnumbered lines that continue a numbered item under that
  * item's text: the address lines under `(i)`, a second paragraph of a
  * lettered point. The template's style for unnumbered text has one indent,
@@ -1601,7 +1616,10 @@ const indentContinuations = (context: Context, placed: Placed): void => {
       UNNUMBERED_ROLES.has(placement.role) &&
       standsUnder(placement, item)
     ) {
-      placed.itemIndents.set(block.id, textStartOf(context, item));
+      placed.itemIndents.set(
+        block.id,
+        underItemIndent(textStartOf(context, item), placement),
+      );
     } else {
       item = null;
     }
@@ -1719,18 +1737,24 @@ const alignFrontLines = (context: Context, placed: Placed): void => {
     const placement =
       block.kind === "table" ? undefined : placed.placementById.get(block.id);
     const alignment = setApartOf(block);
+    // A bullet is no number: a line led by one (`- nachstehend „X“
+    // genannt -`, a dash an editor turned into a list) is still set apart.
+    const bullet = placement?.pattern?.numFmt === "bullet";
     if (
       placement !== undefined &&
       alignment !== undefined &&
       FRONT_TEXT_ROLES.has(placement.role) &&
-      !showsLabel(placement) &&
+      (bullet || !showsLabel(placement)) &&
       block.text.trim().length <= SET_LINE_MAX &&
       !block.text.includes("\t")
     ) {
       placed.alignments.set(block.id, alignment);
-      // Set between the margins, not inside the indent of a text style.
-      placement.styleId =
-        context.profile.roles.body?.styleId ?? placement.styleId;
+      // Set between the margins, not inside the indent of a text style; a
+      // bullet's list sets its indent.
+      if (!bullet) {
+        placement.styleId =
+          context.profile.roles.body?.styleId ?? placement.styleId;
+      }
     }
   }
 };
@@ -2286,8 +2310,8 @@ type ParagraphItemOptions = {
   keepNext: boolean;
   /** The tab stops the paragraph gets of its own. */
   tabStops: readonly number[] | undefined;
-  /** Where the paragraph's lines start under the item it continues. */
-  itemIndent: number | undefined;
+  /** The indent of the paragraph under the item it continues. */
+  itemIndent: TemplatePlanIndent | undefined;
   /** The alignment the paragraph keeps from the source. */
   alignment: TemplatePlanAlignment | undefined;
   /** The section the paragraph is the last of, when it stays a section. */
@@ -2325,7 +2349,7 @@ const paragraphItems = ({
   const numbering = numberingOf(placement);
   // A number no list prints is text in front of the paragraph.
   const hang = numbering === null ? hangOf(context, placement) : null;
-  const under = itemIndent === undefined ? null : { left: itemIndent };
+  const under = itemIndent ?? null;
   const item: TemplatePlanSourceItem = {
     kind: "source",
     blockId: block.id,
@@ -3394,8 +3418,13 @@ const noteParagraphOptions = (
   if (closingLines.size > 0) {
     items.push({ kind: "closingKeptTogether", blocks: closingLines.size });
   }
+  // A line under an item that hangs its own mark is counted with the
+  // continuations, not with the numbers written as text.
   const hung = body.filter(
-    (item) => item.kind === "source" && item.indent?.hanging !== undefined,
+    (item) =>
+      item.kind === "source" &&
+      item.indent?.hanging !== undefined &&
+      !itemIndents.has(item.blockId),
   ).length;
   if (hung > 0) {
     items.push({ kind: "textLabelsHung", blocks: hung });
