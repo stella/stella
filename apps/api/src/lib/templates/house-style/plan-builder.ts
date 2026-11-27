@@ -817,7 +817,10 @@ const pageHolderBeforeContents = (context: Context): string | null => {
   let lastBlank: string | null = null;
   for (const block of topLevel) {
     if (index.contentsBlockIds.has(block.id)) {
-      return pending && placedAny ? lastBlank : null;
+      // The contents' first line may start the page itself.
+      return (pending || block.pageBreakBefore === true) && placedAny
+        ? lastBlank
+        : null;
     }
     if (
       block.kind === "paragraph" &&
@@ -1726,9 +1729,14 @@ const settledContentsHolder = (
   context: Context,
   placed: Placed,
   holder: string | null,
+  tableHolders: ReadonlySet<string>,
 ): string | null => {
   if (holder === null || keepsContents(context, placed)) {
     return holder;
+  }
+  // Kept for a table as well, it stays for the table.
+  if (tableHolders.has(holder)) {
+    return null;
   }
   placed.placements = placed.placements.filter(
     ({ block }) => block.id !== holder,
@@ -1827,13 +1835,23 @@ const placeParagraphs = (context: Context): Placed => {
     placed.placements.push(placement);
     lastPlaced = block.id;
   }
-  const holder = settledContentsHolder(context, placed, contentsHolder);
+  const holder = settledContentsHolder(
+    context,
+    placed,
+    contentsHolder,
+    pageHolders,
+  );
   for (const placement of placed.placements) {
     placed.placementById.set(placement.block.id, placement);
   }
   placed.pageStarts = pageStartsOf(context, placed, pageHolders, holder);
   keepHeadingsWithBody(context, placed);
-  dropLoosePageStarts(context, placed, pageHolders);
+  // The paragraph that holds the contents' page start is no loose one.
+  dropLoosePageStarts(
+    context,
+    placed,
+    holder === null ? pageHolders : new Set([...pageHolders, holder]),
+  );
   keepLinesWithBody(context, placed);
   keepClosingTogether(context, placed);
   alignPartyLines(context, placed);
@@ -2177,9 +2195,22 @@ const contentsCollect = (
  *  the document has an article to stand in front of, and their field
  *  would list one of its headings. */
 const keepsContents = (context: Context, placed: Placed): boolean =>
-  context.profile.regions.contents.length > 0 &&
-  placed.placements.some(({ role }) => role === "articleHeading") &&
-  contentsCollect(context.profile, placed);
+  wantsContents(context, placed) && contentsCollect(context.profile, placed);
+
+/** Whether the template has contents and the document an article of its
+ *  own (not one inside a table) for them to stand in front of. */
+const wantsContents = (
+  { profile, topLevel }: Context,
+  { placements }: Placed,
+): boolean => {
+  const own = new Set(topLevel.map(({ id }) => id));
+  return (
+    profile.regions.contents.length > 0 &&
+    placements.some(
+      ({ role, block }) => role === "articleHeading" && own.has(block.id),
+    )
+  );
+};
 
 const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
   const { topLevel, profile, items } = context;
@@ -2215,9 +2246,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     CLAUSE_ROLES.some((clause) => clause === role);
   // The table of contents stands where the template has it: after the
   // front matter, in front of the first recital or article.
-  const wanted =
-    contents.length > 0 &&
-    topLevel.some(({ id }) => placementById.get(id)?.role === "articleHeading");
+  const wanted = wantsContents(context, placed);
   let contentsPending = wanted && contentsCollect(profile, placed);
   if (wanted && !contentsPending) {
     items.push({ kind: "contentsNotKept", reason: "noHeadingCollected" });
