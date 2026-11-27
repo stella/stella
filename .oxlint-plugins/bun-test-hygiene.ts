@@ -424,7 +424,7 @@ const expressionMentionsEnvGate = (
   if (isProcessEnvReadOf(expr, envVar)) {
     return true;
   }
-  if (expr.type === "Identifier" && typeof expr.name === "string") {
+  if (isIdentifierReference(expr)) {
     const variable = resolveVariable(context, expr);
     const init = variable === null ? null : stableInitializer(variable);
     return (

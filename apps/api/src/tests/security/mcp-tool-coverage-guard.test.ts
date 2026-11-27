@@ -120,13 +120,14 @@ const isPublicLawOnlyTool = (toolName: string): boolean => {
     definitions.length > 0 &&
     definitions.every(
       (definition) =>
-        definition.feature === "FEATURE_PUBLIC_LAW" &&
-        definition.anonymized.exposure === "passthrough",
+        definition.anonymized.exposure === "passthrough" &&
+        "feature" in definition &&
+        definition.feature === "FEATURE_PUBLIC_LAW",
     )
   );
 };
 
-const publicLawOnlyTools = new Set(
+const publicLawOnlyTools = new Set<string>(
   uniqueToolNames.filter((name) => isPublicLawOnlyTool(name)),
 );
 
@@ -139,7 +140,7 @@ const adversarialSuiteSource = readFileSync(
   "utf-8",
 );
 
-const coveredTools = new Set(
+const coveredTools = new Set<string>(
   uniqueToolNames.filter((name) =>
     adversarialSuiteSource.includes(JSON.stringify(name)),
   ),
@@ -162,7 +163,7 @@ describe("MCP tool adversarial coverage guard", () => {
   });
 
   test("every exemption names a registered non-public-law MCP tool", () => {
-    const registeredSet = new Set(uniqueToolNames);
+    const registeredSet = new Set<string>(uniqueToolNames);
     const invalid = exemptedTools.filter(
       (name) => !registeredSet.has(name) || publicLawOnlyTools.has(name),
     );

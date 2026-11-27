@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
@@ -372,4 +374,19 @@ test("strict no-disabled-tests with allowDescribeEnvGate allows only env-gated d
       },
     ),
   ).toEqual([8, 10, 12]);
+});
+
+test("oxlint.config.ts enforces strict no-disabled-tests on security suites", () => {
+  const repoRoot = path.resolve(import.meta.dir, "../..");
+  const configSource = readFileSync(
+    path.join(repoRoot, "oxlint.config.ts"),
+    "utf-8",
+  );
+  expect(configSource).toContain("apps/api/src/tests/security/**/*.test.ts");
+  expect(configSource).toContain(
+    '"bun-test-hygiene/no-disabled-tests": ["error", { strict: true }]',
+  );
+  expect(configSource).toContain(
+    'allowDescribeEnvGate: "STELLA_RUN_POSTGRES_TESTS"',
+  );
 });

@@ -393,19 +393,4 @@ describe("custom oxlint guardrails", () => {
       ".oxlint-plugins/__fixtures__/no-beforeload-redirect.fixture.tsx",
     );
   });
-
-  test("security test suites enforce strict no-disabled-tests with only STELLA_RUN_POSTGRES_TESTS describe gates", () => {
-    const configSource = readRootFixture("oxlint.config.ts");
-    const pluginSource = readRootFixture(".oxlint-plugins/bun-test-hygiene.ts");
-
-    expect(configSource).toContain("apps/api/src/tests/security/**/*.test.ts");
-    expect(configSource).toContain(
-      '"bun-test-hygiene/no-disabled-tests": ["error", { strict: true }]',
-    );
-    expect(configSource).toContain(
-      'allowDescribeEnvGate: "STELLA_RUN_POSTGRES_TESTS"',
-    );
-    expect(pluginSource).toContain("CONDITIONAL_DISABLE_MODIFIERS");
-    expect(pluginSource).toContain("strictDisabled");
-  });
 });
