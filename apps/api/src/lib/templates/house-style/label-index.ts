@@ -1039,7 +1039,10 @@ const joinSpacedNumbers = (
 ): void => {
   const columnOf = new Map<string, number>();
   for (const { cells } of blocks) {
-    for (const { col, blockIds } of cells ?? []) {
+    if (cells === undefined) {
+      continue;
+    }
+    for (const { col, blockIds } of cells) {
       for (const blockId of blockIds) {
         columnOf.set(blockId, col);
       }
