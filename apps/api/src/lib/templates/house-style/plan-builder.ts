@@ -796,6 +796,43 @@ const pageHoldersBeforeTables = (context: Context): Set<string> => {
 };
 
 /**
+ * The blank paragraph that stays because the source starts a page in front
+ * of its own table of contents and the plan keeps the template's in its
+ * place: kept template blocks cannot be told to start a page, so the last
+ * blank paragraph in front of the source's contents stays and starts it.
+ * Null when the template keeps no contents, the source has none, or no page
+ * starts in front of them.
+ */
+const pageHolderBeforeContents = (context: Context): string | null => {
+  const { topLevel, index, profile } = context;
+  if (profile.regions.contents.length === 0) {
+    return null;
+  }
+  let pending = false;
+  let placedAny = false;
+  let lastBlank: string | null = null;
+  for (const block of topLevel) {
+    if (index.contentsBlockIds.has(block.id)) {
+      return pending && placedAny ? lastBlank : null;
+    }
+    if (
+      block.kind === "paragraph" &&
+      roleOf(context, block) === null &&
+      isBlankParagraph(block)
+    ) {
+      pending ||= breaksPage(block);
+      lastBlank = block.id;
+    } else {
+      pending = false;
+      placedAny = true;
+      lastBlank = null;
+    }
+    pending ||= endsPage(context, block);
+  }
+  return null;
+};
+
+/**
  * The blocks in front of which the source starts a page, by its facts
  * alone and before anything is placed: a page break in a blank paragraph
  * or in a line of the source's contents passes to the block after it, as
@@ -960,6 +997,7 @@ const pageStartsOf = (
   context: Context,
   placed: Placed,
   holders: ReadonlySet<string>,
+  contentsHolder: string | null,
 ): Set<string> => {
   const starts = new Set<string>();
   /** A page start waits for the next block that is placed. */
@@ -986,7 +1024,7 @@ const pageStartsOf = (
       held = false;
       continue;
     }
-    if (holders.has(block.id)) {
+    if (holders.has(block.id) || block.id === contentsHolder) {
       // It was kept because the page starts in front of the table, by a
       // break before it, behind it or in the section it closes. With a
       // break of its own among its runs it needs no telling.
@@ -995,7 +1033,9 @@ const pageStartsOf = (
       }
       pending = false;
       placedAny = true;
-      held = true;
+      // The one in front of the contents starts their page only: a page
+      // the source starts behind its contents starts behind the kept ones.
+      held = block.id !== contentsHolder;
       continue;
     }
     if (placed.omitted.has(block.id)) {
@@ -1676,10 +1716,12 @@ const keepClosingTogether = (context: Context, placed: Placed): void => {
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
   const pageHolders = pageHoldersBeforeTables(context);
+  const contentsHolder = pageHolderBeforeContents(context);
   // A blank paragraph that ends a section which stays one carries it.
   const kept = new Set([
     ...tableSeparators(context, pageHolders),
     ...pageHolders,
+    ...(contentsHolder === null ? [] : [contentsHolder]),
     ...context.keptSections.ends.keys(),
   ]);
   const startsPage = pageStartsInSource(context);
@@ -1763,7 +1805,12 @@ const placeParagraphs = (context: Context): Placed => {
   for (const placement of placed.placements) {
     placed.placementById.set(placement.block.id, placement);
   }
-  placed.pageStarts = pageStartsOf(context, placed, pageHolders);
+  placed.pageStarts = pageStartsOf(
+    context,
+    placed,
+    pageHolders,
+    contentsHolder,
+  );
   keepHeadingsWithBody(context, placed);
   dropLoosePageStarts(context, placed, pageHolders);
   keepLinesWithBody(context, placed);
@@ -2126,8 +2173,6 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     contents.length > 0 &&
     topLevel.some(({ id }) => placementById.get(id)?.role === "articleHeading");
   let contentsKept = false;
-  /** Whether the template starts a page in front of the next paragraph. */
-  let behindContents = false;
   let placedCount = 0;
   for (const block of topLevel) {
     if (mergedInto.has(block.id) || omitted.has(block.id)) {
@@ -2154,16 +2199,13 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
         region: "contents",
         blockIds: contents,
       });
-      // Where the template's contents end their page, the text behind
-      // them starts one.
-      behindContents = profile.contentsEndsPage === true;
     }
     const paragraph = paragraphItems({
       context,
       placement,
       title: titleOf.get(block.id),
       breaks,
-      pageStart: placed.pageStarts.has(block.id) || behindContents,
+      pageStart: placed.pageStarts.has(block.id),
       keepNext:
         placed.keptWithNext.has(block.id) || placed.closingLines.has(block.id),
       tabStops: placed.tabStops.get(block.id),
@@ -2171,7 +2213,6 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       alignment: placed.alignments.get(block.id),
       endsSection: context.keptSections.ends.get(block.id),
     });
-    behindContents = false;
     placedCount += paragraph.length;
     body.push(...paragraph);
   }

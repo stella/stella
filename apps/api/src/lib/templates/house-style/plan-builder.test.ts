@@ -2072,23 +2072,56 @@ describe("buildTemplatePlan, tables and omissions", () => {
     expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
   });
 
-  test("what follows the kept contents starts a page where the template's contents end theirs", () => {
-    const profile = inferTemplateProfile(
-      contractTemplate({ contents: "empty" }),
-    );
-    const manifest = czechContract("Text.");
-    const behind = (ends: boolean) => {
-      const { plan } = build(manifest, "keepSource", {
-        profile: { ...profile, contentsEndsPage: ends },
-      });
-      const contents = plan.body.findIndex(({ kind }) => kind === "template");
-      return [plan.body[contents + 1], plan.body[contents + 2]];
+  test("the page the source starts in front of its own contents starts in front of the kept ones", () => {
+    // A template whose sample starts a page in front of its first article:
+    // the document's own page start there is kept.
+    const profile = {
+      ...inferTemplateProfile(contractTemplate({ contents: "empty" })),
+      frontMatterEndsPage: true,
     };
-    const [first, second] = behind(true);
-    expect(first).toMatchObject({ kind: "source", pageBreakBefore: true });
-    // Only the paragraph right behind them.
-    expect(second).not.toHaveProperty("pageBreakBefore");
-    expect(behind(false)[0]).not.toHaveProperty("pageBreakBefore");
+    const paged = (breaks: readonly number[]): DocxBlockManifest => {
+      const manifest = manifestOf([
+        "SMLOUVA O DODÁVCE",
+        "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+        "a",
+        "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+        "",
+        { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+        "",
+        "Článek I.\nPředmět",
+        numbered("1.", "Dodavatel dodá zboží.", 10),
+      ]);
+      return {
+        ...manifest,
+        blocks: manifest.blocks.map((block, position) =>
+          breaks.includes(position) ? { ...block, pageBreaks: 1 } : block,
+        ),
+      };
+    };
+    const around = (manifest: DocxBlockManifest) => {
+      const { plan } = build(manifest, "keepSource", { profile });
+      const contents = plan.body.findIndex(({ kind }) => kind === "template");
+      return {
+        before: plan.body[contents - 1],
+        behind: plan.body[contents + 1],
+        omitted: plan.omit.map(({ blockId }) => blockId),
+      };
+    };
+    // A page of their own, as in the source: the blank paragraph with the
+    // break stays in front of the kept contents, and the heading behind
+    // them starts the next page.
+    const own = around(paged([4, 6]));
+    expect(own.before).toMatchObject({ kind: "source", blockId: "p4" });
+    expect(own.omitted).not.toContain("p4");
+    expect(own.behind).toMatchObject({ blockId: "p7", pageBreakBefore: true });
+    // Only in front of them: the text runs on behind the kept contents.
+    const front = around(paged([4]));
+    expect(front.before).toMatchObject({ kind: "source", blockId: "p4" });
+    expect(front.behind).not.toHaveProperty("pageBreakBefore");
+    // Only behind them: nothing is kept in front.
+    const back = around(paged([6]));
+    expect(back.omitted).toContain("p4");
+    expect(back.behind).toMatchObject({ blockId: "p7", pageBreakBefore: true });
   });
 });
 
