@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { compareCodeUnit } from "@stll/collation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import {
@@ -96,7 +97,6 @@ import {
   META_URL_DIAGNOSTICS,
 } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";

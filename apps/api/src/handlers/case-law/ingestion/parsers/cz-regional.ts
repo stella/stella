@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
@@ -20,6 +21,7 @@
  * styles[]: { localId, alignment, bold, italic, ... }
  */
 
+import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
@@ -44,8 +46,6 @@ import {
   isRunningHeaderLine,
   withoutSoftHyphens,
 } from "@stll/legal-ast/page-furniture";
-
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { htmlParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/html-paragraphs";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 const paragraph = (id: string, text: string): Block => ({
   id,

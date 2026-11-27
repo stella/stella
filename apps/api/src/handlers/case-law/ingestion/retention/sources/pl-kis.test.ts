@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
+
 import {
   assemblePlKisDecision as uncheckedAssemblePlKisDecision,
   PL_KIS_INCLUDED_CATEGORIES,
@@ -10,7 +12,6 @@ import {
 import { RETENTION_TEXT_ABSENCE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plKisRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-kis";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";

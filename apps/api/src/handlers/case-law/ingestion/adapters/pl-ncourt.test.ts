@@ -21,6 +21,13 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import {
+  AST_BOUNDARY_WHITESPACE,
+  AST_CONTENT_LOST,
+  AST_STRUCTURE_DEGRADED,
+  validateAndLog,
+  validateAst,
+} from "@stll/case-law-parsers/validate-ast";
 
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
@@ -64,13 +71,6 @@ import {
   decodeSourceRawEnvelope,
   PUBLISHER_REQUEST,
 } from "@/api/lib/legal-search/ingestion-types";
-import {
-  AST_BOUNDARY_WHITESPACE,
-  AST_CONTENT_LOST,
-  AST_STRUCTURE_DEGRADED,
-  validateAndLog,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import {
   resetLogSinkForTesting,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
@@ -44,6 +45,7 @@ import {
   parseDecimalToken,
   parseIntegerToken,
 } from "@stll/agent-input/numeric-token";
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/shared-inlines";
 import type { CheerioAPI } from "@stll/html";
 import {
   type AnyNode,
@@ -67,8 +69,6 @@ import {
   takesANumber,
 } from "@stll/legal-ast/printed-paragraph-labels";
 import { normalizeUnicode } from "@stll/text-normalize";
-
-import { isExcludedHtmlTag } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 const BIDI_MARK = /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
 const STARTS_WITH_BIDI_MARK = /^[\u200E\u200F\u202A-\u202E\u2066-\u2069]/u;

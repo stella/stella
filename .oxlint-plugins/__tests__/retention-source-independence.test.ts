@@ -13,7 +13,7 @@ test("a projection may not reach parser code, adapters or AST builders", async (
         'import { parseCzNss } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";',
         'import { czNssAdapter } from "../../adapters/cz-nss";',
         'import { paragraph } from "@stll/legal-ast/document-ast";',
-        'import { normalizeValidationText } from "@/api/lib/legal-search/parsers/validate-ast";',
+        'import { normalizeValidationText } from "@stll/case-law-parsers/validate-ast";',
         'const lazy = import("@/api/handlers/case-law/ingestion/parsers/pl-tk");',
         'export * from "@/api/lib/legal-search/parsers/text-encoding";',
       ].join("\n"),
@@ -59,7 +59,7 @@ test("a projection may share types and use text helpers outside the parsers", as
     await lintSingleRule(
       "retention-source-independence",
       [
-        'import type { ValidationSource } from "@/api/lib/legal-search/parsers/validate-ast";',
+        'import type { ValidationSource } from "@stll/case-law-parsers/validate-ast";',
         'import type { DocumentAst } from "@stll/legal-ast/document-ast";',
         'import { type CzNssRawEnvelope } from "../../adapters/cz-nss";',
         'import { Result } from "better-result";',

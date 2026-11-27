@@ -1,8 +1,7 @@
 import { Glob } from "bun";
 
+import type { ValidationSource } from "@stll/case-law-parsers/validate-ast";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-
-import type { ValidationSource } from "@/api/lib/legal-search/parsers/validate-ast";
 
 const ROOT = new URL("../../handlers/case-law/ingestion/", import.meta.url);
 const PARSER_FIXTURES = new URL("parsers/__fixtures__/", ROOT);

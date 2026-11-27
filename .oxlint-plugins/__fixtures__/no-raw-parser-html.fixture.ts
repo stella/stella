@@ -7,7 +7,7 @@ import {
   isExcludedHtmlTag,
   ownTableRows,
   visibleHtmlText,
-} from "../../apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "@stll/case-law-parsers/shared-inlines";
 
 const $ = load("<table><tr><td>Visible</td></tr></table>");
 const table = $(

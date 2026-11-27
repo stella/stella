@@ -5,14 +5,14 @@ import * as v from "valibot";
 
 import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
 import { readRtfString } from "@stll/case-law-parsers/rtf-reader";
+import {
+  buildValidationHtml,
+  validateAst,
+} from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { LINE_WRAP_TYPE, planBlockLineWrap } from "@stll/legal-ast/line-wrap";
 
-import {
-  buildValidationHtml,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {

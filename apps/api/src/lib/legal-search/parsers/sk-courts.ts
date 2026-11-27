@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: the PDF text-layer read moved unchanged into libpdf-utils.ts (readPdfTextPages): the same load, pages and extraction.
 /**
@@ -40,6 +41,15 @@
 
 import { SecurityError } from "@libpdf/core";
 
+import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
+import {
+  buildBoldRanges,
+  isBoldFont,
+  normalizeSpanText,
+  readPdfTextPages,
+  segmentsToInlines,
+} from "@stll/case-law-parsers/libpdf-utils";
+import type { PdfSegment, PdfSpan } from "@stll/case-law-parsers/libpdf-utils";
 import { createBlockAnchorAllocator } from "@stll/legal-ast/block-anchors";
 import type {
   Block,
@@ -79,19 +89,6 @@ import {
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 import { collapseLetterSpacing } from "@stll/text-normalize";
-
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import {
-  buildBoldRanges,
-  isBoldFont,
-  normalizeSpanText,
-  readPdfTextPages,
-  segmentsToInlines,
-} from "@/api/lib/legal-search/parsers/libpdf-utils";
-import type {
-  PdfSegment,
-  PdfSpan,
-} from "@/api/lib/legal-search/parsers/libpdf-utils";
 
 // ── Public API ─────────────────────────────────────────────
 

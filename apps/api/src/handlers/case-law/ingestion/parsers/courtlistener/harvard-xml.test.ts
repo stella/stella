@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { OpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
 import {
   type Block,
   type Inline,
@@ -7,7 +8,6 @@ import {
 } from "@stll/legal-ast/document-ast";
 
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 
 import { conservesText } from "./blocks";
 import { composeCourtListenerText } from "./compose";

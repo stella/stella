@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 /**
  * Reader for the full text the TJDFT jurisprudence search serves as
@@ -26,6 +27,8 @@
 import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { sanitizeUrl } from "@stll/case-law-parsers/sanitize-url";
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -38,9 +41,6 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
-
-import { isExcludedHtmlTag } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 const SOURCE_SYSTEM = "jurisdf.tjdft.jus.br";
 

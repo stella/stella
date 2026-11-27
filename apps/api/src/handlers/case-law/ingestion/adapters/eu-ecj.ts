@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [eu-ecj] bounded response body reads preserve identical payloads; only oversized responses are refused.
@@ -17,6 +18,7 @@ import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   type CaseLawWorkExpression,
 } from "@stll/api-contract/case-law-source-languages";
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 // parser-output-unchanged: [eu-ecj] the Formex archive reader keeps the same file entries in the same order.
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sanitizeErrorForOutput } from "@stll/errors";
@@ -150,7 +152,6 @@ import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-s
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { EU_ECJ_METADATA_URL_SCHEMA } from "./eu-ecj.metadata-urls";

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: adds the address-as-label rejection reason; text conversion is unchanged.
 // parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 // parser-output-unchanged: typed URL values pass through; plain strings are projected as before
@@ -6,6 +7,11 @@ import { Result, TaggedError } from "better-result";
 import { decodeHTMLStrict } from "entities";
 import * as v from "valibot";
 
+import {
+  MetadataUrlDefect,
+  type SafeHref,
+  toMetadataUrl,
+} from "@stll/case-law-parsers/sanitize-url";
 import { declareFingerprintFields } from "@stll/errors";
 
 import {
@@ -17,11 +23,6 @@ import {
   metadataUrlItemSchema,
   rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
-import {
-  MetadataUrlDefect,
-  type SafeHref,
-  toMetadataUrl,
-} from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const plainTextBrand = Symbol("PlainText");

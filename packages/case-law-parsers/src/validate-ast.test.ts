@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  Block,
-  HeadingBlock,
-  ParagraphBlock,
-} from "@stll/legal-ast/document-ast";
-
 import {
   AST_CONTENT_LOST,
   AST_MISSING,
@@ -14,7 +8,12 @@ import {
   storedDecisionSignal,
   validateAst,
   validationSignal,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+} from "@stll/case-law-parsers/validate-ast";
+import type {
+  Block,
+  HeadingBlock,
+  ParagraphBlock,
+} from "@stll/legal-ast/document-ast";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -796,6 +795,7 @@ describe("validateAst on deeply nested markup", () => {
   } as const satisfies Record<string, string>;
 
   for (const [shape, html] of Object.entries(DEEP_SHAPES)) {
+    // timeout: parses 200,000-deep HTML markup iteratively (~6.5s on busy runners).
     test(`reads the text ${shape}`, () => {
       const result = validateAst(html, [
         makeBlock({ plainText: "Soud rozhodl takto" }),
@@ -805,7 +805,7 @@ describe("validateAst on deeply nested markup", () => {
       expect(
         result.issues.filter((issue) => issue.severity === "error"),
       ).toEqual([]);
-    });
+    }, 15_000);
   }
 });
 

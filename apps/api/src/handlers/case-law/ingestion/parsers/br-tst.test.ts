@@ -6,6 +6,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -16,7 +17,6 @@ import {
   parseBrTstHtml as uncheckedParseBrTstHtml,
   parseBrTstPrecedent as uncheckedParseBrTstPrecedent,
 } from "@/api/handlers/case-law/ingestion/parsers/br-tst";
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { isRecord } from "@/api/lib/type-guards";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 

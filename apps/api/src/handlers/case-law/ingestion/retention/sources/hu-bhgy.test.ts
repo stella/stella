@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -12,7 +13,6 @@ import {
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 const ADAPTER_FIXTURES = new URL(
   "../../adapters/__fixtures__/",

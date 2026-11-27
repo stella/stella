@@ -1,14 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  validateAst,
+  type ValidationResult,
+} from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  validateAst,
-  type ValidationResult,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,

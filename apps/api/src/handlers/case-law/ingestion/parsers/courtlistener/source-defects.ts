@@ -2,7 +2,7 @@
 // parser-output-unchanged: the projected source is the validation paragraphs the parsed HTML held, joined as its text was.
 import { panic } from "better-result";
 
-import type { ValidationResult } from "@/api/lib/legal-search/parsers/validate-ast";
+import type { ValidationResult } from "@stll/case-law-parsers/validate-ast";
 
 import { conservesText } from "./blocks";
 import { markupResidueMatchesIn } from "./markup-residue";

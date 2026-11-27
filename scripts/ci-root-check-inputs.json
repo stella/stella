@@ -43,7 +43,8 @@
       "scripts/**",
       "apps/api/scripts/test-path-filters.ts",
       "packages/scripts/src/child-exit-status.ts",
-      "@stll/api"
+      "@stll/api",
+      "@stll/case-law-parsers"
     ],
     "Route network manifest coverage": [
       "@stll/web",
@@ -54,16 +55,22 @@
     ],
     "Restore route network baseline": ["**"],
     "Prepare environment": ["**"],
-    "Content delivery declarations": ["@stll/api", "@stll/cli"],
+    "Content delivery declarations": [
+      "@stll/api",
+      "@stll/cli",
+      "@stll/case-law-parsers"
+    ],
     "Test capability shard merge and package parity": [
       "@stll/api",
       "@stll/cli",
-      "scripts/**"
+      "scripts/**",
+      "@stll/case-law-parsers"
     ],
     "Test CLI contract changeset guard over derived catalogs": [
       "@stll/api",
       "@stll/cli",
-      "scripts/**"
+      "scripts/**",
+      "@stll/case-law-parsers"
     ],
     "Test remaining repository scripts": ["**"],
     "Test release image CI gate": [
@@ -273,7 +280,8 @@
       "scripts/**",
       "@stll/api",
       "@stll/sha256",
-      "@stll/concurrency"
+      "@stll/concurrency",
+      "@stll/case-law-parsers"
     ],
     "Landing deploy scope": [
       "turbo.json",
@@ -302,7 +310,8 @@
       "docs/module-ownership.md",
       "scripts/**",
       "bunfig.toml",
-      ".oxlint-plugins/**"
+      ".oxlint-plugins/**",
+      "@stll/case-law-parsers"
     ],
     "Outbound transport ownership": [
       "apps/api/**",
@@ -323,7 +332,8 @@
       "docs/module-ownership/**",
       "scripts/**",
       ".oxlint-plugins/**",
-      "bunfig.toml"
+      "bunfig.toml",
+      "@stll/case-law-parsers"
     ],
     "Generated artifact formatting invariants": [
       "@stll/scripts",
@@ -334,7 +344,8 @@
       "@stll/api",
       "scripts/**",
       ".oxlint-plugins/**",
-      "@stll/api-contract"
+      "@stll/api-contract",
+      "@stll/case-law-parsers"
     ],
     "Queue authority": ["**"],
     "Design token docs": [
@@ -379,7 +390,12 @@
       "packages/**/src/**",
       "scripts/**"
     ],
-    "Test api scripts": ["@stll/api", ".github/workflows/**", "scripts/**"],
+    "Test api scripts": [
+      "@stll/api",
+      ".github/workflows/**",
+      "scripts/**",
+      "@stll/case-law-parsers"
+    ],
     "Test CLI runtime package parity": ["**"],
     "Offline check transport policy": ["**"],
     "Model catalog generation guard": [
@@ -391,9 +407,17 @@
     ],
     "Model task default evidence guard": ["**"],
     "Model catalog snapshot drift check": ["@stll/ai-catalog"],
-    "Capability description ledger": ["@stll/api", "@stll/cli"],
-    "Capability file-transport ledger": ["@stll/api", "@stll/cli"],
-    "MCP coverage guard": ["@stll/api", "@stll/cli"],
+    "Capability description ledger": [
+      "@stll/api",
+      "@stll/cli",
+      "@stll/case-law-parsers"
+    ],
+    "Capability file-transport ledger": [
+      "@stll/api",
+      "@stll/cli",
+      "@stll/case-law-parsers"
+    ],
+    "MCP coverage guard": ["@stll/api", "@stll/cli", "@stll/case-law-parsers"],
     "MCP surface baseline self-test": ["@stll/errors"],
     "Offline catalogue pinned-content policy": ["**"],
     "Catalogue pinned-content check": [
@@ -533,7 +557,8 @@
       "scripts/**",
       "docs/changelog/**",
       "@stll/sha256",
-      "@stll/test-state"
+      "@stll/test-state",
+      "@stll/case-law-parsers"
     ],
     "Test release queue history guard": [
       "scripts/check-release-queue-history*",
@@ -566,7 +591,8 @@
       "docker-compose.yml",
       "scripts/ci-service-images.json",
       "scripts/check-railway-template-draft.ts",
-      "scripts/dev-compose-contract*"
+      "scripts/dev-compose-contract*",
+      "@stll/case-law-parsers"
     ],
     "Test detect-desktop-release-changes script": ["scripts/**"],
     "Test route smoke change detector": [
@@ -583,7 +609,8 @@
       "scripts/**",
       "@stll/api",
       "@stll/sha256",
-      "@stll/concurrency"
+      "@stll/concurrency",
+      "@stll/case-law-parsers"
     ],
     "Test geometry shard plan": [
       "@stll/web",
@@ -661,7 +688,8 @@
       "@stll/sha256",
       "@stll/api",
       "@stll/concurrency",
-      "@stll/errors"
+      "@stll/errors",
+      "@stll/case-law-parsers"
     ],
     "Task result cache contract": [
       ".github/workflows/**",
@@ -721,17 +749,20 @@
     "Test migration identity logic": [
       "@stll/api",
       "@stll/sha256",
-      "scripts/**"
+      "scripts/**",
+      "@stll/case-law-parsers"
     ],
     "Check migration identity against the base branch": [
       "@stll/api",
       "@stll/sha256",
-      "scripts/**"
+      "scripts/**",
+      "@stll/case-law-parsers"
     ],
     "Check grant release order against the production release": [
       "@stll/api",
       "scripts/check-grant-release-order.ts",
-      "scripts/check-grant-release-order.test.ts"
+      "scripts/check-grant-release-order.test.ts",
+      "@stll/case-law-parsers"
     ],
     "Test dead-columns reference matching": [
       "@stll/api",
@@ -759,7 +790,8 @@
       "@stll/concurrency",
       "@stll/fetch",
       "@stll/docx-utils",
-      "@stll/locales"
+      "@stll/locales",
+      "@stll/case-law-parsers"
     ],
     "Test projection-totality classification": [
       "@stll/api",
@@ -789,13 +821,15 @@
       "@stll/template-conditions",
       "@stll/text-normalize",
       "@stll/uuid-codec",
-      "scripts/**"
+      "scripts/**",
+      "@stll/case-law-parsers"
     ],
     "Test aggregate inventories": [
       "scripts/**",
       ".oxlint-plugins/**",
       "@stll/collation",
-      "@stll/api"
+      "@stll/api",
+      "@stll/case-law-parsers"
     ],
     "Test write contract inventories": ["**"],
     "Office fixture metadata": ["**"],
@@ -834,7 +868,7 @@
     "Web raw JSON API census": ["@stll/web", "scripts/**"],
     "Test subject reachability census": ["**"],
     "Deployment feature guard": ["**"],
-    "Processed-field backlog guard": ["@stll/api"],
+    "Processed-field backlog guard": ["@stll/api", "@stll/case-law-parsers"],
     "GitHub API command ownership": ["**"],
     "Tracked file sizes": ["**"],
     "CI job names": [

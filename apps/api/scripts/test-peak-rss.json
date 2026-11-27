@@ -5616,14 +5616,6 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/shared-inlines.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/shared-inlines.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
@@ -5702,14 +5694,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/validate-ast.test.ts": {
-      "peakMb": 464,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/handlers/case-law/ingestion/parsers/validation-document-reuse.test.ts": {
@@ -21960,14 +21944,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/document-builders/html-whitespace.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/lib/legal-search/document-builders/legislation-citations.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
@@ -22264,14 +22240,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/parsers/libpdf-utils.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/lib/legal-search/parsers/markup-residue.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
@@ -22312,14 +22280,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/parsers/validate-ast-normalization.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/lib/legal-search/parsers/validate-ast-parity.test.ts": {
       "peakMb": 520,
       "baselineMb": 193,
@@ -22334,14 +22294,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-3"
-      }
-    },
-    "src/lib/legal-search/parsers/validate-ast-words.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
       }
     },
     "src/lib/legal-search/pg-fts-legal-provider.test.ts": {
@@ -25086,14 +25038,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/lib/sanitize-url.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/lib/scheduler/bullmq.test.ts": {

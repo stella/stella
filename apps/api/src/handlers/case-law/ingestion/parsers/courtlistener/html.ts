@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
@@ -16,6 +17,8 @@
 
 import { panic } from "better-result";
 
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/shared-inlines";
+import { validationParagraphs } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import {
@@ -26,9 +29,6 @@ import {
   type ParentNode,
 } from "@stll/html/nodes";
 import { normalizeUnicode } from "@stll/text-normalize";
-
-import { isExcludedHtmlTag } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { validationParagraphs } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   type BodyVocabulary,

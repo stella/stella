@@ -181,10 +181,7 @@ describe.serial("HTML parser helper ownership", () => {
       '$("p").text();',
     ];
     expect(
-      await lint(
-        source,
-        "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts",
-      ),
+      await lint(source, "packages/case-law-parsers/src/shared-inlines.ts"),
     ).toEqual([]);
     expect(await lint(source, "other/shared-inlines.ts")).toEqual([3]);
   });

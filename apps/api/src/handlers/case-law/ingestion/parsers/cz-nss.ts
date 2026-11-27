@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
@@ -31,10 +32,19 @@
 import { Result } from "better-result";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 import {
   inlineStyleDeclaresProperty,
   inlineStyleValue,
 } from "@stll/case-law-parsers/inline-style";
+import {
+  inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
+  stripFurniturePrefix,
+  visibleHtmlText,
+  walkInlines as walkInlinesShared,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { isComment, isTag, isText } from "@stll/html/nodes";
@@ -76,16 +86,6 @@ import {
   isLetterSpacedEmphasis,
   normalizeUnicode,
 } from "@stll/text-normalize";
-
-import {
-  inlinesToPlainText,
-  isExcludedHtmlTag,
-  ownTableRows,
-  stripFurniturePrefix,
-  visibleHtmlText,
-  walkInlines as walkInlinesShared,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 // ── Public API ─────────────────────────────────────────────
 

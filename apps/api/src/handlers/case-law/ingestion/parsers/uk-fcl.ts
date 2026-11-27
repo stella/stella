@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 import { panic, Result } from "better-result";
@@ -5,6 +6,8 @@ import * as slimdom from "slimdom";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
+import { sanitizeUrl } from "@stll/case-law-parsers/sanitize-url";
+import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import type {
   Block,
   DecisionDocumentAst,
@@ -14,9 +17,7 @@ import type {
 import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { parsePlainDate } from "@stll/time";
 
-import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 const AKN = "http://docs.oasis-open.org/legaldocml/ns/akn/3.0";
 const UK = "https://caselaw.nationalarchives.gov.uk/akn";

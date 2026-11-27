@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: the section-or-full-text choice and textComplete read the same validateAst verdict; only the logging moved to the pipeline.
 /**
@@ -17,6 +18,11 @@
 
 import { panic } from "better-result";
 
+import {
+  buildValidationHtml,
+  validateAst,
+} from "@stll/case-law-parsers/validate-ast";
+import type { ValidationResult } from "@stll/case-law-parsers/validate-ast";
 import type {
   Block,
   DocumentAst,
@@ -24,12 +30,6 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { collapseLetterSpacing } from "@stll/text-normalize";
-
-import {
-  buildValidationHtml,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
-import type { ValidationResult } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** Publisher recorded on the AST. */
 const PL_NSA_SOURCE_SYSTEM = "orzeczenia.nsa.gov.pl";

@@ -1,6 +1,7 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { RETENTION_TEXT_ABSENCE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
@@ -8,7 +9,6 @@ import {
   PDF_PROJECTION_MAX_BYTES,
   projectPdfText,
 } from "@/api/handlers/case-law/ingestion/retention/sources/pdf-text";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** Words the typesetter broke at a line end, each into its two halves. */
 const BROKEN_WORDS = [

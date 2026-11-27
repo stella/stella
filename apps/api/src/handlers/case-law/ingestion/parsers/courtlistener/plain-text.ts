@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
@@ -16,16 +17,15 @@
  * paragraph is scoped alone.
  */
 
+import {
+  isExcludedHtmlTag,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/shared-inlines";
+import { validationParagraphs } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
-
-import {
-  isExcludedHtmlTag,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { validationParagraphs } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { conservesText, createUnitBuilder, graphicsIn } from "./blocks";
 import type { FormatInput } from "./harvard-xml";

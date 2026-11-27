@@ -2,6 +2,10 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import {
+  AST_STRUCTURE_DEGRADED,
+  validateAst,
+} from "@stll/case-law-parsers/validate-ast";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
@@ -51,10 +55,6 @@ import type {
   StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
-import {
-  AST_STRUCTURE_DEGRADED,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";

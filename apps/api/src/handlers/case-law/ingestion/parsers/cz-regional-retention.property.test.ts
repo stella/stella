@@ -2,13 +2,13 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { load } from "@stll/html";
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
-
 import {
   buildValidationHtml,
   validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+} from "@stll/case-law-parsers/validate-ast";
+import { load } from "@stll/html";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { parseRegionalDecision as uncheckedParseRegionalDecision } from "./cz-regional";

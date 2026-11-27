@@ -1,3 +1,8 @@
+import type {
+  validateAst,
+  ValidationSource,
+} from "@stll/case-law-parsers/validate-ast";
+
 /**
  * How the pipeline checks that a parsed decision kept the publisher's text.
  *
@@ -16,10 +21,6 @@
  * modules, which is what makes the two implementations independent.
  */
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import type {
-  validateAst,
-  ValidationSource,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 export type RetentionProjectionContext = {
   readonly sourceRawObjects: NonNullable<IngestionResult["sourceRawObjects"]>;

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: [cz-uohs] exports the printed decision-type set for the type census; parsing is unchanged.
 // parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: A null list now reads as empty; records that parsed before keep their exact output.
@@ -7,6 +8,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_JUDGE_NAME_RE,
@@ -90,7 +92,6 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseValue,
 } from "@/api/lib/legal-search/ingestion-types";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";

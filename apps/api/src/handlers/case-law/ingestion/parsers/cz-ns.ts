@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
@@ -13,6 +14,16 @@
  *      ruling items, tables)
  */
 
+import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
+import { collapseHtmlWhitespace } from "@stll/case-law-parsers/html-whitespace";
+import { sanitizeUrl } from "@stll/case-law-parsers/sanitize-url";
+import {
+  inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
+  visibleHtmlText,
+  walkInlines as walkInlinesShared,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import {
@@ -49,17 +60,6 @@ import {
   isRunningHeaderLine,
   withoutSoftHyphens,
 } from "@stll/legal-ast/page-furniture";
-
-import {
-  inlinesToPlainText,
-  isExcludedHtmlTag,
-  ownTableRows,
-  visibleHtmlText,
-  walkInlines as walkInlinesShared,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 // ── Public API ─────────────────────────────────────────────
 

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: [cz-uohs] its reader supplies text directly and retains the same footnote inlines; replay fixture fields are unchanged.
 // parser-output-unchanged: [cz-nss] canonical line text is unchanged because this reader constructs no numeric superscript inlines.
@@ -29,12 +30,11 @@
 
 import { panic } from "better-result";
 
+import { appendTextInline } from "@stll/case-law-parsers/shared-inlines";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 import { startsWithPlOperativeVerb } from "@stll/legal-ast/polish-document-roles";
-
-import { appendTextInline } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 // Built from code points: the characters are invisible in a regex literal.
 const NO_BREAK_SPACE = String.fromCodePoint(0xa0);

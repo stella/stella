@@ -1,17 +1,16 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { visibleHtmlText } from "@stll/case-law-parsers/visible-html-text";
-import { load } from "@stll/html";
-import type { Block } from "@stll/legal-ast/document-ast";
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
-
 import {
   buildValidationHtml,
   validateAst,
   validationParagraphs,
   type ValidationResult,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+} from "@stll/case-law-parsers/validate-ast";
+import { visibleHtmlText } from "@stll/case-law-parsers/visible-html-text";
+import { load } from "@stll/html";
+import type { Block } from "@stll/legal-ast/document-ast";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { courtListenerValidationPolicy } from "./validation-policy";
 

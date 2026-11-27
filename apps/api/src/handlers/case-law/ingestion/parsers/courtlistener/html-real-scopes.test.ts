@@ -2,8 +2,9 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import type { OpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
+
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 
 import { composeCourtListenerText } from "./compose";

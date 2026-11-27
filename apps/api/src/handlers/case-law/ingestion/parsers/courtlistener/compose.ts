@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: imports the unchanged citation scope shape from its pure owner.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
@@ -12,6 +13,10 @@ import { Result } from "better-result";
  * no opinion is published without the others.
  */
 
+import {
+  compareOpinionOrder,
+  type OpinionType,
+} from "@stll/case-law-parsers/courtlistener/vocabulary";
 import type { CitationOpinionScope } from "@stll/legal-ast/citation-opinion-scope";
 // parser-output-unchanged: imports the document AST from its package owner
 import { isApparatusRole } from "@stll/legal-ast/document-ast";
@@ -27,10 +32,6 @@ import {
   COURTLISTENER_REJECTION_REASON,
   type CourtListenerRejectionReason,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/rejection";
-import {
-  compareOpinionOrder,
-  type OpinionType,
-} from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { indexCitationScopes } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
 import {

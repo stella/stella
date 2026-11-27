@@ -10,14 +10,13 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import { type Inline, plainTextOf } from "@stll/legal-ast/document-ast";
 import {
   normalizeInlineLine,
   stripInlinePrefix,
 } from "@stll/legal-ast/inline-line";
 import { assertProperty, propertySeed } from "@stll/property-testing";
-
-import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See

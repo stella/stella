@@ -15,6 +15,18 @@
       "types": "./src/at-decision-regions.ts",
       "import": "./src/at-decision-regions.ts"
     },
+    "./court-paragraph-numbers": {
+      "types": "./src/court-paragraph-numbers.ts",
+      "import": "./src/court-paragraph-numbers.ts"
+    },
+    "./courtlistener/canonical-id-order": {
+      "types": "./src/courtlistener/canonical-id-order.ts",
+      "import": "./src/courtlistener/canonical-id-order.ts"
+    },
+    "./courtlistener/vocabulary": {
+      "types": "./src/courtlistener/vocabulary.ts",
+      "import": "./src/courtlistener/vocabulary.ts"
+    },
     "./document-footnotes": {
       "types": "./src/document-footnotes.ts",
       "import": "./src/document-footnotes.ts"
@@ -23,9 +35,17 @@
       "types": "./src/entity-residue.ts",
       "import": "./src/entity-residue.ts"
     },
+    "./html-whitespace": {
+      "types": "./src/html-whitespace.ts",
+      "import": "./src/html-whitespace.ts"
+    },
     "./inline-style": {
       "types": "./src/inline-style.ts",
       "import": "./src/inline-style.ts"
+    },
+    "./libpdf-utils": {
+      "types": "./src/libpdf-utils.ts",
+      "import": "./src/libpdf-utils.ts"
     },
     "./markup-residue": {
       "types": "./src/markup-residue.ts",
@@ -34,6 +54,10 @@
     "./parse-xml-error": {
       "types": "./src/parse-xml-error.ts",
       "import": "./src/parse-xml-error.ts"
+    },
+    "./parser-logger": {
+      "types": "./src/parser-logger.ts",
+      "import": "./src/parser-logger.ts"
     },
     "./rtf-control-vocabulary": {
       "types": "./src/rtf-control-vocabulary.ts",
@@ -51,6 +75,10 @@
       "types": "./src/rtf-reader.ts",
       "import": "./src/rtf-reader.ts"
     },
+    "./rtf-source-registry": {
+      "types": "./src/rtf-source-registry.ts",
+      "import": "./src/rtf-source-registry.ts"
+    },
     "./run-content-text": {
       "types": "./src/run-content-text.ts",
       "import": "./src/run-content-text.ts"
@@ -59,6 +87,14 @@
       "types": "./src/run-content-text.fixtures.ts",
       "import": "./src/run-content-text.fixtures.ts"
     },
+    "./sanitize-url": {
+      "types": "./src/sanitize-url.ts",
+      "import": "./src/sanitize-url.ts"
+    },
+    "./shared-inlines": {
+      "types": "./src/shared-inlines.ts",
+      "import": "./src/shared-inlines.ts"
+    },
     "./strip-html": {
       "types": "./src/strip-html.ts",
       "import": "./src/strip-html.ts"
@@ -66,6 +102,10 @@
     "./text-encoding": {
       "types": "./src/text-encoding.ts",
       "import": "./src/text-encoding.ts"
+    },
+    "./validate-ast": {
+      "types": "./src/validate-ast.ts",
+      "import": "./src/validate-ast.ts"
     },
     "./visible-html-text": {
       "types": "./src/visible-html-text.ts",
@@ -81,15 +121,18 @@
     "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/case-law-parsers"
   },
   "dependencies": {
+    "@libpdf/core": "catalog:",
     "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/docx-core": "catalog:",
+    "@stll/errors": "workspace:*",
     "@stll/html": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/mojibake": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
-    "entities": "^9.0.0"
+    "entities": "^9.0.0",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

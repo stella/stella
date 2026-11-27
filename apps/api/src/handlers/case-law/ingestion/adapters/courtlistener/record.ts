@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 import { panic, Result } from "better-result";
 /**
@@ -11,6 +12,12 @@ import { panic, Result } from "better-result";
  */
 import * as v from "valibot";
 
+import {
+  type CitationType,
+  isCitationType,
+  isOpinionType,
+  type OpinionType,
+} from "@stll/case-law-parsers/courtlistener/vocabulary";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 
@@ -42,12 +49,6 @@ import {
   type PersonRow,
   readCsvBoolean,
 } from "./snapshot-columns";
-import {
-  type CitationType,
-  isCitationType,
-  isOpinionType,
-  type OpinionType,
-} from "./vocabulary";
 
 export const COURTLISTENER_RECORD_VERSION = 1;
 
