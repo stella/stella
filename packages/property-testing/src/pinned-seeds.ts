@@ -4,7 +4,10 @@ import path from "node:path";
 
 import { PropertyTestConfigError } from "./property-test-config-error";
 
-export const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
+const PROPERTY_SEEDS_PATH = path.resolve(
+  import.meta.dir,
+  "../property-seeds.json",
+);
 export const PROPERTY_SEEDS_FILE =
   "packages/property-testing/property-seeds.json";
 export const REPLAY_PATH_PATTERN = /^\d+(:\d+)*$/u;
@@ -99,10 +102,7 @@ export const readPinnedSeeds = (): Result<
     return Result.ok(cachedSeeds);
   }
   return Result.try({
-    try: (): unknown =>
-      JSON.parse(
-        readFileSync(path.join(REPO_ROOT, PROPERTY_SEEDS_FILE), "utf-8"),
-      ),
+    try: (): unknown => JSON.parse(readFileSync(PROPERTY_SEEDS_PATH, "utf-8")),
     catch: (cause) =>
       new PropertyTestConfigError("Unable to read property seeds", cause),
   })

@@ -510,7 +510,7 @@ test("duration budgeting uses selected work only and never creates an empty shar
         }).shards,
       ).toBe(seconds > API_SHARD_SECONDS ? 2 : 1);
     }
-    for (let index = 0; index < 5; index++) {
+    for (let index = 0; index < API_TEST_SHARD_IDS.length; index++) {
       write(`apps/api/src/new-${index}.test.ts`, 'import "./handler";');
     }
     expect(
@@ -765,5 +765,45 @@ test("new external Turbo inputs widen without a selector rule and invalid metada
         selectApiTestImpact({ root, changed: ["notes/unrelated.ts"] }).mode,
       ).toBe("all");
     }
+  });
+});
+
+test("runner rule and runner import closure widen only test-runner scripts and their helpers", () => {
+  withRepository((root, write) => {
+    write(
+      "apps/api/scripts/run-tests.ts",
+      'import { plan } from "./runner-helper"; export const ok = plan;',
+    );
+    write("apps/api/scripts/runner-helper.ts", "export const plan = true;");
+    write("apps/api/scripts/seed-example.ts", "export const seed = true;");
+    write("apps/api/scripts/seed-example.test.ts", 'import "./seed-example";');
+    // Transitive helper of run-tests.ts widens to the full suite.
+    expect(
+      selectApiTestImpact({
+        root,
+        changed: ["apps/api/scripts/runner-helper.ts"],
+      }).mode,
+    ).toBe("all");
+    // Unrelated maintenance script and its test stay narrowly selected.
+    expect(
+      selectApiTestImpact({
+        root,
+        changed: ["apps/api/scripts/seed-example.ts"],
+      }),
+    ).toEqual({
+      mode: "selected",
+      files: ["scripts/seed-example.test.ts"],
+      shards: 1,
+    });
+    expect(
+      selectApiTestImpact({
+        root,
+        changed: ["apps/api/scripts/seed-example.test.ts"],
+      }),
+    ).toEqual({
+      mode: "selected",
+      files: ["scripts/seed-example.test.ts"],
+      shards: 1,
+    });
   });
 });
