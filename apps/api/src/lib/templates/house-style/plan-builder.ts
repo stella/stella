@@ -33,6 +33,7 @@ import type {
   TemplatePlanReference,
   TemplatePlanSection,
   TemplatePlanSourceItem,
+  TemplatePlanSpacing,
   TrackedChanges,
   TrackedChangesView,
 } from "@/api/lib/templates/house-style/folio-contract";
@@ -263,6 +264,10 @@ export type FormattingNoteItem =
    *  text of table cells. The template's text styles set every line at the
    *  left. */
   | { kind: "alignmentsKept"; blocks: number }
+  /** `blocks` cell paragraphs the source sets tight by hand (no space in
+   *  front of them, none behind them) stay tight: the rows of a table keep
+   *  their height in the template's text style. */
+  | { kind: "cellSpacingKept"; blocks: number }
   /** The letterhead the template keeps: `filled` cells took the letter's
    *  own addressee, date or reference; `left` cells still show the
    *  template's sample text, because the letter states nothing for them,
@@ -2178,6 +2183,21 @@ const cellStyleOf = (
 ): string | null =>
   role === "party" ? (profile.roles.body?.styleId ?? styleId) : styleId;
 
+/**
+ * The sides a cell paragraph sets tight by hand: no space in front of it,
+ * none behind it, or neither. Only a side it states as none is kept; any
+ * other measure is the template's to give.
+ */
+const setTightOf = ({
+  spacing,
+}: DocxBlock): TemplatePlanSpacing | undefined => {
+  const tight: TemplatePlanSpacing = {
+    ...(spacing?.before === 0 ? { before: 0 } : {}),
+    ...(spacing?.after === 0 ? { after: 0 } : {}),
+  };
+  return Object.keys(tight).length === 0 ? undefined : tight;
+};
+
 /** The roles of cell paragraphs that are lines of text laid out by their
  *  table: where the source centres one or sets it at the right, it stays. */
 const CELL_TEXT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
@@ -2205,6 +2225,9 @@ const tableItem = (
         CELL_TEXT_ROLES.has(placement.role) && inner.text.trim() !== ""
           ? setApartOf(inner)
           : undefined;
+      const spacing = CELL_TEXT_ROLES.has(placement.role)
+        ? setTightOf(inner)
+        : undefined;
       nested.push({
         blockId: inner.id,
         ...(styleId === null ? {} : { styleId }),
@@ -2212,6 +2235,7 @@ const tableItem = (
         ...stripOf(placement),
         ...asTextOf(inner, numbering),
         ...(alignment === undefined ? {} : { alignment }),
+        ...(spacing === undefined ? {} : { spacing }),
       });
     } else if (inner.kind === "paragraph") {
       // A cell paragraph placed with its table takes the style the
@@ -2223,12 +2247,22 @@ const tableItem = (
       const labelled = shownLabelOf(inner) !== null;
       const alignment =
         inner.text.trim() === "" ? undefined : setApartOf(inner);
-      if (styleId !== undefined || labelled || alignment !== undefined) {
+      // So is how close its rows stand: a row set tight by hand (a swatch
+      // of a legend, a line of a dense table) would grow by the spacing of
+      // the template's text style.
+      const spacing = setTightOf(inner);
+      if (
+        styleId !== undefined ||
+        labelled ||
+        alignment !== undefined ||
+        spacing !== undefined
+      ) {
         nested.push({
           blockId: inner.id,
           ...(styleId === undefined ? {} : { styleId }),
           ...(labelled ? { numbering: null, labelAsText: true } : {}),
           ...(alignment === undefined ? {} : { alignment }),
+          ...(spacing === undefined ? {} : { spacing }),
         });
       }
     }
@@ -3211,6 +3245,17 @@ const noteParagraphOptions = (
   }
   if (aligned > 0) {
     items.push({ kind: "alignmentsKept", blocks: aligned });
+  }
+  let tight = 0;
+  for (const item of body) {
+    if (item.kind === "source") {
+      tight += (item.nested ?? NO_NESTED).filter(
+        (nested) => nested.spacing !== undefined,
+      ).length;
+    }
+  }
+  if (tight > 0) {
+    items.push({ kind: "cellSpacingKept", blocks: tight });
   }
   const closed = body.filter(
     (item) =>
