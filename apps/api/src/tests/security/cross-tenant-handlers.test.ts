@@ -68,12 +68,16 @@ import {
   legalLists,
   legalReaderAnnotations,
   legalReaderAnswers,
+  legislationDocuments,
+  legislationMatterLinks,
+  legislationSources,
   notifications,
   numberSeries,
   organizationDataExports,
   organizationSettings,
   outboundActions,
   playbookDefinitions,
+  pushDevices,
   recordingTranscriptionRuns,
   reportExports,
   savedSearches,
@@ -100,6 +104,7 @@ import readAuditLogs from "@/api/handlers/audit-logs/list";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
+import listCatalogue from "@/api/handlers/catalogue/list";
 import fileChatThreadBrowserDownload from "@/api/handlers/chat/browser-downloads/chat-thread";
 import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
 import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
@@ -223,7 +228,10 @@ import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import { createListReaderAnnotations } from "@/api/handlers/legal-reader/annotations/list";
 import { createListReaderAnswers } from "@/api/handlers/legal-reader/answers/list";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
+import deleteLegislationMatterLink from "@/api/handlers/legislation/matter-links/delete";
+import listLegislationMatterLinks from "@/api/handlers/legislation/matter-links/list";
 import listLegalLists from "@/api/handlers/lists/list";
+import unregisterPushDevice from "@/api/handlers/me/push-devices/unregister";
 import deleteMemory from "@/api/handlers/memories/delete";
 import listMemories from "@/api/handlers/memories/list";
 import updateMemory from "@/api/handlers/memories/update";
@@ -543,6 +551,16 @@ const viewTemplateB = toSafeId<"workspaceViewTemplate">(
 const workspaceViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-2222222229ab",
 );
+const legislationSourceB = toSafeId<"legislationSource">(
+  "22222222-2222-4222-8222-2222222229ac",
+);
+const legislationDocumentB = toSafeId<"legislationDocument">(
+  "22222222-2222-4222-8222-2222222229ad",
+);
+const legislationMatterLinkB = toSafeId<"legislationMatterLink">(
+  "22222222-2222-4222-8222-2222222229ae",
+);
+const pushDeviceTokenB = "b".repeat(64);
 const foreignSignalB = toSafeId<"signal">(
   "22222222-2222-4222-8222-222222222248",
 );
@@ -4331,6 +4349,91 @@ const isolationCases: IsolationCase[] = [
       expectRecordFieldEquals(result, "id", testIds.wsB1),
   },
   {
+    name: "catalogue list excludes foreign organization installed skills",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listCatalogue, workspaceA, {}),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listCatalogue, workspaceB, {}),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      const entries = recordField(result, "entries");
+      if (!Array.isArray(entries)) {
+        throw new TypeError("Expected an array at response.entries");
+      }
+      expect(
+        entries.some(
+          (entry) =>
+            isRecord(entry) && entry["installedSkillId"] === agentSkillB,
+        ),
+      ).toBe(false);
+    },
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      const entries = recordField(result, "entries");
+      if (!Array.isArray(entries)) {
+        throw new TypeError("Expected an array at response.entries");
+      }
+      expect(
+        entries.some(
+          (entry) =>
+            isRecord(entry) && entry["installedSkillId"] === agentSkillB,
+        ),
+      ).toBe(true);
+    },
+  },
+  {
+    name: "legislation matter links list",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listLegislationMatterLinks, workspaceA, {
+        workspaceId: testIds.wsB1,
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(listLegislationMatterLinks, workspaceB, {
+        workspaceId: testIds.wsB1,
+      }),
+    expectDenied: (result) =>
+      expectFieldArrayExcludesId(result, "links", legislationMatterLinkB),
+    expectPositive: (result) =>
+      expectFieldArrayContainsId(result, "links", legislationMatterLinkB),
+  },
+  {
+    name: "legislation matter link delete",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(deleteLegislationMatterLink, workspaceA, {
+        workspaceId: testIds.wsB1,
+        params: { workspaceId: testIds.wsB1, linkId: legislationMatterLinkB },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(deleteLegislationMatterLink, workspaceB, {
+        workspaceId: testIds.wsB1,
+        params: { workspaceId: testIds.wsB1, linkId: legislationMatterLinkB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(recordField(result, "success")).toBe(true);
+    },
+  },
+  {
+    name: "me push device unregister isolates another user's device token",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(unregisterPushDevice, workspaceA, {
+        params: { token: pushDeviceTokenB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(unregisterPushDevice, workspaceB, {
+        params: { token: pushDeviceTokenB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(recordField(result, "removed")).toBe(false);
+    },
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(recordField(result, "removed")).toBe(true);
+    },
+  },
+  {
     name: "workspaces list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(readWorkspaces, workspaceA, { query: {} }),
@@ -5251,6 +5354,39 @@ testState.beforeAll(async () => {
     name: "Isolation View B",
     layout: tableViewLayout,
     position: 0,
+  });
+  await testDb.insert(legislationSources).values({
+    id: legislationSourceB,
+    adapterKey: "cz-esbirka",
+    name: "Isolation Legislation Source B",
+  });
+  await testDb.insert(legislationDocuments).values({
+    id: legislationDocumentB,
+    sourceId: legislationSourceB,
+    eli: "cz/sb/2012/89",
+    title: "Isolation Statute B",
+    country: "CZ",
+    language: "cs",
+  });
+  await testDb.insert(legislationMatterLinks).values({
+    id: legislationMatterLinkB,
+    documentId: legislationDocumentB,
+    statuteId: "cz/sb/2012/89",
+    provisionId: "par-1",
+    appliedVersion: "2026-01-01",
+    jurisdiction: "CZ",
+    workspaceId: ids.wsB1,
+    linkedBy: ids.userB1,
+  });
+  await testDb.insert(pushDevices).values({
+    userId: ids.userB1,
+    organizationId: ids.orgB,
+    platform: "ios",
+    token: pushDeviceTokenB,
+    environment: "sandbox",
+    bundleId: "app.stll.mobile",
+    appVersion: "1.0.0",
+    locale: "en-US",
   });
 });
 
