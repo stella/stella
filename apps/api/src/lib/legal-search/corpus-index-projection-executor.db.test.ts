@@ -3,8 +3,6 @@ import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { deferred, settledWithin } from "@stll/test-kit";
-
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -121,6 +119,7 @@ const projectionStates = async (entityIds: readonly string[]) =>
     )
     .orderBy(corpusIndexProjectionStates.entityId);
 
+/** How many of `entityIds` a cycle left reserved. */
 const reservedIntents = async (entityIds: readonly string[]) =>
   (
     await db
@@ -326,27 +325,6 @@ test("every cycle reports one timing per phase, in both commit modes", async () 
   }
 });
 
-/**
- * Resolves once `count` arrivals have called `arrive`; a chain that sends its
- * requests one after another never gets there, so the wait fails instead of
- * hanging the suite.
- */
-const arrivals = (count: number) => {
-  let arrived = 0;
-  const all = deferred();
-  return {
-    arrive: async (): Promise<void> => {
-      arrived += 1;
-      if (arrived >= count) {
-        all.resolve();
-      }
-      await settledWithin(all.promise, {
-        description: `${count} requests in flight together`,
-      });
-    },
-  };
-};
-
 test("repeated 413 cycles park only the rejected revision after its healthy batch mate succeeds", async () => {
   const entityIds = await seedLegislation([1, 2]);
   const failingEntity =
@@ -355,12 +333,9 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
     entityIds.at(1) ?? panic("Expected healthy legislation entity");
   const requestSizes: number[] = [];
   const warn = spyOn(logger, "warn");
-  let pair = arrivals(1);
   const ingest = async (_indexId: string, ndjson: string) => {
     const size = ndjson.split("\n").length;
     requestSizes.push(size);
-    // Both halves of a split request are in flight together.
-    await pair.arrive();
     if (ndjson.includes(failingEntity)) {
       return Result.err(
         new CorpusIndexError({
@@ -381,7 +356,6 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
     expect(first.status).toBe("append_unknown");
     expect(first.requestCount).toBe(1);
     expect(requestSizes).toEqual([2]);
-    // The rejected request halves its revisions' caps, uncharged.
     expect(await projectionStates(entityIds)).toEqual(
       entityIds.map((entityId) => ({
         entityId,
@@ -393,18 +367,15 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
     );
 
     await makeRetryDue(entityIds);
-    pair = arrivals(2);
     const second = await runLegislationCycle({
       entityIds,
       text: "Small act text.",
       ingest,
     });
-    // The rejected half stops new starts, not the half already in flight.
     expect(second.status).toBe("append_unknown");
-    expect(second.requestCount).toBe(2);
-    expect(second.applied).toBe(1);
-    expect(second.cancelled).toBe(0);
-    expect(requestSizes).toEqual([2, 1, 1]);
+    expect(second.requestCount).toBe(1);
+    expect(second.cancelled).toBe(1);
+    expect(requestSizes).toEqual([2, 1]);
     expect(await projectionStates(entityIds)).toEqual([
       {
         entityId: failingEntity,
@@ -415,6 +386,26 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
       },
       {
         entityId: healthyEntity,
+        workStatus: "retry_scheduled",
+        failureAttempts: 0,
+        lastFailureKind: "append_rejected",
+        appendRequestCap: 1,
+      },
+    ]);
+
+    await makeRetryDue([healthyEntity]);
+    const third = await runLegislationCycle({
+      entityIds,
+      text: "Small act text.",
+      ingest,
+    });
+    expect(third.status).toBe("completed");
+    expect(third.applied).toBe(1);
+    expect(third.requestCount).toBe(1);
+    expect(requestSizes).toEqual([2, 1, 1]);
+    expect(await projectionStates([healthyEntity])).toEqual([
+      {
+        entityId: healthyEntity,
         workStatus: "eligible",
         failureAttempts: 0,
         lastFailureKind: null,
@@ -423,15 +414,14 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
     ]);
 
     await makeRetryDue([failingEntity]);
-    pair = arrivals(1);
-    const third = await runLegislationCycle({
+    const fourth = await runLegislationCycle({
       entityIds,
       text: "Small act text.",
       ingest,
     });
-    expect(third.status).toBe("append_blocked");
-    expect(third.blocked).toBe(1);
-    expect(third.requestCount).toBe(1);
+    expect(fourth.status).toBe("append_blocked");
+    expect(fourth.blocked).toBe(1);
+    expect(fourth.requestCount).toBe(1);
     expect(requestSizes).toEqual([2, 1, 1, 1]);
     expect(await projectionStates(entityIds)).toEqual([
       {
@@ -529,18 +519,15 @@ test("an unknown two-revision outcome does not charge either batch mate", async 
     text: "Small act text.",
     ingest,
   });
-  // Each revision is now alone, so each unknown outcome is its own and is
-  // charged; whichever request failed first, neither revision is left
-  // reserved, and none is charged twice.
-  expect(second.requestCount + second.cancelled).toBe(2);
-  expect(requestSizes.slice(0, 1)).toEqual([2]);
-  expect(requestSizes.slice(1).every((size) => size === 1)).toBe(true);
-  const charged = (await projectionStates(entityIds)).map(
-    ({ failureAttempts }) => failureAttempts,
-  );
-  expect(charged.toSorted((left, right) => left - right)).toEqual(
-    second.requestCount === 2 ? [1, 1] : [0, 1],
-  );
+  expect(second.requestCount).toBe(1);
+  expect(requestSizes).toEqual([2, 1]);
+  expect(
+    (await projectionStates(entityIds)).map(
+      ({ failureAttempts }) => failureAttempts,
+    ),
+  ).toEqual([1, 0]);
+  // The revision behind the failed request was handed back, not left to
+  // expire.
   expect(await reservedIntents(entityIds)).toBe(0);
 });
 
@@ -579,7 +566,7 @@ test.each([
   },
 );
 
-test("an engine fault starts nothing more and hands back what it did not start", async () => {
+test("an engine fault leaves later requests unattempted", async () => {
   const entityIds = await seedLegislation([9, 10]);
   const result = await runLegislationCycle({
     entityIds,
@@ -590,10 +577,8 @@ test("an engine fault starts nothing more and hands back what it did not start",
       ),
   });
   expect(result.status).toBe("engine_unavailable");
-  // A request already in flight when the first failed still records its
-  // outcome; one not started by then is handed back, not left to expire.
-  expect(result.requestCount + result.cancelled).toBe(2);
-  expect(result.requestCount).toBeGreaterThanOrEqual(1);
+  expect(result.requestCount).toBe(1);
+  expect(result.cancelled).toBe(1);
   expect(await reservedIntents(entityIds)).toBe(0);
   expect(
     (await projectionStates(entityIds)).map(

@@ -7,14 +7,13 @@
  * Under a 600-second commit window a revision sent alone held its chain for
  * a whole window, so a backlog of them drained one or two a cycle. These
  * cases pin what replaced that: revisions of one cap travel together, a
- * cycle's requests run side by side inside one window, a failing request
- * bisects down to the revision at fault, no request starts on a lease shorter
- * than the start margin, and whatever a cycle did not start is handed back
- * at once.
+ * chain still sends one request at a time, a failing request bisects down to
+ * the revision at fault, no request starts on a lease shorter than the start
+ * margin, and whatever a cycle did not start is handed back when it ends,
+ * however it ends: a transaction that fails after a request was sent, or a
+ * start that rolls back, leaves no reservation behind and no request running.
  *
- * The client fake stands in for the window: a request "waits for the commit"
- * by waiting for the other requests of its round, and time passing inside
- * the window is the reserved leases running short.
+ * Time passing inside the window is the reserved leases running short.
  */
 
 import { panic, Result } from "better-result";
@@ -22,7 +21,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { deferred, settledWithin } from "@stll/test-kit";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -45,10 +44,7 @@ import {
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   corpusProjectionAppendStartMarginMs,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import {
-  CORPUS_PROJECTION_APPEND_REQUESTS_IN_FLIGHT,
-  executeCorpusProjectionAppendCycle,
-} from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import {
   abandonCorpusProjectionAppendTx,
   cancelCorpusProjectionReservationsTx,
@@ -230,83 +226,86 @@ const makeRetryDue = async (entityIds: readonly string[]) => {
     );
 };
 
+type Ingest = (ndjson: string) => Promise<Result<void, CorpusIndexError>>;
+
+type AppendCycleOptions = Parameters<
+  typeof executeCorpusProjectionAppendCycle
+>[0];
+
 /**
- * One commit round: every request that arrives waits until `count` have, as
- * requests published by the same commit do, then `onFull` runs once before
- * any is released. A chain that sends one request per window never fills a
- * round, so its wait fails instead of hanging the suite.
+ * The engine fake: records each request as its revision list, publishes what
+ * `ingest` accepts, and counts the requests in flight, so a test can see that
+ * a chain sends one at a time and that none outlives the cycle.
  */
-const commitRound = (
-  count: number,
-  onFull: () => Promise<void> = async () => {},
-) => {
-  let arrived = 0;
+const fakeEngine = (ingest: Ingest) => {
+  const published = new Map<string, number>();
+  const requests: string[][] = [];
+  const bodies: string[] = [];
   let inFlight = 0;
-  let peakInFlight = 0;
-  const full = deferred();
-  return {
-    peak: () => peakInFlight,
-    wait: async (): Promise<void> => {
-      arrived += 1;
-      inFlight += 1;
-      peakInFlight = Math.max(peakInFlight, inFlight);
-      if (arrived === count) {
-        await onFull();
-        full.resolve();
-      }
-      await settledWithin(full.promise, {
-        description: `${count} requests of one commit round`,
+  let peak = 0;
+  const engineClient: AppendCycleOptions["client"] = {
+    ingestCommittedBatch: async ({ ndjson }) => {
+      const revisions = ndjson.split("\n").map((line) => {
+        const { projection_revision } = JSON.parse(line);
+        return typeof projection_revision === "string"
+          ? projection_revision
+          : panic("A sent document has no revision");
       });
+      requests.push(revisions);
+      bodies.push(ndjson);
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      const outcome = await ingest(ndjson);
       inFlight -= 1;
+      if (outcome.isOk()) {
+        for (const revision of revisions) {
+          published.set(revision, (published.get(revision) ?? 0) + 1);
+        }
+      }
+      return outcome;
     },
+    ingestQueuedBatch: async () =>
+      panic("Projection append must wait for publication"),
+    aggregate: async ({ query }) =>
+      Result.ok({
+        projection_revisions: {
+          buckets: Array.from(published, ([key, doc_count]) => ({
+            key,
+            doc_count,
+          })).filter(({ key }) => query.includes(`"${key}"`)),
+          doc_count_error_upper_bound: 0,
+          sum_other_doc_count: 0,
+        },
+      }),
+  };
+  return {
+    client: engineClient,
+    requests,
+    bodies,
+    inFlight: () => inFlight,
+    peak: () => peak,
+    sizes: () =>
+      requests
+        .map(({ length }) => length)
+        .toSorted((left, right) => left - right),
   };
 };
 
-type Ingest = (ndjson: string) => Promise<Result<void, CorpusIndexError>>;
+const accepting: Ingest = async () => Result.ok(undefined);
 
-/** One cycle of the generation, its requests recorded as revision lists. */
+/** One cycle of the generation. */
 const runCycle = async ({
   entityIds,
-  ingest,
+  engine,
+  transactions = runInTransaction,
 }: {
   entityIds: readonly SafeId<"legislationDocument">[];
-  ingest: Ingest;
-}) => {
-  const published = new Map<string, number>();
-  const requests: string[][] = [];
-  const result = await executeCorpusProjectionAppendCycle({
-    runInTransaction,
-    client: {
-      ingestCommittedBatch: async ({ ndjson }) => {
-        const revisions = ndjson.split("\n").map((line) => {
-          const { projection_revision } = JSON.parse(line);
-          return typeof projection_revision === "string"
-            ? projection_revision
-            : panic("A sent document has no revision");
-        });
-        requests.push(revisions);
-        const outcome = await ingest(ndjson);
-        if (outcome.isOk()) {
-          for (const revision of revisions) {
-            published.set(revision, (published.get(revision) ?? 0) + 1);
-          }
-        }
-        return outcome;
-      },
-      ingestQueuedBatch: async () =>
-        panic("Projection append must wait for publication"),
-      aggregate: async ({ query }) =>
-        Result.ok({
-          projection_revisions: {
-            buckets: Array.from(published, ([key, doc_count]) => ({
-              key,
-              doc_count,
-            })).filter(({ key }) => query.includes(`"${key}"`)),
-            doc_count_error_upper_bound: 0,
-            sum_other_doc_count: 0,
-          },
-        }),
-    },
+  engine: ReturnType<typeof fakeEngine>;
+  transactions?: AppendCycleOptions["runInTransaction"];
+}) =>
+  await executeCorpusProjectionAppendCycle({
+    runInTransaction: transactions,
+    client: engine.client,
     commitMode: CORPUS_PROJECTION_APPEND_COMMIT_MODE.published,
     ...TARGET,
     scope: { type: "subjects", entityIds },
@@ -323,13 +322,33 @@ const runCycle = async ({
         storedAst: { type: "absent" } as const,
       }),
   });
-  return {
-    result,
-    sizes: requests
-      .map(({ length }) => length)
-      .toSorted((left, right) => left - right),
-  };
+
+const setCap = async (
+  entityIds: readonly string[],
+  appendRequestCap: number,
+) => {
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({ appendRequestCap })
+    .where(inArray(corpusIndexProjectionStates.entityId, [...entityIds]));
 };
+
+/** How many of `entityIds` have an append started, as `tx` sees it. */
+const countStarted = async (
+  tx: FixtureTransaction,
+  entityIds: readonly string[],
+): Promise<number> =>
+  (
+    await tx
+      .select({ id: corpusIndexProjectionIntents.id })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          inArray(corpusIndexProjectionIntents.entityId, [...entityIds]),
+          eq(corpusIndexProjectionIntents.status, "append_started"),
+        ),
+      )
+  ).length;
 
 const reserve = async (
   entityIds: readonly SafeId<"legislationDocument">[],
@@ -537,7 +556,7 @@ test("an append starts only while its lease covers the generation's start margin
   ).toEqual([{ intentId: covered.intentId, status: "started" }]);
 });
 
-test("legacy single entities are grouped into shared requests that one commit round publishes", async () => {
+test("legacy single entities are grouped into shared requests sent one at a time", async () => {
   const entityIds = await seed(40);
   await db.execute(
     sql`UPDATE ${corpusIndexProjectionStates} SET append_mode = 'single' WHERE entity_id IN (${sql.join(
@@ -545,18 +564,12 @@ test("legacy single entities are grouped into shared requests that one commit ro
       sql`, `,
     )})`,
   );
-  const round = commitRound(2);
-  const { result, sizes } = await runCycle({
-    entityIds,
-    ingest: async () => {
-      await round.wait();
-      return Result.ok(undefined);
-    },
-  });
-  // Two requests of the legacy cap and the rest, not forty of one, and both
-  // in flight inside the same window.
-  expect(sizes).toEqual([8, 32]);
-  expect(round.peak()).toBe(2);
+  const engine = fakeEngine(accepting);
+  const result = await runCycle({ entityIds, engine });
+  // Two requests of the legacy cap and the rest, not forty of one, and never
+  // more than one in flight: the chain's byte budget is one request.
+  expect(engine.sizes()).toEqual([8, 32]);
+  expect(engine.peak()).toBe(1);
   expect(result.status).toBe("completed");
   expect(result.requestCount).toBe(2);
   expect(result.applied).toBe(40);
@@ -571,41 +584,44 @@ test("legacy single entities are grouped into shared requests that one commit ro
 test("a failing shared request bisects down to the revision at fault while its mates apply", async () => {
   const entityIds = await seed(8);
   const poisoned = entityIds.at(3) ?? panic("Expected a poisoned entity");
-  const ingestRound =
-    (round: ReturnType<typeof commitRound>): Ingest =>
-    async (ndjson) => {
-      await round.wait();
-      return ndjson.includes(poisoned)
-        ? Result.err(
-            new CorpusIndexError({
-              message: "request rejected",
-              status: 413,
-              rejection: "definite",
-            }),
-          )
-        : Result.ok(undefined);
-    };
-  const cycles: number[][] = [];
-  const applied: number[] = [];
-  // 8 -> 4 + 4 -> 2 + 2 -> 1 + 1 -> 1: one round each, halves side by side.
-  for (const width of [1, 2, 2, 2, 1]) {
-    // db-await-in-loop: one append cycle per bisection round
-    const { result, sizes } = await runCycle({
-      entityIds,
-      ingest: ingestRound(commitRound(width)),
-    });
-    cycles.push(sizes);
-    applied.push(result.applied);
+  const engine = fakeEngine(async (ndjson) =>
+    ndjson.includes(poisoned)
+      ? Result.err(
+          new CorpusIndexError({
+            message: "request rejected",
+            status: 413,
+            rejection: "definite",
+          }),
+        )
+      : Result.ok(undefined),
+  );
+  const settledOf = async () =>
+    (await states(entityIds)).filter(
+      ({ entityId, appliedRevision, workStatus }) =>
+        entityId === poisoned
+          ? workStatus === "blocked"
+          : appliedRevision !== null,
+    ).length;
+  // A failed request closes its chain, so its mates that were not sent wait
+  // for the next cycle; the bound only stops a regression from looping.
+  for (let cycle = 0; cycle < 12 && (await settledOf()) < 8; cycle += 1) {
+    // db-await-in-loop: one append cycle per bisection round, bounded above
+    await runCycle({ entityIds, engine });
     // db-await-in-loop: cleanup of the round's failed request, modelled as done
     await makeRetryDue(entityIds);
   }
-  expect(cycles).toEqual([[8], [4, 4], [2, 2], [1, 1], [1]]);
-  expect(applied).toEqual([0, 4, 2, 1, 0]);
-  const final = await states(entityIds);
+  expect(await settledOf()).toBe(8);
+  expect(engine.peak()).toBe(1);
+  // Each request that carried the fault was half the one before, down to
+  // the revision alone, which is charged twice and blocked.
   expect(
-    final.filter(({ appliedRevision }) => appliedRevision !== null),
-  ).toHaveLength(7);
-  expect(final.find(({ entityId }) => entityId === poisoned)).toMatchObject({
+    engine.requests
+      .filter((_, index) => engine.bodies.at(index)?.includes(poisoned))
+      .map(({ length }) => length),
+  ).toEqual([8, 4, 2, 1, 1]);
+  expect(
+    (await states(entityIds)).find(({ entityId }) => entityId === poisoned),
+  ).toMatchObject({
     workStatus: "blocked",
     failureAttempts: 2,
     appendRequestCap: 1,
@@ -613,55 +629,32 @@ test("a failing shared request bisects down to the revision at fault while its m
 });
 
 test("a cycle starts nothing on a lease inside the start margin and hands the rest back", async () => {
-  const requests = CORPUS_PROJECTION_APPEND_REQUESTS_IN_FLIGHT + 4;
-  const entityIds = await seed(requests);
-  await db
-    .update(corpusIndexProjectionStates)
-    .set({ appendRequestCap: 1 })
-    .where(inArray(corpusIndexProjectionStates.entityId, entityIds));
-  // The window passes while the first round is in flight: what is still
+  const entityIds = await seed(5);
+  await setCap(entityIds, 1);
+  // The window passes while the first request is in flight: what is still
   // reserved now has less lease left than a request needs.
-  const round = commitRound(
-    CORPUS_PROJECTION_APPEND_REQUESTS_IN_FLIGHT,
-    async () => {
-      await db.execute(
-        sql`UPDATE ${corpusIndexProjectionIntents}
+  const engine = fakeEngine(async () => {
+    await db.execute(
+      sql`UPDATE ${corpusIndexProjectionIntents}
         SET lease_expires_at = clock_timestamp() + interval '60 seconds'
         WHERE status = 'reserved'
           AND entity_id IN (${sql.join(
             entityIds.map((id) => sql`${id}::uuid`),
             sql`, `,
           )})`,
-      );
-    },
-  );
-  const { result, sizes } = await runCycle({
-    entityIds,
-    ingest: async () => {
-      await round.wait();
-      return Result.ok(undefined);
-    },
+    );
+    return Result.ok(undefined);
   });
-  expect(round.peak()).toBe(CORPUS_PROJECTION_APPEND_REQUESTS_IN_FLIGHT);
-  expect(sizes).toHaveLength(CORPUS_PROJECTION_APPEND_REQUESTS_IN_FLIGHT);
+  const result = await runCycle({ entityIds, engine });
+  expect(engine.sizes()).toEqual([1]);
   expect(result.status).toBe("completed");
-  expect(result.applied).toBe(CORPUS_PROJECTION_APPEND_REQUESTS_IN_FLIGHT);
+  expect(result.applied).toBe(1);
   expect(result.cancelled).toBe(4);
-  // Handed back at once, uncharged and still at their place in the queue.
-  expect(await intentsWithStatus(entityIds, "reserved")).toEqual([]);
-  const handedBack = await intentsWithStatus(entityIds, "cancelled");
-  expect(handedBack).toHaveLength(4);
-  expect(
-    handedBack.every(
-      ({ lastError }) =>
-        lastError ===
-        "projection append handed back a reservation it did not start",
-    ),
-  ).toBe(true);
+  await expectHandedBack(entityIds, 4);
   const waiting = (await states(entityIds)).filter(
     ({ appliedRevision }) => appliedRevision === null,
   );
-  const waitingIds = new Set(waiting.map(({ entityId }) => entityId));
+  // Uncharged and still at their place in the queue.
   expect(
     waiting.map(({ workStatus, failureAttempts }) => ({
       workStatus,
@@ -673,10 +666,107 @@ test("a cycle starts nothing on a lease inside the start margin and hands the re
       failureAttempts: 0,
     })),
   );
+  const waitingIds = new Set(waiting.map(({ entityId }) => entityId));
   expect(
     await reserve(
       entityIds.filter((id) => waitingIds.has(id)),
       { leaseMs: FULL_LEASE_MS },
     ),
   ).toHaveLength(4);
+});
+
+/** None of `entityIds` is still reserved; `count` went back by hand-back. */
+const expectHandedBack = async (
+  entityIds: readonly string[],
+  count: number,
+) => {
+  expect(await intentsWithStatus(entityIds, "reserved")).toEqual([]);
+  const handedBack = (await intentsWithStatus(entityIds, "cancelled")).filter(
+    ({ lastError }) =>
+      lastError ===
+      "projection append handed back a reservation it did not start",
+  );
+  expect(handedBack).toHaveLength(count);
+};
+
+type FixtureTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Runs each transaction of the cycle, and fails the first one `fails` picks
+ * after its work and before its commit, so it rolls back. `fails` sees how
+ * many of the fixture's appends were started before and after the work, as
+ * the transaction itself sees them.
+ */
+const failingOnce = (
+  entityIds: readonly string[],
+  fails: (started: { before: number; after: number }) => boolean,
+): AppendCycleOptions["runInTransaction"] => {
+  let failed = false;
+  return async (operation) =>
+    await db.transaction(async (tx) => {
+      const before = await countStarted(tx, entityIds);
+      const value = await operation(asTestRaw<Transaction>(tx));
+      if (
+        !failed &&
+        fails({ before, after: await countStarted(tx, entityIds) })
+      ) {
+        failed = true;
+        return panic("injected transaction failure");
+      }
+      return value;
+    });
+};
+
+test("a transaction that fails after a request was sent hands back what the cycle did not start", async () => {
+  const entityIds = await seed(8);
+  await setCap(entityIds, 4);
+  const engine = fakeEngine(accepting);
+  const exit = { inFlight: -1 };
+  const failure = await rejectionOf(
+    runCycle({
+      entityIds,
+      engine,
+      // The first transaction after the first request: its acceptance.
+      transactions: failingOnce(entityIds, () => engine.requests.length === 1),
+    }).finally(() => {
+      exit.inFlight = engine.inFlight();
+    }),
+  );
+  expect(String(failure)).toContain("injected transaction failure");
+  // The cycle did not return while a request was running, sent nothing
+  // after the failure, and left no reservation of its own behind.
+  expect(exit.inFlight).toBe(0);
+  expect(engine.sizes()).toEqual([4]);
+  await expectHandedBack(entityIds, 4);
+});
+
+test("a start transaction that rolls back leaves no reservation behind", async () => {
+  const entityIds = await seed(8);
+  await setCap(entityIds, 4);
+  const engine = fakeEngine(accepting);
+  const exit = { inFlight: -1 };
+  const failure = await rejectionOf(
+    runCycle({
+      entityIds,
+      engine,
+      // The second request's start: its transaction starts appends and then
+      // rolls back, so its revisions are still reserved.
+      transactions: failingOnce(
+        entityIds,
+        ({ before, after }) => engine.requests.length === 1 && after > before,
+      ),
+    }).finally(() => {
+      exit.inFlight = engine.inFlight();
+    }),
+  );
+  expect(String(failure)).toContain("injected transaction failure");
+  expect(exit.inFlight).toBe(0);
+  expect(engine.sizes()).toEqual([4]);
+  // The first request was sent, accepted and proven before the failure.
+  expect(
+    (await states(entityIds)).filter(
+      ({ appliedRevision }) => appliedRevision !== null,
+    ),
+  ).toHaveLength(4);
+  await expectHandedBack(entityIds, 4);
 });
