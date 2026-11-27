@@ -241,6 +241,31 @@ describe("proposeBlockRoles", () => {
       "clause1",
     );
 
+    // Behind parties without numbers and the sentence that opens the
+    // operative part, numbered lines are provisions, whatever they speak
+    // of.
+    const operative = rolesOf(
+      manifestOf([
+        "SUPPLY AGREEMENT",
+        "Alpha Ltd, registered office 1 Long Street, London",
+        "and",
+        "Beta Ltd, registered office 2 Short Street, Leeds",
+        "have agreed as follows:",
+        "1. Notices shall be delivered to the registered office.",
+        "2. Each party shall notify changes to its company number.",
+      ]),
+    );
+    expect(
+      operative[
+        "1. Notices shall be delivered to the registered office.".slice(0, 28)
+      ],
+    ).toBe("clause1");
+    expect(
+      operative[
+        "2. Each party shall notify changes to its company number.".slice(0, 28)
+      ],
+    ).toBe("clause1");
+
     // Numbered provisions that name no party stay provisions, also where
     // a later one speaks of a registered office.
     const provisions = rolesOf(

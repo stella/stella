@@ -356,7 +356,8 @@ const enumerated = ({
  * …`, or `a)`, `b)`): the document's first enumerated lines, counted from
  * one, where the first has a party's details in or under it and each
  * further one has them too or follows the word that joins two parties. At
- * least two, as a contract has. `provisions` are the labelled lines of the
+ * least two, as a contract has, and none where a party is named or the
+ * preamble opens in front of them. `provisions` are the labelled lines of the
  * body, in order.
  */
 const partyHeadsOf = (
@@ -364,6 +365,17 @@ const partyHeadsOf = (
   provisions: readonly LabelEntry[],
 ): Set<number> => {
   const heads: LabelEntry[] = [];
+  // Parties stand in front of the operative part. Where a party is named
+  // or the preamble opens in front of the first numbered line, the
+  // numbered lines are provisions, whatever they speak of.
+  const opened = blocks
+    .slice(0, provisions.at(0)?.position ?? 0)
+    .some(
+      ({ text }) => PARTY_IDENTITY.test(text) || PREAMBLE_MARKER.test(text),
+    );
+  if (opened) {
+    return new Set();
+  }
   for (const [at, entry] of provisions.entries()) {
     const first = heads.at(0);
     if (
