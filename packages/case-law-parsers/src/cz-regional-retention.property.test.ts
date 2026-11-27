@@ -4,14 +4,13 @@ import fc from "fast-check";
 
 import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@stll/case-law-parsers/cz-regional";
 import type { ParseRegionalInput } from "@stll/case-law-parsers/cz-regional";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   buildValidationHtml,
   validateAst,
 } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   expectMarkerRetention,

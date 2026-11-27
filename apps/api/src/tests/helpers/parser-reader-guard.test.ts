@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
+import {
+  assertReaderAcceptsAst,
+  guardParser,
+} from "@stll/case-law-parsers/parser-reader-guard";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { assertReaderAcceptsAst, guardParser } from "./parser-reader-guard";
 
 const ast = {
   version: 1,

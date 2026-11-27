@@ -7,6 +7,7 @@ import {
   huDocketFrom,
   parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
 } from "@stll/case-law-parsers/hu-bhgy";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   readRtf as readRtfDocument,
   readRtfString,
@@ -41,8 +42,6 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   assertNotePath,

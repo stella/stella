@@ -20,6 +20,7 @@ import {
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
@@ -106,7 +107,6 @@ import {
 import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

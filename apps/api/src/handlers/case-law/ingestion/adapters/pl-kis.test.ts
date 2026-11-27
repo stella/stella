@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@stll/case-law-parsers/pl-kis";
 import {
   AST_STRUCTURE_DEGRADED,
@@ -57,7 +58,6 @@ import type {
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

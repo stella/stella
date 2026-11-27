@@ -2,6 +2,7 @@ import { ops, PDF, PdfArray, PdfNumber, PdfString } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { readPdfTextPages } from "@stll/case-law-parsers/libpdf-utils";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   assemblePdfParagraphs,
   extractPdfBodyAndNotes,
@@ -15,8 +16,6 @@ import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { sha256Hex } from "@stll/sha256/bun";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlSnDecisionPdf = guardParser(uncheckedParsePlSnDecisionPdf);
 

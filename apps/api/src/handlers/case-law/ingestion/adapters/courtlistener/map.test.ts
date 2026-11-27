@@ -4,6 +4,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { OPINION_TYPES } from "@stll/case-law-parsers/courtlistener/vocabulary";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -15,7 +16,6 @@ import {
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   getAdapter,

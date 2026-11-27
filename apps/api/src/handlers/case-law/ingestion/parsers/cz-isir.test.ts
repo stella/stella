@@ -12,8 +12,7 @@ import {
   type CzIsirParagraph,
   parseCzIsirDecision as parseUnguarded,
 } from "@stll/case-law-parsers/cz-isir";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 
 const parseCzIsirDecision = guardParser(parseUnguarded);
 

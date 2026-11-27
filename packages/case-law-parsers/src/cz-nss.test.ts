@@ -2,11 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@stll/case-law-parsers/cz-nss";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
 

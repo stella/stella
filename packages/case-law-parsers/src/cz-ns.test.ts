@@ -8,10 +8,9 @@ import {
 } from "@stll/case-law-parsers/cz-ns";
 import type { ParseNsDecisionInput } from "@stll/case-law-parsers/cz-ns";
 import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 

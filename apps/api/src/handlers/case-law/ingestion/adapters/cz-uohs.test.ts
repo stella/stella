@@ -2,6 +2,7 @@ import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   extractPdfBodyAndNotes,
   PDF_PARAGRAPH_START,
@@ -31,7 +32,6 @@ import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

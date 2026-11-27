@@ -1,13 +1,12 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlDecisionContent as uncheckedParsePlDecisionContent,
   PL_DECISION_MARKUP,
 } from "@stll/case-law-parsers/pl-courts";
 import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 

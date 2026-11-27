@@ -12,7 +12,7 @@ test("fixture parser imports must go through the reader schema guard", async () 
     await lintSingleRule(
       "parser-fixture-reader-guard",
       [
-        'import { guardParser } from "@/api/tests/helpers/parser-reader-guard";',
+        'import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";',
         'import { parseSkUsDocumentXhtml as rawParse } from "./sk-us";',
         "rawParse(input);",
         "fixtures.map(rawParse);",
@@ -44,7 +44,7 @@ test("allows parser fixtures routed through the imported reader schema guard", a
     await lintSingleRule(
       "parser-fixture-reader-guard",
       [
-        'import { guardParser } from "@/api/tests/helpers/parser-reader-guard";',
+        'import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";',
         'import { parseSkUsDocumentXhtml as rawParse } from "./sk-us";',
         "const parse = guardParser(rawParse);",
         "parse(input);",
@@ -102,7 +102,7 @@ test("a local binding that shadows a parser's name is not the parser", async () 
     await lintSingleRule(
       "parser-fixture-reader-guard",
       [
-        'import { guardParser } from "@/api/tests/helpers/parser-reader-guard";',
+        'import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";',
         'import { parseSkUsDocumentXhtml } from "./sk-us";',
         "const parse = guardParser(parseSkUsDocumentXhtml);",
         "inputs.map((parseSkUsDocumentXhtml) => parseSkUsDocumentXhtml);",

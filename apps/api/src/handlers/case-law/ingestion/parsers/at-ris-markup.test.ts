@@ -7,10 +7,9 @@ import {
   readRisContent,
   risTextFidelity,
 } from "@stll/case-law-parsers/at-ris-markup";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { load } from "@stll/html";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 

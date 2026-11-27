@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
 

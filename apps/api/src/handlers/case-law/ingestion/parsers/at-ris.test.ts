@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
 import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 

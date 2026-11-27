@@ -1,11 +1,11 @@
 import { panic } from "better-result";
 import { gunzipSync } from "node:zlib";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { load } from "@stll/html";
 
 import { buildCzNssDecision as uncheckedBuildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { EnrolledAdapterFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

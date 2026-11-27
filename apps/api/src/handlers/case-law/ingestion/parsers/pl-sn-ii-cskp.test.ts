@@ -1,6 +1,7 @@
 import { ops, PDF, PdfString } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   extractPdfLines,
   PDF_PARAGRAPH_START,
@@ -11,8 +12,6 @@ import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { sha256Hex } from "@stll/sha256/bun";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import provenance from "./__fixtures__/pl-sn-ii-cskp-1456-22.pdf.provenance.json";
 

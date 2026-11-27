@@ -21,6 +21,7 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
 import { PL_NCOURT_COURT_NAMES } from "@stll/case-law-parsers/pl-ncourt-courts";
@@ -77,7 +78,6 @@ import {
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
