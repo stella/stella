@@ -73,8 +73,15 @@ export type DocxBlock = {
   /** The space in effect in front of the paragraph and behind it, in
    *  twentieths of a point: each side its own, else its style's, else the
    *  document defaults', else none. A side set to auto spacing or counted
-   *  in lines is left out. Absent from an engine that does not report it. */
-  spacingInEffect?: { before?: number; after?: number };
+   *  in lines is left out. The line spacing resolved the same way, single
+   *  where nothing states one. Absent from an engine that does not report
+   *  it. */
+  spacingInEffect?: {
+    before?: number;
+    after?: number;
+    line?: number;
+    lineRule?: TemplatePlanLineRule;
+  };
   /** The indent in effect, in twentieths of a point: where the
    *  paragraph's lines start, and what its first line adds to that
    *  (negative for a hanging indent). Absent when nothing states one, and
@@ -288,7 +295,18 @@ export type TemplatePlanAlignment = "left" | "center" | "right" | "both";
 
 /** The space in front of a paragraph and behind it, in twentieths of a
  *  point: at least one side. */
-export type TemplatePlanSpacing = { before?: number; after?: number };
+/** How a line spacing is counted: `auto` in 240ths of a line, `exact` and
+ *  `atLeast` in twentieths of a point. */
+export type TemplatePlanLineRule = "auto" | "exact" | "atLeast";
+
+export type TemplatePlanSpacing = {
+  before?: number;
+  after?: number;
+  /** The spacing of the paragraph's lines, counted by `lineRule` (`auto`
+   *  when left out). Left out by an engine that does not know it. */
+  line?: number;
+  lineRule?: TemplatePlanLineRule;
+};
 
 export type TemplatePlanNestedParagraph = {
   blockId: string;
@@ -672,6 +690,8 @@ const blockSchema = v.strictObject({
     v.strictObject({
       before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
       after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      line: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+      lineRule: v.exactOptional(v.picklist(["auto", "exact", "atLeast"])),
     }),
   ),
   indent: v.exactOptional(

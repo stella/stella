@@ -2212,18 +2212,27 @@ const setTightOf = ({
 };
 
 /**
- * The sides a cell paragraph sets tight through its style or the document's
- * defaults. Such a paragraph, placed with its table in no style of the
- * template, would otherwise take the space of the template's body text.
+ * The spacing a cell paragraph has through its style or the document's
+ * defaults, where the template would give it its body text's instead: the
+ * sides it sets tight, and how close its lines stand. Such a paragraph,
+ * placed with its table in no style of the template, keeps them.
  */
-const tightInEffectOf = ({
-  spacingInEffect,
-}: DocxBlock): TemplatePlanSpacing | undefined => {
-  const tight: TemplatePlanSpacing = {
+const looseSpacingOf = (
+  { spacingInEffect }: DocxBlock,
+  byHand: TemplatePlanSpacing | undefined,
+): TemplatePlanSpacing | undefined => {
+  const spacing: TemplatePlanSpacing = {
     ...(spacingInEffect?.before === 0 ? { before: 0 } : {}),
     ...(spacingInEffect?.after === 0 ? { after: 0 } : {}),
+    ...byHand,
+    ...(spacingInEffect !== undefined && spacingInEffect.line !== undefined
+      ? {
+          line: spacingInEffect.line,
+          lineRule: spacingInEffect.lineRule ?? "auto",
+        }
+      : {}),
   };
-  return Object.keys(tight).length === 0 ? undefined : tight;
+  return Object.keys(spacing).length === 0 ? undefined : spacing;
 };
 
 /**
@@ -2290,8 +2299,9 @@ const looseCellOf = (
   // legend, a line of a dense table) would grow by the spacing of the
   // template's text style.
   const spacing =
-    setTightOf(inner) ??
-    (styleId === undefined ? tightInEffectOf(inner) : undefined);
+    styleId === undefined
+      ? looseSpacingOf(inner, setTightOf(inner))
+      : setTightOf(inner);
   if (
     styleId === undefined &&
     !labelled &&

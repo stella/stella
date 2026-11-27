@@ -3083,7 +3083,7 @@ describe("buildTemplatePlan, the lines of the parties", () => {
     const looks: readonly (Partial<DocxBlock> | undefined)[] = [
       // Tight by its style on both sides, at the left, moved in.
       {
-        spacingInEffect: { before: 0, after: 0 },
+        spacingInEffect: { before: 0, after: 0, line: 276, lineRule: "auto" },
         indent: { left: 727, firstLine: 0 },
       },
       // Tight in front only; a hanging first line.
@@ -3109,9 +3109,10 @@ describe("buildTemplatePlan, the lines of the parties", () => {
     const lookOf = (nested: ReturnType<typeof nestedOf>, position: number) =>
       nested.find(({ blockId }) => blockId === cells[position]?.id);
     const placed = nestedOf(justifying);
+    // Its lines stand as close as the source sets them.
     expect(lookOf(placed, 0)).toMatchObject({
       alignment: "left",
-      spacing: { before: 0, after: 0 },
+      spacing: { before: 0, after: 0, line: 276, lineRule: "auto" },
       indent: { left: 727, firstLine: 0 },
     });
     expect(lookOf(placed, 1)).toMatchObject({
