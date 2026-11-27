@@ -23,6 +23,7 @@ import {
   DECISION_TEXT_FIELD_KEYS,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -42,7 +43,6 @@ import {
   isNssDocumentPlaceholder,
   readNssRegistryMetadata,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
-import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";

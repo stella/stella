@@ -18,16 +18,15 @@
  * rest. There is one Polish decision parser, and this is not a second one.
  */
 
-// parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
 import {
   assemblePdfParagraphs,
   extractPdfLines,
   PDF_PARAGRAPH_START,
   pdfParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+} from "@stll/case-law-parsers/pdf-bands";
+import { parsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_SN_SOURCE_SYSTEM = "sn.pl";

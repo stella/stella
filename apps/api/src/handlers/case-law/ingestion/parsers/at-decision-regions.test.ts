@@ -5,13 +5,12 @@ import {
   type AtPrintedLine,
   readAtDecisionRoles,
 } from "@stll/case-law-parsers/at-decision-regions";
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
-
-import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "./at-findok";
-import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "./at-ris";
 
 const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);

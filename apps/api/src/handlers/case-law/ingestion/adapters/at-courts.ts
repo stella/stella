@@ -9,6 +9,8 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 
+import { parseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
+import type { RisDocumentSections } from "@stll/case-law-parsers/at-ris";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { AST_CONTENT_LOST } from "@stll/case-law-parsers/validate-ast";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
@@ -38,8 +40,6 @@ import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/i
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import type { RisDocumentSections } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,

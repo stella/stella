@@ -11,7 +11,7 @@ import {
   assemblePdfParagraphs,
   extractPdfBodyAndNotes,
   PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+} from "@stll/case-law-parsers/pdf-bands";
 
 type Drawn = { text: string; x: number; y: number; size: number };
 

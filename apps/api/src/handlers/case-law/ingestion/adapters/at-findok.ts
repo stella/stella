@@ -9,6 +9,11 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result, TaggedError } from "better-result";
 
+import {
+  listFindokDocumentFields,
+  parseFindokDecisionXml,
+  parseFindokHeadnoteXml,
+} from "@stll/case-law-parsers/at-findok";
 import { AST_CONTENT_LOST } from "@stll/case-law-parsers/validate-ast";
 import { classifyFailure } from "@stll/errors";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
@@ -33,11 +38,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  listFindokDocumentFields,
-  parseFindokDecisionXml,
-  parseFindokHeadnoteXml,
-} from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import {
   absentDecisionTextFields,
   absentTextField,

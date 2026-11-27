@@ -2,20 +2,20 @@ import { ops, PDF, PdfArray, PdfNumber, PdfString } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { readPdfTextPages } from "@stll/case-law-parsers/libpdf-utils";
-import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
-import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/inline";
-import { sha256Hex } from "@stll/sha256/bun";
-
 import {
   assemblePdfParagraphs,
   extractPdfBodyAndNotes,
   extractPdfLines,
   PDF_PARAGRAPH_START,
   pdfParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import { parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+} from "@stll/case-law-parsers/pdf-bands";
+import type { PdfLine } from "@stll/case-law-parsers/pdf-bands";
+import { parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf } from "@stll/case-law-parsers/pl-sn";
+import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
+import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/inline";
+import { sha256Hex } from "@stll/sha256/bun";
+
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlSnDecisionPdf = guardParser(uncheckedParsePlSnDecisionPdf);

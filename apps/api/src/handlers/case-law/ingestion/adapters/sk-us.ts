@@ -18,6 +18,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-field";
+import { parseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
@@ -78,7 +79,6 @@ import {
   INGESTION_USER_AGENT,
   normalizeMetadataValues,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {

@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parsePlNsaDecision as uncheckedParsePlNsaDecision } from "@stll/case-law-parsers/pl-nsa";
 import { createSha256 } from "@stll/sha256/node";
 
 import {
@@ -61,7 +62,6 @@ import {
   decisionIdentifiersFromMetadata,
   normalizeDecisionIdentifier,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { parsePlNsaDecision as uncheckedParsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   decodeSourceRawEnvelope,

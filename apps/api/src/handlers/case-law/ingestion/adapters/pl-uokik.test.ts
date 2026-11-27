@@ -12,6 +12,7 @@ import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { PL_UOKIK_RULING_UNREAD } from "@stll/case-law-parsers/pl-uokik";
 import { load } from "@stll/html";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
@@ -43,7 +44,6 @@ import {
   plUokikSortKey,
   readPlUokikView,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
-import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";

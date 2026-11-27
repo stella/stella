@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
 import {
   buildValidationHtml,
   validateAst,
@@ -10,7 +11,6 @@ import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "./cz-us";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,

@@ -204,7 +204,7 @@
       "apps/api/src/lib/system-audit/modules.ts",
       "oxlint.config.ts",
       "apps/api/src/handlers/case-law/ingestion/parsers/**",
-      "apps/api/src/lib/legal-search/parsers/sk-courts.ts"
+      "packages/case-law-parsers/src/**"
     ],
     "Oxlint rule decisions": [
       "apps/api/src/lib/db/status-tables.gen.ts",

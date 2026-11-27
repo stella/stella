@@ -21,6 +21,9 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
+import { PL_NCOURT_COURT_NAMES } from "@stll/case-law-parsers/pl-ncourt-courts";
 import {
   AST_BOUNDARY_WHITESPACE,
   AST_CONTENT_LOST,
@@ -57,9 +60,6 @@ import type {
   PlNcourtBuild,
   PlNcourtComponent,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
-import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
-import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";

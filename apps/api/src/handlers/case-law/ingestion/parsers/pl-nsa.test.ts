@@ -1,14 +1,15 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
   parsePlNsaDecision as uncheckedParsePlNsaDecision,
   plNsaParagraphs,
   plNsaStatedSuperscripts,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
+} from "@stll/case-law-parsers/pl-nsa";
+
+import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 /**
  * The pl-nsa reader against whole rows of the dataset.
  *

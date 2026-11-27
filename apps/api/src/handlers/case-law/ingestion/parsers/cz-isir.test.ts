@@ -11,7 +11,8 @@ import {
   CZ_ISIR_PARSE_FAILURE,
   type CzIsirParagraph,
   parseCzIsirDecision as parseUnguarded,
-} from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
+} from "@stll/case-law-parsers/cz-isir";
+
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseCzIsirDecision = guardParser(parseUnguarded);

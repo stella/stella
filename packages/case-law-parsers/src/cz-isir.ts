@@ -124,7 +124,7 @@ const ISIR_BRANCH_COURTS: ReadonlyMap<string, RegisteredCourt> = new Map([
 const registeredCourtOf = (code: string): RegisteredCourt | null =>
   ISIR_BRANCH_COURTS.get(code) ?? (isRegisteredCourt(code) ? code : null);
 
-const DASH = "[-‐‑‒–—]";
+const DASH = "[-‐‑‒–\u2014]";
 
 /** A high court's senate mark: `3 VSPH 1361/2023-B-24`, `103 VSPH 257/2026-103`. */
 const HIGH_COURT_DOCKET = new RegExp(

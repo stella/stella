@@ -981,8 +981,10 @@
         "@stll/legal-ast": "workspace:*",
         "@stll/mojibake": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/time": "0.4.3",
         "better-result": "catalog:",
         "entities": "^9.0.0",
+        "slimdom": "^4.3.5",
         "valibot": "catalog:",
       },
       "devDependencies": {

@@ -12,6 +12,7 @@
 import { panic, Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { parseRegionalDecision } from "@stll/case-law-parsers/cz-regional";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
@@ -49,7 +50,6 @@ import {
   isTimeoutError,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";

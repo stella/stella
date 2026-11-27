@@ -10,6 +10,11 @@
 // parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
 import { panic, Result } from "better-result";
 
+import {
+  huBhgyHeaderLabelsOf,
+  parseHuBhgyDecision,
+} from "@stll/case-law-parsers/hu-bhgy";
+import type { HuBhgyHeaderLabel } from "@stll/case-law-parsers/hu-bhgy";
 import { isRtf, readRtf } from "@stll/case-law-parsers/rtf-reader";
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 /**
@@ -82,11 +87,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  huBhgyHeaderLabelsOf,
-  parseHuBhgyDecision,
-} from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
-import type { HuBhgyHeaderLabel } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import { arrayOrEmpty } from "@/api/lib/array";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";

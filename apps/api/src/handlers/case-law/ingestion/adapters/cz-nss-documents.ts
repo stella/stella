@@ -4,6 +4,13 @@
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { Result } from "better-result";
 
+import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import type { ParseNssDecisionInput } from "@stll/case-law-parsers/cz-nss";
+import {
+  assemblePdfParagraphs,
+  extractPdfLines,
+  pdfParagraphsToHtml,
+} from "@stll/case-law-parsers/pdf-bands";
 import {
   ownTableRows,
   visibleHtmlText,
@@ -13,13 +20,6 @@ import { load } from "@stll/html";
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { PublisherTargetError } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import {
-  assemblePdfParagraphs,
-  extractPdfLines,
-  pdfParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 
 const NSS_REGISTRY_ORIGIN = "https://www.nssoud.cz";
 const ANONYMISED_DECISION_PATH =

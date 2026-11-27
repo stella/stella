@@ -149,7 +149,7 @@ const colourExemptions = [
       "a file format's own default.",
     files: [
       // The hidden-text style the court's published HTML uses.
-      "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts",
+      "packages/case-law-parsers/src/sk-us.ts",
       // Class styles restored for the sender's own email markup.
       "apps/api/src/lib/files/email-sender-styles.ts",
       // Seeded sample emails and documents.

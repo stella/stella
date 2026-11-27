@@ -74,7 +74,7 @@ test("the parser module is recognised by its alias path too", async () => {
     await lintSingleRule(
       "parser-fixture-reader-guard",
       [
-        'import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";',
+        'import { parseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";',
         "parseSkUsDocumentXhtml(input);",
       ].join("\n"),
     ),

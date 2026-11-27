@@ -17,11 +17,6 @@
 // parser-output-unchanged: [pl-uokik] @stll/time now resolves to the published 0.4.1 release with the same exports as the removed workspace copy.
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
-// parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { parsePlainDate } from "@stll/time";
-
-import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
 import {
   assemblePdfParagraphs,
   extractPdfBodyAndNotes,
@@ -29,13 +24,17 @@ import {
   pdfNotesOf,
   pdfParagraphsToHtml,
   pdfRunInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+} from "@stll/case-law-parsers/pdf-bands";
 import type {
   PdfBodyAndNotes,
   PdfFootnoteReference,
   PdfLine,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+} from "@stll/case-law-parsers/pdf-bands";
+import { parsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+import { PL_NCOURT_COURT_NAMES } from "@stll/case-law-parsers/pl-ncourt-courts";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { parsePlainDate } from "@stll/time";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_UOKIK_SOURCE_SYSTEM = "decyzje.uokik.gov.pl";

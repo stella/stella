@@ -69,6 +69,19 @@ import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
+  type CzIsirParagraph,
+  type CzIsirParseFailure,
+  parseCzIsirDecision,
+} from "@stll/case-law-parsers/cz-isir";
+import {
+  assemblePdfParagraphs,
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+  type PdfLine,
+  pdfNotesOf,
+  type PdfRun,
+} from "@stll/case-law-parsers/pdf-bands";
+import {
   CZ_ISIR_INSTANCE,
   CZ_ISIR_METADATA_KEY,
   type CzIsirDecisionMetadata,
@@ -104,19 +117,6 @@ import {
   adapterCatch,
   INGESTION_USER_AGENT,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  type CzIsirParagraph,
-  type CzIsirParseFailure,
-  parseCzIsirDecision,
-} from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
-import {
-  assemblePdfParagraphs,
-  extractPdfBodyAndNotes,
-  PDF_PARAGRAPH_START,
-  type PdfLine,
-  pdfNotesOf,
-  type PdfRun,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   absentDecisionTextFields,

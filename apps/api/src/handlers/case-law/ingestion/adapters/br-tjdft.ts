@@ -52,6 +52,8 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import { parseBrTjdftDocument } from "@stll/case-law-parsers/br-tjdft";
+import type { BrTjdftDocumentContent } from "@stll/case-law-parsers/br-tjdft";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -63,8 +65,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseBrTjdftDocument } from "@/api/handlers/case-law/ingestion/parsers/br-tjdft";
-import type { BrTjdftDocumentContent } from "@/api/handlers/case-law/ingestion/parsers/br-tjdft";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   absentDecisionTextFields,

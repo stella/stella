@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "@stll/case-law-parsers/br-tjdft";
+import type { BrTjdftDocumentContent } from "@stll/case-law-parsers/br-tjdft";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "@/api/handlers/case-law/ingestion/parsers/br-tjdft";
-import type { BrTjdftDocumentContent } from "@/api/handlers/case-law/ingestion/parsers/br-tjdft";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { brTjdftCompletenessIssues } from "@/api/tests/helpers/br-tjdft-completeness";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";

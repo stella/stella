@@ -1,11 +1,10 @@
 import { expect, test } from "bun:test";
 
-import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
-
 import {
   STRUCTURE_FIDELITY_RULES,
   structureFidelityIn,
-} from "./structure-fidelity";
+} from "@stll/case-law-parsers/structure-fidelity";
+import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 const paragraphs = (texts: readonly string[]): Block[] =>
   texts.map((text, index) => ({

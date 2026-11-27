@@ -9,6 +9,14 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
+import {
+  assemblePdfParagraphs,
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+  pdfNotesOf,
+  pdfRunInlines,
+} from "@stll/case-law-parsers/pdf-bands";
+import type { PdfRun } from "@stll/case-law-parsers/pdf-bands";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_JUDGE_NAME_RE,
@@ -44,14 +52,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  assemblePdfParagraphs,
-  extractPdfBodyAndNotes,
-  PDF_PARAGRAPH_START,
-  pdfNotesOf,
-  pdfRunInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import type { PdfRun } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   absentDecisionTextFields,

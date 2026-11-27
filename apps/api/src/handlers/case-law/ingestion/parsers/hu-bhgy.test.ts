@@ -2,6 +2,12 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  huDecisionDateFrom,
+  huDecisionTypeFrom,
+  huDocketFrom,
+  parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
+} from "@stll/case-law-parsers/hu-bhgy";
+import {
   readRtf as readRtfDocument,
   readRtfString,
 } from "@stll/case-law-parsers/rtf-reader";
@@ -36,12 +42,6 @@ import {
 import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
-import {
-  huDecisionDateFrom,
-  huDecisionTypeFrom,
-  huDocketFrom,
-  parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
-} from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 
-import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";

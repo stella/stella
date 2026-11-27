@@ -3,9 +3,8 @@
 import { createInterface } from "node:readline";
 import * as v from "valibot";
 
+import { extractNsMetadata } from "@stll/case-law-parsers/cz-ns";
 import { load } from "@stll/html";
-
-import { extractNsMetadata } from "../../src/handlers/case-law/ingestion/parsers/cz-ns";
 
 // Offline export only: no database, storage client, fetch, or apply mode.
 const rowSchema = v.strictObject({

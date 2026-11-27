@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
-import { readPlNcourtContent } from "./pl-ncourt";
-import { judgeLexLink } from "./pl-ncourt-lexlink";
+import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
+import { judgeLexLink } from "@stll/case-law-parsers/pl-ncourt-lexlink";
 
 const KPC_TITLE =
   "Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego";

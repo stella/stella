@@ -2,15 +2,14 @@ import { Glob } from "bun";
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import {
+  ecjDocumentHtml,
+  parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml,
+} from "@stll/case-law-parsers/eu-ecj";
 import * as astValidation from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
-
-import {
-  ecjDocumentHtml,
-  parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml,
-} from "./eu-ecj";
 
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 

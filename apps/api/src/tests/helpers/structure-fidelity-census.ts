@@ -10,13 +10,13 @@
 
 import { fileURLToPath } from "node:url";
 
-import { isDocumentAst } from "@stll/legal-ast/document-ast";
-
-import { plKisDocumentRules } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import {
   type StructureFidelityDocument,
   structureFidelityIn,
-} from "@/api/lib/legal-search/parsers/structure-fidelity";
+} from "@stll/case-law-parsers/structure-fidelity";
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
+
+import { plKisDocumentRules } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import { isRecord } from "@/api/lib/type-guards";
 import type { StructureFidelityCensus } from "@/api/tests/helpers/structure-fidelity-baseline";
 

@@ -10,16 +10,16 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
+import {
+  buildSkDecisionPdfBlocks,
+  isUnreadablePdfError,
+  parseSkDecisionPdf as uncheckedParseSkDecisionPdf,
+} from "@stll/case-law-parsers/sk-courts";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { documentAstSchema, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import appealLines from "@/api/lib/legal-search/parsers/fixtures/sk-courts-appeal-lines.json";
-import {
-  buildSkDecisionPdfBlocks,
-  isUnreadablePdfError,
-  parseSkDecisionPdf as uncheckedParseSkDecisionPdf,
-} from "@/api/lib/legal-search/parsers/sk-courts";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);

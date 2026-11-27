@@ -5,6 +5,8 @@ import { panic, Result } from "better-result";
 import * as slimdom from "slimdom";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+// parser-output-unchanged: uses DecisionJudgeRole literal directly to decouple from apps/api.
+import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
 import { sanitizeUrl } from "@stll/case-law-parsers/sanitize-url";
 import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
@@ -16,8 +18,6 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { parsePlainDate } from "@stll/time";
-
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 
 const AKN = "http://docs.oasis-open.org/legaldocml/ns/akn/3.0";
 const UK = "https://caselaw.nationalarchives.gov.uk/akn";
@@ -439,7 +439,7 @@ export const parseUkFclDecision = ({
       ? []
       : elements(header, "judge")
           .map((judge) => ({
-            role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+            role: "panel-member" satisfies DecisionJudgeRole,
             nameAsPrinted:
               text(judge) ||
               people

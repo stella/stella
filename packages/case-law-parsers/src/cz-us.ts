@@ -13,6 +13,8 @@ import {
 import { readRtfString } from "@stll/case-law-parsers/rtf-reader";
 import { RTF_SOURCE_OPTIONS } from "@stll/case-law-parsers/rtf-source-registry";
 import { runContentVisibleText } from "@stll/case-law-parsers/run-content-text";
+// parser-output-unchanged: uses literal cz-us key directly to decouple from apps/api.
+import { segmentDecisionBlocks } from "@stll/case-law-parsers/segment-decision";
 import {
   stripFurniturePrefix,
   visibleHtmlText,
@@ -126,9 +128,6 @@ import {
   separateOpinionHeading,
   separateOpinionHeadingNamesAuthor,
 } from "@stll/legal-ast/separate-opinion-heading";
-
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -379,10 +378,7 @@ const coalesceRuns = (inlines: readonly Inline[]): Inline[] => {
 
 /** Primary extraction: read the `docContentHidden` RTF field. */
 const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
-  const document = readRtfString(
-    rtfContent,
-    RTF_SOURCE_OPTIONS[ADAPTER_KEYS.CZ_US],
-  );
+  const document = readRtfString(rtfContent, RTF_SOURCE_OPTIONS["cz-us"]);
   return usDocumentLinesOf(document);
 };
 

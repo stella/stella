@@ -56,7 +56,19 @@ import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 
-import type { CzNsReportEdition } from "@/api/lib/legal-search/cz-ns-collection-entry";
+// parser-output-unchanged: structurally identical CzNsReportEdition type inlined to decouple from apps/api.
+export type CzNsReportEdition =
+  | {
+      extent: "section";
+      number: string;
+      sectionPart: {
+        sectionNumber: number;
+        firstBlock: number;
+        afterLastBlock: number;
+        collectionLabel: string;
+      };
+    }
+  | { extent: "complete" };
 
 const SOURCE_SYSTEM = "sbirka.nsoud.cz";
 

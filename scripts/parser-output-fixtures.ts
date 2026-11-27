@@ -3,6 +3,14 @@ import { Glob } from "bun";
 import path from "node:path";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
+import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import { parseRegionalDecision } from "@stll/case-law-parsers/cz-regional";
+import { parseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
+import {
+  ecjDocumentRoot,
+  parseEcjDecisionHtml,
+} from "@stll/case-law-parsers/eu-ecj";
+import { parseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
 import { load } from "@stll/html";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
@@ -37,14 +45,6 @@ import {
   isSelfCitation,
 } from "../apps/api/src/handlers/case-law/ingestion/citation-extractor";
 import { metadataUrlSchemaForAdapter } from "../apps/api/src/handlers/case-law/ingestion/metadata-url-schemas";
-import { parseNssDecisionHtml } from "../apps/api/src/handlers/case-law/ingestion/parsers/cz-nss";
-import { parseRegionalDecision } from "../apps/api/src/handlers/case-law/ingestion/parsers/cz-regional";
-import { parseUsDecisionHtml } from "../apps/api/src/handlers/case-law/ingestion/parsers/cz-us";
-import {
-  ecjDocumentRoot,
-  parseEcjDecisionHtml,
-} from "../apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj";
-import { parseSkUsDocumentXhtml } from "../apps/api/src/handlers/case-law/ingestion/parsers/sk-us";
 import { segmentDecision } from "../apps/api/src/handlers/case-law/ingestion/segmenter";
 import { judgeNameKey } from "../apps/api/src/handlers/case-law/judges/judge-name";
 import { loadDocxArchive } from "../apps/api/src/lib/docx-archive";

@@ -113,9 +113,13 @@ import {
 import { SUBHEADING_OUTLINE_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
-import { includes } from "@/api/lib/type-guards";
-
 import { readCommonCourtInlines } from "./pl-common-court-inlines";
+
+// parser-output-unchanged: inlines narrow-union includes helper to decouple from apps/api.
+const includes = <T extends string>(
+  list: readonly T[],
+  value: string,
+): value is T => (list as readonly string[]).includes(value);
 
 type ParsePlDecisionInput = {
   caseNumber: string;

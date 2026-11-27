@@ -10,11 +10,11 @@ test("a projection may not reach parser code, adapters or AST builders", async (
     await lintSingleRule(
       "retention-source-independence",
       [
-        'import { parseCzNss } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";',
+        'import { parseCzNss } from "@stll/case-law-parsers/cz-nss";',
         'import { czNssAdapter } from "../../adapters/cz-nss";',
         'import { paragraph } from "@stll/legal-ast/document-ast";',
         'import { normalizeValidationText } from "@stll/case-law-parsers/validate-ast";',
-        'const lazy = import("@/api/handlers/case-law/ingestion/parsers/pl-tk");',
+        'const lazy = import("@stll/case-law-parsers/pl-tk");',
         'export * from "@/api/lib/legal-search/parsers/text-encoding";',
       ].join("\n"),
       { cwd: "scratch", sourcePath: PROJECTION },
@@ -27,7 +27,7 @@ test("a dynamic import through a constant is read, and an unreadable one is reje
     await lintSingleRule(
       "retention-source-independence",
       [
-        'const PARSER = "@/api/handlers/case-law/ingestion/parsers/cz-nss";',
+        'const PARSER = "@stll/case-law-parsers/cz-nss";',
         "const ALIAS = PARSER;",
         "export const a = await import(PARSER);",
         "export const b = await import(ALIAS);",

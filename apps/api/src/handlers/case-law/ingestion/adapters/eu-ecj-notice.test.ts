@@ -15,6 +15,8 @@ import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   caseLawSourceLanguagesOf,
 } from "@stll/api-contract/case-law-source-languages";
+import { parseFormexBibliography } from "@stll/case-law-parsers/eu-ecj-formex-bibliography";
+import { parseEcjNotice } from "@stll/case-law-parsers/eu-ecj-notice";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
@@ -41,8 +43,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
-import { parseEcjNotice } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import {
   classifyObservation,
   resolveExistingDecisionPolicy,

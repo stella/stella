@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "@stll/case-law-parsers/br-tjdft";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { brTjdftCompletenessIssues } from "@/api/tests/helpers/br-tjdft-completeness";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "./br-tjdft";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,

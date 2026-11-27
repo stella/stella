@@ -8,6 +8,14 @@
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
 
+import {
+  parsePlKisDocumentHtml,
+  parsePlKisDocumentPdf,
+} from "@stll/case-law-parsers/pl-kis";
+import type {
+  ParsePlKisDocumentInput,
+  ParsePlKisDocumentOutput,
+} from "@stll/case-law-parsers/pl-kis";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { AST_STRUCTURE_DEGRADED } from "@stll/case-law-parsers/validate-ast";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -77,14 +85,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parsePlKisDocumentHtml,
-  parsePlKisDocumentPdf,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
-import type {
-  ParsePlKisDocumentInput,
-  ParsePlKisDocumentOutput,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import {
   absentDecisionTextFields,
   absentTextField,

@@ -26,6 +26,8 @@ import { panic } from "better-result";
  * order, and only a line it does recognise gains a heading or a role.
  */
 
+// parser-output-unchanged: inlines small helper/type aliases to decouple from apps/api; output unchanged.
+import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import {
   type BodyDocumentLine,
   createParagraphLineReader,
@@ -70,9 +72,15 @@ import { collapseSpacedLetters } from "@stll/text-normalize";
 import { restoreHungarianLetters } from "@stll/text-normalize/hungarian-letters";
 import { parsePlainDate } from "@stll/time";
 
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
-import { arrayOrEmpty } from "@/api/lib/array";
-import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
+type DecisionJudgeInput = {
+  role: DecisionJudgeRole;
+  nameAsPrinted: string;
+  czechDeclinedName?: never;
+};
+
+const arrayOrEmpty = <T>(
+  value: readonly T[] | null | undefined,
+): readonly T[] => value ?? [];
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const HU_BHGY_SOURCE_SYSTEM = "eakta.birosag.hu";
@@ -675,10 +683,10 @@ const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
  * in the signature line, so one suffix table reads both.
  */
 const BENCH_ROLES = [
-  { suffix: "a tanács elnöke", role: DECISION_JUDGE_ROLE.PRESIDING },
-  { suffix: "tanácselnök", role: DECISION_JUDGE_ROLE.PRESIDING },
-  { suffix: "előadó bíró", role: DECISION_JUDGE_ROLE.RAPPORTEUR },
-  { suffix: "bíró", role: DECISION_JUDGE_ROLE.PANEL_MEMBER },
+  { suffix: "a tanács elnöke", role: "presiding" },
+  { suffix: "tanácselnök", role: "presiding" },
+  { suffix: "előadó bíró", role: "rapporteur" },
+  { suffix: "bíró", role: "panel-member" },
 ] as const;
 
 const SIGNATURE_ROLE_SUFFIXES = BENCH_ROLES.map(({ suffix }) => suffix);

@@ -5,7 +5,8 @@ import {
   CZ_NS_SBIRKA_TEXT_HEADING,
   parseCzNsSbirkaText as uncheckedParseCzNsSbirkaText,
   readCzNsSbirkaPage,
-} from "@/api/handlers/case-law/ingestion/parsers/cz-ns-sbirka";
+} from "@stll/case-law-parsers/cz-ns-sbirka";
+
 import {
   CZ_NS_SBIRKA_RECORDINGS,
   czNsSbirkaRecordedPage,

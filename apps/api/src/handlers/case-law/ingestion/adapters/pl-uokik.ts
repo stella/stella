@@ -7,6 +7,17 @@ import { panic, Result } from "better-result";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import {
+  parsePlUokikDocument,
+  plUokikDocumentLines,
+  readPlUokikRulingHeader,
+} from "@stll/case-law-parsers/pl-uokik";
+import type {
+  ParsePlUokikDocumentInput,
+  ParsePlUokikDocumentOutput,
+  PlUokikRulingHeader,
+  PlUokikRulingUnread,
+} from "@stll/case-law-parsers/pl-uokik";
+import {
   MetadataUrlDefect,
   toMetadataUrl,
 } from "@stll/case-law-parsers/sanitize-url";
@@ -101,17 +112,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parsePlUokikDocument,
-  plUokikDocumentLines,
-  readPlUokikRulingHeader,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
-import type {
-  ParsePlUokikDocumentInput,
-  ParsePlUokikDocumentOutput,
-  PlUokikRulingHeader,
-  PlUokikRulingUnread,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,

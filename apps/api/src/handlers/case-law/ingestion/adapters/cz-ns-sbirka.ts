@@ -55,6 +55,13 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import {
+  CZ_NS_SBIRKA_TEXT_HEADING,
+  type CzNsSbirkaPage,
+  type CzNsSbirkaParsedDocument,
+  parseCzNsSbirkaText,
+  readCzNsSbirkaPage,
+} from "@stll/case-law-parsers/cz-ns-sbirka";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
@@ -79,13 +86,6 @@ import {
   INGESTION_USER_AGENT,
   parseCeDate,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  CZ_NS_SBIRKA_TEXT_HEADING,
-  type CzNsSbirkaPage,
-  type CzNsSbirkaParsedDocument,
-  parseCzNsSbirkaText,
-  readCzNsSbirkaPage,
-} from "@/api/handlers/case-law/ingestion/parsers/cz-ns-sbirka";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {

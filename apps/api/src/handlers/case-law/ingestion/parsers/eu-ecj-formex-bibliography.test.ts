@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
+import { parseFormexBibliography } from "@stll/case-law-parsers/eu-ecj-formex-bibliography";
 
 test("keeps repeated bibliography and page values in source order", () => {
   const bibliography = parseFormexBibliography(`

@@ -29,9 +29,9 @@
 import { panic } from "better-result";
 
 import type { DecisionTextFieldKey } from "@stll/api-contract/case-law-text-field";
+import { listRisDocumentContentTypes } from "@stll/case-law-parsers/at-ris";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { listRisDocumentContentTypes } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import type {
   SourceFieldDisposition,
   SourceFieldInventory,

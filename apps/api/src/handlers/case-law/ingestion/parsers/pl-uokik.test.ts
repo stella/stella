@@ -12,24 +12,24 @@ import { PDF } from "@libpdf/core";
 import { describe, expect, spyOn, test } from "bun:test";
 
 import {
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+} from "@stll/case-law-parsers/pdf-bands";
+import type { PdfLine } from "@stll/case-law-parsers/pdf-bands";
+import {
+  parsePlUokikDocument as uncheckedParsePlUokikDocument,
+  PL_UOKIK_RULING_UNREAD,
+  plUokikDocumentLines,
+  readPlUokikRulingHeader,
+} from "@stll/case-law-parsers/pl-uokik";
+import type { ParsePlUokikDocumentInput } from "@stll/case-law-parsers/pl-uokik";
+import {
   AST_STRUCTURE_DEGRADED,
   buildValidationHtml,
   validateAst,
 } from "@stll/case-law-parsers/validate-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import {
-  extractPdfBodyAndNotes,
-  PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import {
-  parsePlUokikDocument as uncheckedParsePlUokikDocument,
-  PL_UOKIK_RULING_UNREAD,
-  plUokikDocumentLines,
-  readPlUokikRulingHeader,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
-import type { ParsePlUokikDocumentInput } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import { checkDecisionRetention } from "@/api/handlers/case-law/ingestion/retention/retention-check";
 import { plUokikRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uokik";
 import {

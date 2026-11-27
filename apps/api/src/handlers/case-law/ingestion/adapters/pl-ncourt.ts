@@ -7,6 +7,10 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import { parsePlCommonCourtDecision } from "@stll/case-law-parsers/pl-courts";
+import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
+import type { PlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
+import { PL_NCOURT_COURT_NAMES } from "@stll/case-law-parsers/pl-ncourt-courts";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -84,16 +88,12 @@ import {
   PL_COURTS_RULING_DECISION_TYPES,
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readPublisher,
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
-import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {
