@@ -1448,6 +1448,55 @@ const indentContinuations = (context: Context, placed: Placed): void => {
   }
 };
 
+/**
+ * Whether the source brings an unnumbered line back to the margin behind a
+ * provision whose text it indents: the line starts at the margin, the
+ * provision's text does not.
+ */
+const standsAtMargin = (line: Placement, item: Placement): boolean => {
+  const own = line.block.indent;
+  const above = item.block.indent;
+  return (
+    own !== undefined &&
+    above !== undefined &&
+    above.left > UNDER_ITEM_TOLERANCE &&
+    own.left <= UNDER_ITEM_TOLERANCE &&
+    own.left + own.firstLine <= UNDER_ITEM_TOLERANCE
+  );
+};
+
+/**
+ * Sets at the margin the unnumbered lines the source sets there behind an
+ * indented provision: the sentence that closes a part, a date, a line that
+ * opens what follows. The template's style for unnumbered text is made for
+ * text under a clause and indents it; a line the source brings back to the
+ * margin is no part of the clause above it and takes the style of plain
+ * text.
+ */
+const setMarginLines = (context: Context, placed: Placed): void => {
+  const plain = context.profile.roles.body?.styleId;
+  if (plain === undefined) {
+    return;
+  }
+  let item: Placement | null = null;
+  for (const block of context.topLevel) {
+    const placement =
+      block.kind === "table" ? undefined : placed.placementById.get(block.id);
+    if (placement === undefined) {
+      continue;
+    }
+    if (showsLabel(placement)) {
+      item = placement;
+    } else if (
+      item !== null &&
+      placement.role === "continuation" &&
+      standsAtMargin(placement, item)
+    ) {
+      placement.styleId = plain;
+    }
+  }
+};
+
 /** The longest line that keeps the alignment the source sets it in. */
 const SET_LINE_MAX = 160;
 
@@ -1744,6 +1793,7 @@ const placeParagraphs = (context: Context): Placed => {
   keepClosingTogether(context, placed);
   alignPartyLines(context, placed);
   indentContinuations(context, placed);
+  setMarginLines(context, placed);
   alignFrontLines(context, placed);
   return placed;
 };
