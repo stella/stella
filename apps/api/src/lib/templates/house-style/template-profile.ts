@@ -739,7 +739,7 @@ const readStructure = (blocks: readonly DocxBlock[]): Structure => {
   };
 };
 
-export type TemplateHeader = {
+type TemplateHeader = {
   /** The sample lines of the addressee, in order: block ids. */
   addressee: string[];
   date: string | null;
@@ -837,20 +837,22 @@ const collectedStyles = (
       .filter((name) => name !== ""),
   );
   const headings = CONTENTS_HEADINGS.exec(instruction);
-  const low = Number(headings?.groups?.["low"] ?? 1);
-  const high = Number(headings?.groups?.["high"] ?? 9);
+  // Levels are single digits and compare as text.
+  const low = headings?.groups?.["low"] ?? "1";
+  const high = headings?.groups?.["high"] ?? "9";
   const outlined = CONTENTS_OUTLINED.test(instruction);
   return styles
     .filter(({ type, name, outlineLvl }) => {
       if (type !== "paragraph") {
         return false;
       }
-      const level = Number(
-        BUILT_IN_HEADING.exec(name ?? "")?.groups?.["level"] ?? 0,
-      );
+      const level = BUILT_IN_HEADING.exec(name ?? "")?.groups?.["level"];
       return (
         names.has((name ?? "").toLowerCase()) ||
-        (headings !== null && level >= low && level <= high) ||
+        (headings !== null &&
+          level !== undefined &&
+          level >= low &&
+          level <= high) ||
         (outlined && outlineLvl !== null)
       );
     })

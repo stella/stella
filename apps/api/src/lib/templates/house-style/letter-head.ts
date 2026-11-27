@@ -6,7 +6,7 @@
 
 import type { DocxBlock } from "@/api/lib/templates/house-style/folio-contract";
 
-export type LetterHead = {
+type LetterHead = {
   /** The lines of the addressee, in order: block ids. */
   addressee: string[];
   /** The line that states the date, or null. */
