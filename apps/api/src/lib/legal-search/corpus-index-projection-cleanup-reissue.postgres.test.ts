@@ -399,8 +399,9 @@ if (!databaseUrl || !runPostgresTests) {
           const claim = await settledWithin(claimSettlement(claimDb, fixture), {
             description: "claim to skip rows locked by reissue",
             timeoutMs: 5000,
+          }).finally(() => {
+            releaseReissue.resolve(undefined);
           });
-          releaseReissue.resolve(undefined);
 
           expect((await reissue).reissuedIntentIds.toSorted()).toEqual(
             fixture.intentIds.toSorted(),

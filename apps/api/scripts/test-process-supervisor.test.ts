@@ -786,9 +786,14 @@ posixTest(
           "-e",
           `
           const descendant = ${JSON.stringify(`
-            import { writeFileSync } from "node:fs";
+            import { renameSync, writeFileSync } from "node:fs";
             process.on("SIGTERM", () => undefined);
-            const heartbeat = () => writeFileSync(${JSON.stringify(heartbeatPath)}, String(process.pid) + ":" + String(Date.now()));
+            const heartbeatTarget = ${JSON.stringify(heartbeatPath)};
+            const heartbeatTmp = heartbeatTarget + ".tmp";
+            const heartbeat = () => {
+              writeFileSync(heartbeatTmp, String(process.pid) + ":" + String(Date.now()));
+              renameSync(heartbeatTmp, heartbeatTarget);
+            };
             heartbeat();
             setInterval(heartbeat, 20);
           `)};
