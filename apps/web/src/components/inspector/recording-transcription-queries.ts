@@ -34,10 +34,6 @@ const fetchRecordingTranscriptionRun = async (
   );
 };
 
-export type RecordingTranscriptionRun = Awaited<
-  ReturnType<typeof fetchRecordingTranscriptionRun>
->["run"];
-
 /** A run is polled while it works; it announces nothing over realtime. */
 export const recordingTranscriptionRunOptions = (
   ref: RecordingTranscriptionRunRef,
