@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -587,19 +588,17 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
           body: { change: "body", body: "Second update." },
         }),
       );
-      for (let attempt = 0; ; attempt += 1) {
-        const waiting = await db.execute<{ waiting: number }>(
-          sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
-            WHERE datname = current_database() AND wait_event_type = 'Lock'`,
-        );
-        if ((waiting.at(0)?.waiting ?? 0) > 0) {
-          break;
-        }
-        if (attempt > 200) {
-          throw new TypeError("The second comment update never waited");
-        }
-        await Bun.sleep(10);
-      }
+      await waitForExternalState({
+        description: "second comment update to wait on a lock",
+        timeoutMs: 2000,
+        read: async () => {
+          const waiting = await db.execute<{ waiting: number }>(
+            sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+          );
+          return (waiting.at(0)?.waiting ?? 0) > 0;
+        },
+      });
 
       releaseFirstUpdate();
       expect(await firstUpdate).toEqual({ ok: true });
@@ -631,19 +630,17 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
       await deletedInTransaction;
       const creation = create(db, tenant);
       // The comment's write waits on the claim the deletion holds.
-      for (let attempt = 0; ; attempt += 1) {
-        const waiting = await db.execute<{ waiting: number }>(
-          sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
-            WHERE datname = current_database() AND wait_event_type = 'Lock'`,
-        );
-        if ((waiting.at(0)?.waiting ?? 0) > 0) {
-          break;
-        }
-        if (attempt > 200) {
-          throw new TypeError("The comment write never waited on the claim");
-        }
-        await Bun.sleep(10);
-      }
+      await waitForExternalState({
+        description: "comment write to wait on the claim lock",
+        timeoutMs: 2000,
+        read: async () => {
+          const waiting = await db.execute<{ waiting: number }>(
+            sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+          );
+          return (waiting.at(0)?.waiting ?? 0) > 0;
+        },
+      });
       release();
       await deletion;
       // The held claim is gone once the write resumes, so the row policy

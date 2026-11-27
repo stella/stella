@@ -15,6 +15,7 @@ import {
   resourceUpdatedRealtimeEvent,
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
+import { settledWithin, WaitTimeoutError } from "@stll/test-kit";
 
 import { rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
@@ -111,20 +112,26 @@ const readNextChunk = async (response: Response) => {
   }
   const reader = body.getReader();
   try {
-    const deadline = Bun.sleep(STREAM_CLOSE_WAIT_MS).then(
-      () => "timeout" as const,
-    );
     // A heartbeat keeps an idle connection open and says nothing about
     // delivery; a slow setup can queue one before the step under test.
-    for (;;) {
-      const result = await Promise.race([reader.read(), deadline]);
-      if (
-        result === "timeout" ||
-        result.done ||
-        !isHeartbeatOnly(result.value)
-      ) {
-        return result;
+    const readNonHeartbeat = async () => {
+      for (;;) {
+        const result = await reader.read();
+        if (result.done || !isHeartbeatOnly(result.value)) {
+          return result;
+        }
       }
+    };
+    try {
+      return await settledWithin(readNonHeartbeat(), {
+        description: "next non-heartbeat workspace event chunk",
+        timeoutMs: STREAM_CLOSE_WAIT_MS,
+      });
+    } catch (error) {
+      if (error instanceof WaitTimeoutError) {
+        return "timeout" as const;
+      }
+      throw error;
     }
   } finally {
     try {
@@ -145,9 +152,6 @@ const awaitStreamEnd = async (response: Response): Promise<StreamOutcome> => {
   }
   const reader = body.getReader();
   try {
-    const deadline = Bun.sleep(STREAM_CLOSE_WAIT_MS).then(
-      () => "open" as const,
-    );
     const drain = async (): Promise<StreamOutcome> => {
       for (;;) {
         const { done } = await reader.read();
@@ -156,7 +160,19 @@ const awaitStreamEnd = async (response: Response): Promise<StreamOutcome> => {
         }
       }
     };
-    const outcome = await Promise.race([drain(), deadline]);
+    let outcome: StreamOutcome;
+    try {
+      outcome = await settledWithin(drain(), {
+        description: "workspace event stream to close",
+        timeoutMs: STREAM_CLOSE_WAIT_MS,
+      });
+    } catch (error) {
+      if (error instanceof WaitTimeoutError) {
+        outcome = "open";
+      } else {
+        throw error;
+      }
+    }
     if (outcome === "open") {
       await reader.cancel();
     }

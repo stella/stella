@@ -14,6 +14,7 @@ import {
   getChatTurnDurationMs,
 } from "@stll/api-contract/chat-turn-duration";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf, settledWithin, WaitTimeoutError } from "@stll/test-kit";
 
 import type { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -691,7 +692,14 @@ describe("chat run log database contract", () => {
         received.value = next;
         return next;
       });
-      await Bun.sleep(50);
+      expect(
+        await rejectionOf(
+          settledWithin(pending, {
+            description: "run-log reader to emit before settlement",
+            timeoutMs: 50,
+          }),
+        ),
+      ).toBeInstanceOf(WaitTimeoutError);
       expect(received.value).toBeNull();
       await withChatRunPings(
         async (pings) =>

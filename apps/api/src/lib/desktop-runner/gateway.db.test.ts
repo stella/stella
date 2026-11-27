@@ -1913,30 +1913,24 @@ describe("runner feature", () => {
   });
 });
 
-/** System timers that remember which ones are still scheduled. */
+/** Fake timers that remember which handles are still scheduled. */
 const recordingTimers = () => {
   const pending = new Set<Timer>();
+  let nextId = 1;
+  const allocate = (): Timer => {
+    const timer = asTestRaw<Timer>(nextId);
+    nextId += 1;
+    pending.add(timer);
+    return timer;
+  };
   const timers: RunnerTimers = {
-    setTimeout: (run, ms) => {
-      const timer = setTimeout(() => {
-        pending.delete(timer);
-        run();
-      }, ms);
-      pending.add(timer);
-      return timer;
-    },
+    setTimeout: () => allocate(),
     clearTimeout: (timer) => {
       pending.delete(timer);
-      clearTimeout(timer);
     },
-    setInterval: (run, ms) => {
-      const timer = setInterval(run, ms);
-      pending.add(timer);
-      return timer;
-    },
+    setInterval: () => allocate(),
     clearInterval: (timer) => {
       pending.delete(timer);
-      clearInterval(timer);
     },
   };
   return { timers, pending };

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { rejectionOf, settledWithin, WaitTimeoutError } from "@stll/test-kit";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationDocuments,
@@ -97,11 +99,14 @@ if (!databaseUrl || !runPostgresTests) {
             pageSize: 1,
             apply: true,
           });
-          const settledEarly = await Promise.race([
-            page.then(() => true),
-            Bun.sleep(500).then(() => false),
-          ]);
-          expect(settledEarly).toBe(false);
+          expect(
+            await rejectionOf(
+              settledWithin(page, {
+                description: "work name backfill page to bypass held lock",
+                timeoutMs: 500,
+              }),
+            ),
+          ).toBeInstanceOf(WaitTimeoutError);
 
           held.resolve(undefined);
           await retitle;

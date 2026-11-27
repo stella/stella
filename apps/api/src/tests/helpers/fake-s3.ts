@@ -67,6 +67,8 @@ export type FakeS3Hold = {
   readonly isReached: boolean;
   /** Settles once a matching request is held. */
   readonly reached: Promise<undefined>;
+  /** Settles once the held request signal aborts at the server. */
+  readonly aborted: Promise<undefined>;
   /** Settles after the held request has applied and produced its response. */
   readonly completed: Promise<undefined>;
   readonly release: () => void;
@@ -316,6 +318,7 @@ export const startFakeS3 = ({
   const failures: { failure: FakeS3Failure; remaining: number }[] = [];
   const holds: {
     match: FakeS3HoldMatch;
+    bindAbort: (signal: AbortSignal) => void;
     reached: () => void;
     released: Promise<undefined>;
     completed: () => void;
@@ -399,17 +402,18 @@ export const startFakeS3 = ({
     const hold =
       holdIndex === -1 ? undefined : holds.splice(holdIndex, 1).at(0);
     if (hold !== undefined) {
+      hold.bindAbort(request.signal);
       hold.reached();
       await hold.released;
     }
     try {
       if (delayMs > 0) {
         await Bun.sleep(delayMs);
-        // The client hung up mid-request: answer without applying it, the way
-        // a cancelled upload or delete leaves the store untouched.
-        if (request.signal.aborted) {
-          return new Response(null, { status: 499 });
-        }
+      }
+      // The client hung up mid-request: answer without applying it, the way
+      // a cancelled upload or delete leaves the store untouched.
+      if (request.signal.aborted) {
+        return new Response(null, { status: 499 });
       }
 
       if (method === "LIST") {
@@ -554,10 +558,24 @@ export const startFakeS3 = ({
     holdNext: (match) => {
       let isReached = false;
       const reached = Promise.withResolvers<undefined>();
+      const aborted = Promise.withResolvers<undefined>();
       const released = Promise.withResolvers<undefined>();
       const completed = Promise.withResolvers<undefined>();
       holds.push({
         match,
+        bindAbort: (signal) => {
+          if (signal.aborted) {
+            aborted.resolve(undefined);
+            return;
+          }
+          signal.addEventListener(
+            "abort",
+            () => {
+              aborted.resolve(undefined);
+            },
+            { once: true },
+          );
+        },
         reached: () => {
           isReached = true;
           reached.resolve(undefined);
@@ -570,6 +588,7 @@ export const startFakeS3 = ({
           return isReached;
         },
         reached: reached.promise,
+        aborted: aborted.promise,
         completed: completed.promise,
         release: () => {
           released.resolve(undefined);

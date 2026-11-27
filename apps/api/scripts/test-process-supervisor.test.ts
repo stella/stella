@@ -788,7 +788,7 @@ posixTest(
           const descendant = ${JSON.stringify(`
             import { writeFileSync } from "node:fs";
             process.on("SIGTERM", () => undefined);
-            const heartbeat = () => writeFileSync(${JSON.stringify(heartbeatPath)}, String(Date.now()));
+            const heartbeat = () => writeFileSync(${JSON.stringify(heartbeatPath)}, String(process.pid) + ":" + String(Date.now()));
             heartbeat();
             setInterval(heartbeat, 20);
           `)};
@@ -820,11 +820,22 @@ posixTest(
         intervalMs: 20,
         read: () => readFileSync(heartbeatPath, "utf-8") !== afterLeaderExit,
       });
+      const descendantPid = Number(afterLeaderExit.split(":")[0]);
+      expect(Number.isInteger(descendantPid) && descendantPid > 0).toBe(true);
       fixture.supervisor.dispose();
-      await Bun.sleep(100);
-      const afterDispose = readFileSync(heartbeatPath, "utf-8");
-      await Bun.sleep(100);
-      expect(readFileSync(heartbeatPath, "utf-8")).toBe(afterDispose);
+      await waitForExternalState({
+        description: `descendant ${String(descendantPid)} exits after supervisor dispose`,
+        intervalMs: 20,
+        timeoutMs: 2000,
+        read: () => {
+          try {
+            process.kill(descendantPid, 0);
+            return false;
+          } catch {
+            return true;
+          }
+        },
+      });
     } finally {
       fixture.cleanup();
     }
