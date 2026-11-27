@@ -24,6 +24,7 @@ import {
   parseVerifyArgs,
   runAutofixSteps,
   runVerifySteps,
+  runVerifyStepsConcurrent,
 } from "./verify";
 import {
   admitLocal,
@@ -407,13 +408,188 @@ test("options reject unknown arguments and missing refs", () => {
     scope: "all",
     mode: "check",
   });
+  expect(parseVerifyArgs(["--concurrency", "3"])).toEqual({
+    base: "origin/main",
+    scope: "affected",
+    mode: "check",
+    concurrency: 3,
+  });
   for (const { args, message } of [
     { args: ["--base"], message: "--base requires a ref" },
     { args: ["--base", "--all"], message: "--base requires a ref" },
+    {
+      args: ["--concurrency"],
+      message: "--concurrency requires a positive integer",
+    },
+    {
+      args: ["--concurrency", "0"],
+      message: "--concurrency requires a positive integer",
+    },
     { args: ["--unknown"], message: "Unknown verify argument: --unknown" },
   ]) {
     expect(() => parseVerifyArgs(args)).toThrow(message);
   }
+});
+
+test("runVerifyStepsConcurrent runs prepare serially, lightweight checks with bounded concurrency, and code-quality serially", async () => {
+  const step = (
+    job: string,
+    name: string,
+    phase: VerifyWorkflowStep["phase"],
+  ): VerifyWorkflowStep => ({
+    job,
+    name,
+    run: "true",
+    cwd: ".",
+    env: {},
+    phase,
+  });
+  const steps = [
+    step("generated-sources", "prep-1", "prepare"),
+    step("ci-checks-rest", "check-1", "check"),
+    step("ci-checks-rest", "check-2", "check"),
+    step("ci-checks-rest", "check-3", "check"),
+    step("code-quality-api", "cq-1", "check"),
+    step("code-quality-web-rest", "cq-2", "check"),
+  ];
+  let active = 0;
+  let maxParallelCheckActive = 0;
+  let maxSerialActive = 0;
+  const order: string[] = [];
+  const firstTwoStarted = Promise.withResolvers<undefined>();
+  let parallelStarted = 0;
+  const status = await runVerifyStepsConcurrent(
+    steps,
+    async (current, { buffered }) => {
+      active += 1;
+      const isParallelCheck =
+        current.phase === "check" && !current.job.startsWith("code-quality-");
+      if (isParallelCheck) {
+        expect(buffered).toBe(true);
+        maxParallelCheckActive = Math.max(maxParallelCheckActive, active);
+      } else {
+        expect(buffered).toBe(false);
+        maxSerialActive = Math.max(maxSerialActive, active);
+      }
+      order.push(current.name);
+      if (isParallelCheck) {
+        parallelStarted += 1;
+        if (parallelStarted === 2) {
+          firstTwoStarted.resolve(undefined);
+        }
+        await firstTwoStarted.promise;
+      }
+      active -= 1;
+      return current.name === "check-2" ? 1 : 0;
+    },
+    2,
+  );
+  expect(status).toBe(1);
+  expect(order[0]).toBe("prep-1");
+  expect(order.slice(-2)).toEqual(["cq-1", "cq-2"]);
+  expect(maxParallelCheckActive).toBe(2);
+  expect(maxSerialActive).toBe(1);
+});
+
+test("runVerifyStepsConcurrent deduplicates identical local prepare commands", async () => {
+  const steps: VerifyWorkflowStep[] = [
+    {
+      job: "generated-sources",
+      name: "Produce generated sources",
+      run: [
+        `if [[ "\${STELLA_VERIFY_LOCAL:-false}" == true ]]; then`,
+        "  unset CI_GENERATED_SOURCES_MANIFEST",
+        "  bun scripts/ci-generated-sources.ts prepare",
+        "else",
+        '  bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"',
+        "fi",
+      ].join("\n"),
+      cwd: ".",
+      env: {},
+      phase: "prepare",
+    },
+    {
+      job: "ci-checks-generated",
+      name: "Load merge base measurement",
+      run: "bash scripts/prepare-typecheck-base.sh",
+      cwd: ".",
+      env: {},
+      phase: "prepare",
+    },
+    {
+      job: "e2e-vite-canary",
+      name: "Prepare generated sources",
+      run: "bun scripts/ci-generated-sources.ts prepare",
+      cwd: ".",
+      env: {},
+      phase: "prepare",
+    },
+  ];
+  const executed: string[] = [];
+  const status = await runVerifyStepsConcurrent(
+    steps,
+    async (current) => {
+      executed.push(current.name);
+      return 0;
+    },
+    2,
+  );
+  expect(status).toBe(0);
+  expect(executed).toEqual([
+    "Produce generated sources",
+    "Load merge base measurement",
+  ]);
+
+  const heredocExecuted: string[] = [];
+  const heredocStatus = await runVerifyStepsConcurrent(
+    [
+      {
+        job: "generated-sources",
+        name: "Heredoc A",
+        run: "cat <<'EOF'\n  indented\nEOF",
+        cwd: ".",
+        env: {},
+        phase: "prepare",
+      },
+      {
+        job: "generated-sources",
+        name: "Heredoc B",
+        run: "cat <<'EOF'\nindented\nEOF",
+        cwd: ".",
+        env: {},
+        phase: "prepare",
+      },
+    ],
+    async (current) => {
+      heredocExecuted.push(current.name);
+      return 0;
+    },
+    1,
+  );
+  expect(heredocStatus).toBe(0);
+  expect(heredocExecuted).toEqual(["Heredoc A", "Heredoc B"]);
+});
+
+test("runVerifyStepsConcurrent stops scheduling on admission refusal", async () => {
+  const step = (name: string): VerifyWorkflowStep => ({
+    job: "ci-checks-rest",
+    name,
+    run: "true",
+    cwd: ".",
+    env: {},
+    phase: "check",
+  });
+  const executed: string[] = [];
+  const status = await runVerifyStepsConcurrent(
+    [step("a"), step("b"), step("c"), step("d")],
+    async (current) => {
+      executed.push(current.name);
+      return current.name === "a" ? BOTH_GATES_REFUSED : 0;
+    },
+    1,
+  );
+  expect(status).toBe(BOTH_GATES_REFUSED);
+  expect(executed).toEqual(["a"]);
 });
 
 for (const conflict of [false, true]) {

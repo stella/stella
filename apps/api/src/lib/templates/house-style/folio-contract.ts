@@ -62,6 +62,11 @@ export type DocxBlock = {
   /** The paragraph alignment in effect (`w:jc`): the paragraph's own, else
    *  its style's. Absent when neither states one. */
   alignment?: string;
+  /** The space the paragraph states for itself in front of it and behind
+   *  it, in twentieths of a point; a side it does not state is left out.
+   *  Absent when it states neither, and from an engine that does not
+   *  report it. What its style gives is not here. */
+  spacing?: TemplatePlanSpacing;
   /** The indent in effect, in twentieths of a point: where the
    *  paragraph's lines start, and what its first line adds to that
    *  (negative for a hanging indent). Absent when nothing states one, and
@@ -197,6 +202,9 @@ export type TemplateField = {
   part: string;
   /** The field name in upper case: `TOC`, `REF`, `FILLIN`, `DATE`. */
   kind: string;
+  /** The field's code as the template writes it (`TOC \o "1-3" \h`).
+   *  Absent from an inspection read before it was reported. */
+  instruction?: string;
   /** Main story only: the top-level block the field starts in. */
   blockId?: string;
   /** Main story only: the top-level block the field ends in. A plan keeps
@@ -257,6 +265,10 @@ type TemplatePlanMerge = "lineBreak" | "space" | "none";
 /** How a paragraph's lines are set between the margins. */
 export type TemplatePlanAlignment = "left" | "center" | "right" | "both";
 
+/** The space in front of a paragraph and behind it, in twentieths of a
+ *  point: at least one side. */
+export type TemplatePlanSpacing = { before?: number; after?: number };
+
 export type TemplatePlanNestedParagraph = {
   blockId: string;
   styleId?: string;
@@ -266,6 +278,10 @@ export type TemplatePlanNestedParagraph = {
   labelAsText?: boolean;
   /** As on a source item. */
   alignment?: TemplatePlanAlignment;
+  /** The paragraph's own space in front of it and behind it, over its
+   *  style's; a side left out is the style's. Left out by an engine that
+   *  does not know it. */
+  spacing?: TemplatePlanSpacing;
 };
 
 /** A section of the output with a page other than the template's, in
@@ -393,6 +409,9 @@ export type TemplatePlan = {
   /** The section the body ends with, when its page is another than the
    *  template's. */
   lastSection?: TemplatePlanSection;
+  /** Paragraphs inside kept template tables written without their text.
+   *  An engine that does not know the option leaves them as they are. */
+  emptyTemplateBlockIds?: string[];
   /** The view of a source with tracked changes the plan is made for. The
    *  output carries no revision. */
   trackedChanges?: TrackedChangesView;
@@ -601,6 +620,12 @@ const blockSchema = v.strictObject({
   pageBreakBefore: v.exactOptional(v.literal(true)),
   endsSection: v.exactOptional(v.literal(true)),
   alignment: v.exactOptional(v.string()),
+  spacing: v.exactOptional(
+    v.strictObject({
+      before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    }),
+  ),
   indent: v.exactOptional(
     v.strictObject({
       left: v.pipe(v.number(), v.integer()),

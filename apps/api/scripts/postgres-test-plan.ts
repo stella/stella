@@ -34,6 +34,7 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/email/correspondence/source-race.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
     "src/lib/legal-search/corpus-index-generation-retire.postgres.test.ts",
+    "src/lib/legal-search/corpus-index-projection-append-behind-cleanup.postgres.test.ts",
     "src/lib/legal-search/corpus-index-route-proof-runner.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",

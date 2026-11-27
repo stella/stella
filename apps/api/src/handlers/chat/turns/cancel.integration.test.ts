@@ -528,10 +528,16 @@ describe("stopping a chat turn", () => {
       status: 202,
     });
     const first = (await readTurn(turnId)).cancelRequestedAt;
-    expect(first).not.toBeNull();
-    await Bun.sleep(5);
+    if (first === null) {
+      panic("Expected cancelRequestedAt to be recorded");
+    }
+    const backdated = new Date(first.getTime() - 10_000);
+    await testDb
+      .update(chatTurns)
+      .set({ cancelRequestedAt: backdated })
+      .where(eq(chatTurns.id, turnId));
     expect((await stop({ threadId, turnId })).status).toBe(202);
-    expect((await readTurn(turnId)).cancelRequestedAt).toEqual(first);
+    expect((await readTurn(turnId)).cancelRequestedAt).toEqual(backdated);
   });
 
   test("aborts a run this process produces and answers once it is settled", async () => {

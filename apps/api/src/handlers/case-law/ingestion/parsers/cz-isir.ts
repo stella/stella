@@ -1,3 +1,4 @@
+// parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 /**
  * A court decision the insolvency register (isir.justice.cz) publishes, read
@@ -36,10 +37,10 @@ import {
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 import { Temporal } from "@stll/time";
 
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 const SOURCE_SYSTEM = "isir.justice.cz";

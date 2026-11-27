@@ -11,6 +11,8 @@ import { enrolledCorpusIndexGroupContracts } from "@/api/lib/legal-search/corpus
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
+  corpusIndexRevisionRetrieval,
+  type CorpusRevisionRetrieval,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { repairAppliedCorpusProjectionDriftTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import { planLines } from "@/api/tests/helpers/explain-plan";
@@ -253,6 +255,9 @@ const intentProbe = ({ lines }: ReservationPlan): string => {
 const explainReservation = async (
   scopedIndexId: string | null = null,
   eligibilityAt: Date = ELIGIBILITY_AT,
+  revisionRetrieval: CorpusRevisionRetrieval = corpusIndexRevisionRetrieval(
+    CORPUS_INDEX_MANIFESTS[GENERATION],
+  ),
 ): Promise<ReservationPlan> =>
   await db.transaction(async (transaction) => {
     const tx = asTestRaw<Transaction>(transaction);
@@ -266,6 +271,7 @@ const explainReservation = async (
     const queue = corpusProjectionReservationQueue(tx, {
       family: "case_law",
       generation: GENERATION,
+      revisionRetrieval,
       limit: LIMIT,
       eligibilityAt,
       scopedEntityIds: null,
@@ -320,6 +326,21 @@ test("the reservation queue reads outstanding revisions, not revision history", 
 
   // Six times the settled history must not cost measurably more to skip.
   expect(deep.buffers).toBeLessThanOrEqual(Math.round(shallow.buffers * 1.25));
+  // A generation whose hits carry their revision leaves revisions being
+  // deleted out of the probe too, and the same partial index still answers
+  // it: the statuses it excludes are a superset of the index's.
+  const stored = await explainReservation(null, ELIGIBILITY_AT, {
+    type: "stored",
+    field: "projection_revision",
+  });
+  expect(stored.reservedRows).toBe(LIMIT);
+  expect(planText(stored)).not.toContain("Seq Scan");
+  expect(intentProbe(stored)).toContain(
+    "corpus_index_projection_intents_outstanding_idx",
+  );
+  // Both probes, the holding revisions and the count of those being deleted,
+  // read only the entity's outstanding revisions.
+  expect(intentProbe(stored)).not.toMatch(/Rows Removed by Filter: [1-9]/u);
   // What remains is the in-flight prefix ahead of the reserved batch, not
   // anything either table accumulates.
   expect(deep.buffers / deep.reservedRows).toBeLessThanOrEqual(25);

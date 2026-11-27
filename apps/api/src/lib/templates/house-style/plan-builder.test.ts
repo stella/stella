@@ -383,6 +383,84 @@ describe("buildTemplatePlan, a number typed with a blank between its parts", () 
   });
 });
 
+describe("buildTemplatePlan, a letter on a template with a letterhead", () => {
+  const letterhead = {
+    ...PROFILE,
+    regions: { ...PROFILE.regions, keepBefore: ["t90"] },
+    header: {
+      addressee: ["h1", "h2", "h3", "h4"],
+      date: "h5",
+      reference: "h6",
+    },
+  };
+  const slotsOf = (plan: TemplatePlan) =>
+    plan.body.flatMap((item) =>
+      item.kind === "slot"
+        ? [[item.templateBlockId, item.sourceBlockIds] as const]
+        : [],
+    );
+
+  test("the addressee, the date and the reference go into the letterhead's cells", () => {
+    const letter = manifestOf([
+      "Alfa Dodávky s.r.o.",
+      "Dlouhá 12",
+      "110 00 Praha 1",
+      "V Brně dne 6. 1. 2026",
+      "Vážená paní,",
+      "obracíme se na Vás ve věci neuhrazené faktury.",
+    ]);
+    const { plan, note } = build(letter, "keepSource", { profile: letterhead });
+    // Three lines for four sample lines: the fourth is emptied. No
+    // reference in the letter: that cell keeps the template's sample.
+    expect(slotsOf(plan)).toEqual([
+      ["h1", ["p0"]],
+      ["h2", ["p1"]],
+      ["h3", ["p2"]],
+      ["h5", ["p3"]],
+    ]);
+    expect(plan.emptyTemplateBlockIds).toEqual(["h4"]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual([
+      "p4",
+      "p5",
+    ]);
+    expect(note.items).toContainEqual({
+      kind: "letterheadFilled",
+      filled: ["addressee", "date"],
+      left: ["reference"],
+    });
+  });
+
+  test("more lines than sample lines end up in the last one; a document that is no letter leaves every cell", () => {
+    const long = manifestOf([
+      "Beta Holdings Ltd",
+      "Legal Department",
+      "Attn. Ms Helen Marsh",
+      "Tower House",
+      "1 Long Street",
+      "London SW1A 1AA",
+      "Dear Ms Marsh,",
+      "We write further to your letter.",
+    ]);
+    expect(
+      slotsOf(build(long, "keepSource", { profile: letterhead }).plan),
+    ).toEqual([
+      ["h1", ["p0"]],
+      ["h2", ["p1"]],
+      ["h3", ["p2"]],
+      ["h4", ["p3", "p4", "p5"]],
+    ]);
+    const memo = manifestOf(["Shrnutí", "Text bez oslovení a bez adresy."]);
+    const built = build(memo, "keepSource", { profile: letterhead });
+    expect(slotsOf(built.plan)).toEqual([]);
+    expect(built.plan).not.toHaveProperty("emptyTemplateBlockIds");
+    expect(built.note.items).toContainEqual({
+      kind: "letterheadFilled",
+      filled: [],
+      left: ["addressee", "date", "reference"],
+    });
+  });
+});
+
 describe("buildTemplatePlan, headings without a number", () => {
   const manifest = manifestOf([
     "SMLOUVA",
@@ -2197,6 +2275,110 @@ describe("buildTemplatePlan, tables and omissions", () => {
     // Once: the recital under the heading does not bring them again.
     expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
   });
+
+  test("contents whose field would list none of the document's headings are left out, and the note says so", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = czechContract("Text.");
+    const kept = (contentsStyles: string[] | undefined) => {
+      const { plan, note } = build(manifest, "keepSource", {
+        profile:
+          contentsStyles === undefined
+            ? profile
+            : { ...profile, contentsStyles },
+      });
+      return {
+        contents: plan.body.filter(({ kind }) => kind === "template").length,
+        notes: note.items.filter(({ kind }) => kind === "contentsNotKept"),
+        updates: plan.fields?.updateOnOpen ?? false,
+      };
+    };
+    // The field collects the style the articles are placed in.
+    expect(kept(["Article"])).toMatchObject({ contents: 1, notes: [] });
+    // It collects the built-in headings, and no heading is placed in one.
+    expect(kept([])).toEqual({
+      contents: 0,
+      notes: [{ kind: "contentsNotKept", reason: "noHeadingCollected" }],
+      updates: false,
+    });
+    expect(kept(["TOC1"]).contents).toBe(0);
+    // A profile that does not say what the field collects keeps them.
+    expect(kept(undefined)).toMatchObject({ contents: 1, notes: [] });
+  });
+
+  test("the page the source starts in front of its own contents starts in front of the kept ones", () => {
+    // A template whose sample starts a page in front of its first article:
+    // the document's own page start there is kept.
+    const profile = {
+      ...inferTemplateProfile(contractTemplate({ contents: "empty" })),
+      frontMatterEndsPage: true,
+    };
+    const paged = (breaks: readonly number[]): DocxBlockManifest => {
+      const manifest = manifestOf([
+        "SMLOUVA O DODÁVCE",
+        "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+        "a",
+        "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+        "",
+        { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+        "",
+        "Článek I.\nPředmět",
+        numbered("1.", "Dodavatel dodá zboží.", 10),
+      ]);
+      return {
+        ...manifest,
+        blocks: manifest.blocks.map((block, position) =>
+          breaks.includes(position) ? { ...block, pageBreaks: 1 } : block,
+        ),
+      };
+    };
+    const around = (manifest: DocxBlockManifest) => {
+      const { plan } = build(manifest, "keepSource", { profile });
+      const contents = plan.body.findIndex(({ kind }) => kind === "template");
+      return {
+        before: plan.body[contents - 1],
+        behind: plan.body[contents + 1],
+        omitted: plan.omit.map(({ blockId }) => blockId),
+      };
+    };
+    // A page of their own, as in the source: the blank paragraph with the
+    // break stays in front of the kept contents, and the heading behind
+    // them starts the next page.
+    const own = around(paged([4, 6]));
+    expect(own.before).toMatchObject({ kind: "source", blockId: "p4" });
+    expect(own.omitted).not.toContain("p4");
+    expect(own.behind).toMatchObject({ blockId: "p7", pageBreakBefore: true });
+    // Only in front of them: the text runs on behind the kept contents.
+    const front = around(paged([4]));
+    expect(front.before).toMatchObject({ kind: "source", blockId: "p4" });
+    expect(front.behind).not.toHaveProperty("pageBreakBefore");
+    // Contents that are not kept need no page: the paragraph goes, and
+    // the heading starts the one page the two breaks leave.
+    const dropped = build(paged([4, 6]), "keepSource", {
+      profile: { ...profile, contentsStyles: [] },
+    }).plan;
+    expect(dropped.body.some(({ kind }) => kind === "template")).toBe(false);
+    expect(dropped.omit.map(({ blockId }) => blockId)).toContain("p4");
+    // The first line of the source's contents may start the page itself:
+    // the blank paragraph in front of it is told to.
+    const byLine = paged([6]);
+    const told = around({
+      ...byLine,
+      blocks: byLine.blocks.map((block) =>
+        block.id === "p5" ? { ...block, pageBreakBefore: true } : block,
+      ),
+    });
+    expect(told.before).toMatchObject({
+      kind: "source",
+      blockId: "p4",
+      pageBreakBefore: true,
+    });
+    // Only behind them: nothing is kept in front.
+    const back = around(paged([6]));
+    expect(back.omitted).toContain("p4");
+    expect(back.behind).toMatchObject({ blockId: "p7", pageBreakBefore: true });
+  });
 });
 
 describe("buildTemplatePlan invariants", () => {
@@ -2650,6 +2832,47 @@ describe("buildTemplatePlan, the lines of the parties", () => {
       styleId: PROFILE.roles.body?.styleId,
       alignment: "right",
     });
+  });
+
+  test("a cell paragraph the source sets tight by hand stays tight", () => {
+    const table = inColumns(2, ["Risk", "", "Low", ""]);
+    const spaced = [
+      undefined,
+      // A swatch: no text, no space around it.
+      { before: 0, after: 0 },
+      // One side tight, the other a measure of the source's own.
+      { before: 0, after: 120 },
+      // A measure on both sides: the template's style decides.
+      { before: 60, after: 60 },
+    ];
+    const cells = table.blocks.filter(({ kind }) => kind === "paragraph");
+    for (const [position, spacing] of spaced.entries()) {
+      const cell = cells[position];
+      if (cell !== undefined && spacing !== undefined) {
+        cell.spacing = spacing;
+      }
+    }
+    const { plan, note } = build({
+      ...table,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...table.blocks,
+        ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
+          (block, position) => ({ ...block, id: `after${String(position)}` }),
+        ),
+      ],
+    });
+    const nested = sourceItems(plan).flatMap((item) => item.nested ?? []);
+    const spacingOf = (position: number) =>
+      nested.find(({ blockId }) => blockId === cells[position]?.id)?.spacing;
+    expect(spacingOf(0)).toBeUndefined();
+    expect(spacingOf(1)).toEqual({ before: 0, after: 0 });
+    expect(spacingOf(2)).toEqual({ before: 0 });
+    expect(spacingOf(3)).toBeUndefined();
+    expect(note.items).toContainEqual({ kind: "cellSpacingKept", blocks: 2 });
   });
 
   test("a template whose style indent is not known leaves the lines as they are", () => {

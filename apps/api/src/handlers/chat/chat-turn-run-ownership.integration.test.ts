@@ -3,10 +3,16 @@ import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import { setImmediate } from "node:timers/promises";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
-import { deferred } from "@stll/test-kit";
+import {
+  deferred,
+  settledWithin,
+  waitForAbort,
+  WaitTimeoutError,
+} from "@stll/test-kit";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -391,7 +397,7 @@ describe("a producing run", () => {
       for await (const chunk of body) {
         delivered.push(decoder.decode(chunk, { stream: true }));
         // Real socket progress must continue between reads, even for a slower viewer.
-        await Bun.sleep(1);
+        await setImmediate();
       }
       delivered.push(decoder.decode());
       expect(delivered.join("")).toContain(encodedSnapshot);
@@ -473,7 +479,15 @@ describe("a producing run", () => {
       socket.resume();
       // Bun can leave a failed chunked socket open until client cancellation.
       // Collect its buffered prefix without waiting for that close handshake.
-      await Promise.race([closed.promise, Bun.sleep(200)]);
+      await settledWithin(closed.promise, {
+        description: "stalled HTTP socket to close",
+        timeoutMs: 200, // timeout: bounded window collecting buffered prefix without waiting for close handshake
+      }).catch((error: unknown) => {
+        if (error instanceof WaitTimeoutError) {
+          return;
+        }
+        throw error;
+      });
       const delivered = wire.join("");
       expect(delivered).toContain("HTTP/1.1 200");
       expect(delivered).toContain("connected");
@@ -577,7 +591,7 @@ describe("a producing run", () => {
     try {
       expect(await run.settled).toBe("stored");
       // Let the transport's pending iterator read observe EOF after settlement.
-      await Bun.sleep(0);
+      await setImmediate();
       const body = response.body ?? panic("Expected queued turn delivery");
       await body.cancel();
       expect(run.control.abortController.signal.aborted).toBe(false);
@@ -693,7 +707,14 @@ describe("a producing run", () => {
         );
         // The turn is no longer running while the settlement finishes: a
         // beat now would read it as lost.
-        await Bun.sleep(30);
+        expect(
+          await rejectionOf(
+            settledWithin(waitForAbort(run.control.abortController.signal), {
+              description: "run abort during own settlement",
+              timeoutMs: 30, // timeout: bounded window asserting own settlement is not aborted by heartbeat
+            }),
+          ),
+        ).toBeInstanceOf(WaitTimeoutError);
         return {
           type: "stored",
           outcome: { reason: "client-disconnected", type: "interrupted" },
@@ -805,9 +826,14 @@ describe("a producing run", () => {
       return end;
     });
     // The run stored its outcome, but a beat still reads its turn.
-    for (let poll = 0; poll < 40; poll += 1) {
-      await Bun.sleep(1);
-    }
+    expect(
+      await rejectionOf(
+        settledWithin(settled, {
+          description: "run to settle while heartbeat reads turn",
+          timeoutMs: 40, // timeout: bounded window asserting run waits for in-flight heartbeat
+        }),
+      ),
+    ).toBeInstanceOf(WaitTimeoutError);
     expect((await readTurn(execution.id)).status).toBe("interrupted");
     expect(over).toBe(false);
 
@@ -888,9 +914,14 @@ describe("a producing run", () => {
       relinquishedWith = end;
       return end;
     });
-    for (let poll = 0; poll < 40; poll += 1) {
-      await Bun.sleep(1);
-    }
+    expect(
+      await rejectionOf(
+        settledWithin(relinquished, {
+          description: "ownership to relinquish while heartbeat reads turn",
+          timeoutMs: 40, // timeout: bounded window asserting relinquish waits for in-flight heartbeat
+        }),
+      ),
+    ).toBeInstanceOf(WaitTimeoutError);
     expect(relinquishedWith).toBeUndefined();
 
     beatMayFinish.resolve(undefined);
@@ -921,9 +952,14 @@ describe("a producing run", () => {
       return end;
     });
     expect(await run.settled).toBe("stored");
-    for (let poll = 0; poll < 40; poll += 1) {
-      await Bun.sleep(1);
-    }
+    expect(
+      await rejectionOf(
+        settledWithin(relinquished, {
+          description: "ownership to relinquish while follow-up is running",
+          timeoutMs: 40, // timeout: bounded window asserting relinquish waits for follow-up work
+        }),
+      ),
+    ).toBeInstanceOf(WaitTimeoutError);
     expect(relinquishedWith).toBeUndefined();
 
     followUpMayFinish.resolve(undefined);

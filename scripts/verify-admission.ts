@@ -53,6 +53,50 @@ export const withCheckAdmission = ({
   return remote;
 };
 
+type AsyncAdmissionOptions = {
+  alreadyRemote: boolean;
+  admitLocal: () => number;
+  probeRemote: () => number;
+  runLocal: () => Promise<number>;
+  runRemote: () => number;
+  report: (message: string) => void;
+};
+
+export const withCheckAdmissionAsync = async ({
+  alreadyRemote,
+  admitLocal,
+  probeRemote,
+  runLocal,
+  runRemote,
+  report,
+}: AsyncAdmissionOptions): Promise<number> => {
+  const admission = admitLocal();
+  if (admission !== 0 && admission !== BOTH_GATES_REFUSED) {
+    return admission;
+  }
+  const local = admission === 0 ? await runLocal() : admission;
+  if (local !== BOTH_GATES_REFUSED) {
+    return local;
+  }
+  if (alreadyRemote) {
+    report(BOTH_GATES_MESSAGE);
+    return BOTH_GATES_REFUSED;
+  }
+  const probe = probeRemote();
+  if (probe === BOTH_GATES_REFUSED) {
+    report(BOTH_GATES_MESSAGE);
+    return BOTH_GATES_REFUSED;
+  }
+  if (probe !== 0) {
+    return probe;
+  }
+  const remote = runRemote();
+  if (remote === BOTH_GATES_REFUSED) {
+    report(BOTH_GATES_MESSAGE);
+  }
+  return remote;
+};
+
 export type HostConfig = {
   localGate: string[] | null;
   remote: string[] | null;

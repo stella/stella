@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, spyOn } from "bun:test";
+import { setImmediate } from "node:timers/promises";
 
 import {
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
-import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { isChatTurnGenerating } from "@/components/chat/chat-user-actions";
@@ -241,7 +241,7 @@ const settled = (turnId: string, status: string) =>
 
 const tick = async (times = 20) => {
   for (let index = 0; index < times; index += 1) {
-    await ownerSleep(0);
+    await setImmediate();
   }
 };
 

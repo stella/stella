@@ -501,6 +501,26 @@ describe("proposeBlockRoles", () => {
     expect(proposeBlockRoles({ manifest: cells })).toEqual([]);
   });
 
+  test("a number with no words in a table cell counts the rows and is no provision", () => {
+    // A list numbers the rows of a table: the first cell of each row holds
+    // the number and nothing else.
+    const counted = inColumns(2, [
+      numbered("1.", "", 7),
+      "nález",
+      numbered("2.", "", 7),
+      "doporučení",
+    ]);
+    expect(proposeBlockRoles({ manifest: counted })).toEqual([]);
+    // With words behind it, a number in a cell is a provision.
+    const provisions = inColumns(2, [
+      numbered("1.", "Dodavatel dodá zboží.", 7),
+      "The supplier delivers the goods.",
+    ]);
+    expect(
+      proposeBlockRoles({ manifest: provisions }).map(({ blockId }) => blockId),
+    ).toContain("p0");
+  });
+
   test("a paragraph that holds only a picture is read, a bulleted one is a bullet", () => {
     const manifest = manifestOf([
       "SMLOUVA",

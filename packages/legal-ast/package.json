@@ -254,6 +254,10 @@
     "./document-types": {
       "types": "./src/document-types.ts",
       "import": "./src/document-types.ts"
+    },
+    "./sections-from-ast": {
+      "types": "./src/sections-from-ast.ts",
+      "import": "./src/sections-from-ast.ts"
     }
   },
   "scripts": {

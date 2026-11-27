@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setImmediate } from "node:timers/promises";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
@@ -554,7 +555,7 @@ if (!databaseUrl || !runPostgresTests) {
         batchSize: 1,
         leaseWaitMs: 5000,
         waitForLease: async () => {
-          await Bun.sleep(1);
+          await setImmediate();
         },
         acquireBatch: async () => {
           const sourceLease = await acquireCaseLawSourceIngestionLease({
