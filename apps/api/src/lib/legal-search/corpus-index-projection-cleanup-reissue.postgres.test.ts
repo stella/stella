@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { rejectionOf, settledWithin, WaitTimeoutError } from "@stll/test-kit";
 import { Temporal } from "@stll/time";
 
 import {
@@ -326,11 +327,14 @@ if (!databaseUrl || !runPostgresTests) {
               reissue: evidence,
             });
           });
-          const secondFinishedWhileHeld = await Promise.race([
-            second.then(() => true),
-            Bun.sleep(LOCK_WAIT_MS).then(() => false),
-          ]);
-          expect(secondFinishedWhileHeld).toBe(false);
+          expect(
+            await rejectionOf(
+              settledWithin(second, {
+                description: "second reissue to bypass held lock",
+                timeoutMs: LOCK_WAIT_MS, // timeout: bounded window asserting competing reissue stays blocked on lock
+              }),
+            ),
+          ).toBeInstanceOf(WaitTimeoutError);
           releaseFirst.resolve(undefined);
 
           const sorted = fixture.intentIds.toSorted();
@@ -392,16 +396,19 @@ if (!databaseUrl || !runPostgresTests) {
             return result;
           });
           await reissueHolds.promise;
-          const claim = claimSettlement(claimDb, fixture);
-          await Bun.sleep(LOCK_WAIT_MS);
-          releaseReissue.resolve(undefined);
+          const claim = await settledWithin(claimSettlement(claimDb, fixture), {
+            description: "claim to skip rows locked by reissue",
+            timeoutMs: 5000,
+          }).finally(() => {
+            releaseReissue.resolve(undefined);
+          });
 
           expect((await reissue).reissuedIntentIds.toSorted()).toEqual(
             fixture.intentIds.toSorted(),
           );
           // Locked rows are skipped and committed ones are cleanup work, so the
           // claim leases nothing either way.
-          expect(await claim).toEqual([]);
+          expect(claim).toEqual([]);
         } finally {
           await cleanUp(reissueDb, fixture);
         }
