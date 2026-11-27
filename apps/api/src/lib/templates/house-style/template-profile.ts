@@ -258,6 +258,7 @@ const CONFIDENCE = {
 const NO_BLOCKS: readonly DocxBlock[] = [];
 const NO_FINDINGS: readonly TemplateHealthFinding[] = [];
 const NO_LEVELS: readonly ProfileListLevel[] = [];
+const NO_HEADER_FIELDS: readonly TemplateHeaderField[] = [];
 
 type StyleFacts = {
   style: TemplateStyle;
@@ -914,7 +915,8 @@ const inferHeaderFields = (
         more.length === 0 &&
         named !== null &&
         value?.kind === "paragraph" &&
-        value.text.trim() === ""
+        value.text.trim() === "" &&
+        (value.inlineObjects ?? 0) === 0
       ) {
         found.push({
           field: named.field,
@@ -1612,7 +1614,8 @@ type ProfileIssueCode =
   | "listLevelChanged"
   | "sharedListLevel"
   | "unknownBlock"
-  | "fieldKeptInPart";
+  | "fieldKeptInPart"
+  | "headerFieldNotKept";
 
 export type TemplateProfileIssue = {
   severity: "error" | "warning";
@@ -1676,6 +1679,36 @@ const unknownLevelIssues = (
       return known === true && abstractByNum.get(numId) === abstractNumId
         ? []
         : [{ severity: "error", code: "unknownListLevel" }];
+    },
+  );
+
+/**
+ * A header field is filled in the front blocks the output keeps: the table
+ * that holds its cells has to be one of them, or the lines the document
+ * states for it would be taken from the body and placed nowhere.
+ */
+const headerFieldIssues = (
+  { headerFields, regions: { keepBefore } }: TemplateProfile,
+  nestedOf: ReadonlyMap<string, readonly DocxBlock[]>,
+): TemplateProfileIssue[] =>
+  (headerFields ?? NO_HEADER_FIELDS).flatMap(
+    ({ labelBlockId, valueBlockId }) => {
+      const kept = keepBefore.some((tableId) => {
+        const inside = nestedOf.get(tableId) ?? NO_BLOCKS;
+        return (
+          inside.some(({ id }) => id === labelBlockId) &&
+          inside.some(({ id }) => id === valueBlockId)
+        );
+      });
+      return kept
+        ? []
+        : [
+            {
+              severity: "error" as const,
+              code: "headerFieldNotKept" as const,
+              blockId: valueBlockId,
+            },
+          ];
     },
   );
 
@@ -1774,7 +1807,7 @@ export const validateTemplateProfile = (
     issues.push({ severity: "error", code: "unknownStyle", role: "party" });
   }
 
-  const { topLevel } = readStructure(inspection.blocks);
+  const { topLevel, nestedOf } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);
   const { keepBefore, contents, filler } = profile.regions;
   const slotIds = [profile.slots.party, profile.slots.signature].flatMap(
@@ -1785,6 +1818,7 @@ export const validateTemplateProfile = (
       issues.push({ severity: "error", code: "unknownBlock", blockId });
     }
   }
+  issues.push(...headerFieldIssues(profile, nestedOf));
   // Every region that keeps template blocks, in the order they are placed:
   // the front blocks, then the contents.
   const emitted = [...keepBefore, ...contents];

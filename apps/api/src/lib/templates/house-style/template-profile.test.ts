@@ -378,6 +378,17 @@ describe("inferTemplateProfile", () => {
         : block,
     );
     const profile = inferTemplateProfile({ ...template, blocks });
+    // A value cell that holds a picture is no empty cell.
+    const pictured = inferTemplateProfile({
+      ...template,
+      blocks: blocks.map((block) =>
+        block.id === "p101" ? { ...block, inlineObjects: 1 } : block,
+      ),
+    });
+    expect(pictured.headerFields?.map(({ field }) => field)).toEqual([
+      "to",
+      "subject",
+    ]);
     expect(profile.regions.keepBefore).toContain("t90");
     expect(profile.headerFields).toEqual([
       {
@@ -396,6 +407,32 @@ describe("inferTemplateProfile", () => {
     ]);
     expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
       profile,
+    );
+    // The table that holds the fields' cells has to be kept, or the lines
+    // the document states for them would be placed nowhere.
+    const inspection = { ...template, blocks };
+    expect(
+      validateTemplateProfile(profile, inspection).filter(
+        ({ code }) => code === "headerFieldNotKept",
+      ),
+    ).toEqual([]);
+    expect(
+      validateTemplateProfile(
+        {
+          ...profile,
+          regions: {
+            ...profile.regions,
+            keepBefore: profile.regions.keepBefore.filter((id) => id !== "t90"),
+          },
+        },
+        inspection,
+      ).filter(({ code }) => code === "headerFieldNotKept"),
+    ).toEqual(
+      ["p101", "p103", "p105"].map((blockId) => ({
+        severity: "error",
+        code: "headerFieldNotKept",
+        blockId,
+      })),
     );
     expect(
       inferTemplateProfile(contractTemplate()).headerFields,

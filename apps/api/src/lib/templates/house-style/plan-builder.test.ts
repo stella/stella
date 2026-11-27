@@ -2724,6 +2724,36 @@ describe("buildTemplatePlan, a memo on a template with a header of fields", () =
     );
   });
 
+  test("a second field's name behind a separator keeps the line in the body", () => {
+    const manifest = memo("To: Jane Roe;From: Peter Lang", "Date: 3 May 2026");
+    const { plan } = build(manifest, "keepSource", { profile: memoHeader });
+    expect(slotsOf(plan).map(({ templateBlockId }) => templateBlockId)).toEqual(
+      ["h6"],
+    );
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toContain(
+      blockIdOf(manifest, "To: Jane Roe;"),
+    );
+  });
+
+  test("a field a line of two fields names too is taken from neither line", () => {
+    const manifest = memo(
+      "To: Jane Roe",
+      "To: Richard Miles\tFrom: Peter Lang",
+      "From: Anna Berg",
+      "Re: the draft",
+    );
+    const { plan } = build(manifest, "keepSource", { profile: memoHeader });
+    expect(slotsOf(plan).map(({ templateBlockId }) => templateBlockId)).toEqual(
+      ["h8"],
+    );
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual(
+      expect.arrayContaining([
+        blockIdOf(manifest, "To: Jane Roe"),
+        blockIdOf(manifest, "From: Anna Berg"),
+      ]),
+    );
+  });
+
   test("a field two lines state is taken from neither", () => {
     const manifest = memo("To: Jane Roe", "To: Richard Miles", "Re: the draft");
     const { plan, note } = build(manifest, "keepSource", {

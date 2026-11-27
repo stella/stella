@@ -65,13 +65,16 @@ const HEAD_LINE_MAX = 200;
  *  field for sure; a break that only ends the line is no part of it. */
 const HEAD_LINE =
   /^[ \t\u00A0]*(?<lead>(?<word>\p{L}{2,8})[ \u00A0]*:)[ \t\u00A0]*(?<value>\S[^\n]*)$/u;
-/** A further name of a field inside a line's value. */
-const NAME_INSIDE = /(?:^|[ \t\u00A0])(?<word>\p{L}{2,8})[ \u00A0]*:/gu;
+/** A further name of a field inside a line's value, behind a blank or a
+ *  separator (`To: Jane;From: Peter`). */
+const NAME_INSIDE = /(?:^|[^\p{L}\p{N}])(?<word>\p{L}{2,8})[ \u00A0]*:/gu;
 
-const namesField = (value: string): boolean =>
-  [...value.matchAll(NAME_INSIDE)].some(
-    (match) => fieldOfWord(match.groups?.["word"] ?? "") !== null,
-  );
+/** The fields a line's value names besides its own. */
+const fieldsNamedIn = (value: string): HeadField[] =>
+  [...value.matchAll(NAME_INSIDE)].flatMap((match) => {
+    const field = fieldOfWord(match.groups?.["word"] ?? "");
+    return field === null ? [] : [field];
+  });
 
 /**
  * The lines of a document's head that state one field each: among its
@@ -81,6 +84,9 @@ const namesField = (value: string): boolean =>
  */
 export const readHeadLines = (topLevel: readonly DocxBlock[]): HeadLine[] => {
   const lines: HeadLine[] = [];
+  // Every field a line of the head names, read or not: a field a line that
+  // is not read names too is stated twice.
+  const named: HeadField[] = [];
   const shown = topLevel
     .filter(({ kind, text }) => kind === "paragraph" && text.trim() !== "")
     .slice(0, HEAD_MAX);
@@ -91,17 +97,17 @@ export const readHeadLines = (topLevel: readonly DocxBlock[]): HeadLine[] => {
         : undefined;
     const word = read?.["word"] ?? "";
     const field = fieldOfWord(word);
-    if (
-      read === undefined ||
-      field === null ||
-      block.label !== null ||
-      namesField(read["value"] ?? "")
-    ) {
+    if (read === undefined || field === null) {
+      continue;
+    }
+    const others = fieldsNamedIn(read["value"] ?? "");
+    named.push(field, ...others);
+    if (block.label !== null || others.length > 0) {
       continue;
     }
     lines.push({ field, blockId: block.id, lead: read["lead"] ?? "", word });
   }
   return lines.filter(
-    ({ field }) => lines.filter((line) => line.field === field).length === 1,
+    ({ field }) => named.filter((other) => other === field).length === 1,
   );
 };
