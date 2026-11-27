@@ -1100,4 +1100,25 @@ test("web_build_required skips non-runtime test, fixture, and doc edits while re
   ]) {
     expect(planWebBuild(file), file).toBe("true");
   }
+
+  const fullMergeGroupApiE2e = computeChangedFileScope(
+    {
+      changedFiles: ["apps/api/e2e/decision-reader.spec.mts"],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "merge_group",
+      suiteDepth: "full",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
+  );
+  expect(fullMergeGroupApiE2e.e2e_core_required).toBe("true");
+  expect(fullMergeGroupApiE2e.e2e_production_required).toBe("true");
 });

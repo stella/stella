@@ -61,6 +61,8 @@ describe("route traffic changes require the route smoke", () => {
     "apps/api/scripts/export-capability-catalog.ts",
     "apps/api/scripts/seed-dev.ts",
     "scripts/prepare-mcp-apps.ts",
+    "apps/api/scripts/generate-mcp-app-contracts.ts",
+    "apps/api/scripts/lib/mcp-app-inputs.ts",
     "packages/ui/src/new-component.tsx",
     "packages/api-contract/src/schema.ts",
     ".github/actions/setup-e2e-stack/action.yml",

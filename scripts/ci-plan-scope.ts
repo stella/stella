@@ -599,7 +599,10 @@ const deriveNormalScopeFacts = (
   ]);
   const p = (patterns: readonly string[]) => anyMatches(files, patterns);
   const runtimeAppFiles = files.filter((file) => !isNonRuntimeSourceFile(file));
-  let e2eCore = e2eRequired("core", runtimeAppFiles);
+  const runtimeE2eCoreFiles = files.filter(
+    (file) => file.startsWith("apps/api/e2e/") || !isNonRuntimeSourceFile(file),
+  );
+  let e2eCore = e2eRequired("core", runtimeE2eCoreFiles);
   const collab = p([
     "apps/collab/*",
     "apps/api/src/handlers/folio-collab/*",
