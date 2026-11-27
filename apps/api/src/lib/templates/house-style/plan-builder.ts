@@ -303,7 +303,11 @@ export type FormattingNoteItem =
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
       blockIds: string[];
-    };
+    }
+  /** The template's table of contents was left out: its field collects
+   *  its entries from styles none of the document's headings is placed
+   *  in, so it would fill empty. */
+  | { kind: "contentsNotKept"; reason: "noHeadingCollected" };
 
 /** What was done and what a person should look at. Ids, enums and counts:
  *  the wording is the caller's, in the reader's language. */
@@ -2135,6 +2139,23 @@ type Body = {
   contentsKept: boolean;
 };
 
+/**
+ * Whether the template's contents field would list a heading of the
+ * document: a paragraph with text is placed in a style the field collects
+ * from. True when the profile does not say what the field collects.
+ */
+const contentsCollect = (
+  { contentsStyles }: TemplateProfile,
+  { placements }: Placed,
+): boolean =>
+  contentsStyles === undefined ||
+  placements.some(
+    ({ styleId, block }) =>
+      styleId !== null &&
+      contentsStyles.includes(styleId) &&
+      block.text.trim() !== "",
+  );
+
 const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
   const { topLevel, profile, items } = context;
   const { placementById, titleOf, mergedInto, omitted } = placed;
@@ -2172,6 +2193,10 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
   let contentsPending =
     contents.length > 0 &&
     topLevel.some(({ id }) => placementById.get(id)?.role === "articleHeading");
+  if (contentsPending && !contentsCollect(profile, placed)) {
+    contentsPending = false;
+    items.push({ kind: "contentsNotKept", reason: "noHeadingCollected" });
+  }
   let contentsKept = false;
   let placedCount = 0;
   for (const block of topLevel) {

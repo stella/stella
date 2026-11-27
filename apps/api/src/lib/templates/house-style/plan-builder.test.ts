@@ -2072,6 +2072,37 @@ describe("buildTemplatePlan, tables and omissions", () => {
     expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
   });
 
+  test("contents whose field would list none of the document's headings are left out, and the note says so", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = czechContract("Text.");
+    const kept = (contentsStyles: string[] | undefined) => {
+      const { plan, note } = build(manifest, "keepSource", {
+        profile:
+          contentsStyles === undefined
+            ? profile
+            : { ...profile, contentsStyles },
+      });
+      return {
+        contents: plan.body.filter(({ kind }) => kind === "template").length,
+        notes: note.items.filter(({ kind }) => kind === "contentsNotKept"),
+        updates: plan.fields?.updateOnOpen ?? false,
+      };
+    };
+    // The field collects the style the articles are placed in.
+    expect(kept(["Article"])).toMatchObject({ contents: 1, notes: [] });
+    // It collects the built-in headings, and no heading is placed in one.
+    expect(kept([])).toEqual({
+      contents: 0,
+      notes: [{ kind: "contentsNotKept", reason: "noHeadingCollected" }],
+      updates: false,
+    });
+    expect(kept(["TOC1"]).contents).toBe(0);
+    // A profile that does not say what the field collects keeps them.
+    expect(kept(undefined)).toMatchObject({ contents: 1, notes: [] });
+  });
+
   test("the page the source starts in front of its own contents starts in front of the kept ones", () => {
     // A template whose sample starts a page in front of its first article:
     // the document's own page start there is kept.

@@ -100,6 +100,57 @@ describe("inferTemplateProfile", () => {
     ]);
   });
 
+  test("the styles a kept contents field collects from are read off its code", () => {
+    const withCode = (instruction: string | undefined) => {
+      const template = contractTemplate({ contents: "empty" });
+      for (const field of template.fields) {
+        if (field.kind === "TOC" && instruction !== undefined) {
+          field.instruction = instruction;
+        }
+      }
+      return inferTemplateProfile(template).contentsStyles;
+    };
+    // Styles by name, with the separator of the machine that wrote them.
+    expect(
+      withCode(String.raw` TOC \h \z \t "Heading article;1;Annex heading;2" `),
+    ).toEqual(["Article", "Annex"]);
+    expect(withCode(String.raw`TOC \t "heading ARTICLE,1"`)).toEqual([
+      "Article",
+    ]);
+    // The built-in headings of a range: this template has none.
+    expect(withCode(String.raw`TOC \o "1-3" \h`)).toEqual([]);
+    // A field whose code is not known says nothing.
+    expect(withCode(undefined)).toBeUndefined();
+
+    // Built-in headings by level, and with \u the styles that state an
+    // outline level.
+    const headed = contractTemplate({ contents: "empty" });
+    for (const field of headed.fields) {
+      if (field.kind === "TOC") {
+        field.instruction = String.raw`TOC \o "1-2" \u`;
+      }
+    }
+    for (const style of headed.styles) {
+      if (style.styleId === "Article") {
+        style.name = "heading 2";
+      }
+      if (style.styleId === "Annex") {
+        style.name = "heading 3";
+      }
+      if (style.styleId === "Clause1") {
+        style.outlineLvl = 1;
+      }
+    }
+    expect(inferTemplateProfile(headed).contentsStyles).toEqual([
+      "Article",
+      "Clause1",
+    ]);
+    // A template that keeps no contents collects nothing.
+    const without = contractTemplate({ contents: "empty" });
+    without.fields = without.fields.filter(({ kind }) => kind !== "TOC");
+    expect(inferTemplateProfile(without).contentsStyles).toBeUndefined();
+  });
+
   test("a table in front of the sample is kept; sample parties and signatures are slots", () => {
     const { regions, slots } = inferTemplateProfile(
       contractTemplate({ front: LETTERHEAD }),
