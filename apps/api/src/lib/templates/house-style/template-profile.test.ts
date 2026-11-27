@@ -100,6 +100,50 @@ describe("inferTemplateProfile", () => {
     ]);
   });
 
+  test("the paragraph that only starts the contents' page is kept with them, and a page start behind them is read", () => {
+    const plain = contractTemplate({ contents: "empty" });
+    expect(inferTemplateProfile(plain).contentsEndsPage).toBe(false);
+
+    // The template sets its contents on a page of their own: a paragraph
+    // with nothing but a page break in front of the caption, and a page
+    // break in the paragraph the field ends in.
+    const paged = contractTemplate({ contents: "empty" });
+    for (const block of paged.blocks) {
+      if (block.id === "p3") {
+        Object.assign(block, { text: "", label: null, pageBreaks: 1 });
+      }
+      if (block.id === "p7") {
+        Object.assign(block, { pageBreaks: 1 });
+      }
+    }
+    const profile = inferTemplateProfile(paged);
+    expect(profile.regions.contents).toEqual(["p3", "p4", "p5", "p6", "p7"]);
+    expect(profile.regions.filler).not.toContain("p3");
+    expect(profile.contentsEndsPage).toBe(true);
+
+    // Without a caption the paragraph stands right in front of the field.
+    const bare = contractTemplate({ contents: "empty" });
+    for (const block of bare.blocks) {
+      if (block.id === "p4") {
+        Object.assign(block, { text: "", label: null, pageBreaks: 1 });
+      }
+    }
+    expect(inferTemplateProfile(bare).regions.contents).toEqual([
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+    ]);
+    // A page that starts in front of the first text behind them counts too.
+    const behind = contractTemplate({ contents: "empty" });
+    for (const block of behind.blocks) {
+      if (block.id === "p8") {
+        Object.assign(block, { pageBreakBefore: true });
+      }
+    }
+    expect(inferTemplateProfile(behind).contentsEndsPage).toBe(true);
+  });
+
   test("a table in front of the sample is kept; sample parties and signatures are slots", () => {
     const { regions, slots } = inferTemplateProfile(
       contractTemplate({ front: LETTERHEAD }),
