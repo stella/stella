@@ -953,7 +953,9 @@ fn keychain_given_up(
     return false;
   }
   *phase = KeychainCall::Abandoned;
+  // Counted under the lock, so the reader cannot uncount it first.
   abandoned.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+  drop(phase);
   true
 }
 
