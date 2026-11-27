@@ -44,6 +44,11 @@ export type DocxBlock = {
   /** Pictures, drawings and embedded objects anchored in the block; a block
    *  that holds one is not empty even without text. */
   inlineObjects?: number;
+  /** How many of them are drawn shapes fixed to the page: single floating
+   *  shapes without a picture and without text of their own (a rule, a dot,
+   *  a line) whose horizontal place is counted from the page or a margin.
+   *  Absent without one, and from an engine that does not count them. */
+  pageShapes?: number;
   /** Page breaks among the paragraph's runs; a paragraph without text can
    *  hold one. */
   pageBreaks?: number;
@@ -246,6 +251,8 @@ export type TemplatePlanNestedParagraph = {
   /** As on a source item. */
   labelAsText?: boolean;
   /** As on a source item. */
+  dropPageShapes?: boolean;
+  /** As on a source item. */
   alignment?: TemplatePlanAlignment;
 };
 
@@ -290,6 +297,10 @@ export type TemplatePlanSourceItem = {
    *  the file is opened: not a bullet glyph, not a number a language
    *  spells. */
   labelAsText?: boolean;
+  /** Write the paragraph without its drawn shapes that are fixed to the
+   *  page (`pageShapes` of the block). Everything else it holds is placed.
+   *  Left out by an engine that does not know it. */
+  dropPageShapes?: boolean;
   /** Joins the next plan item, a bare source paragraph, into this one. */
   mergeNext?: TemplatePlanMerge;
   /** Starts the paragraph on a new page. Not for a table, nor for a block
@@ -415,6 +426,9 @@ export type TemplatePlanReport = {
     sourceFields: { kind: string; count: number }[];
     internalHyperlinks: number;
     sectionBreaks: number;
+    /** Drawn shapes fixed to the page that placed paragraphs were written
+     *  without. Absent from an engine that drops none. */
+    pageShapes?: number;
   };
 };
 
@@ -560,6 +574,7 @@ const blockSchema = v.strictObject({
   outlineLevel: v.nullable(v.pipe(v.number(), v.integer())),
   sectionIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
   hash: v.string(),
+  pageShapes: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   inlineObjects: v.exactOptional(
     v.pipe(v.number(), v.integer(), v.minValue(0)),
   ),

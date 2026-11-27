@@ -105,6 +105,11 @@ const SIGNING_MARKER = new RegExp(
   String.raw`^\s*(?:ve?[ \u00A0].{0,40}[ \u00A0]dne${NOT_LETTER}|(?:in|at)[ \u00A0].{0,40}[ ,]on${NOT_LETTER})|_{4,}|\.{6,}|…{3,}|podpis|signature|unterschrift|signed by`,
   "iu",
 );
+/** Whether a line belongs to a signature: the word itself, a place and a
+ *  date, a line to sign on, a name or a function to fill in. */
+export const isSignatureLine = (text: string): boolean =>
+  SIGNATURE_MARKER.test(text) || SIGNING_MARKER.test(text);
+
 const CLAUSE_DEPTH_ROLES = [
   "clause1",
   "clause2",

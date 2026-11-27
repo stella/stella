@@ -190,6 +190,8 @@ const KNOWN_NOTE_KINDS = [
   "lineBreakSpacingKept",
   "invisibleEffectsRemoved",
   "templateBlocksKept",
+  "pageMarksDropped",
+  "pageMarksKept",
 ] as const satisfies readonly NoteSource["kind"][];
 
 type KnownNoteSource = Extract<
@@ -301,6 +303,28 @@ const noteItemOf = (
         kind: "template_blocks_kept",
         reason: item.region,
         count: item.blockIds.length,
+      };
+    // The place is named by the first words of the paragraph that held the
+    // marks, or of the next one when that paragraph held nothing else.
+    case "pageMarksDropped":
+      return {
+        kind: "page_marks_dropped",
+        blockId: item.blockId,
+        count: item.marks,
+        ...(item.nearBlockId === undefined
+          ? textOf(item.blockId, 0, LABEL_EXCERPT_MAX)
+          : {
+              reason: "paragraph_omitted",
+              ...textOf(item.nearBlockId, 0, LABEL_EXCERPT_MAX),
+            }),
+      };
+    case "pageMarksKept":
+      return {
+        kind: "page_marks_kept",
+        blockId: item.blockId,
+        count: item.marks,
+        reason: "signature",
+        ...textOf(item.blockId, 0, LABEL_EXCERPT_MAX),
       };
     default: {
       item satisfies never;

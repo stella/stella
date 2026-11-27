@@ -22,6 +22,7 @@ import {
   buildTemplatePlan,
   NO_EXCLUSIONS,
 } from "@/api/lib/templates/house-style/plan-builder";
+import type { FormattingNoteItem } from "@/api/lib/templates/house-style/plan-builder";
 import type { NumberingMode } from "@/api/lib/templates/house-style/plan-numbering";
 import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
 import { findTopicSuspicions } from "@/api/lib/templates/house-style/reference-suspicions";
@@ -2294,6 +2295,120 @@ describe("buildTemplatePlan, a template in another language than the document", 
     expect(note.items.map(({ kind }) => kind)).not.toContain(
       "templateLanguageDiffers",
     );
+  });
+});
+
+describe("buildTemplatePlan, drawn marks fixed to the source's page", () => {
+  const marked = (
+    lines: readonly string[],
+    marks: Readonly<Record<number, Partial<DocxBlock>>>,
+  ): DocxBlockManifest => {
+    const manifest = manifestOf(lines);
+    return {
+      ...manifest,
+      blocks: manifest.blocks.map((block, position) => ({
+        ...block,
+        ...marks[position],
+      })),
+    };
+  };
+  const notesOf = (note: { items: readonly FormattingNoteItem[] }) =>
+    note.items.filter(
+      ({ kind }) => kind === "pageMarksDropped" || kind === "pageMarksKept",
+    );
+
+  test("a paragraph is written without them, one that holds nothing else goes with them, and the note names each place", () => {
+    const manifest = marked(
+      [
+        "SMLOUVA",
+        "",
+        "Článek I.\nPrvní",
+        "1.1\tZhotovitel provede dílo podle přílohy.",
+        "",
+        "1.2\tObjednatel dílo převezme.",
+      ],
+      {
+        // Dots and nothing else; a provision with two dots; a paragraph
+        // that holds a picture beside its one dot.
+        1: { inlineObjects: 3, pageShapes: 3 },
+        3: { inlineObjects: 2, pageShapes: 2 },
+        4: { inlineObjects: 2, pageShapes: 1 },
+      },
+    );
+    const { plan, note } = build(manifest);
+    expect(plan.omit).toContainEqual({ blockId: "p1", reason: "pageArtifact" });
+    expect(itemOf(plan, manifest, "1.1\t")).toMatchObject({
+      dropPageShapes: true,
+    });
+    // The picture keeps its paragraph, which loses only the dot.
+    expect(
+      sourceItems(plan).find(({ blockId }) => blockId === "p4"),
+    ).toMatchObject({ dropPageShapes: true });
+    expect(itemOf(plan, manifest, "1.2\t")).not.toHaveProperty(
+      "dropPageShapes",
+    );
+    expect(notesOf(note)).toEqual([
+      { kind: "pageMarksDropped", blockId: "p1", marks: 3, nearBlockId: "p2" },
+      { kind: "pageMarksDropped", blockId: "p3", marks: 2 },
+      { kind: "pageMarksDropped", blockId: "p4", marks: 1 },
+    ]);
+  });
+
+  test("a mark next to the words of a signature stays, and the note says so", () => {
+    const manifest = marked(
+      [
+        "SMLOUVA",
+        "Článek I.\nPrvní",
+        "1.1\tZhotovitel provede dílo.",
+        "1.2\tObjednatel dílo převezme.",
+        "V Praze dne 1. 2. 2026",
+        "",
+        "Podpis: ____________________",
+      ],
+      {
+        // A dot in the text, and a drawn line above the signature words.
+        2: { inlineObjects: 1, pageShapes: 1 },
+        5: { inlineObjects: 1, pageShapes: 1 },
+      },
+    );
+    const { plan, note } = build(manifest);
+    expect(plan.omit.map(({ blockId }) => blockId)).not.toContain("p5");
+    expect(
+      sourceItems(plan).find(({ blockId }) => blockId === "p5"),
+    ).not.toHaveProperty("dropPageShapes");
+    expect(notesOf(note)).toEqual([
+      { kind: "pageMarksDropped", blockId: "p2", marks: 1 },
+      { kind: "pageMarksKept", blockId: "p5", marks: 1 },
+    ]);
+  });
+
+  test("a cell paragraph loses its marks with its table's placement", () => {
+    const table = inColumns(2, ["Položka", "Cena"]);
+    const cells = table.blocks.map((block) =>
+      block.text === "Cena"
+        ? { ...block, inlineObjects: 1, pageShapes: 1 }
+        : block,
+    );
+    const { plan } = build({
+      ...table,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...cells,
+        ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
+          (block, position) => ({ ...block, id: `after${String(position)}` }),
+        ),
+      ],
+    });
+    const nested = sourceItems(plan).flatMap((item) => item.nested ?? []);
+    expect(
+      nested.find(
+        ({ blockId }) =>
+          blockId === cells.find(({ text }) => text === "Cena")?.id,
+      ),
+    ).toMatchObject({ dropPageShapes: true });
   });
 });
 

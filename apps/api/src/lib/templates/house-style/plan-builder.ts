@@ -72,6 +72,7 @@ import {
   isBlankParagraph,
   isBulleted,
   isSetAsTitle,
+  isSignatureLine,
 } from "@/api/lib/templates/house-style/role-proposer";
 import type {
   HouseStyleRole,
@@ -261,6 +262,22 @@ export type FormattingNoteItem =
    *  text of table cells. The template's text styles set every line at the
    *  left. */
   | { kind: "alignmentsKept"; blocks: number }
+  /** Drawn marks of the page the source was laid out on (dots, rules and
+   *  lines placed at coordinates of that page) were left out: `marks` of
+   *  them, anchored in the paragraph `blockId`. Set anew, the text stands
+   *  elsewhere and they would stand over it. A paragraph that held nothing
+   *  else is left out with them; `nearBlockId` is then the next paragraph
+   *  with text, to find the place by. */
+  | {
+      kind: "pageMarksDropped";
+      blockId: string;
+      marks: number;
+      nearBlockId?: string;
+    }
+  /** Such marks next to the words of a signature were kept, `marks` of
+   *  them in the paragraph `blockId`: one of them may be the line to sign
+   *  on. They may stand in the wrong place. */
+  | { kind: "pageMarksKept"; blockId: string; marks: number }
   /** `blocks` paragraphs whose number the source types with a blank
    *  between its parts (`1. 1.`) are numbered by the list, which prints the
    *  number closed up (`1.1.`). */
@@ -401,6 +418,8 @@ type BuiltPlan = {
 
 /** What every step of one build reads. */
 type Context = {
+  /** The paragraphs written without their marks of the source's page. */
+  pageMarks: ReadonlySet<string>;
   blocks: readonly DocxBlock[];
   blockById: ReadonlyMap<string, DocxBlock>;
   /** The table a cell paragraph sits in. */
@@ -633,7 +652,7 @@ type Placed = {
   titleOf: Map<string, DocxBlock>;
   /** The heading a joined title paragraph ends up in. */
   mergedInto: Map<string, string>;
-  omitted: Map<string, "empty" | "sourceToc">;
+  omitted: Map<string, "empty" | "sourceToc" | "pageArtifact">;
   /** Placed paragraphs that start a page. */
   pageStarts: Set<string>;
   /** Placed paragraphs that stay on the page of the one after them. */
@@ -1691,6 +1710,12 @@ const placeParagraphs = (context: Context): Placed => {
       placed.omitted.set(block.id, "sourceToc");
       continue;
     }
+    // A paragraph that holds nothing but marks of the source's page goes
+    // with them.
+    if (context.pageMarks.has(block.id) && holdsOnlyPageMarks(block)) {
+      placed.omitted.set(block.id, "pageArtifact");
+      continue;
+    }
     const role = roleOf(context, block);
     if (role === null && isBlankParagraph(block) && !kept.has(block.id)) {
       placed.omitted.set(block.id, "empty");
@@ -1778,6 +1803,72 @@ const asTextOf = (
   numbering === null && shownLabelOf(block) !== null
     ? { labelAsText: true }
     : {};
+
+const NO_PAGE_MARKS: ReadonlySet<string> = new Set();
+/** How many paragraphs with text on either side of one are looked at for
+ *  the words of a signature: the one right above and the one right below. */
+const SIGNATURE_REACH = 1;
+
+/** Whether a paragraph holds nothing but drawn marks fixed to the page. */
+const holdsOnlyPageMarks = (block: DocxBlock): boolean =>
+  block.kind === "paragraph" &&
+  block.text.trim() === "" &&
+  printedLabel(block) === null &&
+  block.pageShapes !== undefined &&
+  block.inlineObjects === block.pageShapes;
+
+/**
+ * The paragraphs that are written without their drawn marks fixed to the
+ * page, and the note of each. Such a mark (a dot, a rule, a line a
+ * conversion from a fixed layout left behind) was placed by the source's
+ * page; set anew, the text stands elsewhere and the mark over it. A mark in
+ * or next to the words of a signature stays: it may be the line to sign on,
+ * and one mark out of place is the lesser harm.
+ */
+const pageMarksToDrop = ({ blocks, items }: Context): Set<string> => {
+  const dropped = new Set<string>();
+  const hasText = (block: DocxBlock | undefined): block is DocxBlock =>
+    block?.kind === "paragraph" && block.text.trim() !== "";
+  /** The paragraphs with text nearest to a place, going one way. */
+  const nearest = (from: number, step: 1 | -1): DocxBlock[] => {
+    const found: DocxBlock[] = [];
+    for (
+      let at = from;
+      at >= 0 && at < blocks.length && found.length < SIGNATURE_REACH;
+      at += step
+    ) {
+      const block = blocks[at];
+      if (hasText(block)) {
+        found.push(block);
+      }
+    }
+    return found;
+  };
+  for (const [position, block] of blocks.entries()) {
+    const marks = block.pageShapes;
+    if (block.kind !== "paragraph" || marks === undefined) {
+      continue;
+    }
+    const around = [
+      block,
+      ...nearest(position - 1, -1),
+      ...nearest(position + 1, 1),
+    ];
+    if (around.some(({ text }) => isSignatureLine(text))) {
+      items.push({ kind: "pageMarksKept", blockId: block.id, marks });
+      continue;
+    }
+    dropped.add(block.id);
+    const [near] = holdsOnlyPageMarks(block) ? nearest(position + 1, 1) : [];
+    items.push({
+      kind: "pageMarksDropped",
+      blockId: block.id,
+      marks,
+      ...(near === undefined ? {} : { nearBlockId: near.id }),
+    });
+  }
+  return dropped;
+};
 
 const stripOf = ({
   numbered,
@@ -1944,6 +2035,7 @@ const tableItem = (
         ...stripOf(placement),
         ...asTextOf(inner, numbering),
         ...(alignment === undefined ? {} : { alignment }),
+        ...(context.pageMarks.has(inner.id) ? { dropPageShapes: true } : {}),
       });
     } else if (inner.kind === "paragraph") {
       // A cell paragraph placed with its table takes the style the
@@ -1955,12 +2047,19 @@ const tableItem = (
       const labelled = shownLabelOf(inner) !== null;
       const alignment =
         inner.text.trim() === "" ? undefined : setApartOf(inner);
-      if (styleId !== undefined || labelled || alignment !== undefined) {
+      const marked = context.pageMarks.has(inner.id);
+      if (
+        styleId !== undefined ||
+        labelled ||
+        alignment !== undefined ||
+        marked
+      ) {
         nested.push({
           blockId: inner.id,
           ...(styleId === undefined ? {} : { styleId }),
           ...(labelled ? { numbering: null, labelAsText: true } : {}),
           ...(alignment === undefined ? {} : { alignment }),
+          ...(marked ? { dropPageShapes: true } : {}),
         });
       }
     }
@@ -2033,6 +2132,7 @@ const paragraphItems = ({
     ...stripped,
     ...(dropsLabelBreak(profile, placement) ? { stripLabelBreak: true } : {}),
     ...asTextOf(block, numbering),
+    ...(context.pageMarks.has(block.id) ? { dropPageShapes: true } : {}),
     ...(title === undefined ? {} : { mergeNext }),
     ...(pageStart ? { pageBreakBefore: true } : {}),
     ...(endsSection === undefined ? {} : { endsSection }),
@@ -2051,6 +2151,7 @@ const paragraphItems = ({
           blockId: title.id,
           hash: title.hash,
           ...asTextOf(title, null),
+          ...(context.pageMarks.has(title.id) ? { dropPageShapes: true } : {}),
         },
       ];
 };
@@ -2849,6 +2950,7 @@ export const buildTemplatePlan = ({
     }
   }
   const context: Context = {
+    pageMarks: NO_PAGE_MARKS,
     blocks,
     blockById: new Map(blocks.map((block) => [block.id, block])),
     tableOf,
@@ -2872,6 +2974,7 @@ export const buildTemplatePlan = ({
   };
 
   context.keptSections = sectionsToKeep(context);
+  context.pageMarks = pageMarksToDrop(context);
   const placed = placeParagraphs(context);
   const { patches, levelsByList } = numberPlacements({
     placements: placed.placements,
