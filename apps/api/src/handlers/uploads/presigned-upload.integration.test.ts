@@ -565,7 +565,7 @@ describe("presigned upload mutation flow", () => {
           await rejectionOf(
             settledWithin(finalizing, {
               description: "finalizeUpload to bypass held admission gate",
-              timeoutMs: 200,
+              timeoutMs: 200, // timeout: bounded window asserting finalize stays blocked on admission gate
             }),
           ),
         ).toBeInstanceOf(WaitTimeoutError);

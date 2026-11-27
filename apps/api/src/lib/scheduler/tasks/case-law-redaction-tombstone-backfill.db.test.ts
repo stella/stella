@@ -282,7 +282,7 @@ if (!databaseUrl || !runPostgresTests) {
           await rejectionOf(
             settledWithin(staleWriter, {
               description: "stale writer to bypass redaction lock",
-              timeoutMs: 100,
+              timeoutMs: 100, // timeout: bounded window asserting stale writer stays blocked on redaction lock
             }),
           ),
         ).toBeInstanceOf(WaitTimeoutError);

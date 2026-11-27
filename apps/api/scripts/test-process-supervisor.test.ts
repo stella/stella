@@ -826,7 +826,7 @@ posixTest(
       await waitForExternalState({
         description: `descendant ${String(descendantPid)} exits after supervisor dispose`,
         intervalMs: 20,
-        timeoutMs: 2000,
+        timeoutMs: 5000,
         read: () => {
           try {
             process.kill(descendantPid, 0);

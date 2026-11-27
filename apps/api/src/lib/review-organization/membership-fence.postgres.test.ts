@@ -84,7 +84,7 @@ if (!databaseUrl || !enabled) {
             await rejectionOf(
               settledWithin(Promise.race([join, matter]), {
                 description: "join or matter to bypass membership fence",
-                timeoutMs: 500,
+                timeoutMs: 500, // timeout: bounded window asserting concurrent writes stay blocked on fence
               }),
             ),
           ).toBeInstanceOf(WaitTimeoutError);

@@ -125,7 +125,7 @@ const readNextChunk = async (response: Response) => {
     try {
       return await settledWithin(readNonHeartbeat(), {
         description: "next non-heartbeat workspace event chunk",
-        timeoutMs: STREAM_CLOSE_WAIT_MS,
+        timeoutMs: STREAM_CLOSE_WAIT_MS, // timeout: bounded window for stream quiet assertion
       });
     } catch (error) {
       if (error instanceof WaitTimeoutError) {
@@ -164,7 +164,7 @@ const awaitStreamEnd = async (response: Response): Promise<StreamOutcome> => {
     try {
       outcome = await settledWithin(drain(), {
         description: "workspace event stream to close",
-        timeoutMs: STREAM_CLOSE_WAIT_MS,
+        timeoutMs: STREAM_CLOSE_WAIT_MS, // timeout: bounded window for stream open assertion
       });
     } catch (error) {
       if (error instanceof WaitTimeoutError) {

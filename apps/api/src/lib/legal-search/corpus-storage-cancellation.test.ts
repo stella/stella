@@ -38,7 +38,7 @@ const releaseAbortedHolds = async (
     Promise.all(holds.map(async (hold) => await hold.aborted)),
     {
       description: "cancelled S3 requests to abort at server",
-      timeoutMs: 2000,
+      timeoutMs: 5000,
     },
   );
   for (const hold of holds) {

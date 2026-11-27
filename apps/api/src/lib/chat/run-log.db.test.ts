@@ -696,7 +696,7 @@ describe("chat run log database contract", () => {
         await rejectionOf(
           settledWithin(pending, {
             description: "run-log reader to emit before settlement",
-            timeoutMs: 50,
+            timeoutMs: 50, // timeout: bounded window asserting reader stays blocked before settlement
           }),
         ),
       ).toBeInstanceOf(WaitTimeoutError);

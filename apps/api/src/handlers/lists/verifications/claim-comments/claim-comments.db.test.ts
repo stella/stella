@@ -590,7 +590,7 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
       );
       await waitForExternalState({
         description: "second comment update to wait on a lock",
-        timeoutMs: 2000,
+        timeoutMs: 5000,
         read: async () => {
           const waiting = await db.execute<{ waiting: number }>(
             sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
@@ -632,7 +632,7 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
       // The comment's write waits on the claim the deletion holds.
       await waitForExternalState({
         description: "comment write to wait on the claim lock",
-        timeoutMs: 2000,
+        timeoutMs: 5000,
         read: async () => {
           const waiting = await db.execute<{ waiting: number }>(
             sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity

@@ -481,7 +481,7 @@ describe("a producing run", () => {
       // Collect its buffered prefix without waiting for that close handshake.
       await settledWithin(closed.promise, {
         description: "stalled HTTP socket to close",
-        timeoutMs: 200,
+        timeoutMs: 200, // timeout: bounded window collecting buffered prefix without waiting for close handshake
       }).catch((error: unknown) => {
         if (error instanceof WaitTimeoutError) {
           return;
@@ -711,7 +711,7 @@ describe("a producing run", () => {
           await rejectionOf(
             settledWithin(waitForAbort(run.control.abortController.signal), {
               description: "run abort during own settlement",
-              timeoutMs: 30,
+              timeoutMs: 30, // timeout: bounded window asserting own settlement is not aborted by heartbeat
             }),
           ),
         ).toBeInstanceOf(WaitTimeoutError);
@@ -830,7 +830,7 @@ describe("a producing run", () => {
       await rejectionOf(
         settledWithin(settled, {
           description: "run to settle while heartbeat reads turn",
-          timeoutMs: 40,
+          timeoutMs: 40, // timeout: bounded window asserting run waits for in-flight heartbeat
         }),
       ),
     ).toBeInstanceOf(WaitTimeoutError);
@@ -918,7 +918,7 @@ describe("a producing run", () => {
       await rejectionOf(
         settledWithin(relinquished, {
           description: "ownership to relinquish while heartbeat reads turn",
-          timeoutMs: 40,
+          timeoutMs: 40, // timeout: bounded window asserting relinquish waits for in-flight heartbeat
         }),
       ),
     ).toBeInstanceOf(WaitTimeoutError);
@@ -956,7 +956,7 @@ describe("a producing run", () => {
       await rejectionOf(
         settledWithin(relinquished, {
           description: "ownership to relinquish while follow-up is running",
-          timeoutMs: 40,
+          timeoutMs: 40, // timeout: bounded window asserting relinquish waits for follow-up work
         }),
       ),
     ).toBeInstanceOf(WaitTimeoutError);

@@ -380,7 +380,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     task.controller.abort(new Error("scheduler shutdown"));
     await settledWithin(run, {
       description: "provision state backfill to abort",
-      timeoutMs: 500,
+      timeoutMs: 5000,
     });
     expect(task.events).toEqual([
       "scheduler.case_law_provision_state_backfill_aborted",

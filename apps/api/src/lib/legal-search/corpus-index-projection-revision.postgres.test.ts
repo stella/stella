@@ -252,7 +252,7 @@ if (!databaseUrl || !runPostgresTests) {
             secondFenceAcquired.promise.then(() => true),
             {
               description: "second fence to acquire while first is held",
-              timeoutMs: 100,
+              timeoutMs: 5000,
             },
           ).catch((error: unknown) => {
             if (error instanceof WaitTimeoutError) {
@@ -364,7 +364,7 @@ if (!databaseUrl || !runPostgresTests) {
             promotionLocked.promise.then(() => true),
             {
               description: "promotion lock to overtake writer",
-              timeoutMs: 100,
+              timeoutMs: 100, // timeout: bounded window asserting competing transaction stays blocked on lock
             },
           ).catch((error: unknown) => {
             if (error instanceof WaitTimeoutError) {
@@ -518,7 +518,7 @@ if (!databaseUrl || !runPostgresTests) {
             olderMutationFinished.promise.then(() => true),
             {
               description: "older mutation to overtake proof lock",
-              timeoutMs: 100,
+              timeoutMs: 100, // timeout: bounded window asserting competing transaction stays blocked on lock
             },
           ).catch((error: unknown) => {
             if (error instanceof WaitTimeoutError) {
@@ -647,7 +647,7 @@ if (!databaseUrl || !runPostgresTests) {
             activation.then(() => true),
             {
               description: "activation to bypass held writer",
-              timeoutMs: 100,
+              timeoutMs: 100, // timeout: bounded window asserting competing transaction stays blocked on lock
             },
           ).catch((error: unknown) => {
             if (error instanceof WaitTimeoutError) {

@@ -222,7 +222,7 @@ if (!databaseUrl || !runPostgres) {
                     await waitForExternalState({
                       description: `backend ${String(pid)} to enter PgSleep`,
                       intervalMs: 1,
-                      timeoutMs: 1000,
+                      timeoutMs: 1000, // timeout: observe the statement under test before its 1s pg_sleep finishes
                       read: async () => {
                         const active = executedRows(
                           await control.unsafe(

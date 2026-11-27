@@ -139,7 +139,7 @@ if (!databaseUrl || !enabled) {
           await rejectionOf(
             settledWithin(erasingAfterLink, {
               description: "erasure to bypass held linking lock",
-              timeoutMs: 50,
+              timeoutMs: 50, // timeout: bounded window asserting erasure stays blocked on linking lock
             }),
           ),
         ).toBeInstanceOf(WaitTimeoutError);
@@ -215,7 +215,7 @@ if (!databaseUrl || !enabled) {
           await rejectionOf(
             settledWithin(linkingAfterErasure, {
               description: "linking to bypass held erasure lock",
-              timeoutMs: 50,
+              timeoutMs: 50, // timeout: bounded window asserting linking stays blocked on erasure lock
             }),
           ),
         ).toBeInstanceOf(WaitTimeoutError);

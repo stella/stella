@@ -103,7 +103,7 @@ if (!databaseUrl || !runPostgresTests) {
             await rejectionOf(
               settledWithin(page, {
                 description: "work name backfill page to bypass held lock",
-                timeoutMs: 500,
+                timeoutMs: 500, // timeout: bounded window asserting backfill stays blocked on held lock
               }),
             ),
           ).toBeInstanceOf(WaitTimeoutError);

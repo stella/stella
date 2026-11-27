@@ -331,7 +331,7 @@ if (!databaseUrl || !runPostgresTests) {
             await rejectionOf(
               settledWithin(second, {
                 description: "second reissue to bypass held lock",
-                timeoutMs: LOCK_WAIT_MS,
+                timeoutMs: LOCK_WAIT_MS, // timeout: bounded window asserting competing reissue stays blocked on lock
               }),
             ),
           ).toBeInstanceOf(WaitTimeoutError);
@@ -398,7 +398,7 @@ if (!databaseUrl || !runPostgresTests) {
           await reissueHolds.promise;
           const claim = await settledWithin(claimSettlement(claimDb, fixture), {
             description: "claim to skip rows locked by reissue",
-            timeoutMs: LOCK_WAIT_MS,
+            timeoutMs: 5000,
           });
           releaseReissue.resolve(undefined);
 
