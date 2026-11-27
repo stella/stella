@@ -526,7 +526,10 @@ const inferAnnexRoles = (
   facts: readonly StyleFacts[],
   roles: TemplateProfile["roles"],
 ): AnnexRoles | undefined => {
-  const main = roles.articleHeading?.numbering?.abstractNumId;
+  // The main outline's list, also where its heading prints no number.
+  const main = OUTLINE_ROLES.map(
+    (role) => roles[role]?.numbering?.abstractNumId,
+  ).find((abstractNumId) => abstractNumId !== undefined);
   const lists = Map.groupBy(
     facts.filter(({ level }) => level !== null),
     ({ level }) => level?.abstractNumId ?? -1,
@@ -1366,6 +1369,47 @@ export type TemplateProfileIssue = {
   blockId?: string;
 };
 
+/**
+ * An issue for every role of the annexes' outline that names a style or a
+ * list level the template does not have. The role on the issue is the one
+ * the annex target stands in for.
+ */
+const annexRoleIssues = (
+  { annexRoles }: TemplateProfile,
+  inspection: TemplateInspection,
+  {
+    styles,
+    abstractByNum,
+  }: {
+    styles: ReadonlySet<string>;
+    abstractByNum: ReadonlyMap<number, number>;
+  },
+): TemplateProfileIssue[] => {
+  const issues: TemplateProfileIssue[] = [];
+  for (const role of OUTLINE_ROLES) {
+    const roleTarget = annexRoles?.[role];
+    if (roleTarget === undefined) {
+      continue;
+    }
+    if (!styles.has(roleTarget.styleId)) {
+      issues.push({ severity: "error", code: "unknownStyle", role });
+    }
+    const { numbering } = roleTarget;
+    const known =
+      numbering === null ||
+      (abstractByNum.get(numbering.numId) === numbering.abstractNumId &&
+        inspection.numbering.abstractNums.some(
+          ({ abstractNumId, levels }) =>
+            abstractNumId === numbering.abstractNumId &&
+            levels.some(({ ilvl }) => ilvl === numbering.ilvl),
+        ));
+    if (!known) {
+      issues.push({ severity: "error", code: "unknownListLevel", role });
+    }
+  }
+  return issues;
+};
+
 /** An issue for every spare or mark level the template does not have. */
 const unknownLevelIssues = (
   profile: TemplateProfile,
@@ -1464,6 +1508,12 @@ export const validateTemplateProfile = (
   }
 
   issues.push(...unknownLevelIssues(profile, inspection, abstractByNum));
+  issues.push(
+    ...annexRoleIssues(profile, inspection, {
+      styles: new Set(facts.keys()),
+      abstractByNum,
+    }),
+  );
 
   const { topLevel } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);

@@ -215,9 +215,9 @@ const ANNEX_DEFINITION = 77;
 
 /**
  * The contract template with an outline of its own for annexes: a heading
- * and a clause style named for annexes, in a list of their own. The clause
- * style names another list of the same definition, as templates grown by
- * hand do.
+ * and the styles under it, named for annexes, in a list of their own. The
+ * first clause style names another list of the same definition, as
+ * templates grown by hand do.
  */
 export const templateWithAnnexOutline = (): TemplateInspection => {
   const template = contractTemplate();
@@ -227,6 +227,9 @@ export const templateWithAnnexOutline = (): TemplateInspection => {
       ...template.styles,
       style(["AnnexArticle", "Annex article", [ANNEX_LIST, 0]]),
       style(["AnnexClause", "Annex clause 1.1", [ANNEX_LIST + 1, 1]]),
+      style(["AnnexClause2", "Annex clause 1.1.1", [ANNEX_LIST, 2]]),
+      style(["AnnexLetter", "Annex clause a)", [ANNEX_LIST, 3]]),
+      style(["AnnexRoman", "Annex clause (i)", [ANNEX_LIST, 4]]),
     ],
     numbering: {
       abstractNums: [
@@ -236,6 +239,9 @@ export const templateWithAnnexOutline = (): TemplateInspection => {
           levels: [
             level(0, "decimal", "%1.", "AnnexArticle"),
             level(1, "decimal", "%1.%2.", "AnnexClause"),
+            level(2, "decimal", "%1.%2.%3.", "AnnexClause2"),
+            level(3, "lowerLetter", "%4)", "AnnexLetter"),
+            level(4, "lowerRoman", "(%5)", "AnnexRoman"),
           ],
         },
       ],

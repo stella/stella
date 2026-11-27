@@ -59,6 +59,31 @@ describe("inferTemplateProfile", () => {
     expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
       profile,
     );
+    // A target of the annexes' outline that names what the template lacks
+    // is an error, as a role's is.
+    expect(
+      validateTemplateProfile(
+        {
+          ...profile,
+          annexRoles: {
+            ...profile.annexRoles,
+            ...(profile.annexRoles?.clause1 === undefined
+              ? {}
+              : {
+                  clause1: {
+                    ...profile.annexRoles.clause1,
+                    styleId: "Missing",
+                  },
+                }),
+          },
+        },
+        template,
+      ),
+    ).toContainEqual({
+      severity: "error",
+      code: "unknownStyle",
+      role: "clause1",
+    });
 
     // A second list whose styles are not named for annexes is no outline
     // of theirs.

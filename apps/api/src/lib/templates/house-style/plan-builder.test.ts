@@ -260,6 +260,45 @@ describe("buildTemplatePlan, a template with an outline of its own for annexes",
     ]);
   });
 
+  test("an outline for annexes that lacks a level the main outline numbers is not used", () => {
+    // Its clauses would count in the main list under a heading of the
+    // annexes' list.
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const { clause1: _dropped, ...partial } = profile.annexRoles ?? {};
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...profile, annexRoles: partial },
+    });
+    expect(itemOf(plan, manifest, "Rozsah")).toMatchObject({
+      styleId: "Article",
+    });
+    expect(itemOf(plan, manifest, "Podmínky platí")).toMatchObject({
+      styleId: "Clause1",
+    });
+  });
+
+  test("a heading's title that stays a paragraph of its own is set as its heading is", () => {
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const split = manifestOf([
+      "SMLOUVA",
+      numbered("1.", "Předmět smlouvy", 10),
+      numbered("1.1", "Dodavatel dodá zboží.", 10),
+      "Příloha č. 1\nPodmínky",
+      "Článek 1",
+      "Rozsah",
+      numbered("1.1", "Podmínky platí pro každou dodávku.", 20),
+    ]);
+    // The title is kept from joining its heading, as after a refusal.
+    const { plan } = build(split, "keepSource", {
+      profile,
+      exclusions: {
+        ...NO_EXCLUSIONS,
+        merges: new Set([blockIdOf(split, "Článek 1")]),
+      },
+    });
+    expect(itemOf(plan, split, "Článek 1")?.styleId).toBe("AnnexArticle");
+    expect(itemOf(plan, split, "Rozsah")?.styleId).toBe("AnnexArticle");
+  });
+
   test("a template without one sets an annex's provisions as it sets the body's", () => {
     const { plan } = build(manifest);
     expect(itemOf(plan, manifest, "Rozsah")).toMatchObject({
