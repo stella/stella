@@ -22280,6 +22280,14 @@
         "job": "measure-2"
       }
     },
+    "src/lib/legal-search/parsers/rtf-reader-owner.test.ts": {
+      "peakMb": 193,
+      "baselineMb": 193,
+      "source": {
+        "runId": "44976310794",
+        "job": "measure-2"
+      }
+    },
     "src/lib/legal-search/parsers/sk-courts.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,

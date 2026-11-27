@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import path from "node:path";
 
 const OWNER = "packages/case-law-parsers/src/rtf-reader.ts";
-const SOURCE_ROOT = path.resolve(import.meta.dir, "../../..");
+const SOURCE_ROOT = path.resolve(import.meta.dir, "../../../../../..");
 
 const readerMarkers = [
   "ansicpg",

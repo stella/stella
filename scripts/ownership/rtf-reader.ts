@@ -22,7 +22,7 @@ export default {
         reason: "Exercises source byte decoding.",
       },
       {
-        path: "packages/case-law-parsers/src/rtf-reader-owner.test.ts",
+        path: "apps/api/src/lib/legal-search/parsers/rtf-reader-owner.test.ts",
         reason: "Enumerates reader implementations.",
       },
       {
