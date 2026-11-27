@@ -9,7 +9,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { releaseRevokedRunners } from "@/api/lib/desktop-runner/store";
 
 type RevokeDesktopRegistryCredentialOptions = {
@@ -32,7 +32,7 @@ export const revokeDesktopRegistryCredential = async ({
   expectedKeyHash,
   db = rootDb,
 }: RevokeDesktopRegistryCredentialOptions) =>
-  await withAggregateTransaction(db, async (tx) => {
+  await withOwnerOrganizationScope(db, organizationId, async (tx) => {
     const revoked = await tx
       .update(apikey)
       .set({

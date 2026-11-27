@@ -849,12 +849,38 @@ const getPresignClient = async ({
 };
 
 /**
+ * Maximum lifetime (900 seconds / 15 minutes) for any presigned S3 download URL.
+ *
+ * Revocation-lag contract: a presigned S3 GET URL is a bearer credential that
+ * S3 honors until `X-Amz-Expires` elapses; membership removal, workspace access
+ * revocation, or file deletion cannot revoke an already-issued S3 signature
+ * before expiry. Bounding every presigned download URL to at most 15 minutes
+ * (and further capping synthetic-principal downloads to 60 seconds / remaining
+ * session lifetime via `issueSessionBoundCredentialTtl`) limits the post-revocation
+ * window, while STS scoped signing binds the signature to the tenant's
+ * `org/` or `org/workspace/` key prefix.
+ */
+export const MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS = 15 * 60;
+
+const assertDownloadExpiryWithinBounds = (expiresIn: number): void => {
+  if (
+    !Number.isFinite(expiresIn) ||
+    expiresIn <= 0 ||
+    expiresIn > MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS
+  ) {
+    throw new S3PresignError({
+      message: `Presigned download URL lifetime must be between 1 and ${MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS} seconds`,
+    });
+  }
+};
+
+/**
  * Longest presign expiry the warmed session must be able to cover. Matches
- * the file-read expiry (`FILE_READ_URL_EXPIRY_SECONDS` in
- * handlers/files/get.ts): a warmed session passes
+ * `MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS`: a warmed session passes
  * `hasScopedSessionTimeForPresign` for any presign up to this expiry.
  */
-const PREWARM_PRESIGN_EXPIRES_IN_SECONDS = 15 * 60;
+const PREWARM_PRESIGN_EXPIRES_IN_SECONDS =
+  MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS;
 
 /**
  * Fire-and-forget warmup of a workspace's scoped download-signing session.
@@ -1074,6 +1100,7 @@ const presignInternalDownloadUrl = async (
   key: string,
   { expiresIn, fileName, scope }: PresignInternalDownloadOptions,
 ): Promise<string> => {
+  assertDownloadExpiryWithinBounds(expiresIn);
   const result = await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
@@ -1122,6 +1149,7 @@ export const presignDownloadUrl = async (
     fileName,
   }: PresignDownloadOptions,
 ): Promise<string> => {
+  assertDownloadExpiryWithinBounds(expiresIn);
   const issuedExpiresIn = await issueSessionBoundCredentialTtl(
     "signedDownload",
     {

@@ -30,6 +30,7 @@ import {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { lockSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 
 export type SharepointDisablePurgeResult = {
@@ -115,7 +116,9 @@ export const purgeSharepointForOrg = async (
 export const disableAndPurgeSharepointForOrg = async (options: PurgeOptions) =>
   await Result.tryPromise(
     async () =>
-      await rootDb.transaction(
+      await withOwnerOrganizationScope(
+        rootDb,
+        options.organizationId,
         async (tx) => await purgeSharepointForOrg(tx, options),
       ),
   );
