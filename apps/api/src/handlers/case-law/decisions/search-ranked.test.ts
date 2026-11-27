@@ -9,6 +9,7 @@ import {
   corpusIndexDecisionTerms,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
+import { minimumWordsHeld } from "@/api/lib/legal-search/corpus-ranked-decision-query";
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
 import {
   PUBLIC_READ_TIMEOUT_CODE,
@@ -43,7 +44,7 @@ const shapeOf = (overrides: Partial<Parameters<typeof rankedSearchShape>[0]>) =>
 
 describe("which requests rank whole decisions", () => {
   test("a relevance search on a generation with the decision field does", () => {
-    expect(shapeOf({})).toMatchObject({ type: "ranked", arm: "any" });
+    expect(shapeOf({})).toMatchObject({ type: "ranked", arm: "half" });
     expect(shapeOf({ strict: true })).toMatchObject({
       type: "ranked",
       arm: "all",
@@ -51,11 +52,11 @@ describe("which requests rank whole decisions", () => {
   });
 
   test("a caller comparing arms sets the unstrict arm; strict still means every word", () => {
-    expect(shapeOf({ unstrictArm: "half" })).toMatchObject({
+    expect(shapeOf({ unstrictArm: "any" })).toMatchObject({
       type: "ranked",
-      arm: "half",
+      arm: "any",
     });
-    expect(shapeOf({ unstrictArm: "half", strict: true })).toMatchObject({
+    expect(shapeOf({ unstrictArm: "any", strict: true })).toMatchObject({
       type: "ranked",
       arm: "all",
     });
@@ -84,13 +85,16 @@ describe("which requests rank whole decisions", () => {
   });
 
   test("the arm is part of the cursor's identity", () => {
-    const any = shapeOf({});
+    const unstrict = shapeOf({});
     const all = shapeOf({ strict: true });
-    expect(rankedCursorTarget("target", any)).not.toBe(
+    expect(rankedCursorTarget("target", unstrict)).not.toBe(
       rankedCursorTarget("target", all),
     );
+    expect(rankedCursorTarget("target", unstrict)).not.toBe(
+      rankedCursorTarget("target", shapeOf({ unstrictArm: "any" })),
+    );
     expect(rankedCursorTarget("target", { type: "passages" })).toBe("target");
-    expect(rankedCursorTarget("target", any)).toMatch(/^[0-9a-f]{32}$/u);
+    expect(rankedCursorTarget("target", unstrict)).toMatch(/^[0-9a-f]{32}$/u);
   });
 });
 
@@ -123,7 +127,9 @@ describe("the ranked plan", () => {
   test("scope filters the scan, and the words are its should clauses", () => {
     const sent = JSON.stringify(plan.scanQuery.query);
     expect(plan.scanQuery.query).toMatchObject({
-      bool: { minimum_should_match: 1 },
+      bool: {
+        minimum_should_match: minimumWordsHeld(shape.arm, plan.words.length),
+      },
     });
     const { bool } = v.parse(
       v.object({
