@@ -1,4 +1,5 @@
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
+import { attenuateSafeDb, attenuateScopedDb } from "@/api/db/scoped";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
@@ -98,6 +99,16 @@ export const buildMcpContextFromChat = (
   const workspaceAccessBoundary = createWorkspaceAccessBoundary(
     accessibleWorkspaceIds,
   );
+  const isWorkspaceScopeNarrowed = [...deps.workspaceStatusById.keys()].some(
+    (statusKey) =>
+      !workspaceAccessBoundary.accessibleWorkspaceIdSet.has(statusKey),
+  );
+  const safeDb = isWorkspaceScopeNarrowed
+    ? attenuateSafeDb(deps.safeDb, accessibleWorkspaceIds)
+    : deps.safeDb;
+  const scopedDb = isWorkspaceScopeNarrowed
+    ? attenuateScopedDb(deps.scopedDb, accessibleWorkspaceIds)
+    : deps.scopedDb;
   const accessibleWorkspaceStatusById = deriveWorkspaceStatusMap(deps);
   const requestPinServerValidatedWorkspaceId =
     deps.pinServerValidatedWorkspaceId;
@@ -129,8 +140,8 @@ export const buildMcpContextFromChat = (
     organizationId: deps.organizationId,
     pinServerValidatedWorkspaceId,
     recordAuditEvent: deps.recordAuditEvent ?? NO_OP_AUDIT_RECORDER,
-    safeDb: deps.safeDb,
-    scopedDb: deps.scopedDb,
+    safeDb,
+    scopedDb,
     // Chat reaches third-party services only through its native tools. A
     // registry handler run from a chat script, which has no outbound approval,
     // or as a projected write holds no permit, so it cannot send to one.
