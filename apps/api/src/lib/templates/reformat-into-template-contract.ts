@@ -33,6 +33,11 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
   "line_break_spacing_kept",
   "invisible_effects_removed",
   "template_blocks_kept",
+  /** `count` fields of the source show their last text in the output and
+   *  no longer update; `reason` lists the kinds with their counts
+   *  (`REF:3,FORMCHECKBOX:2`). A form field's box or list is gone. Check
+   *  them against the source. */
+  "fields_as_text",
   /** A finding of the formatter this tool does not word yet; `reason`
    *  names it. */
   "other",
