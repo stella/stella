@@ -2794,21 +2794,27 @@ describe("buildTemplatePlan, lines the source brings back to the margin", () => 
     const at = manifest.blocks.findIndex(({ text }) =>
       text.startsWith("Dodavatel dále zajistí:"),
     );
-    const cell = { ...manifest.blocks[0], id: "c1", text: "položka" };
-    const table = {
-      ...manifest.blocks[0],
+    const [first] = manifest.blocks;
+    if (first === undefined) {
+      throw new Error("no block to copy");
+    }
+    const cell: DocxBlock = { ...first, id: "c1", text: "položka" };
+    const table: DocxBlock = {
+      ...first,
       id: "t1",
-      kind: "table" as const,
+      kind: "table",
       text: "",
       cells: [{ row: 0, col: 0, blockIds: ["c1"] }],
     };
-    const blocks = [
-      ...manifest.blocks.slice(0, at + 1),
-      table,
-      cell,
-      ...manifest.blocks.slice(at + 1),
-    ].flatMap((block) => (block === undefined ? [] : [block]));
-    const withTable = { ...manifest, blocks };
+    const withTable: DocxBlockManifest = {
+      ...manifest,
+      blocks: [
+        ...manifest.blocks.slice(0, at + 1),
+        table,
+        cell,
+        ...manifest.blocks.slice(at + 1),
+      ],
+    };
     expect(styleOf(withTable, "Dodavatel dále zajistí:")).toBe("Body");
   });
 
