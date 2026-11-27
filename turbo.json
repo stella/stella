@@ -1948,7 +1948,9 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/AGENTS.md",
-        "$TURBO_ROOT$/apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/**"
+        "$TURBO_ROOT$/apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/**",
+        "$TURBO_ROOT$/apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/**",
+        "$TURBO_ROOT$/apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/__fixtures__/**"
       ]
     },
     // The path-grammar test pins api-contract's browser copy of the pattern.
