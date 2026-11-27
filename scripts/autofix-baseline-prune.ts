@@ -59,13 +59,6 @@ export const PRUNABLE_BASELINE_WRITERS = [
     baselines: [{ path: BASELINE_PATHS.transferRead, collection: [] }],
   },
   {
-    write: ["bun", "scripts/queue-authority.ts", "--write"],
-    baselines: [
-      { path: BASELINE_PATHS.queueAuthority, collection: ["members"] },
-      { path: BASELINE_PATHS.schedulerTaskAuthority, collection: ["members"] },
-    ],
-  },
-  {
     write: ["bun", "scripts/seed-test-determinism-baselines.ts"],
     baselines: [
       { path: BASELINE_PATHS.testState, collection: [] },

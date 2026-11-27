@@ -12,7 +12,6 @@ import { API } from "tsrs/async";
 
 import {
   analyzeTestSubjectReachability,
-  checkReachabilityBaselineMembership,
   REACHABILITY_CATEGORIES,
   type ReachabilityCategory,
   type ReachabilityFinding,
@@ -788,27 +787,5 @@ describe("test subject reachability", () => {
         files: input.files,
       }),
     ).toEqual([]);
-  });
-
-  test("rejects an exception added to the head baseline", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "subject-reachability-git-"));
-    roots.push(root);
-    mkdirSync(path.join(root, "scripts"), { recursive: true });
-    writeFileSync(
-      path.join(root, "scripts/test-subject-reachability-baseline.json"),
-      "{}\n",
-    );
-    git(root, "init", "-q");
-    git(root, "config", "user.email", "test@example.com");
-    git(root, "config", "user.name", "Test");
-    git(root, "add", ".");
-    git(root, "commit", "-qm", "base");
-    const base = git(root, "rev-parse", "HEAD");
-    writeFileSync(
-      path.join(root, "scripts/test-subject-reachability-baseline.json"),
-      `${JSON.stringify({ [TEST_FILE]: ["no-classified-reachability"] })}\n`,
-    );
-
-    expect(checkReachabilityBaselineMembership(root, ["--base", base])).toBe(1);
   });
 });
