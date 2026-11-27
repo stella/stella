@@ -59,27 +59,31 @@ export const maybeStartUploadTriggeredFlows = async ({
   fileName,
 }: MaybeStartUploadTriggeredFlowsArgs): Promise<void> => {
   const definitionsResult = await Result.tryPromise({
-    try: async () =>
-      await withOwnerOrganizationScope(
-        rootDb,
-        organizationId,
-        async (tx) =>
-          await tx
-            .select({
-              id: flowDefinitions.id,
-              trigger: flowDefinitions.trigger,
-              createdByUserId: flowDefinitions.createdByUserId,
-            })
-            .from(flowDefinitions)
-            .where(
-              and(
-                eq(flowDefinitions.organizationId, organizationId),
-                eq(flowDefinitions.enabled, true),
-                sql`${flowDefinitions.trigger}->>'type' = 'file-upload'`,
-              ),
-            )
-            .limit(LIMITS.flowDefinitionsCount),
-      ),
+    try: async () => {
+      let definitions: {
+        id: (typeof flowDefinitions.$inferSelect)["id"];
+        trigger: (typeof flowDefinitions.$inferSelect)["trigger"];
+        createdByUserId: (typeof flowDefinitions.$inferSelect)["createdByUserId"];
+      }[] = [];
+      await withOwnerOrganizationScope(rootDb, organizationId, async (tx) => {
+        definitions = await tx
+          .select({
+            id: flowDefinitions.id,
+            trigger: flowDefinitions.trigger,
+            createdByUserId: flowDefinitions.createdByUserId,
+          })
+          .from(flowDefinitions)
+          .where(
+            and(
+              eq(flowDefinitions.organizationId, organizationId),
+              eq(flowDefinitions.enabled, true),
+              sql`${flowDefinitions.trigger}->>'type' = 'file-upload'`,
+            ),
+          )
+          .limit(LIMITS.flowDefinitionsCount);
+      });
+      return definitions;
+    },
     catch: (cause) => cause,
   });
 

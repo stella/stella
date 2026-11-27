@@ -181,12 +181,17 @@ export const readOrganizationMachineApiKeyPage = async (
 /** {@link readOrganizationMachineApiKeyPage} through the owner connection. */
 export const listOrganizationMachineApiKeys = async (
   options: ListOptions,
-): Promise<MachineApiKeyPageRow[]> =>
+): Promise<MachineApiKeyPageRow[]> => {
+  let rows: MachineApiKeyPageRow[] = [];
   await withOwnerOrganizationScope(
     rootDb,
     options.organizationId,
-    async (tx) => await readOrganizationMachineApiKeyPage(tx, options),
+    async (tx) => {
+      rows = await readOrganizationMachineApiKeyPage(tx, options);
+    },
   );
+  return rows;
+};
 
 /**
  * A single machine key, scoped to the organization in the same query.
@@ -201,15 +206,15 @@ export const findOrganizationMachineApiKey = async ({
 }: {
   keyId: string;
   organizationId: SafeId<"organization">;
-}): Promise<MachineApiKeyRow | null> =>
-  await withOwnerOrganizationScope(
-    rootDb,
-    organizationId,
-    async (tx) =>
-      await tx
-        .select(machineApiKeyColumns)
-        .from(apikey)
-        .where(and(organizationScope(organizationId), eq(apikey.id, keyId)))
-        .limit(1)
-        .then((rows) => rows.at(0) ?? null),
-  );
+}): Promise<MachineApiKeyRow | null> => {
+  let row: MachineApiKeyRow | null = null;
+  await withOwnerOrganizationScope(rootDb, organizationId, async (tx) => {
+    const rows = await tx
+      .select(machineApiKeyColumns)
+      .from(apikey)
+      .where(and(organizationScope(organizationId), eq(apikey.id, keyId)))
+      .limit(1);
+    row = rows.at(0) ?? null;
+  });
+  return row;
+};

@@ -114,11 +114,17 @@ export const purgeSharepointForOrg = async (
 };
 
 export const disableAndPurgeSharepointForOrg = async (options: PurgeOptions) =>
-  await Result.tryPromise(
-    async () =>
-      await withOwnerOrganizationScope(
-        rootDb,
-        options.organizationId,
-        async (tx) => await purgeSharepointForOrg(tx, options),
-      ),
-  );
+  await Result.tryPromise(async () => {
+    let result: SharepointDisablePurgeResult = {
+      purgedConnections: 0,
+      purgedPendingStates: 0,
+    };
+    await withOwnerOrganizationScope(
+      rootDb,
+      options.organizationId,
+      async (tx) => {
+        result = await purgeSharepointForOrg(tx, options);
+      },
+    );
+    return result;
+  });

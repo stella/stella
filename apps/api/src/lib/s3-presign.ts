@@ -862,17 +862,14 @@ const getPresignClient = async ({
  */
 export const MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS = 15 * 60;
 
-const assertDownloadExpiryWithinBounds = (expiresIn: number): void => {
-  if (
-    !Number.isFinite(expiresIn) ||
-    expiresIn <= 0 ||
-    expiresIn > MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS
-  ) {
-    throw new S3PresignError({
-      message: `Presigned download URL lifetime must be between 1 and ${MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS} seconds`,
-    });
-  }
-};
+const downloadExpiryBoundsError = (expiresIn: number): S3PresignError | null =>
+  !Number.isFinite(expiresIn) ||
+  expiresIn <= 0 ||
+  expiresIn > MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS
+    ? new S3PresignError({
+        message: `Presigned download URL lifetime must be between 1 and ${MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS} seconds`,
+      })
+    : null;
 
 /**
  * Longest presign expiry the warmed session must be able to cover. Matches
@@ -1100,7 +1097,10 @@ const presignInternalDownloadUrl = async (
   key: string,
   { expiresIn, fileName, scope }: PresignInternalDownloadOptions,
 ): Promise<string> => {
-  assertDownloadExpiryWithinBounds(expiresIn);
+  const expiryError = downloadExpiryBoundsError(expiresIn);
+  if (expiryError !== null) {
+    return await Promise.reject(expiryError);
+  }
   const result = await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
@@ -1149,7 +1149,10 @@ export const presignDownloadUrl = async (
     fileName,
   }: PresignDownloadOptions,
 ): Promise<string> => {
-  assertDownloadExpiryWithinBounds(expiresIn);
+  const expiryError = downloadExpiryBoundsError(expiresIn);
+  if (expiryError !== null) {
+    return await Promise.reject(expiryError);
+  }
   const issuedExpiresIn = await issueSessionBoundCredentialTtl(
     "signedDownload",
     {
