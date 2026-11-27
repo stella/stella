@@ -1618,8 +1618,11 @@ const nestDeeperItems = (context: Context, placed: Placed): void => {
     if (source === null || context.tableOf.has(block.id)) {
       continue;
     }
-    const stack = stacks.get(source.abstractNumId) ?? [];
-    stacks.set(source.abstractNumId, stack);
+    let stack = stacks.get(source.abstractNumId);
+    if (stack === undefined) {
+      stack = [];
+      stacks.set(source.abstractNumId, stack);
+    }
     while ((stack.at(-1)?.ilvl ?? -1) >= source.ilvl) {
       stack.pop();
     }
