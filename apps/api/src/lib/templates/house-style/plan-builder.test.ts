@@ -1255,18 +1255,18 @@ describe("buildTemplatePlan, pages the source starts", () => {
         "VERTRAG",
         "zwischen",
         "der Universität",
-        numbered("–", "nachstehend „Auftragnehmerin“ genannt -", 0),
+        "nachstehend „Auftragnehmerin“ genannt -",
         "Článek I.\nPrvní",
         "Text ustanovení.",
       ],
-      { 3: { alignment: "right" } },
+      {
+        3: {
+          alignment: "right",
+          label: "–",
+          numbering: { numId: 7, ilvl: 0, abstractNumId: 7, bullet: true },
+        },
+      },
     );
-    const line = front.blocks.find(({ text }) =>
-      text.startsWith("nachstehend"),
-    );
-    if (line?.numbering) {
-      line.numbering = { ...line.numbering, bullet: true };
-    }
     const { plan } = build(front);
     const item = itemOf(plan, front, "nachstehend");
     expect(item?.alignment).toBe("right");
