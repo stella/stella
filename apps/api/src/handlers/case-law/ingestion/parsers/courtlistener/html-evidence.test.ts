@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 
-import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
+import { composeCourtListenerText } from "@stll/case-law-parsers/courtlistener/compose";
 
-import { composeCourtListenerText } from "./compose";
+import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 
 for (const citationMarkup of [
   "<cross_reference>9123 U.S. 9456</cross_reference>",

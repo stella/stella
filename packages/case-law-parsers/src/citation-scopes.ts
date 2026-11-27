@@ -9,8 +9,35 @@ import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
-import { sortDeep } from "@/api/lib/sort-deep";
-import { isRecord } from "@/api/lib/type-guards";
+// parser-output-unchanged: inlines sortDeep and isRecord to decouple from apps/api.
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" &&
+  v !== null &&
+  !Array.isArray(v) &&
+  !(v instanceof Date) &&
+  !(v instanceof RegExp);
+
+const sortDeep = (data: unknown): unknown => {
+  if (Array.isArray(data)) {
+    return data.map(sortDeep);
+  }
+  if (isPlainObject(data)) {
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(data).toSorted()) {
+      Object.defineProperty(sorted, key, {
+        value: sortDeep(data[key]),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
+    return sorted;
+  }
+  return data;
+};
 
 /**
  * What makes a parser's opinion boundaries unusable. Each is a parser defect,

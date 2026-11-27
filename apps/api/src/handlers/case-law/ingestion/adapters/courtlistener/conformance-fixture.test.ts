@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
 
+import { COURTLISTENER_TEXT_FORMATS } from "@stll/case-law-parsers/courtlistener/select";
+
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 
-import { COURTLISTENER_TEXT_FORMATS } from "../../parsers/courtlistener/select";
 import { courtListenerConformanceFixture } from "./conformance-fixture";
 import { COURTLISTENER_SOURCE_FIELD_INVENTORY } from "./inventory";
 

@@ -13,10 +13,20 @@ import { Result } from "better-result";
  * no opinion is published without the others.
  */
 
+import { indexCitationScopes } from "@stll/case-law-parsers/citation-scopes";
+import type { OpinionRow } from "@stll/case-law-parsers/courtlistener/opinion-row";
+import {
+  COURTLISTENER_REJECTION_REASON,
+  type CourtListenerRejectionReason,
+} from "@stll/case-law-parsers/courtlistener/rejection";
 import {
   compareOpinionOrder,
   type OpinionType,
 } from "@stll/case-law-parsers/courtlistener/vocabulary";
+import {
+  scanRun,
+  US_CITATION_WORK_LIMIT,
+} from "@stll/case-law-parsers/us-citation-scanner";
 import type { CitationOpinionScope } from "@stll/legal-ast/citation-opinion-scope";
 // parser-output-unchanged: imports the document AST from its package owner
 import { isApparatusRole } from "@stll/legal-ast/document-ast";
@@ -27,17 +37,6 @@ import type {
 } from "@stll/legal-ast/document-types";
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 import { normalizeUnicode } from "@stll/text-normalize";
-
-import {
-  COURTLISTENER_REJECTION_REASON,
-  type CourtListenerRejectionReason,
-} from "@/api/handlers/case-law/ingestion/adapters/courtlistener/rejection";
-import { indexCitationScopes } from "@/api/handlers/case-law/ingestion/citation-scopes";
-import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
-import {
-  scanRun,
-  US_CITATION_WORK_LIMIT,
-} from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 
 import {
   composeFrontMatter,

@@ -12,6 +12,21 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
+import type { CitationScopeIndex } from "@stll/case-law-parsers/citation-scopes";
+import {
+  scanRun,
+  US_CITATION_WORK_LIMIT,
+  workBudgetExhausted,
+} from "@stll/case-law-parsers/us-citation-scanner";
+import type {
+  BarrierKind,
+  CitationWorkBudget,
+  ReporterIdentityKey,
+  ScannedPin,
+  ScannedRun,
+  Token,
+  UsCitationWorkBudgetError,
+} from "@stll/case-law-parsers/us-citation-scanner";
 import type {
   DecisionIdentifiers,
   ReporterCitationIdentifier,
@@ -23,7 +38,6 @@ import type {
   InlineCitationTarget,
 } from "@stll/legal-ast/inline";
 
-import type { CitationScopeIndex } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { annotateUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-annotations";
 import {
   abstainShort,
@@ -45,20 +59,6 @@ import type {
   EntityTarget,
   UsCitationBundleOverflowError,
 } from "@/api/handlers/case-law/ingestion/us-citation-bundles";
-import {
-  scanRun,
-  US_CITATION_WORK_LIMIT,
-  workBudgetExhausted,
-} from "@/api/handlers/case-law/ingestion/us-citation-scanner";
-import type {
-  BarrierKind,
-  CitationWorkBudget,
-  ReporterIdentityKey,
-  ScannedPin,
-  ScannedRun,
-  Token,
-  UsCitationWorkBudgetError,
-} from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 
 /** Occurrences one decision may carry before extraction rejects it. */
 export const US_CITATION_OCCURRENCE_LIMIT = 50_000;

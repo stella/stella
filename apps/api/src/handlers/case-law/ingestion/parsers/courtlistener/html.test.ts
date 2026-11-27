@@ -1,17 +1,20 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import type { Block, Inline } from "@stll/legal-ast/document-ast";
-
-import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-
 import {
   COURTLISTENER_HTML_FORMATS,
   COURTLISTENER_HTML_PARSERS,
   parseHeadmatter,
-} from "./html";
-import { createTextBudget, type FormatParse } from "./outcome";
-import { selectOpinionText } from "./select";
+} from "@stll/case-law-parsers/courtlistener/html";
+import {
+  createTextBudget,
+  type FormatParse,
+} from "@stll/case-law-parsers/courtlistener/outcome";
+import { selectOpinionText } from "@stll/case-law-parsers/courtlistener/select";
+import type { Block, Inline } from "@stll/legal-ast/document-ast";
+
+import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
+
 import { parsedWords, sourceWords, wordDifference } from "./test-oracle";
 
 const fixture = (name: string): string =>

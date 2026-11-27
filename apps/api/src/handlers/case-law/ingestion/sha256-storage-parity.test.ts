@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { citationScopeAstHash } from "@stll/case-law-parsers/citation-scopes";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   createSha256 as legacyHasher,
@@ -9,7 +10,6 @@ import {
 
 import { graphFingerprintOf } from "@/api/handlers/case-law/analysis/significance";
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
-import { citationScopeAstHash } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,

@@ -980,6 +980,7 @@
         "@stll/html": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/mojibake": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "0.4.3",
         "better-result": "catalog:",

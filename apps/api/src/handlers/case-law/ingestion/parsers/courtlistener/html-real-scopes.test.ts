@@ -2,13 +2,12 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { composeCourtListenerText } from "@stll/case-law-parsers/courtlistener/compose";
+import type { CourtListenerHtmlFormat } from "@stll/case-law-parsers/courtlistener/html";
 import type { OpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
 
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-
-import { composeCourtListenerText } from "./compose";
-import type { CourtListenerHtmlFormat } from "./html";
 
 // Labels below were read from the five complete publisher fields, independently
 // of the parser and retention oracle. Added Id. probes are labelled mutations.

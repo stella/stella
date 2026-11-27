@@ -15,9 +15,8 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
+import type { ReporterBase } from "@stll/case-law-parsers/us-citation-scanner";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
-
-import type { ReporterBase } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 
 /** Distinct identifiers one cited decision may carry. */
 export const US_CITATION_BUNDLE_LIMIT = DECISION_IDENTIFIER_MAX_COUNT;
