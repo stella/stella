@@ -3562,3 +3562,23 @@ describe("buildTemplatePlan, list items in a table cell", () => {
     ).toBe(true);
   });
 });
+
+describe("buildTemplatePlan, a paragraph that cites itself", () => {
+  test("cites its own number through a field that shows the number", () => {
+    const citing = "Nothing in this Clause 4.2 limits liability.";
+    const manifest = englishAgreement(citing);
+    const own = blockIdOf(manifest, citing);
+    const { plan } = build(manifest);
+    expect(
+      (plan.references ?? []).filter(
+        ({ blockId, targetBlockId }) =>
+          blockId === own && targetBlockId === own,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        instruction: String.raw`\n \h`,
+        expectedText: "4.2",
+      }),
+    ]);
+  });
+});

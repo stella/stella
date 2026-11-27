@@ -456,6 +456,56 @@ describe("folioTemplatePlanEngine", () => {
     expect(xml).toMatch(/ REF _Ref\d+ \\h \\\* MERGEFORMAT /u);
   });
 
+  test("a clause that cites itself through its source's field keeps the link", async () => {
+    const said = (value: string): string =>
+      `<w:r><w:t xml:space="preserve">${value}</w:t></w:r>`;
+    const char = (type: string): string =>
+      `<w:r><w:fldChar w:fldCharType="${type}"/></w:r>`;
+    const cited = [
+      char("begin"),
+      String.raw`<w:r><w:instrText xml:space="preserve"> REF _Ref1 \r \h </w:instrText></w:r>`,
+      char("separate"),
+      said("1.1"),
+      char("end"),
+    ].join("");
+    const selfCiting = await docx({
+      body: [
+        paragraph("SERVICES AGREEMENT"),
+        paragraph("Article 1"),
+        paragraph("Scope"),
+        `<w:p><w:pPr>${listed(1, 0)}</w:pPr><w:bookmarkStart w:id="1" w:name="_Ref1"/>${said("The supplier provides the services. Nothing in this Section ")}${cited}${said(" limits them.")}<w:bookmarkEnd w:id="1"/></w:p>`,
+        paragraph("A closing sentence."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: list(0, level(0, "decimal", "1.%1.")) + instance(1, 0),
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: selfCiting,
+        template: await template('<w:defaultTabStop w:val="708"/>'),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.outcome.repairs).toEqual([]);
+    const own = formatted.plan.references?.find(
+      ({ blockId, targetBlockId }) => blockId === targetBlockId,
+    );
+    expect(own).toMatchObject({ expectedText: "1.1" });
+    const output = (
+      await folioTemplatePlanEngine.analyze(formatted.docx)
+    ).unwrap();
+    const clause = output.blocks.find(({ text }) =>
+      text.startsWith("The supplier"),
+    );
+    // The paragraph's own bookmark holds the field that shows its number.
+    expect(clause?.crossReferences).toEqual([
+      expect.objectContaining({ targetBlockId: clause?.id }),
+    ]);
+  });
+
   test("formats one view of a document with tracked changes: accepted unless the caller asks for the rejected one", async () => {
     const tracked = await docx({
       body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,
