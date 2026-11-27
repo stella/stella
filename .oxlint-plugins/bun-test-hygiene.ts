@@ -292,6 +292,7 @@ const NEGATION_MODIFIER = "not";
 
 const FOCUS_MODIFIER = "only";
 const DISABLE_MODIFIERS = new Set(["skip", "todo"]);
+const CONDITIONAL_DISABLE_MODIFIERS = new Set(["skipIf", "todoIf"]);
 const EACH_MODIFIER = "each";
 
 const FUNCTION_TYPES = new Set([
@@ -370,6 +371,131 @@ const testRegistration = (
     current = unwrapExpression(current.callee);
   }
   return null;
+};
+
+type NoDisabledTestsOptions = {
+  strict: boolean;
+  allowDescribeEnvGate: string | null;
+};
+
+const isOptionRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const readNoDisabledTestsOptions = (raw: unknown): NoDisabledTestsOptions => {
+  if (!isOptionRecord(raw)) {
+    return { strict: false, allowDescribeEnvGate: null };
+  }
+  const gate = raw.allowDescribeEnvGate;
+  return {
+    strict: raw.strict === true,
+    allowDescribeEnvGate:
+      typeof gate === "string" && gate.length > 0 ? gate : null,
+  };
+};
+
+const isProcessEnvReadOf = (node: unknown, envVar: string): boolean => {
+  const expr = unwrapExpression(node);
+  if (expr?.type !== "MemberExpression") {
+    return false;
+  }
+  if (memberPropertyName(expr) !== envVar) {
+    return false;
+  }
+  const envObj = unwrapExpression(expr.object);
+  return (
+    envObj?.type === "MemberExpression" &&
+    memberPropertyName(envObj) === "env" &&
+    unwrapExpression(envObj.object)?.type === "Identifier" &&
+    unwrapExpression(envObj.object)?.name === "process"
+  );
+};
+
+const expressionMentionsEnvGate = (
+  context: ScopeContext,
+  node: unknown,
+  envVar: string,
+  seen = new Set<unknown>(),
+): boolean => {
+  const expr = unwrapExpression(node);
+  if (expr === null || seen.has(expr)) {
+    return false;
+  }
+  seen.add(expr);
+  if (isProcessEnvReadOf(expr, envVar)) {
+    return true;
+  }
+  if (expr.type === "Identifier" && typeof expr.name === "string") {
+    const variable = resolveVariable(context, expr);
+    const init = variable === null ? null : stableInitializer(variable);
+    return (
+      init !== null && expressionMentionsEnvGate(context, init, envVar, seen)
+    );
+  }
+  if (expr.type === "UnaryExpression") {
+    return expressionMentionsEnvGate(context, expr.argument, envVar, seen);
+  }
+  if (expr.type === "LogicalExpression" || expr.type === "BinaryExpression") {
+    return (
+      expressionMentionsEnvGate(context, expr.left, envVar, seen) ||
+      expressionMentionsEnvGate(context, expr.right, envVar, seen)
+    );
+  }
+  return false;
+};
+
+const skipIfConditionArg = (call: AstNode): unknown => {
+  let current = unwrapExpression(call.callee);
+  while (current !== null) {
+    if (
+      current.type === "CallExpression" &&
+      isAstNode(current.callee) &&
+      current.callee.type === "MemberExpression" &&
+      memberPropertyName(current.callee) === "skipIf"
+    ) {
+      return Array.isArray(current.arguments) ? current.arguments[0] : null;
+    }
+    if (current.type === "MemberExpression") {
+      current = unwrapExpression(current.object);
+      continue;
+    }
+    if (current.type === "CallExpression") {
+      current = unwrapExpression(current.callee);
+      continue;
+    }
+    return null;
+  }
+  return null;
+};
+
+const isAllowedDescribeEnvGate = (
+  context: ScopeContext,
+  registration: TestRegistration,
+  envVar: string,
+): boolean => {
+  if (
+    registration.kind !== TEST_KIND.describe ||
+    DISABLED_FUNCTIONS.has(registration.exportName) ||
+    registration.modifiers.includes("todo") ||
+    registration.modifiers.includes("todoIf")
+  ) {
+    return false;
+  }
+  if (registration.modifiers.includes("skipIf")) {
+    const arg = skipIfConditionArg(registration.call);
+    return arg !== null && expressionMentionsEnvGate(context, arg, envVar);
+  }
+  if (registration.modifiers.includes("skip")) {
+    const block = enclosingBlock(registration.call);
+    if (
+      block.conditional &&
+      isAstNode(block.node) &&
+      isAstNode(block.node.parent) &&
+      block.node.parent.type === "IfStatement"
+    ) {
+      return expressionMentionsEnvGate(context, block.node.parent.test, envVar);
+    }
+  }
+  return false;
 };
 
 const describeRegistration = ({
@@ -1612,31 +1738,75 @@ export default eslintCompatPlugin({
     "no-disabled-tests": {
       meta: {
         type: "problem",
+        schema: [
+          {
+            type: "object",
+            properties: {
+              strict: { type: "boolean" },
+              allowDescribeEnvGate: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+        ],
         messages: {
           disabled:
             "`{{call}}` disables this test without a stated reason. Add a " +
             "comment on the same line or directly above saying why it is " +
             "disabled and what re-enables it, use a conditional form " +
             "(`.skipIf(condition)`, `.todoIf(condition)`), or remove it.",
+          strictDisabled:
+            "`{{call}}` disables this test in a strict security suite. Remove " +
+            "the skip/todo modifier so security assertions always run.",
         },
       },
       createOnce(context) {
         let comments: readonly SourceComment[] | null = null;
+        let options: NoDisabledTestsOptions = {
+          strict: false,
+          allowDescribeEnvGate: null,
+        };
 
         return {
           before() {
             comments = null;
+            options = readNoDisabledTestsOptions(context.options.at(0));
             return mentionsBunTest(context.sourceCode.text);
           },
           CallExpression(node) {
             const registration = testRegistration(context, node);
-            if (
-              registration === null ||
-              (!DISABLED_FUNCTIONS.has(registration.exportName) &&
-                !registration.modifiers.some((modifier) =>
-                  DISABLE_MODIFIERS.has(modifier),
-                ))
-            ) {
+            if (registration === null) {
+              return;
+            }
+            const isUnconditionalDisabled =
+              DISABLED_FUNCTIONS.has(registration.exportName) ||
+              registration.modifiers.some((modifier) =>
+                DISABLE_MODIFIERS.has(modifier),
+              );
+            const isConditionalDisabled = registration.modifiers.some(
+              (modifier) => CONDITIONAL_DISABLE_MODIFIERS.has(modifier),
+            );
+            if (options.strict) {
+              if (!isUnconditionalDisabled && !isConditionalDisabled) {
+                return;
+              }
+              if (
+                options.allowDescribeEnvGate !== null &&
+                isAllowedDescribeEnvGate(
+                  context,
+                  registration,
+                  options.allowDescribeEnvGate,
+                )
+              ) {
+                return;
+              }
+              context.report({
+                node,
+                messageId: "strictDisabled",
+                data: { call: describeRegistration(registration) },
+              });
+              return;
+            }
+            if (!isUnconditionalDisabled) {
               return;
             }
             if (enclosingBlock(registration.call).conditional) {

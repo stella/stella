@@ -321,3 +321,55 @@ test("accepts queries through the render result and a screen bound elsewhere", a
     ),
   ).toEqual([]);
 });
+
+test("strict no-disabled-tests rejects skips, todos, skipIf, and reason comments", async () => {
+  expect(
+    await lintSingleRule(
+      "no-disabled-tests",
+      [
+        'import { describe, it, test, xdescribe, xit } from "bun:test";',
+        "// reason: temporarily disabled",
+        'test.skip("reasoned skip", () => {});',
+        'test.todo("todo");',
+        'describe.skipIf(true)("conditional skip", () => {});',
+        'it.todoIf(true)("conditional todo", () => {});',
+        'xit("xit", () => {});',
+        'xdescribe("xdescribe", () => {});',
+        "if (process.env.CI) {",
+        '  describe.skip("branch skip", () => {});',
+        "}",
+        'test("active", () => {});',
+      ].join("\n"),
+      { plugin, ruleOptions: { strict: true } },
+    ),
+  ).toEqual([3, 4, 5, 6, 7, 8, 10]);
+});
+
+test("strict no-disabled-tests with allowDescribeEnvGate allows only env-gated describe skips", async () => {
+  expect(
+    await lintSingleRule(
+      "no-disabled-tests",
+      [
+        'import { describe, test } from "bun:test";',
+        'const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";',
+        'const otherFlag = process.env["OTHER_FLAG"] === "true";',
+        'describe.skipIf(!runPostgresTests)("allowed skipIf", () => {});',
+        "if (!runPostgresTests) {",
+        '  describe.skip("allowed branch skip", () => {});',
+        "}",
+        'test.skipIf(!runPostgresTests)("disallowed test skipIf", () => {});',
+        "if (!otherFlag) {",
+        '  describe.skip("disallowed other-flag skip", () => {});',
+        "}",
+        'test.todo("disallowed todo");',
+      ].join("\n"),
+      {
+        plugin,
+        ruleOptions: {
+          strict: true,
+          allowDescribeEnvGate: "STELLA_RUN_POSTGRES_TESTS",
+        },
+      },
+    ),
+  ).toEqual([8, 10, 12]);
+});

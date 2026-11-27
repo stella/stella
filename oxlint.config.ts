@@ -2911,6 +2911,40 @@ const config = defineConfig({
       },
     },
     {
+      // Security test suites must never silently skip, stub, or conditionally
+      // bypass assertions. Only the five reviewed live-Postgres suites may
+      // gate `describe.skip` / `describe.skipIf` on `STELLA_RUN_POSTGRES_TESTS`.
+      files: ["apps/api/src/tests/security/**/*.test.ts"],
+      excludeFiles: [
+        "apps/api/src/tests/security/billing-arrangements.postgres.test.ts",
+        "apps/api/src/tests/security/billing-visibility.postgres.test.ts",
+        "apps/api/src/tests/security/case-law-decision-base-table-contract.postgres.test.ts",
+        "apps/api/src/tests/security/public-law-reader-role.postgres.test.ts",
+        "apps/api/src/tests/security/table-policy-settings.test.ts",
+      ],
+      rules: {
+        "bun-test-hygiene/no-disabled-tests": ["error", { strict: true }],
+      },
+    },
+    {
+      // Reviewed live-Postgres security suites may gate top-level `describe`
+      // blocks on `STELLA_RUN_POSTGRES_TESTS`, while all other skips/todos
+      // stay banned.
+      files: [
+        "apps/api/src/tests/security/billing-arrangements.postgres.test.ts",
+        "apps/api/src/tests/security/billing-visibility.postgres.test.ts",
+        "apps/api/src/tests/security/case-law-decision-base-table-contract.postgres.test.ts",
+        "apps/api/src/tests/security/public-law-reader-role.postgres.test.ts",
+        "apps/api/src/tests/security/table-policy-settings.test.ts",
+      ],
+      rules: {
+        "bun-test-hygiene/no-disabled-tests": [
+          "error",
+          { strict: true, allowDescribeEnvGate: "STELLA_RUN_POSTGRES_TESTS" },
+        ],
+      },
+    },
+    {
       // Tests wait on the work's own completion signal, not on the clock.
       // Existing sites are budgeted in scripts/test-timing-ledger.json,
       // which only shrinks.
