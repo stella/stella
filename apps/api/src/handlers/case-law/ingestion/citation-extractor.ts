@@ -22,6 +22,11 @@ import {
 } from "@stll/api-contract/decision-reporter-grammar";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import {
+  type CitationScopeIndex,
+  type CitationScopesRejectedError,
+  indexCitationScopes,
+} from "@stll/case-law-parsers/citation-scopes";
+import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
 } from "@stll/legal-ast/citation-prefix";
@@ -47,11 +52,6 @@ import {
   detectCitationDecisionTypeHint,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { detectCitationSheetNumber } from "@/api/handlers/case-law/citation-sheet-number";
-import {
-  type CitationScopeIndex,
-  type CitationScopesRejectedError,
-  indexCitationScopes,
-} from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { readCjeuCitationGroups } from "@/api/handlers/case-law/ingestion/cjeu-citation-groups";
 import { extractUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type {

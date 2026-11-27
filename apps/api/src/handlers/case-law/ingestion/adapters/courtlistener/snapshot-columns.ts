@@ -14,8 +14,8 @@
  */
 
 import { compareCanonicalIds } from "@stll/case-law-parsers/courtlistener/canonical-id-order";
+import type { OpinionRow } from "@stll/case-law-parsers/courtlistener/opinion-row";
 
-import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
 import type { SourceFieldDisposition } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -510,7 +510,7 @@ export const PERSON_FIELDS = {
 /** One CSV row: every pinned column, as the decoder produced its text. */
 export type CsvRow<TColumn extends string> = Readonly<Record<TColumn, string>>;
 
-export type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
+export type { OpinionRow } from "@stll/case-law-parsers/courtlistener/opinion-row";
 export type CitationRow = CsvRow<(typeof CITATION_COLUMNS)[number]>;
 export type PersonRow = CsvRow<(typeof PERSON_COLUMNS)[number]>;
 

@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
-
-import shortTexts from "./short-text.test-fixture.json";
 import {
   classifyCourtListenerText,
   excludesSourcePlaceholder,
   isSourcePlaceholderSequence,
-} from "./usability";
+} from "@stll/case-law-parsers/courtlistener/usability";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+
+import shortTexts from "./short-text.test-fixture.json";
 
 const whitespace = fc
   .array(fc.constantFrom(" ", "\t", "\n", "\r\n", "\u00a0"), {

@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { conservesText } from "@stll/case-law-parsers/courtlistener/blocks";
+import { parseHarvardXml } from "@stll/case-law-parsers/courtlistener/harvard-xml";
+import { createTextBudget } from "@stll/case-law-parsers/courtlistener/outcome";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
-
-import { conservesText } from "./blocks";
-import { parseHarvardXml } from "./harvard-xml";
-import { createTextBudget } from "./outcome";
 
 const parse = (body: string) =>
   parseHarvardXml({

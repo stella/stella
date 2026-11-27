@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { composeCourtListenerText } from "@stll/case-law-parsers/courtlistener/compose";
+
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-
-import { composeCourtListenerText } from "./compose";
 
 const compose = (html: string, id = "9109419") => {
   const result = composeCourtListenerText([

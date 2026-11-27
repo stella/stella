@@ -2,6 +2,12 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  CITATION_SCOPE_METADATA_KEY,
+  citationScopeAstHash,
+  citationScopeEnvelope,
+  validatedCitationScopes,
+} from "@stll/case-law-parsers/citation-scopes";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   isDocumentAst,
@@ -14,12 +20,6 @@ import { stableStringify } from "@stll/stable-stringify";
 import { mapCourtListenerRecord as uncheckedMapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { recordedClusters } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import {
-  CITATION_SCOPE_METADATA_KEY,
-  citationScopeAstHash,
-  citationScopeEnvelope,
-  validatedCitationScopes,
-} from "@/api/handlers/case-law/ingestion/citation-scopes";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,

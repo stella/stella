@@ -6,6 +6,12 @@ import { eq } from "drizzle-orm";
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import {
+  CITATION_SCOPE_METADATA_KEY,
+  citationScopeEnvelope,
+  CitationScopesRejectedError,
+  validatedCitationScopes,
+} from "@stll/case-law-parsers/citation-scopes";
+import {
   markupResidueIn,
   markupResidueWarnings,
 } from "@stll/case-law-parsers/markup-residue";
@@ -37,12 +43,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { DecisionCitationExtraction } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
-import {
-  CITATION_SCOPE_METADATA_KEY,
-  citationScopeEnvelope,
-  CitationScopesRejectedError,
-  validatedCitationScopes,
-} from "@/api/handlers/case-law/ingestion/citation-scopes";
 import {
   annotationOnlyCitationPlan,
   planDecisionCitations,

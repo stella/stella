@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import shortTexts from "./short-text.test-fixture.json";
 import {
   classifyCourtListenerText,
   type CourtListenerTextUsability,
-} from "./usability";
+} from "@stll/case-law-parsers/courtlistener/usability";
+
+import shortTexts from "./short-text.test-fixture.json";
 
 describe("CourtListener short text usability", () => {
   test.each([

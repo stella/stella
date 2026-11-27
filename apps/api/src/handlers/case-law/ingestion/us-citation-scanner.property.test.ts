@@ -7,13 +7,16 @@ import {
   US_REPORTER_PAGE_LEAD_SOURCE,
 } from "@stll/api-contract/us-reporter-citation";
 import {
+  scanRun,
+  US_CITATION_WORK_LIMIT,
+} from "@stll/case-law-parsers/us-citation-scanner";
+import {
   assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
 import { US_REPORTER_SPELLINGS } from "../../../../../../packages/api-contract/src/us-reporter-editions.generated";
-import { scanRun, US_CITATION_WORK_LIMIT } from "./us-citation-scanner";
 
 const noise = fc
   .array(

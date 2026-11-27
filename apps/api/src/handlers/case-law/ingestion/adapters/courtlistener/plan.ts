@@ -1,3 +1,4 @@
+// parser-output-unchanged: CourtListener parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: [us-courtlistener] named declaration types leave emitted runtime unchanged.
 /**
@@ -18,6 +19,13 @@ import {
   parseUsReporterReference,
   US_REPORTER_JURISDICTION,
 } from "@stll/api-contract/us-reporter-citation";
+import {
+  COURTLISTENER_REJECTION_REASON,
+  type CourtListenerRecordRejectedError,
+  type CourtListenerRejectionReason,
+  rejectCourtListenerRecord,
+  type RejectionDiagnostic,
+} from "@stll/case-law-parsers/courtlistener/rejection";
 import {
   CITATION_TYPES,
   compareOpinionOrder,
@@ -50,13 +58,6 @@ import {
   type AdmittedCourtListenerRecord,
   type AdmittedOpinion,
 } from "./record";
-import {
-  COURTLISTENER_REJECTION_REASON,
-  type CourtListenerRecordRejectedError,
-  type CourtListenerRejectionReason,
-  rejectCourtListenerRecord,
-  type RejectionDiagnostic,
-} from "./rejection";
 import {
   compareBytewise,
   compareCanonicalIds,

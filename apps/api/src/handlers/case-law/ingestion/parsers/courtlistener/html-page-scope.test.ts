@@ -1,13 +1,15 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  COURTLISTENER_HTML_PARSERS,
+  PAGE_CHROME_SIGNATURES,
+} from "@stll/case-law-parsers/courtlistener/html";
+import { createTextBudget } from "@stll/case-law-parsers/courtlistener/outcome";
+import { selectOpinionText } from "@stll/case-law-parsers/courtlistener/select";
 import { assertProperty } from "@stll/property-testing";
 
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-
-import { COURTLISTENER_HTML_PARSERS, PAGE_CHROME_SIGNATURES } from "./html";
-import { createTextBudget } from "./outcome";
-import { selectOpinionText } from "./select";
 
 const MENU_SIGNATURE = PAGE_CHROME_SIGNATURES.COURT_MENU;
 const FOOTER_SIGNATURE = PAGE_CHROME_SIGNATURES.REPORTING_FOOTER;

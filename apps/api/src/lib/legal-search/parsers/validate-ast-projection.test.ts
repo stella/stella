@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { courtListenerValidationPolicy } from "@stll/case-law-parsers/courtlistener/validation-policy";
 import {
   validateAst as validateSharedAst,
   validationInlineText,
@@ -11,8 +12,6 @@ import {
   projectPlainText,
 } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
-
-import { courtListenerValidationPolicy } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/validation-policy";
 
 const validateAst = (
   html: string,

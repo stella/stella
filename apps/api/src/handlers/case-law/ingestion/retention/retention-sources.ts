@@ -1,7 +1,7 @@
 import { ownEntry } from "@stll/api-contract/own-key";
+import { courtListenerValidationPolicy } from "@stll/case-law-parsers/courtlistener/validation-policy";
 import type { ValidationSourcePolicy } from "@stll/case-law-parsers/validate-ast";
 
-import { courtListenerValidationPolicy } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/validation-policy";
 import {
   RETENTION_UNPARSED_REASON,
   type RetentionPolicy,

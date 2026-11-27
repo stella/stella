@@ -1,10 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
+import { composeCourtListenerText } from "@stll/case-law-parsers/courtlistener/compose";
+import {
+  createTextBudget,
+  type FormatParse,
+} from "@stll/case-law-parsers/courtlistener/outcome";
+import {
+  paragraphsOf,
+  parsePlainText,
+  parsePreformatted,
+} from "@stll/case-law-parsers/courtlistener/plain-text";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
-import { composeCourtListenerText } from "./compose";
-import { createTextBudget, type FormatParse } from "./outcome";
-import { paragraphsOf, parsePlainText, parsePreformatted } from "./plain-text";
 import { recordedOpinionClusters } from "./test-oracle";
 
 /** The raw text axis, before the shared projection folds spacing. */

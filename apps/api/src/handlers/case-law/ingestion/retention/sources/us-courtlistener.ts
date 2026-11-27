@@ -17,13 +17,13 @@
  */
 import { Result } from "better-result";
 
+// Type-only: the column precedence is checked against the parser's list.
+import type { COURTLISTENER_TEXT_FORMATS } from "@stll/case-law-parsers/courtlistener/select";
 import { load } from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 
 // Type-only: the part names stay the adapter's, without running its code.
 import type { COURTLISTENER_RAW_PART } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/raw";
-// Type-only: the column precedence is checked against the parser's list.
-import type { COURTLISTENER_TEXT_FORMATS } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/select";
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,
