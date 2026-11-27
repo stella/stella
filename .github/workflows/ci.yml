@@ -5125,7 +5125,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [network-baseline, phone-layouts]
+        mode: [network-baseline-1, network-baseline-2, phone-layouts]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -5158,7 +5158,7 @@ jobs:
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare merge-base network budget
-        if: matrix.mode == 'network-baseline'
+        if: startsWith(matrix.mode, 'network-baseline-')
         timeout-minutes: 5
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -5177,23 +5177,24 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure flaky-test quarantine
-        if: ${{ matrix.mode == 'network-baseline' && !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ startsWith(matrix.mode, 'network-baseline-') && !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check route network baseline
-        if: ${{ matrix.mode == 'network-baseline' && !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ startsWith(matrix.mode, 'network-baseline-') && !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 14
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
           E2E_EXECUTION_PROFILE: network-baseline
+          E2E_ROUTE_SMOKE_GROUPS: "2"
           E2E_EXPECT_DEV_ROUTES: "false"
-          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-pr.zip
-        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts --project=route-smoke
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-pr-${{ matrix.mode }}.zip
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts --project=route-smoke --shard=${{ matrix.mode == 'network-baseline-1' && '1/2' || '2/2' }}
 
       - name: Explain network baseline failure
-        if: matrix.mode == 'network-baseline' && failure() && steps.network-baseline.outcome == 'failure'
+        if: startsWith(matrix.mode, 'network-baseline-') && failure() && steps.network-baseline.outcome == 'failure'
         run: bash scripts/ci/explain-network-baseline-failure.sh
 
       - name: Configure flaky-test quarantine for phone layouts
@@ -5220,10 +5221,10 @@ jobs:
           retention-days: 7
 
       - name: Upload route smoke report
-        if: always() && matrix.mode == 'network-baseline'
+        if: always() && startsWith(matrix.mode, 'network-baseline-')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: route-smoke-pr-blob
+          name: route-smoke-pr-blob-${{ matrix.mode }}
           path: apps/web/e2e/test-results/blob-report/
           retention-days: 7
 
