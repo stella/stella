@@ -92,6 +92,16 @@ const deriveWorkspaceStatusMap = ({
  * can be off on this deployment) and is re-checked in the orchestrator, not
  * here, where the tool name is known.
  */
+const hasExcludedWorkspace = (
+  workspaceStatusById:
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined,
+  allowedWorkspaceIds: ReadonlySet<string>,
+): boolean =>
+  workspaceStatusById !== undefined &&
+  [...workspaceStatusById.keys()].some(
+    (statusKey) => !allowedWorkspaceIds.has(statusKey),
+  );
+
 export const buildMcpContextFromChat = (
   deps: ChatRegistryContextDeps,
 ): McpRequestResources => {
@@ -99,9 +109,9 @@ export const buildMcpContextFromChat = (
   const workspaceAccessBoundary = createWorkspaceAccessBoundary(
     accessibleWorkspaceIds,
   );
-  const isWorkspaceScopeNarrowed = [...deps.workspaceStatusById.keys()].some(
-    (statusKey) =>
-      !workspaceAccessBoundary.accessibleWorkspaceIdSet.has(statusKey),
+  const isWorkspaceScopeNarrowed = hasExcludedWorkspace(
+    deps.workspaceStatusById,
+    workspaceAccessBoundary.accessibleWorkspaceIdSet,
   );
   const safeDb = isWorkspaceScopeNarrowed
     ? attenuateSafeDb(deps.safeDb, accessibleWorkspaceIds)
