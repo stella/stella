@@ -117,10 +117,9 @@ export type TemplateProfile = {
   regions: {
     /** Kept in front of the document: a letterhead, a memo header. */
     keepBefore: string[];
-    /** The table of contents field with its caption, kept whole, and in
-     *  front of them the paragraph that only starts their page, where the
-     *  template has one. Empty when the template has no such field, or
-     *  when it stands in a table and shows entries of the sample text. */
+    /** The table of contents field with its caption, kept whole. Empty
+     *  when the template has none, or when its field shows entries of the
+     *  sample text: those cite headings that are dropped with the sample. */
     contents: string[];
     /** Sample text, dropped. */
     filler: string[];
@@ -135,10 +134,6 @@ export type TemplateProfile = {
    *  (title, parties) and its first article. Absent when the sample has no
    *  article, and from a profile made before this was read. */
   frontMatterEndsPage?: boolean;
-  /** Whether the template starts a page behind its kept table of contents:
-   *  what follows the contents then starts one too. Absent when the
-   *  template keeps none, and from a profile made before this was read. */
-  contentsEndsPage?: boolean;
   /** The style the template writes the text of its tables in. Absent when
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
@@ -799,47 +794,13 @@ type RegionOptions = {
   roles: TemplateProfile["roles"];
 };
 
-/** Whether a paragraph holds nothing but a forced page start. */
-const startsPageOnly = (block: DocxBlock): boolean =>
-  block.kind === "paragraph" &&
-  block.text.trim() === "" &&
-  (block.inlineObjects ?? 0) === 0 &&
-  (block.pageBreaks ?? 0) > 0;
-
-/**
- * Whether a page starts behind the block at `position`: it ends in a page
- * break itself, or the paragraphs without text right behind it hold one, or
- * the first block with text behind it starts a page.
- */
-const endsPageAt = (
-  topLevel: readonly DocxBlock[],
-  position: number,
-): boolean => {
-  if ((topLevel[position]?.pageBreaks ?? 0) > 0) {
-    return true;
-  }
-  for (const block of topLevel.slice(position + 1)) {
-    if (block.kind !== "paragraph" || block.text.trim() !== "") {
-      return block.pageBreakBefore === true;
-    }
-    if ((block.pageBreaks ?? 0) > 0 || block.pageBreakBefore === true) {
-      return true;
-    }
-  }
-  return false;
-};
-
 const inferRegions = ({
   inspection: { fields },
   structure: { topLevel, nestedOf },
   roles,
-}: RegionOptions): Pick<
-  TemplateProfile,
-  "regions" | "slots" | "contentsEndsPage"
-> => {
+}: RegionOptions): Pick<TemplateProfile, "regions" | "slots"> => {
   const order = topLevel.map(({ id }) => id);
   const contents: string[] = [];
-  let contentsEndsPage: boolean | undefined;
   const contentsField = fields.find(
     ({ kind, blockId }) => kind === CONTENTS_FIELD && blockId !== undefined,
   );
@@ -862,20 +823,13 @@ const inferRegions = ({
       const caption = topLevel[from - 1];
       // The caption above the field belongs to it. A short line that does
       // not name the contents is sample text of something else.
-      const captioned =
+      if (
         caption?.kind === "paragraph" &&
-        CONTENTS_CAPTION.test(caption.text.trim());
-      // So does the paragraph in front that only starts their page: the
-      // template sets its contents on a page of their own.
-      const lead = topLevel[captioned ? from - 2 : from - 1];
-      if (lead !== undefined && startsPageOnly(lead)) {
-        contents.push(lead.id);
-      }
-      if (captioned) {
+        CONTENTS_CAPTION.test(caption.text.trim())
+      ) {
         contents.push(caption.id);
       }
       contents.push(...order.slice(from, to + 1));
-      contentsEndsPage = endsPageAt(topLevel, to);
     }
   }
   const inContents = new Set(contents);
@@ -977,7 +931,6 @@ const inferRegions = ({
       signature:
         signatureBlocks.length === 0 ? null : { blockIds: signatureBlocks },
     },
-    ...(contentsEndsPage === undefined ? {} : { contentsEndsPage }),
   };
 };
 
@@ -1647,7 +1600,6 @@ const profileSchema = v.strictObject({
   slots: v.strictObject({ party: slotSchema, signature: slotSchema }),
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
   frontMatterEndsPage: v.exactOptional(v.boolean()),
-  contentsEndsPage: v.exactOptional(v.boolean()),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
   header: v.exactOptional(
     v.strictObject({
