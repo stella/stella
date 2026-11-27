@@ -4,8 +4,9 @@
  *
  * Complements HTTP `cross-tenant-handlers.test.ts` and single-tenant
  * `tool-outputs.db.test.ts` by driving the production MCP request context
- * (`createMembershipScopedDb`, `createMembershipSafeDb`,
- * `loadAccessibleMcpWorkspaces`, `filterUsableMcpWorkspaces`) across six
+ * (`buildMcpSecurityPrincipal` -> `resolveMemberAuthorization`,
+ * `createMcpOperationDatabases`, `loadAccessibleMcpWorkspaces`,
+ * `filterUsableMcpWorkspaces`) across six
  * adversarial boundaries:
  *
  * 1. Cross-tenant (Org A owner -> Org B resources across all DB-backed tools)
@@ -29,7 +30,6 @@ import {
 import { and, eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   INVOICE_STATUS,
@@ -40,27 +40,19 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import {
-  createMembershipSafeDb,
-  createMembershipScopedDb,
-} from "@/api/db/scoped";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { cents } from "@/api/lib/money";
 import { isRecord } from "@/api/lib/type-guards";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
-import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
-import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
-import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { handleMcpToolCall } from "@/api/mcp/tools";
-import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
-import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
+import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
+import { buildMcpSecurityPrincipal } from "@/api/tests/security/principal";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -75,7 +67,7 @@ const SITE_NOTE_URL = "https://research.example.org/search";
 type Actor = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  role: AuthorizedMcpRequestContext["memberRole"];
+  role: MemberRole;
   email: string;
 };
 
@@ -145,46 +137,15 @@ const buildContext = async (
   options?: {
     tokenWorkspaceIds?: readonly SafeId<"workspace">[];
   },
-): Promise<AuthorizedMcpRequestContext> => {
-  const identity = {
+) =>
+  await buildMcpSecurityPrincipal({
+    db: testDb,
     organizationId: actor.organizationId,
-    serverValidatedWorkspaceIds: [],
     userId: actor.userId,
-  };
-  const scopedDb = asTestRaw<ScopedDb>(
-    createMembershipScopedDb(testDb, identity),
-  );
-  const safeDb = asTestRaw<SafeDb>(createMembershipSafeDb(testDb, identity));
-  const usable = filterUsableMcpWorkspaces({
-    accessibleWorkspaces: await loadAccessibleMcpWorkspaces({
-      organizationId: actor.organizationId,
-      scopedDb,
-    }),
-    tokenWorkspaceIds: options?.tokenWorkspaceIds,
+    ...(options?.tokenWorkspaceIds === undefined
+      ? {}
+      : { tokenWorkspaceIds: options.tokenWorkspaceIds }),
   });
-  const workspaceIds = usable.map((workspace) => workspace.id);
-  return asTestRaw<AuthorizedMcpRequestContext>({
-    accessibleWorkspaceIds: workspaceIds,
-    accessibleWorkspaceIdSet: new Set(workspaceIds),
-    accessibleWorkspaceStatusById: new Map(
-      usable.map((workspace) => [workspace.id, workspace.status]),
-    ),
-    accessibleWorkspaces: usable,
-    grantedScopes: MCP_ALL_RESOURCE_SCOPES,
-    memberRole: actor.role,
-    organizationId: actor.organizationId,
-    recordAuditEvent: async () => undefined,
-    safeDb,
-    scopedDb,
-    toolConfirmation: TOOL_CONFIRMATION.caller,
-    userId: actor.userId,
-    userEmail: actor.email,
-    featureAccessSnapshot: enrolledTimeBillingSnapshot({
-      organizationId: actor.organizationId,
-      userId: actor.userId,
-    }),
-  });
-};
 
 const callTool = async (
   actor: Actor,
@@ -200,6 +161,16 @@ const callTool = async (
     args,
     context: await buildContext(actor, options),
   });
+
+const expectAllowed = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+  label: string,
+) => {
+  expect({ label, isError: result.isError === true }).toEqual({
+    label,
+    isError: false,
+  });
+};
 
 const expectDenied = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,
@@ -246,7 +217,7 @@ const createOrgAndOwner = async (
 const addOrgMember = async (
   organizationId: SafeId<"organization">,
   name: string,
-  role: AuthorizedMcpRequestContext["memberRole"],
+  role: MemberRole,
 ): Promise<Actor> => {
   const userId = mintAuthProviderId<"user">();
   const email = `${userId}@test.local`;
@@ -317,6 +288,10 @@ beforeAll(async () => {
     "Alpha External",
     "external",
   );
+
+  // Enrol principals in time-billing in Postgres so resolveMemberAuthorization
+  // -> featureAccessSnapshotFromAuthorization reflects real DB state.
+  await enrolTimeBilling(testDb, [firmA.owner, firmB.owner, memberA, collabA]);
 
   // Contacts in both orgs
   const contactA = safeIdFromStructured<"contact">(
@@ -677,6 +652,24 @@ describe("MCP adversarial runtime isolation", () => {
       expect(siteNotes.isError).not.toBe(true);
       expect(textOf(siteNotes)).not.toContain("Beta-only research note");
 
+      // Positive controls: each owner can read their own tenant resources
+      expectAllowed(
+        await callTool(fx.ownerA, "read_document", { entity_id: fx.docA1 }),
+        "control: ownerA read_document(docA1)",
+      );
+      expectAllowed(
+        await callTool(fx.ownerB, "read_document", { entity_id: fx.docB }),
+        "control: ownerB read_document(docB)",
+      );
+      expectAllowed(
+        await callTool(fx.ownerB, "read_contact", { contact_id: fx.contactB }),
+        "control: ownerB read_contact(contactB)",
+      );
+      expectAllowed(
+        await callTool(fx.ownerB, "list_invoices", { invoice_id: fx.invoiceB }),
+        "control: ownerB list_invoices(invoiceB)",
+      );
+
       // Direct ID probes into Org B must all be denied
       const deniedReads: readonly [string, Record<string, unknown>][] = [
         ["list_documents(matterB)", { matter_id: fx.matterB }],
@@ -1026,6 +1019,25 @@ describe("MCP adversarial runtime isolation", () => {
           ],
         ];
 
+      // Positive controls: ownerA can access restricted resources and memberA
+      // can access assigned matterA_accessible resources.
+      expectAllowed(
+        await callTool(fx.ownerA, "read_document", {
+          entity_id: fx.docA_secret,
+        }),
+        "control: ownerA read_document(docA_secret)",
+      );
+      expectAllowed(
+        await callTool(fx.ownerA, "list_invoices", {
+          invoice_id: fx.invoiceA_spanning,
+        }),
+        "control: ownerA list_invoices(invoiceA_spanning)",
+      );
+      expectAllowed(
+        await callTool(fx.memberA, "read_document", { entity_id: fx.docA1 }),
+        "control: memberA read_document(docA1)",
+      );
+
       for (const [label, toolName, args] of blockedCalls) {
         const res = await callTool(fx.memberA, toolName, args);
         expectDenied(res, label);
@@ -1085,6 +1097,43 @@ describe("MCP adversarial runtime isolation", () => {
   describe("3. Token-scoped workspace narrowing (tokenWorkspaceIds)", () => {
     test("org A owner pinned to matterA_accessible cannot access matterA_restricted or spanning invoice", async () => {
       const pinned = { tokenWorkspaceIds: [fx.matterA_accessible] };
+
+      // Positive control: unpinned ownerA can see restricted matter and secret doc
+      const unpinnedMatters = await callTool(fx.ownerA, "list_matters", {});
+      expectAllowed(unpinnedMatters, "control: unpinned ownerA list_matters");
+      expect(textOf(unpinnedMatters)).toContain(fx.matterA_restricted);
+      expectAllowed(
+        await callTool(fx.ownerA, "read_document", {
+          entity_id: fx.docA_secret,
+        }),
+        "control: unpinned ownerA read_document(docA_secret)",
+      );
+
+      // Direct RLS verification: createMcpOperationDatabases switches Postgres
+      // RLS to explicit mode for tokenWorkspaceIds, so even an unfiltered table
+      // scan through pinnedContext.scopedDb only sees matterA_accessible rows.
+      const pinnedContext = await buildContext(fx.ownerA, pinned);
+      const rlsRows = await pinnedContext.scopedDb(
+        async (tx) =>
+          await tx
+            .select({ id: entities.id, workspaceId: entities.workspaceId })
+            .from(entities),
+      );
+      const visibleEntityIds = new Set(rlsRows.map((row) => row.id));
+      expect(visibleEntityIds.has(fx.docA1)).toBe(true);
+      expect(visibleEntityIds.has(fx.docA_secret)).toBe(false);
+      expect(visibleEntityIds.has(fx.docB)).toBe(false);
+
+      // Positive control under pinned token: reads inside matterA_accessible succeed
+      expectAllowed(
+        await callTool(
+          fx.ownerA,
+          "read_document",
+          { entity_id: fx.docA1 },
+          pinned,
+        ),
+        "control: pinned ownerA read_document(docA1)",
+      );
 
       const matters = await callTool(fx.ownerA, "list_matters", {}, pinned);
       expect(matters.isError).not.toBe(true);
@@ -1445,6 +1494,12 @@ describe("MCP adversarial runtime isolation", () => {
       for (const [label, toolName, args] of postRevocation) {
         expectDenied(await callTool(fx.memberA, toolName, args), label);
       }
+
+      // Positive control: ownerA still retains access to matterA_accessible
+      expectAllowed(
+        await callTool(fx.ownerA, "read_document", { entity_id: fx.docA1 }),
+        "control: ownerA read_document(docA1) after memberA removal",
+      );
     });
   });
 });
