@@ -1,6 +1,7 @@
 //! Settings an organization's administrator fixes for every user of a
 //! machine: turning off in-app updates, keeping the activity timeline, its
-//! window details, its stella AI drafts or clipboard history off, and naming
+//! window details, its browser tab titles, its stella AI drafts or clipboard
+//! history off, and naming
 //! the self-hosted server the app trusts without asking. Every switch only
 //! turns something off: no key can turn a feature on or choose for a user.
 //!
@@ -20,6 +21,7 @@ use crate::feature_gate::DesktopFeature;
 pub const DISABLE_UPDATES: &str = "DisableUpdates";
 pub const DISABLE_ACTIVITY: &str = "DisableActivity";
 pub const DISABLE_ACTIVITY_DETAILS: &str = "DisableActivityDetails";
+pub const DISABLE_ACTIVITY_BROWSER_TITLES: &str = "DisableActivityBrowserTitles";
 pub const DISABLE_ACTIVITY_AI_DRAFTS: &str = "DisableActivityAiDrafts";
 pub const DISABLE_CLIPBOARD: &str = "DisableClipboard";
 pub const SERVER_WEB_ORIGIN: &str = "ServerWebOrigin";
@@ -37,6 +39,9 @@ pub struct ManagedPolicy {
   /// Activity records app names only: no window titles or documents,
   /// whatever the user chose.
   pub activity_details_disabled: bool,
+  /// Browsers record their app name only: no tab or window titles, whatever
+  /// the user chose for each browser.
+  pub activity_browser_titles_disabled: bool,
   /// No stella AI drafts from recorded activity, whatever the user and the
   /// server allow.
   pub activity_ai_drafts_disabled: bool,
@@ -75,6 +80,7 @@ impl ManagedPolicy {
       updates_disabled: source.flag(DISABLE_UPDATES),
       activity_disabled: source.flag(DISABLE_ACTIVITY),
       activity_details_disabled: source.flag(DISABLE_ACTIVITY_DETAILS),
+      activity_browser_titles_disabled: source.flag(DISABLE_ACTIVITY_BROWSER_TITLES),
       activity_ai_drafts_disabled: source.flag(DISABLE_ACTIVITY_AI_DRAFTS),
       clipboard_disabled: source.flag(DISABLE_CLIPBOARD),
       server: managed_server(source),
@@ -91,6 +97,7 @@ pub fn current() -> &'static ManagedPolicy {
         updates_disabled = policy.updates_disabled,
         activity_disabled = policy.activity_disabled,
         activity_details_disabled = policy.activity_details_disabled,
+        activity_browser_titles_disabled = policy.activity_browser_titles_disabled,
         activity_ai_drafts_disabled = policy.activity_ai_drafts_disabled,
         clipboard_disabled = policy.clipboard_disabled,
         server = policy
@@ -288,6 +295,22 @@ mod tests {
   }
 
   #[test]
+  fn the_activity_browser_titles_flag_turns_off_browser_titles_only() {
+    let policy = ManagedPolicy::from_source(&Fixture {
+      flags: HashMap::from([(DISABLE_ACTIVITY_BROWSER_TITLES, true)]),
+      ..Fixture::default()
+    });
+    assert_eq!(
+      policy,
+      ManagedPolicy {
+        activity_browser_titles_disabled: true,
+        ..ManagedPolicy::default()
+      }
+    );
+    assert!(policy.blocked_features().is_empty());
+  }
+
+  #[test]
   fn the_activity_ai_drafts_flag_turns_off_drafts_only() {
     let policy = ManagedPolicy::from_source(&Fixture {
       flags: HashMap::from([(DISABLE_ACTIVITY_AI_DRAFTS, true)]),
@@ -310,6 +333,7 @@ mod tests {
       flags: HashMap::from([
         (DISABLE_ACTIVITY, false),
         (DISABLE_ACTIVITY_DETAILS, false),
+        (DISABLE_ACTIVITY_BROWSER_TITLES, false),
         (DISABLE_ACTIVITY_AI_DRAFTS, false),
       ]),
       ..Fixture::default()

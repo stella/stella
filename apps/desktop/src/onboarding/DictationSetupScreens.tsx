@@ -6,7 +6,6 @@ import { useLocale, useTranslations } from "use-intl";
 import { DESKTOP_DICTATION_CLEANUP_LIMITS } from "@stll/api-contract/desktop-dictation-cleanup";
 import { Button } from "@stll/ui/button";
 import { CheckCircle2Icon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
 
 import { DictationCustomWords } from "../mainview/DictationCustomWords";
 import {
@@ -34,6 +33,8 @@ import type {
   DictationSetupScreen,
 } from "./dictation-setup-steps";
 import {
+  ChoiceCard,
+  ChoiceGroup,
   Facts,
   ScreenContent,
   ScreenHeader,
@@ -203,7 +204,7 @@ const TranscriptionScreen = ({ controls, snapshot }: ScreenProps) => {
             className="bg-card rounded-xl border p-3"
             data-destination="local"
           >
-            <DestinationHeading choice="local" reason={null} />
+            <LocalDestinationHeading />
             <div className="mt-3">
               <LocalModel
                 controls={controls}
@@ -221,93 +222,72 @@ const TranscriptionScreen = ({ controls, snapshot }: ScreenProps) => {
 /** This computer or stella AI, as two cards of one choice. */
 const TranscriptionChoice = ({ controls, snapshot }: ScreenProps) => {
   const t = useTranslations("onboarding.dictationSetup.transcription");
+  const destinationT = useTranslations("dictation.destination");
   const cloud = useCloudModels();
-  const name = useId();
-  const cloudUnavailable = cloud.offered === null && cloud.reason !== null;
+  const localChosen = snapshot.destination === "local";
+  const cloudChosen = snapshot.destination === "cloud";
   return (
-    <div
-      aria-label={t("title")}
-      className="flex flex-col gap-3"
-      role="radiogroup"
-    >
-      {(["local", "cloud"] as const).map((choice) => {
-        const chosen = snapshot.destination === choice;
-        return (
-          <div
-            className="bg-card has-checked:border-primary rounded-xl border"
-            data-destination={choice}
-            key={choice}
-          >
-            <Label
-              className="items-start gap-3 rounded-xl p-3 hover:bg-transparent"
-              variant="choice"
-            >
-              <input
-                checked={chosen}
-                className="accent-primary mt-0.5 size-4 shrink-0"
-                disabled={choice === "cloud" && cloudUnavailable && !chosen}
-                name={name}
-                onChange={() => {
-                  void controls.setDestination(choice);
-                }}
-                type="radio"
-                value={choice}
-              />
-              <DestinationHeading
-                choice={choice}
-                reason={choice === "cloud" ? cloud.reason : null}
-              />
-            </Label>
-            {choice === "local" ? (
-              <div className="px-3 ps-10 pb-3">
-                <LocalModel
-                  controls={controls}
-                  offersDownload={chosen}
-                  snapshot={snapshot}
-                />
-              </div>
-            ) : null}
-            {choice === "cloud" && chosen && cloud.offered !== null ? (
-              <div className="px-3 ps-10 pb-3">
-                <CloudModel
-                  cloudModel={snapshot.cloudModel}
-                  cloudModelUnreadable={snapshot.cloudModelUnreadable}
-                  controls={controls}
-                  offered={cloud.offered}
-                />
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
+    <ChoiceGroup label={t("title")}>
+      <ChoiceCard
+        checked={localChosen}
+        description={t("localBody")}
+        details={
+          <LocalModel
+            controls={controls}
+            offersDownload={localChosen}
+            snapshot={snapshot}
+          />
+        }
+        onChoose={() => {
+          void controls.setDestination("local");
+        }}
+        title={t("localTitle")}
+        value={"local" satisfies DictationDestinationChoice}
+      />
+      <ChoiceCard
+        checked={cloudChosen}
+        description={t("cloudBody")}
+        details={
+          cloudChosen && cloud.offered !== null ? (
+            <CloudModel
+              cloudModel={snapshot.cloudModel}
+              cloudModelUnreadable={snapshot.cloudModelUnreadable}
+              controls={controls}
+              offered={cloud.offered}
+            />
+          ) : undefined
+        }
+        // A choice already made stays chosen, so it can be read.
+        disabled={
+          cloud.offered === null && cloud.reason !== null && !cloudChosen
+        }
+        note={
+          cloud.reason === null
+            ? undefined
+            : destinationT(unavailableMessage(cloud.reason))
+        }
+        onChoose={() => {
+          void controls.setDestination("cloud");
+        }}
+        title={t("cloudTitle")}
+        value={"cloud" satisfies DictationDestinationChoice}
+      />
+    </ChoiceGroup>
   );
 };
 
-/** A place speech can be transcribed and what that means for the audio;
- *  for stella AI, why it is not offered when it is not. */
-const DestinationHeading = ({
-  choice,
-  reason,
-}: {
-  choice: DictationDestinationChoice;
-  reason: CloudModelOffer["reason"];
-}) => {
+/** This computer as the only place speech is transcribed, and what that
+ *  means for the audio. */
+const LocalDestinationHeading = () => {
   const t = useTranslations("onboarding.dictationSetup.transcription");
-  const destinationT = useTranslations("dictation.destination");
   return (
     <span className="min-w-0">
       <span className="text-foreground block text-sm font-medium">
-        {choice === "local" ? t("localTitle") : t("cloudTitle")}
+        {t("localTitle")}
       </span>
       <span className="text-muted-foreground mt-0.5 block text-sm leading-relaxed text-pretty">
-        {choice === "local" ? t("localBody") : t("cloudBody")}
+        {t("localBody")}
       </span>
-      {reason === null ? null : (
-        <span className="text-muted-foreground mt-1 block text-xs" role="note">
-          {destinationT(unavailableMessage(reason))}
-        </span>
-      )}
     </span>
   );
 };

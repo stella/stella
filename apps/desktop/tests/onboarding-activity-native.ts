@@ -19,6 +19,7 @@ import type { PermissionsSnapshot } from "../src/shared/permissions";
 export const ACTIVITY_OFF = {
   captureDetails: false,
   detailsAccess: "disabled",
+  browserTitlesManaged: false,
   detectCalls: true,
   recordingStatus: "off",
 } as const satisfies ActivitySetupSnapshot;

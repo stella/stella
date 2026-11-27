@@ -63,6 +63,7 @@
     "browserAnsweredAppNameOnly": "Only the app name is recorded for <bdi>{browser}</bdi>. You can change this in Settings.",
     "browserAnsweredTitles": "Tab titles in <bdi>{browser}</bdi> are recorded. You can change this in Settings.",
     "browserPrivacyNote": "stella cannot recognize every private window, so pause recording before you browse privately.",
+    "browserTitlesManaged": "Your organization has turned off browser tab titles on this computer. Browsers record their app name only.",
     "browserQuestionAppNameOnly": "App name only",
     "browserQuestionDescription": "Tab titles help describe your work.",
     "browserQuestionLater": "Decide later",

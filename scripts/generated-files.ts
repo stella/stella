@@ -2679,6 +2679,18 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "desktop-activity-data-map",
+    outputKind: "committed",
+    outputs: ["apps/desktop/docs/activity-data-map.gen.md"],
+    inputs: ["apps/desktop/src-tauri/src/activity_data_map.rs"],
+    write: ["bun", "--filter", "@stll/desktop", "activity-data-map:generate"],
+    check: null,
+    unchecked:
+      "Desktop Rust tests compare the page with its rows and the rows with the stored records",
+    autofix: false,
+    after: [],
+  },
+  {
     id: "desktop-rpc",
     outputKind: "committed",
     outputs: ["packages/api-contract/src/desktop-rpc.gen.ts"],

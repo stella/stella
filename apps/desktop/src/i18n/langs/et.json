@@ -63,6 +63,7 @@
     "browserAnsweredAppNameOnly": "Brauserist <bdi>{browser}</bdi> salvestatakse ainult rakenduse nimi. Seda saad muuta seadetes.",
     "browserAnsweredTitles": "Brauseri <bdi>{browser}</bdi> vahekaartide pealkirjad salvestatakse. Seda saad muuta seadetes.",
     "browserPrivacyNote": "stella ei tunne ära iga privaatset akent, seega peatage salvestamine enne privaatset sirvimist.",
+    "browserTitlesManaged": "Teie organisatsioon on selles arvutis brauseri vahekaartide pealkirjade salvestamise välja lülitanud. Brauseritest salvestatakse ainult rakenduse nimi.",
     "browserQuestionAppNameOnly": "Ainult rakenduse nimi",
     "browserQuestionDescription": "Vahekaartide pealkirjad aitavad tööd kirjeldada.",
     "browserQuestionLater": "Otsusta hiljem",

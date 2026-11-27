@@ -63,6 +63,7 @@
     "browserAnsweredAppNameOnly": "Naršyklės <bdi>{browser}</bdi> įrašomas tik programos pavadinimas. Tai galite pakeisti nustatymuose.",
     "browserAnsweredTitles": "Naršyklės <bdi>{browser}</bdi> kortelių pavadinimai įrašomi. Tai galite pakeisti nustatymuose.",
     "browserPrivacyNote": "stella atpažįsta ne kiekvieną privatų langą, todėl prieš naršydami privačiai pristabdykite įrašymą.",
+    "browserTitlesManaged": "Jūsų organizacija šiame kompiuteryje išjungė naršyklės skirtukų pavadinimų įrašymą. Iš naršyklių įrašomas tik programos pavadinimas.",
     "browserQuestionAppNameOnly": "Tik programos pavadinimas",
     "browserQuestionDescription": "Kortelių pavadinimai padeda aprašyti darbą.",
     "browserQuestionLater": "Nuspręsti vėliau",

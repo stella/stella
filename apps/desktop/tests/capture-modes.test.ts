@@ -10,6 +10,7 @@ import {
   captureModeCommands,
   effectiveCaptureMode,
   savedCaptureMode,
+  titlesAvailable,
   undecidedBrowser,
 } from "../src/activity/capture-modes";
 import type {
@@ -29,6 +30,7 @@ const LISTS: CaptureLists = {
   appNameOnlyApps: [TERMINAL],
   browserApps: [CHROME, SAFARI],
   browserTitleApps: [SAFARI],
+  browserTitlesManaged: false,
   excludedApps: [MUSIC],
 };
 
@@ -85,6 +87,7 @@ const membershipCases = (app: ActivityAppExclusion, browser: boolean) =>
         appNameOnlyApps: nameOnly ? [app] : [],
         browserApps: browser ? [app] : [],
         browserTitleApps: titles ? [app] : [],
+        browserTitlesManaged: false,
         excludedApps: excluded ? [app] : [],
       })),
     ),
@@ -127,6 +130,19 @@ describe("the mode Settings shows for an app", () => {
     expect(effectiveCaptureMode(off, SAFARI.identifier)).toBe("appOnly");
     expect(effectiveCaptureMode(off, MUSIC.identifier)).toBe("nothing");
     expect(effectiveCaptureMode(LISTS, WORD.identifier)).toBe("titles");
+  });
+
+  test("under the browser policy no browser shows or offers titles, other apps keep theirs", () => {
+    const managed = {
+      ...LISTS,
+      browserTitleApps: [],
+      browserTitlesManaged: true,
+    };
+    expect(effectiveCaptureMode(managed, SAFARI.identifier)).toBe("appOnly");
+    expect(titlesAvailable(managed, SAFARI.identifier)).toBe(false);
+    expect(effectiveCaptureMode(managed, WORD.identifier)).toBe("titles");
+    expect(titlesAvailable(managed, WORD.identifier)).toBe(true);
+    expect(titlesAvailable(LISTS, SAFARI.identifier)).toBe(true);
   });
 });
 
@@ -228,6 +244,7 @@ const DAY = {
   appNameOnlyApps: [],
   browserApps: [CHROME, SAFARI],
   browserTitleApps: [],
+  browserTitlesManaged: false,
   excludedApps: [],
   segments: [segment(WORD, "08"), segment(SAFARI, "09"), segment(CHROME, "10")],
 } satisfies Parameters<typeof undecidedBrowser>[0];
@@ -241,6 +258,12 @@ describe("which browser the Activity window asks about", () => {
     expect(undecidedBrowser({ ...DAY, captureDetails: false }, new Set())).toBe(
       null,
     );
+  });
+
+  test("never while managed policy keeps browser titles off", () => {
+    expect(
+      undecidedBrowser({ ...DAY, browserTitlesManaged: true }, new Set()),
+    ).toBe(null);
   });
 
   test("a browser chosen for titles, set to its name, or excluded is decided", () => {

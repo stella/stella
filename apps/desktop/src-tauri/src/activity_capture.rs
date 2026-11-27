@@ -245,6 +245,31 @@ struct CaptureRecord {
   answer: Option<LastAnswer>,
 }
 
+/// The record with each answer, as stored, for the Activity data map
+/// (`activity_data_map.rs`).
+#[cfg(test)]
+pub(crate) fn capture_record_data_map_samples() -> Vec<serde_json::Value> {
+  let at = DateTime::<Utc>::UNIX_EPOCH;
+  [
+    LastAnswer::Granted(ConfirmedGrant {
+      confirmed_at: at,
+      expires_at: at,
+    }),
+    LastAnswer::Refused {
+      reason: StopReason::NotAvailable,
+    },
+  ]
+  .into_iter()
+  .map(|answer| {
+    serde_json::to_value(CaptureRecord {
+      intent: ActivityRecordingStatus::Recording,
+      answer: Some(answer),
+    })
+    .expect("a capture record serializes")
+  })
+  .collect()
+}
+
 /// A stretch the member wanted recorded and Activity could not record. It
 /// holds times and the reason only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -314,6 +314,7 @@ const openWindow = async (
       // app names only. Written out here, as the handlers run in the page.
       activity_get_setup: () =>
         ({
+          browserTitlesManaged: false,
           captureDetails: false,
           detailsAccess: "disabled",
           detectCalls: true,

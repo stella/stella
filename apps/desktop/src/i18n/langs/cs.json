@@ -63,6 +63,7 @@
     "browserAnsweredAppNameOnly": "U <bdi>{browser}</bdi> se zaznamenává jen název aplikace. Změnit to můžete v Nastavení.",
     "browserAnsweredTitles": "Názvy karet v <bdi>{browser}</bdi> se zaznamenávají. Změnit to můžete v Nastavení.",
     "browserPrivacyNote": "stella nepozná každé soukromé okno, proto před soukromým prohlížením záznam pozastavte.",
+    "browserTitlesManaged": "Vaše organizace v tomto počítači vypnula záznam názvů panelů prohlížeče. Prohlížeče zaznamenávají jen název aplikace.",
     "browserQuestionAppNameOnly": "Jen název aplikace",
     "browserQuestionDescription": "Názvy karet pomáhají s popisy práce.",
     "browserQuestionLater": "Rozhodnout později",

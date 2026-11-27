@@ -21,6 +21,7 @@ const SETTINGS = {
   appNameOnlyApps: [],
   browserApps: [CHROME, SAFARI],
   browserTitleApps: [SAFARI],
+  browserTitlesManaged: false,
 } satisfies TitleCaptureSettings;
 
 const NONE = new Set<string>();
@@ -35,6 +36,34 @@ describe("which gate keeps an app's window titles out", () => {
     expect(titleGate(SETTINGS, "com.google.Chrome")).toEqual({
       browser: CHROME,
       type: "browserOff",
+    });
+  });
+
+  test("managed policy closes every browser and leaves nothing to explain or turn on", () => {
+    // The native side reports no chosen browser while the policy applies.
+    const managed = {
+      ...SETTINGS,
+      browserTitleApps: [],
+      browserTitlesManaged: true,
+    } satisfies TitleCaptureSettings;
+    expect(titleGate(managed, SAFARI.identifier)).toEqual({
+      browser: SAFARI,
+      type: "browserManaged",
+    });
+    expect(titleGate(managed, CHROME.identifier)).toEqual({
+      browser: CHROME,
+      type: "browserManaged",
+    });
+    expect(titleGate(managed, WORD)).toEqual({ type: "open" });
+    expect(
+      explainedBrowsers(
+        managed,
+        [CHROME.identifier, SAFARI.identifier],
+        new Set([SAFARI.identifier]),
+      ),
+    ).toEqual([]);
+    expect(missingTitlesReason(managed, [CHROME.identifier], NONE)).toEqual({
+      type: "none",
     });
   });
 

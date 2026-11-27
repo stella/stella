@@ -63,6 +63,7 @@
     "browserAnsweredAppNameOnly": "يُسجَّل اسم التطبيق فقط لـ <bdi>{browser}</bdi>. يمكنك تغيير ذلك في الإعدادات.",
     "browserAnsweredTitles": "تُسجَّل عناوين علامات التبويب في <bdi>{browser}</bdi>. يمكنك تغيير ذلك في الإعدادات.",
     "browserPrivacyNote": "لا تتعرّف stella على كل نافذة خاصة، لذا أوقف التسجيل مؤقتًا قبل التصفح الخاص.",
+    "browserTitlesManaged": "أوقفت مؤسستك تسجيل عناوين علامات تبويب المتصفح على هذا الكمبيوتر. لا يُسجَّل من المتصفحات إلا اسم التطبيق.",
     "browserQuestionAppNameOnly": "اسم التطبيق فقط",
     "browserQuestionDescription": "تساعد عناوين علامات التبويب في وصف العمل.",
     "browserQuestionLater": "القرار لاحقًا",

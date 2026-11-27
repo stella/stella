@@ -79,6 +79,7 @@ import {
   captureModeCommands,
   effectiveCaptureMode,
   isBrowserApp,
+  titlesAvailable,
 } from "./capture-modes";
 import type { CaptureMode, CaptureModeCommand } from "./capture-modes";
 import { DraftConsent } from "./DraftConsent";
@@ -259,6 +260,22 @@ type SettingsSectionProps = {
 };
 
 const CAPTURE_DETAILS_ROW_ID = "activity-capture-details";
+
+const BROWSER_TITLES_MANAGED_ID =
+  "activity-capture-modes-browser-titles-managed";
+
+/** Why one app's titles cannot be chosen, when the list says so. */
+const titlesUnavailableNoteId = (
+  settings: ActivitySettingsSnapshot,
+  identifier: string,
+): string | undefined => {
+  if (!settings.captureDetails) {
+    return "activity-capture-modes-details-off";
+  }
+  return titlesAvailable(settings, identifier)
+    ? undefined
+    : BROWSER_TITLES_MANAGED_ID;
+};
 
 /** Why details are not recorded although the setting is on, under its row:
  * the Activity window's own strip when Accessibility access is missing. */
@@ -534,9 +551,21 @@ const CaptureModeList = ({
         </List>
       )}
       {apps.some((app) => isBrowserApp(settings, app.identifier)) ? (
-        <p className="text-muted-foreground px-1 text-xs text-pretty">
-          {t("browserPrivacyNote")}
-        </p>
+        <>
+          {/* Managed policy leaves no browser titles to choose; the note
+           * says who decided. */}
+          {settings.browserTitlesManaged && settings.captureDetails ? (
+            <p
+              className="text-muted-foreground px-1 text-xs text-pretty"
+              id={BROWSER_TITLES_MANAGED_ID}
+            >
+              {t("browserTitlesManaged")}
+            </p>
+          ) : null}
+          <p className="text-muted-foreground px-1 text-xs text-pretty">
+            {t("browserPrivacyNote")}
+          </p>
+        </>
       ) : null}
       <div>
         <Button
@@ -593,11 +622,7 @@ const CaptureModeRow = ({
           </ListItemContent>
         </div>
         <ToggleGroup<CaptureMode>
-          aria-describedby={
-            settings.captureDetails
-              ? undefined
-              : "activity-capture-modes-details-off"
-          }
+          aria-describedby={titlesUnavailableNoteId(settings, app.identifier)}
           aria-label={t("captureModeLabel", { name: app.name })}
           disabled={pending}
           onValueChange={(next) => {
@@ -615,7 +640,8 @@ const CaptureModeRow = ({
           {CAPTURE_MODES.map((option) => (
             <ToggleGroupItem<CaptureMode>
               disabled={
-                (option === "titles" && !settings.captureDetails) ||
+                (option === "titles" &&
+                  !titlesAvailable(settings, app.identifier)) ||
                 (option === "nothing" && deletionDisabled)
               }
               key={option}
