@@ -1026,7 +1026,10 @@ mod tests {
         }
         StopReason::NotAvailable
         | StopReason::BlockedByPolicy
-        | StopReason::NotConfirmed => None,
+        | StopReason::NotConfirmed
+        | StopReason::StoreKeyUnavailable
+        | StopReason::KeychainNotAnswering
+        | StopReason::StoreUnreadable => None,
       };
       assert_eq!(action, expected, "{reason:?}");
     }

@@ -641,17 +641,59 @@ impl RenewalTransport for HttpRenewal {
   }
 }
 
+/// Why a pending rotation could not be settled.
+#[derive(Debug, PartialEq, Eq)]
+enum RecoveryError {
+  /// The server refused every credential generation of the saved link.
+  Refused,
+  /// The server's renewal answer named another member or organization, or
+  /// an expiry that is not live.
+  InvalidReply(&'static str),
+  /// Nothing definite: storage, the network, a rate limit, or a successor
+  /// only the foreground may replace. The caller may try again.
+  Failed(String),
+}
+
+impl From<String> for RecoveryError {
+  fn from(message: String) -> Self {
+    Self::Failed(message)
+  }
+}
+
+impl RecoveryError {
+  fn from_failure(failure: RenewalFailure) -> Self {
+    match failure {
+      RenewalFailure::Rejected => Self::Refused,
+      RenewalFailure::Throttled => Self::Failed(crate::registry::rate_limited()),
+      RenewalFailure::Unavailable(message) => Self::Failed(message),
+    }
+  }
+
+  /// The text callers outside this module have always received.
+  fn into_message(self) -> String {
+    match self {
+      Self::Refused => crate::registry::not_connected(),
+      Self::InvalidReply(message) => message.into(),
+      Self::Failed(message) => message,
+    }
+  }
+}
+
 fn validate_renewal_reply(
   account: &LinkedAccount,
   reply: &RenewalReply,
-) -> Result<(), String> {
+) -> Result<(), RecoveryError> {
   if reply.identity.user_id != account.identity.user_id
     || reply.identity.organization_id != account.identity.organization_id
   {
-    return Err("Account renewal identity changed".into());
+    return Err(RecoveryError::InvalidReply(
+      "Account renewal identity changed",
+    ));
   }
   if !is_live_expiry(&reply.expires_at) {
-    return Err("Account renewal expiry is invalid".into());
+    return Err(RecoveryError::InvalidReply(
+      "Account renewal expiry is invalid",
+    ));
   }
   Ok(())
 }
@@ -661,7 +703,7 @@ async fn commit_rotation(
   mut account: LinkedAccount,
   pending: PendingRotation,
   reply: RenewalReply,
-) -> Result<LinkedAccount, String> {
+) -> Result<LinkedAccount, RecoveryError> {
   validate_renewal_reply(&account, &reply)?;
   account.credential = DesktopAccountCredential {
     key: pending.successor_key,
@@ -679,7 +721,7 @@ async fn recover_rotation(
   account: LinkedAccount,
   transport: &impl RenewalTransport,
   mode: RecoveryMode,
-) -> Result<LinkedAccount, String> {
+) -> Result<LinkedAccount, RecoveryError> {
   let Some(pending) = store.pending().await? else {
     return Ok(account);
   };
@@ -696,63 +738,75 @@ async fn recover_rotation(
   };
   match transport.send(&candidate, None).await {
     Ok(reply) => commit_rotation(store, account, pending, reply).await,
-    Err(RenewalFailure::Unavailable(message)) => Err(message),
-    Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
-    Err(RenewalFailure::Rejected) => {
-      if matches!(mode, RecoveryMode::ProbeOnly) {
-        return Err("Account renewal needs foreground recovery".into());
-      }
-      if matches!(mode, RecoveryMode::Disconnect) {
-        return match transport.send(&account, None).await {
-          // Keep the journal: a timed-out rotation can still commit, so
-          // disconnect revokes the successor too before clearing.
-          Ok(reply) => {
-            validate_renewal_reply(&account, &reply)?;
-            Ok(account)
-          }
-          Err(RenewalFailure::Unavailable(message)) => Err(message),
-          Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
-          // A timed-out rotation can commit between the two probes; adopt a
-          // live successor so disconnect revokes it instead of orphaning it.
-          Err(RenewalFailure::Rejected) => match transport.send(&candidate, None).await
-          {
+    Err(RenewalFailure::Rejected) => match mode {
+      // The background never rotates: it only learns, by probes, whether the
+      // original still answers. Only both generations being refused is
+      // definite; the link is kept for the member to link again.
+      RecoveryMode::ProbeOnly => match transport.send(&account, None).await {
+        Ok(reply) => {
+          validate_renewal_reply(&account, &reply)?;
+          Err(RecoveryError::Failed(
+            "Account renewal needs foreground recovery".into(),
+          ))
+        }
+        Err(RenewalFailure::Rejected) => {
+          // A timed-out rotation can commit between the two probes.
+          match transport.send(&candidate, None).await {
             Ok(reply) => commit_rotation(store, account, pending, reply).await,
-            Err(RenewalFailure::Unavailable(message)) => Err(message),
-            Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
-            Err(RenewalFailure::Rejected) => {
-              store
-                .clear()
-                .await
-                .map_err(rejected_but_kept(&account.credential.key))?;
-              Err(crate::registry::not_connected())
-            }
-          },
-        };
-      }
-      match transport.send(&account, Some(&pending.successor_key)).await {
-        Ok(reply) => commit_rotation(store, account, pending, reply).await,
-        Err(RenewalFailure::Unavailable(message)) => Err(message),
-        Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
-        // A timed-out rotation can commit between the first probe and this
-        // retry; only both generations being rejected ends the link.
+            Err(failure) => Err(RecoveryError::from_failure(failure)),
+          }
+        }
+        Err(failure) => Err(RecoveryError::from_failure(failure)),
+      },
+      RecoveryMode::Disconnect => match transport.send(&account, None).await {
+        // Keep the journal: a timed-out rotation can still commit, so
+        // disconnect revokes the successor too before clearing.
+        Ok(reply) => {
+          validate_renewal_reply(&account, &reply)?;
+          Ok(account)
+        }
+        // A timed-out rotation can commit between the two probes; adopt a
+        // live successor so disconnect revokes it instead of orphaning it.
         Err(RenewalFailure::Rejected) => match transport.send(&candidate, None).await {
           Ok(reply) => commit_rotation(store, account, pending, reply).await,
-          Err(RenewalFailure::Unavailable(message)) => Err(message),
-          Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
           Err(RenewalFailure::Rejected) => {
-            if is_live_expiry(&account.credential.expires_at) {
-              store
-                .clear()
-                .await
-                .map_err(rejected_but_kept(&account.credential.key))?;
-            } else {
-              store.expire().await?;
-            }
-            Err(crate::registry::not_connected())
+            store
+              .clear()
+              .await
+              .map_err(rejected_but_kept(&account.credential.key))?;
+            Err(RecoveryError::Refused)
           }
+          Err(failure) => Err(RecoveryError::from_failure(failure)),
         },
+        Err(failure) => Err(RecoveryError::from_failure(failure)),
+      },
+      RecoveryMode::Foreground => {
+        match transport.send(&account, Some(&pending.successor_key)).await {
+          Ok(reply) => commit_rotation(store, account, pending, reply).await,
+          // A timed-out rotation can commit between the first probe and this
+          // retry; only both generations being rejected ends the link.
+          Err(RenewalFailure::Rejected) => {
+            match transport.send(&candidate, None).await {
+              Ok(reply) => commit_rotation(store, account, pending, reply).await,
+              Err(RenewalFailure::Rejected) => {
+                if is_live_expiry(&account.credential.expires_at) {
+                  store
+                    .clear()
+                    .await
+                    .map_err(rejected_but_kept(&account.credential.key))?;
+                } else {
+                  store.expire().await?;
+                }
+                Err(RecoveryError::Refused)
+              }
+              Err(failure) => Err(RecoveryError::from_failure(failure)),
+            }
+          }
+          Err(failure) => Err(RecoveryError::from_failure(failure)),
+        }
       }
-    }
+    },
+    Err(failure) => Err(RecoveryError::from_failure(failure)),
   }
 }
 
@@ -765,7 +819,9 @@ async fn rotate_account(
   let pending = PendingRotation { successor_key };
   store.stage(Some(pending.clone())).await?;
   match transport.send(&account, Some(&pending.successor_key)).await {
-    Ok(reply) => commit_rotation(store, account, pending, reply).await,
+    Ok(reply) => commit_rotation(store, account, pending, reply)
+      .await
+      .map_err(RecoveryError::into_message),
     Err(RenewalFailure::Unavailable(message)) => Err(message),
     // The API refused before rotating, so the current key stays live.
     Err(RenewalFailure::Throttled) => {
@@ -811,15 +867,45 @@ impl std::ops::Deref for AccountRequest {
   }
 }
 
+/// Why no account could be loaded for a request.
+#[derive(Debug, PartialEq, Eq)]
+enum LoadFailure {
+  /// The saved link could not be read.
+  Unread(String),
+  /// The saved link's pending rotation could not be settled.
+  Recovery {
+    namespace: String,
+    error: RecoveryError,
+  },
+}
+
+impl From<String> for LoadFailure {
+  fn from(message: String) -> Self {
+    Self::Unread(message)
+  }
+}
+
+impl LoadFailure {
+  fn into_message(self) -> String {
+    match self {
+      Self::Unread(message) => message,
+      Self::Recovery { error, .. } => error.into_message(),
+    }
+  }
+}
+
 async fn load_account_for_request(
   state: &AccountState,
   mode: RecoveryMode,
-) -> Result<Option<LinkedAccount>, String> {
+) -> Result<Option<LinkedAccount>, LoadFailure> {
   let mut store = state.lock().await;
   let Some(saved) = store.load_usable().await? else {
     return Ok(None);
   };
-  let saved = recover_rotation(&mut store, saved, &HttpRenewal, mode).await?;
+  let namespace = saved.local_data_namespace();
+  let saved = recover_rotation(&mut store, saved, &HttpRenewal, mode)
+    .await
+    .map_err(|error| LoadFailure::Recovery { namespace, error })?;
   let live = is_live_expiry(&saved.credential.expires_at);
   if !live {
     store.expire().await?;
@@ -831,7 +917,7 @@ async fn load_account_for_request(
 async fn load_request_account(
   state: &AccountState,
   mode: RecoveryMode,
-) -> Result<Option<AccountRequest>, String> {
+) -> Result<Option<AccountRequest>, LoadFailure> {
   let lease = lock_requests().await;
   Ok(
     load_account_for_request(state, mode)
@@ -846,13 +932,56 @@ async fn load_request_account(
 pub async fn request_account(
   state: &AccountState,
 ) -> Result<Option<AccountRequest>, String> {
-  load_request_account(state, RecoveryMode::ProbeOnly).await
+  load_request_account(state, RecoveryMode::ProbeOnly)
+    .await
+    .map_err(LoadFailure::into_message)
+}
+
+/// Why a background read produced no account for a request.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum BackgroundAccountError {
+  /// The server definitively refused to renew the saved link: it refused
+  /// every credential generation, or its renewal answer named another
+  /// account or an expiry that is not live. Only linking again helps; the
+  /// link is kept until then.
+  RenewalRefused { namespace: String },
+  /// Nothing definite is known (the Keychain, the network, a rate limit, or
+  /// a rotation only the foreground may finish); the read is tried again.
+  Unavailable(String),
+}
+
+impl BackgroundAccountError {
+  fn from_load(failure: LoadFailure) -> Self {
+    match failure {
+      LoadFailure::Recovery {
+        namespace,
+        error: RecoveryError::Refused | RecoveryError::InvalidReply(_),
+      } => Self::RenewalRefused { namespace },
+      LoadFailure::Recovery {
+        error: RecoveryError::Failed(message),
+        ..
+      }
+      | LoadFailure::Unread(message) => Self::Unavailable(message),
+    }
+  }
+}
+
+/// [`request_account`], with a definitive renewal refusal told apart from
+/// a read that may succeed later.
+pub(crate) async fn background_account(
+  state: &AccountState,
+) -> Result<Option<AccountRequest>, BackgroundAccountError> {
+  load_request_account(state, RecoveryMode::ProbeOnly)
+    .await
+    .map_err(BackgroundAccountError::from_load)
 }
 
 pub async fn foreground_account(
   state: &AccountState,
 ) -> Result<Option<AccountRequest>, String> {
-  let Some(mut request) = load_request_account(state, RecoveryMode::Foreground).await?
+  let Some(mut request) = load_request_account(state, RecoveryMode::Foreground)
+    .await
+    .map_err(LoadFailure::into_message)?
   else {
     return Ok(None);
   };
@@ -1268,13 +1397,14 @@ async fn load_account_to_disconnect(
 ) -> Result<Option<LinkedAccount>, String> {
   match load_account_for_request(state, RecoveryMode::Disconnect).await {
     Ok(account) => Ok(account),
-    Err(error)
-      if error == crate::registry::not_connected()
-        || error == crate::device_proof::RECONNECT =>
-    {
+    Err(LoadFailure::Recovery {
+      error: RecoveryError::Refused,
+      ..
+    }) => Ok(None),
+    Err(LoadFailure::Unread(error)) if error == crate::device_proof::RECONNECT => {
       Ok(None)
     }
-    Err(error) => Err(error),
+    Err(failure) => Err(failure.into_message()),
   }
 }
 
@@ -3339,9 +3469,8 @@ mod tests {
       assert_eq!(
         recover_rotation(&mut store, original.clone(), &transport, mode)
           .await
-          .err()
-          .as_deref(),
-        Some("probe unavailable")
+          .err(),
+        Some(RecoveryError::Failed("probe unavailable".into()))
       );
       assert_eq!(
         transport.requests(),
@@ -3431,7 +3560,7 @@ mod tests {
       )
       .await
       .err(),
-      Some(crate::registry::rate_limited())
+      Some(RecoveryError::Failed(crate::registry::rate_limited()))
     );
     assert_rotation_pending(&store, &original).await;
   }
@@ -3482,7 +3611,7 @@ mod tests {
       recover_rotation(&mut store, original, &transport, RecoveryMode::Foreground)
         .await
         .err(),
-      Some(crate::registry::not_connected())
+      Some(RecoveryError::Refused)
     );
     assert_eq!(transport.requests().len(), 3);
     assert!(store.load().await.unwrap().is_none());
@@ -3494,23 +3623,102 @@ mod tests {
     for seconds in [60, -60] {
       let original = fixture("stella_dr_original", seconds);
       let mut store = rotation_fixture(original.clone());
-      let transport = QueuedRenewal::new(vec![Err(RenewalFailure::Rejected)]);
-      assert!(
+      // The original still answers: only the foreground may finish the
+      // rotation, and nothing definite is known.
+      let transport = QueuedRenewal::new(vec![
+        Err(RenewalFailure::Rejected),
+        Ok(renewal_reply(&original)),
+      ]);
+      assert!(matches!(
         recover_rotation(
           &mut store,
           original.clone(),
           &transport,
           RecoveryMode::ProbeOnly
         )
-        .await
-        .is_err()
-      );
+        .await,
+        Err(RecoveryError::Failed(_))
+      ));
       assert_eq!(
         transport.requests(),
-        vec![("stella_dr_successor".into(), None)]
+        vec![
+          ("stella_dr_successor".into(), None),
+          ("stella_dr_original".into(), None),
+        ]
       );
       assert_rotation_pending(&store, &original).await;
     }
+  }
+
+  #[tokio::test]
+  async fn background_recovery_reports_a_refusal_of_both_generations_and_keeps_the_link()
+   {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+    ]);
+    assert_eq!(
+      recover_rotation(
+        &mut store,
+        original.clone(),
+        &transport,
+        RecoveryMode::ProbeOnly
+      )
+      .await
+      .err(),
+      Some(RecoveryError::Refused)
+    );
+    assert_eq!(
+      transport.requests(),
+      vec![
+        ("stella_dr_successor".into(), None),
+        ("stella_dr_original".into(), None),
+        ("stella_dr_successor".into(), None),
+      ]
+    );
+    // Nothing is cleared in the background: the member links again.
+    assert_rotation_pending(&store, &original).await;
+  }
+
+  #[test]
+  fn background_recovery_tells_a_definitive_refusal_from_one_that_may_pass() {
+    let refused = |namespace: &str| BackgroundAccountError::RenewalRefused {
+      namespace: namespace.into(),
+    };
+    let namespace = fixture("stella_dr_original", 60).local_data_namespace();
+    let cases = [
+      (RecoveryError::Refused, refused(&namespace)),
+      (
+        RecoveryError::InvalidReply("Account renewal identity changed"),
+        refused(&namespace),
+      ),
+      (
+        RecoveryError::Failed(crate::registry::rate_limited()),
+        BackgroundAccountError::Unavailable(crate::registry::rate_limited()),
+      ),
+      (
+        RecoveryError::Failed("network unavailable".into()),
+        BackgroundAccountError::Unavailable("network unavailable".into()),
+      ),
+    ];
+    for (error, expected) in cases {
+      assert_eq!(
+        BackgroundAccountError::from_load(LoadFailure::Recovery {
+          namespace: namespace.clone(),
+          error,
+        }),
+        expected
+      );
+    }
+    assert_eq!(
+      BackgroundAccountError::from_load(LoadFailure::Unread(
+        "keychain did not answer".into()
+      )),
+      BackgroundAccountError::Unavailable("keychain did not answer".into())
+    );
   }
 
   #[tokio::test]
@@ -3633,7 +3841,7 @@ mod tests {
       recover_rotation(&mut store, original, &transport, RecoveryMode::Disconnect)
         .await
         .err(),
-      Some(crate::registry::not_connected())
+      Some(RecoveryError::Refused)
     );
     assert_eq!(transport.requests().len(), 3);
     assert!(store.load().await.unwrap().is_none());
@@ -3654,6 +3862,7 @@ mod tests {
       [
         (invalid, RecoveryMode::Foreground),
         (invalid, RecoveryMode::Disconnect),
+        (invalid, RecoveryMode::ProbeOnly),
       ]
     }) {
       let original = fixture("stella_dr_original", 60);
@@ -3676,18 +3885,21 @@ mod tests {
         _ => unreachable!(),
       }
       let mut store = rotation_fixture(original.clone());
-      let replies = if matches!(mode, RecoveryMode::Disconnect) {
+      let probes_original =
+        matches!(mode, RecoveryMode::Disconnect | RecoveryMode::ProbeOnly);
+      let replies = if probes_original {
         vec![Err(RenewalFailure::Rejected), Ok(reply)]
       } else {
         vec![Ok(reply)]
       };
       let transport = QueuedRenewal::new(replies);
-      assert!(
-        recover_rotation(&mut store, original.clone(), &transport, mode)
-          .await
-          .is_err()
-      );
-      let expected = if matches!(mode, RecoveryMode::Disconnect) {
+      // An answer for another account or an expiry that is not live is
+      // definite, and never saved.
+      assert!(matches!(
+        recover_rotation(&mut store, original.clone(), &transport, mode).await,
+        Err(RecoveryError::InvalidReply(_))
+      ));
+      let expected = if probes_original {
         vec![
           ("stella_dr_successor".into(), None),
           ("stella_dr_original".into(), None),
