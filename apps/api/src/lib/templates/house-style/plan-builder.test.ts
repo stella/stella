@@ -298,11 +298,11 @@ describe("buildTemplatePlan, a letter on a template with a letterhead", () => {
     const long = manifestOf([
       "Beta Holdings Ltd",
       "Legal Department",
-      "Attn. Ms Jane Roe",
+      "Attn. Ms Helen Marsh",
       "Tower House",
       "1 Long Street",
       "London SW1A 1AA",
-      "Dear Ms Roe,",
+      "Dear Ms Marsh,",
       "We write further to your letter.",
     ]);
     expect(
