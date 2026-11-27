@@ -2728,7 +2728,7 @@ const cachedOutboundTransportReferences = (
   const content = readSource(context, file);
   const earlier = PREVIOUS_OUTBOUND_REFS.get(context)?.get(file);
   const refs =
-    earlier !== undefined && earlier.content === content
+    earlier?.content === content
       ? earlier.refs
       : outboundTransportReferences({
           file,
