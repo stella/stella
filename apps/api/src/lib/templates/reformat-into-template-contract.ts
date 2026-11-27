@@ -11,6 +11,11 @@ export const REFORMAT_NUMBERING_MODES = [
   "house_scheme",
 ] as const;
 
+/** What a caller may ask for a document's tracked changes: keep them as
+ *  the changes they are, or format the text with all of them accepted or
+ *  all of them rejected. */
+export const REFORMAT_TRACKED_CHANGES = ["keep", "accept", "reject"] as const;
+
 export const REFORMAT_REFUSAL_CODES = [
   "tracked_changes",
   "unsupported_content",
@@ -33,6 +38,24 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
   "line_break_spacing_kept",
   "invisible_effects_removed",
   "template_blocks_kept",
+  /** The document's tracked changes are in the output as tracked changes;
+   *  `count` is how many. Change tracking is switched off there. */
+  "tracked_changes_kept",
+  /** Tracked changes in paragraphs the output does not have (blank lines,
+   *  the document's own table of contents); `count` is how many. */
+  "tracked_changes_not_carried",
+  /** Recorded changes of formatting are not carried; `count` is how many.
+   *  With the changes rejected, a paragraph may show another number or
+   *  bullet than the document's rejected text. */
+  "formatting_changes_not_kept",
+  /** The output is the text with every tracked change accepted or
+   *  rejected (`reason`); `count` is how many changes that resolved. */
+  "tracked_changes_resolved",
+  /** A cell of the letterhead the template keeps still shows the
+   *  template's sample text, because the document states nothing for it;
+   *  `reason` names the cell: `addressee`, `date` or `reference`. It has
+   *  to be filled in by hand. */
+  "letterhead_sample_left",
   /** A finding of the formatter this tool does not word yet; `reason`
    *  names it. */
   "other",
