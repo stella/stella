@@ -20,6 +20,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 
 import { readFailureBrand } from "@stll/errors";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -204,12 +205,15 @@ const seedDueThread = async (
   return threadId;
 };
 
-const runCompactor = async (task: SchedulerTask = compactChatThreads) => {
+const runCompactor = async (
+  task: SchedulerTask = compactChatThreads,
+  signal: AbortSignal = new AbortController().signal,
+) => {
   await task(
     asTestRaw<SchedulerTaskContext>({
       db: asTestRaw<SchedulerDb>(testDb),
       logger,
-      signal: new AbortController().signal,
+      signal,
     }),
   );
 };
@@ -528,6 +532,40 @@ describe("chat thread compactor", () => {
     expect(readFailureBrand(captured[0])?.reason).toBe(
       "work_deadline_exceeded",
     );
+    expect(await readCheckpoints(threadId)).toEqual([]);
+    expect((await readThread(threadId))?.compactionScheduledAt).not.toBeNull();
+  });
+
+  test("a run stopped by the scheduler is reported as a cancellation", async () => {
+    const threadId = await seedDueThread([ids.wsA1]);
+    const captured: unknown[] = [];
+    const captureSpy = spyOn(captureModule, "captureError");
+    captureSpy.mockImplementation((error) => {
+      captured.push(error);
+    });
+    const stop = new AbortController();
+    modelSpy.mockImplementation(async ({ abortSignal }) => {
+      stop.abort();
+      abortSignal?.throwIfAborted();
+      return SUMMARY_MARKDOWN;
+    });
+    // Like the dedicated connection, the fence refuses to return once its
+    // signal has fired.
+    const task = createChatThreadCompactor({
+      database: asTestRaw<RlsDatabase<Transaction>>(testDb),
+      withStoredContentEgress: async ({ signal, work }) => {
+        const value = await work();
+        signal.throwIfAborted();
+        return value;
+      },
+    });
+
+    const stopped = await rejectionOf(runCompactor(task, stop.signal));
+
+    expect(stopped).toMatchObject({ message: "SchedulerAborted" });
+
+    expect(captured).toHaveLength(1);
+    expect(readFailureBrand(captured[0])?.reason).toBe("work_cancelled");
     expect(await readCheckpoints(threadId)).toEqual([]);
     expect((await readThread(threadId))?.compactionScheduledAt).not.toBeNull();
   });
