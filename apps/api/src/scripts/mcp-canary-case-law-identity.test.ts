@@ -326,4 +326,18 @@ describe("the case-law identity canary", () => {
     expect(outcome?.detail).toContain(`${SUPREME}: search still running after`);
     expect(waits).toEqual(Array.from({ length: 10 }, () => 1));
   });
+  test("calls across countries share one bound on calls in flight", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const callTool: CallCaseLawTool = async (name, args) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await Promise.resolve();
+      await Promise.resolve();
+      inFlight -= 1;
+      return { type: "ok", payload: answer(exact, name, args) };
+    };
+    await sampleCaseLawIdentities(callTool);
+    expect(peak).toBeLessThanOrEqual(4);
+  });
 });

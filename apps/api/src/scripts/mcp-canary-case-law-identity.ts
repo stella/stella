@@ -34,6 +34,7 @@ const FACET_SEED_QUERY = {
   SVK: "Najvyšší súd",
 } as const satisfies Record<ProbeCountry, string>;
 
+/** Matches the default per-caller public read admission. */
 const TOOL_CALL_CONCURRENCY = 4;
 const FAILURES_REPORTED_MAX = 5;
 /** How many times one search follows its continuation before giving up. */
@@ -338,13 +339,17 @@ export const sampleCaseLawIdentities = async (
   callTool: CallCaseLawTool,
   { wait = sleep }: { wait?: WaitFor } = {},
 ): Promise<{ country: ProbeCountry; outcome: CaseLawIdentityProbeOutcome }[]> =>
-  await Promise.all(
-    CASE_LAW_IDENTITY_PROBE_COUNTRIES.map(async (country) => ({
+  // One country at a time: each already runs TOOL_CALL_CONCURRENCY calls,
+  // the caller's whole per-caller read admission.
+  await mapWithConcurrency({
+    items: CASE_LAW_IDENTITY_PROBE_COUNTRIES,
+    limit: 1,
+    operation: async (country) => ({
       country,
       outcome: PUBLIC_COUNTRY_SURFACE_OPEN.search[
         PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw
       ]
         ? await probeCountry(callTool, wait, country)
         : SEARCH_CLOSED,
-    })),
-  );
+    }),
+  });
