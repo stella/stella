@@ -11,6 +11,8 @@ import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { load } from "@stll/html";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 
 const FIXTURES = [
@@ -27,7 +29,7 @@ const FIXTURES = [
 ] as const;
 
 const fixtureXml = async (name: string): Promise<string> =>
-  await Bun.file(new URL(`__fixtures__/${name}.xml`, import.meta.url)).text();
+  await Bun.file(new URL(`${name}.xml`, PARSER_FIXTURES_DIR)).text();
 
 const parseXml = (xml: string) =>
   parseRisDecisionXml({
