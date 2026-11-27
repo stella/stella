@@ -2083,6 +2083,74 @@ describe("buildTemplatePlan, what a paragraph states for itself", () => {
     expect(note.items).toContainEqual({ kind: "linesKeptWithNext", blocks: 1 });
   });
 
+  test("a letter's closing stays together with the end of its text", () => {
+    const letter = [
+      "Reply to your enquiry",
+      "Dear Sir or Madam,",
+      "We refer to your letter and confirm that the works were handed over on time and without defects.",
+      "Please do not hesitate to contact us with any further question.",
+      "Yours faithfully,",
+      "Jane Example",
+      "Head of Contracts",
+    ];
+    const manifest = manifestOf(letter);
+    const { plan, note } = build(manifest);
+    const kept = sourceItems(plan)
+      .filter(({ keepNext }) => keepNext === true)
+      .map(({ blockId }) => blockId);
+    // The end of the text, the closing line and the name; the last line has
+    // nothing to stay with.
+    expect(kept).toEqual([
+      blockIdOf(manifest, "Please do not"),
+      blockIdOf(manifest, "Yours faithfully"),
+      blockIdOf(manifest, "Jane Example"),
+    ]);
+    expect(note.items).toContainEqual({
+      kind: "closingKeptTogether",
+      blocks: 3,
+    });
+    // A table in front of the closing parts it from the text before: that
+    // paragraph is not kept with the table.
+    const fees = inColumns(2, ["Item", "Fee"]);
+    const tabled = {
+      ...manifest,
+      blocks: [
+        ...manifest.blocks.slice(0, 4),
+        ...fees.blocks.map((block) => ({ ...block, id: `fee-${block.id}` })),
+        ...manifest.blocks.slice(4),
+      ].map((block) =>
+        block.cells === undefined
+          ? block
+          : {
+              ...block,
+              cells: block.cells.map((cell) => ({
+                ...cell,
+                blockIds: cell.blockIds.map((id) => `fee-${id}`),
+              })),
+            },
+      ),
+    };
+    expect(
+      sourceItems(build(tabled).plan)
+        .filter(({ keepNext }) => keepNext === true)
+        .map(({ blockId }) => blockId),
+    ).toEqual([
+      blockIdOf(manifest, "Yours faithfully"),
+      blockIdOf(manifest, "Jane Example"),
+    ]);
+    // A closing line with text of the letter under it closes nothing.
+    const quoted = manifestOf([
+      ...letter.slice(0, 5),
+      "That is how your letter of last week ended, and the next three paragraphs answer it point by point.",
+      "Jane Example",
+    ]);
+    expect(
+      sourceItems(build(quoted).plan).filter(
+        ({ keepNext }) => keepNext === true,
+      ),
+    ).toEqual([]);
+  });
+
   test("a long heading without a number stays with what it heads, whatever its first letter", () => {
     const long =
       "podmínky, za kterých se smluvní strany dohodly na dalším postupu při plnění celého díla";
