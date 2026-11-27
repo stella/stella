@@ -1483,6 +1483,8 @@ const setMarginLines = (context: Context, placed: Placed): void => {
   const atMargin: Placement[] = [];
   let under = 0;
   let item: Placement | null = null;
+  /** Whether the line placed last is one of `atMargin`. */
+  let opensList = false;
   for (const block of context.topLevel) {
     const placement =
       block.kind === "table" ? undefined : placed.placementById.get(block.id);
@@ -1490,10 +1492,20 @@ const setMarginLines = (context: Context, placed: Placed): void => {
       continue;
     }
     if (showsLabel(placement)) {
+      // A list of bullets hangs from the line that opens it: that line
+      // stays where the bullets expect it.
+      if (placement.pattern?.numFmt === "bullet" && opensList) {
+        atMargin.pop();
+      }
       item = placement;
-    } else if (item !== null && placement.role === "continuation") {
+      opensList = false;
+      continue;
+    }
+    opensList = false;
+    if (item !== null && placement.role === "continuation") {
       if (standsAtMargin(placement, item)) {
         atMargin.push(placement);
+        opensList = true;
       } else if (standsUnder(placement, item)) {
         under += 1;
       }
