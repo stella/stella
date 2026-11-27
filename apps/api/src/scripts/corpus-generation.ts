@@ -2494,6 +2494,44 @@ const WAKE_BATCH_STATES = 500;
 /** Batches one run takes at most; a larger backlog is finished by a rerun. */
 const WAKE_MAX_BATCHES = 60;
 
+type WakeProgress = { woken: number; busy: boolean };
+
+/**
+ * Wakes owed states one committed batch at a time, recursing while batches
+ * come back full and at most `batchesLeft` more times; a larger backlog is
+ * finished by a rerun. A batch that meets a held row lock stops the run as
+ * busy with what earlier batches already woke.
+ */
+const wakeDeferredBatches = async (
+  rootDb: CaseLawRootHandle,
+  wake: DeferredWakeTarget,
+  batchesLeft: number,
+): Promise<WakeProgress> => {
+  if (batchesLeft <= 0) {
+    return { woken: 0, busy: false };
+  }
+  const step = await Result.tryPromise({
+    try: async () =>
+      await withAggregateTransaction(
+        rootDb,
+        async (tx) =>
+          await wakeDeferredAppendStatesBatchTx(tx, wake, WAKE_BATCH_STATES),
+      ),
+    catch: (cause) => cause,
+  });
+  if (step.isErr()) {
+    if (getPgErrorCode(step.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+      return { woken: 0, busy: true };
+    }
+    return panic("A deferred-state wake batch failed", step.error);
+  }
+  if (step.value < WAKE_BATCH_STATES) {
+    return { woken: step.value, busy: false };
+  }
+  const rest = await wakeDeferredBatches(rootDb, wake, batchesLeft - 1);
+  return { woken: step.value + rest.woken, busy: rest.busy };
+};
+
 const deferredLine = (
   label: string,
   { count, idsSha256 }: DeferredAppendStates,
@@ -2525,36 +2563,10 @@ const runWakeDeferred = async (
     write(modeLine(mode, "applied: nothing owed"));
     return Result.ok(0);
   }
-  const applied = await withDatabase(ACCESS.write, async (rootDb) => {
-    let woken = 0;
-    for (let batch = 0; batch < WAKE_MAX_BATCHES; batch += 1) {
-      const step = await Result.tryPromise({
-        try: async () =>
-          // db-await-in-loop: one bounded batch per transaction, each committed before the next
-          await withAggregateTransaction(
-            rootDb,
-            async (tx) =>
-              await wakeDeferredAppendStatesBatchTx(
-                tx,
-                wake,
-                WAKE_BATCH_STATES,
-              ),
-          ),
-        catch: (cause) => cause,
-      });
-      if (step.isErr()) {
-        if (getPgErrorCode(step.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
-          return { woken, busy: true };
-        }
-        return panic("A deferred-state wake batch failed", step.error);
-      }
-      woken += step.value;
-      if (step.value < WAKE_BATCH_STATES) {
-        break;
-      }
-    }
-    return { woken, busy: false };
-  });
+  const applied = await withDatabase(
+    ACCESS.write,
+    async (rootDb) => await wakeDeferredBatches(rootDb, wake, WAKE_MAX_BATCHES),
+  );
   if (applied.isErr()) {
     return Result.err(applied.error);
   }

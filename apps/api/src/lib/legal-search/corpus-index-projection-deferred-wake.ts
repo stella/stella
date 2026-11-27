@@ -88,7 +88,6 @@ export const wakeDeferredAppendStatesBatchTx = async (
   limit: number,
 ): Promise<number> => {
   await setSharedLockTimeout(tx, DEFERRED_WAKE_LOCK_TIMEOUT_MS);
-  // audit: skip - scheduling bookkeeping on the derived public corpus projection
   return executedRows(
     await tx.execute(
       wakeCorpusProjectionStatesQuery({ where: deferred(target), limit }),

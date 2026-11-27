@@ -290,7 +290,7 @@ export const corpusIndexProjectionIntentIsOutstanding = (status: SQLWrapper) =>
  * status the outstanding partial index leaves out, so the index keeps
  * answering the probe.
  */
-export const corpusIndexProjectionIntentHoldsAppend = (
+const corpusIndexProjectionIntentHoldsAppend = (
   status: SQLWrapper,
   retrieval: CorpusRevisionRetrieval,
 ) => {
@@ -309,7 +309,7 @@ export const corpusIndexProjectionIntentHoldsAppend = (
 };
 
 /** A revision whose exact delete is queued, issued or awaiting settlement. */
-export const corpusIndexProjectionIntentIsDeleting = (status: SQLWrapper) =>
+const corpusIndexProjectionIntentIsDeleting = (status: SQLWrapper) =>
   sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_DELETING_INTENT_STATUSES)})`;
 
 /**
