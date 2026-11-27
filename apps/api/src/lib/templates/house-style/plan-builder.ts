@@ -1703,6 +1703,27 @@ const keepClosingTogether = (context: Context, placed: Placed): void => {
   }
 };
 
+/**
+ * The paragraph kept to start the contents' page, once the paragraphs are
+ * placed: it has no page to start where the contents are not kept after
+ * all and would leave one empty, so there it is left out like any blank
+ * paragraph.
+ */
+const settledContentsHolder = (
+  context: Context,
+  placed: Placed,
+  holder: string | null,
+): string | null => {
+  if (holder === null || keepsContents(context, placed)) {
+    return holder;
+  }
+  placed.placements = placed.placements.filter(
+    ({ block }) => block.id !== holder,
+  );
+  placed.omitted.set(holder, "empty");
+  return null;
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
@@ -1793,15 +1814,11 @@ const placeParagraphs = (context: Context): Placed => {
     placed.placements.push(placement);
     lastPlaced = block.id;
   }
+  const holder = settledContentsHolder(context, placed, contentsHolder);
   for (const placement of placed.placements) {
     placed.placementById.set(placement.block.id, placement);
   }
-  placed.pageStarts = pageStartsOf(
-    context,
-    placed,
-    pageHolders,
-    contentsHolder,
-  );
+  placed.pageStarts = pageStartsOf(context, placed, pageHolders, holder);
   keepHeadingsWithBody(context, placed);
   dropLoosePageStarts(context, placed, pageHolders);
   keepLinesWithBody(context, placed);
@@ -2143,6 +2160,14 @@ const contentsCollect = (
       block.text.trim() !== "",
   );
 
+/** Whether the plan keeps the template's contents: the template has them,
+ *  the document has an article to stand in front of, and their field
+ *  would list one of its headings. */
+const keepsContents = (context: Context, placed: Placed): boolean =>
+  context.profile.regions.contents.length > 0 &&
+  placed.placements.some(({ role }) => role === "articleHeading") &&
+  contentsCollect(context.profile, placed);
+
 const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
   const { topLevel, profile, items } = context;
   const { placementById, titleOf, mergedInto, omitted } = placed;
@@ -2172,11 +2197,11 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     CLAUSE_ROLES.some((clause) => clause === role);
   // The table of contents stands where the template has it: after the
   // front matter, in front of the first recital or article.
-  let contentsPending =
+  const wanted =
     contents.length > 0 &&
     topLevel.some(({ id }) => placementById.get(id)?.role === "articleHeading");
-  if (contentsPending && !contentsCollect(profile, placed)) {
-    contentsPending = false;
+  let contentsPending = wanted && contentsCollect(profile, placed);
+  if (wanted && !contentsPending) {
     items.push({ kind: "contentsNotKept", reason: "noHeadingCollected" });
   }
   let contentsKept = false;

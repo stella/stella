@@ -33,8 +33,11 @@ const DATE =
 const POSTAL_CODE =
   /\b\d{3}[  ]\d{2}\b|\b\d{4,5}\b|\b[A-Z]{1,2}\d[A-Z\d]?[  ]?\d[A-Z]{2}\b/u;
 
-/** A line may end in a period that closes a short form: `s.r.o.`, `Ltd.`. */
-const ENDS_IN_SHORT_FORM = /(?:^|[ \u00A0,])[\p{L}.]{1,6}\.$/u;
+/** A line may end in a period that closes a short form: `s.r.o.`, `Ltd.`,
+ *  `a.s.`. A word in lower case with one period behind it ends a sentence
+ *  (`dopis.`). */
+const ENDS_IN_SHORT_FORM =
+  /(?:^|[ \u00A0,])(?:\p{L}{1,3}\.(?:[ \u00A0]?\p{L}{1,3}\.)+|\p{Lu}[\p{L}]{0,5}\.)$/u;
 
 const isHeadLine = (text: string): boolean =>
   text.length <= HEAD_LINE_MAX &&
@@ -82,8 +85,10 @@ export const readLetterHead = (
       runs.push([]);
     } else if (
       run === undefined ||
+      // A blank line parts two blocks of lines: the sender's address from
+      // the addressee's.
       (previous !== undefined &&
-        topLevel.indexOf(block) - topLevel.indexOf(previous) > 2)
+        topLevel.indexOf(block) - topLevel.indexOf(previous) > 1)
     ) {
       runs.push([block]);
     } else {

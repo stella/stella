@@ -775,15 +775,19 @@ const inferHeader = (
   const firstCell = new Set(table.cells?.at(0)?.blockIds);
   const opening = shown.filter(({ id }) => firstCell.has(id));
   const label = opening.findIndex(({ text }) => text.trim().endsWith(":"));
-  const sample = label === -1 ? opening : opening.slice(0, label);
-  const addressee =
-    sample.length >= 2 && sample.length <= HEADER_ADDRESSEE_MAX
-      ? sample.map(({ id }) => id)
-      : [];
   const date = shown.find(({ text }) => HEADER_DATE.test(text.trim()));
   const reference = shown.find(({ text }) =>
     HEADER_REFERENCE.test(text.trim()),
   );
+  // A date or a reference under the address is no line of it: a paragraph
+  // takes one thing.
+  const sample = (label === -1 ? opening : opening.slice(0, label)).filter(
+    (block) => block !== date && block !== reference,
+  );
+  const addressee =
+    sample.length >= 2 && sample.length <= HEADER_ADDRESSEE_MAX
+      ? sample.map(({ id }) => id)
+      : [];
   // A header of label and value cells (a memo's `From:`, `To:`) has no
   // sample of an addressee and no date of its own: its labels stay.
   return addressee.length === 0 && date === undefined

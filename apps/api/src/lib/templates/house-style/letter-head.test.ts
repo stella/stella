@@ -26,6 +26,27 @@ describe("readLetterHead", () => {
     });
   });
 
+  test("a sentence with a date in it is no date line, and a blank line parts the sender's address from the addressee's", () => {
+    const { blocks } = manifestOf([
+      "Gama Stavby a.s.",
+      "Krátká 2",
+      "602 00 Brno",
+      "",
+      "Alfa Dodávky s.r.o.",
+      "Dlouhá 12",
+      "110 00 Praha 1",
+      "",
+      "Dne 6. 1. 2026 jsme obdrželi Váš dopis.",
+      "Vážená paní inženýrko,",
+      "odpovídáme na Vaši výzvu.",
+    ]);
+    expect(readLetterHead(blocks)).toMatchObject({
+      // The block nearest to the salutation: the addressee's alone.
+      addressee: ["p4", "p5", "p6"],
+      date: null,
+    });
+  });
+
   test("an English and a German head", () => {
     expect(
       readLetterHead(

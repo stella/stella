@@ -2148,6 +2148,13 @@ describe("buildTemplatePlan, tables and omissions", () => {
     const front = around(paged([4]));
     expect(front.before).toMatchObject({ kind: "source", blockId: "p4" });
     expect(front.behind).not.toHaveProperty("pageBreakBefore");
+    // Contents that are not kept need no page: the paragraph goes, and
+    // the heading starts the one page the two breaks leave.
+    const dropped = build(paged([4, 6]), "keepSource", {
+      profile: { ...profile, contentsStyles: [] },
+    }).plan;
+    expect(dropped.body.some(({ kind }) => kind === "template")).toBe(false);
+    expect(dropped.omit.map(({ blockId }) => blockId)).toContain("p4");
     // Only behind them: nothing is kept in front.
     const back = around(paged([6]));
     expect(back.omitted).toContain("p4");
