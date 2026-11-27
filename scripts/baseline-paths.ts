@@ -20,8 +20,6 @@ export const BASELINE_PATHS = {
   /** scripts/check-mutation-query-invalidation.ts */
   mutationQueryInvalidation:
     "scripts/mutation-query-invalidation-baseline.json",
-  /** scripts/check-actionlint-baseline.ts */
-  actionlint: ".github/actionlint-baseline.json",
   /** scripts/check-test-state-baseline.ts */
   testState: "scripts/test-state-baseline.json",
   /** scripts/seed-test-determinism-baselines.ts */
@@ -38,8 +36,6 @@ export const BASELINE_PATHS = {
   writeContracts: "scripts/write-contract-routes-baseline.json",
   /** scripts/check-aggregate-mutations.ts */
   aggregateMutations: "scripts/aggregate-mutation-routes-baseline.json",
-  /** scripts/check-oxlint-effective-config.ts */
-  oxlintEffectiveConfig: "scripts/oxlint-effective-config-baseline.json",
   /** scripts/bundle-baseline.ts */
   bundle: "scripts/bundle-baseline.json",
   /** scripts/dependency-audit.ts */
@@ -62,8 +58,6 @@ export const BASELINE_PATHS = {
   transferRead: "scripts/transfer-read-guard-baseline.json",
   /** scripts/source-fingerprint-baseline.ts */
   sourceFingerprint: "scripts/source-fingerprint-baseline.json",
-  /** scripts/test-subject-reachability.ts */
-  testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
@@ -93,10 +87,6 @@ export const BASELINE_PATHS = {
     "apps/api/src/handlers/legislation/fixtures/statute-recall/baseline.json",
   /** apps/web/e2e/helpers/network.ts */
   webNetwork: "apps/web/e2e/network-baseline.json",
-  /** scripts/queue-authority.ts */
-  queueAuthority: "scripts/queue-authority-baseline.json",
-  /** scripts/queue-authority.ts */
-  schedulerTaskAuthority: "scripts/scheduler-task-authority-baseline.json",
   // The i18n baselines and source locks are produced by
   // `packages/scripts/src/i18n-*.ts` against the messages directory it is
   // given, so the package holds the file name and each catalog contributes the
