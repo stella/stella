@@ -1711,8 +1711,14 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     // A paragraph that holds nothing but marks of the source's page goes
-    // with them.
-    if (context.pageMarks.has(block.id) && holdsOnlyPageMarks(block)) {
+    // with them, unless the source starts a page in front of it or it is
+    // kept for a section or a table: then it stays, without its marks.
+    if (
+      context.pageMarks.has(block.id) &&
+      holdsOnlyPageMarks(block) &&
+      !startsPage.has(block.id) &&
+      !kept.has(block.id)
+    ) {
       placed.omitted.set(block.id, "pageArtifact");
       continue;
     }
