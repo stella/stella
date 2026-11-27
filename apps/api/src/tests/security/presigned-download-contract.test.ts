@@ -11,6 +11,7 @@ import {
   presignDownloadUrl,
   resetAwsS3ClientForTesting,
   S3PresignError,
+  setScopedS3ClientFactoryForTesting,
   setScopedSigningEnabledForTesting,
 } from "@/api/lib/s3-presign";
 import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
@@ -59,6 +60,12 @@ describe("presigned S3 download URL TTL and prefix-scoping contract", () => {
       },
     };
 
+    const atFloor = await presignDownloadUrl("org-alpha/ws-alpha/doc-1.pdf", {
+      ...baseOptions,
+      expiresIn: 1,
+    });
+    expect(new URL(atFloor).searchParams.get("X-Amz-Expires")).toBe("1");
+
     const atCeiling = await presignDownloadUrl("org-alpha/ws-alpha/doc-1.pdf", {
       ...baseOptions,
       expiresIn: MAX_ALLOWED_TTL_SECONDS,
@@ -68,6 +75,7 @@ describe("presigned S3 download URL TTL and prefix-scoping contract", () => {
     for (const invalidExpiresIn of [
       MAX_ALLOWED_TTL_SECONDS + 1,
       3600,
+      0.5,
       0,
       -60,
       Number.NaN,
@@ -103,23 +111,35 @@ describe("presigned S3 download URL TTL and prefix-scoping contract", () => {
     // Under scoped signing, a cross-workspace or cross-org key is rejected
     // before any STS session or presigned URL is minted.
     setScopedSigningEnabledForTesting(() => true);
+    let scopedFactoryCalls = 0;
+    setScopedS3ClientFactoryForTesting(async () => {
+      scopedFactoryCalls += 1;
+      return await Promise.reject(
+        new Error("scoped client factory must not be called"),
+      );
+    });
     for (const outOfScopeKey of [
       "org-1/ws-2/file-a.pdf",
       "org-2/ws-1/file-a.pdf",
       "org-1/ws-10/file-a.pdf",
       "org-10/ws-1/file-a.pdf",
     ]) {
+      const error = await rejectionOf(
+        presignDownloadUrl(outOfScopeKey, {
+          userId: "user-contract",
+          expiresIn: MAX_ALLOWED_TTL_SECONDS,
+          source: callerDownloadSource({ id: "session-contract" }),
+          readSessionAuthority: noSessionAuthority,
+          scope,
+        }),
+      );
+      expect(error).toBeInstanceOf(S3PresignError);
       expect(
-        await rejectionOf(
-          presignDownloadUrl(outOfScopeKey, {
-            userId: "user-contract",
-            expiresIn: MAX_ALLOWED_TTL_SECONDS,
-            source: callerDownloadSource({ id: "session-contract" }),
-            readSessionAuthority: noSessionAuthority,
-            scope,
-          }),
-        ),
-      ).toBeInstanceOf(S3PresignError);
+        error instanceof S3PresignError ? error.cause : null,
+      ).toMatchObject({
+        message: "S3 key is outside the requested signing scope",
+      });
     }
+    expect(scopedFactoryCalls).toBe(0);
   });
 });

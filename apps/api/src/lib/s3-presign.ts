@@ -864,7 +864,7 @@ export const MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS = 15 * 60;
 
 const downloadExpiryBoundsError = (expiresIn: number): S3PresignError | null =>
   !Number.isFinite(expiresIn) ||
-  expiresIn <= 0 ||
+  expiresIn < 1 ||
   expiresIn > MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS
     ? new S3PresignError({
         message: `Presigned download URL lifetime must be between 1 and ${MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS} seconds`,
