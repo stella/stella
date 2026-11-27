@@ -13,8 +13,12 @@ import * as v from "valibot";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
+// parser-output-unchanged: listing reads use readPublisher with identical status, retry, and error classification; parsed decisions are unchanged.
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
@@ -252,7 +256,6 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
  * ```
  */
 /** Max retries for transient 5xx / timeout errors before skipping. */
-const SERVER_ERROR_RETRIES = 2;
 
 /**
  * The gateway got no usable answer from the origin: the upstream refused the
@@ -812,27 +815,33 @@ export const createPagePaginatedFetch = <TResponse>(
         const fetchT0 = performance.now();
         const listTimeout = opts.listTimeoutMs ?? ADAPTER_TIMEOUT.LIST;
 
-        // fetchWithRetry handles timeout/5xx/429 with exponential
-        // backoff. All page-paginated adapters inherit this.
-        let response: Response;
-        try {
-          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
-          response = await fetchWithRetry(url, init, {
-            fetchStage: "listing",
-            maxRetries: SERVER_ERROR_RETRIES,
-            timeoutMs: listTimeout,
-            signal,
-            adapterKey: opts.adapterKey,
-          });
-        } catch (error) {
-          // Parent signal aborted: propagate for pipeline handling
-          if (signal?.aborted) {
-            throw error;
-          }
-          throw error;
-        }
+        // readPublisher handles timeout/5xx/429 with exponential backoff
+        // and typed ReadOutcome classification. All page-paginated adapters
+        // inherit this.
+        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
+        const outcome = await readPublisher(url, {
+          ...init,
+          fetchStage: "listing",
+          retryPolicy: "publisher-backoff",
+          timeoutMs: listTimeout,
+          signal,
+          adapterKey: opts.adapterKey,
+        });
 
-        if (!response.ok) {
+        if (outcome.type !== "present") {
+          const thrownError =
+            outcome.type === "unavailable" && outcome.cause.kind === "thrown"
+              ? outcome.cause.error
+              : undefined;
+          let failedStatus: number | undefined;
+          if (
+            outcome.type === "unavailable" &&
+            outcome.cause.kind === "status"
+          ) {
+            failedStatus = outcome.cause.status;
+          } else if (thrownError instanceof AdapterFetchError) {
+            failedStatus = thrownError.httpStatus;
+          }
           // A 5xx the origin itself produced, after all retries: skip this
           // page and advance.
           // 429 is NOT skipped — it is the publisher's rate-limit refusal,
@@ -841,15 +850,16 @@ export const createPagePaginatedFetch = <TResponse>(
           // (see BAD_GATEWAY_STATUS): nothing was read, so there is nothing
           // to advance past.
           if (
-            response.status >= 500 &&
-            response.status !== BAD_GATEWAY_STATUS
+            failedStatus !== undefined &&
+            failedStatus >= 500 &&
+            failedStatus !== BAD_GATEWAY_STATUS
           ) {
             // Same rule as the timeout skip above: a publisher-side 5xx
             // is operational, logged per page, and aggregated by the
             // coverage ledger rather than captured per attempt.
             logger.warn("case_law.ingestion.page_skipped_server_error", {
               adapterKey: opts.adapterKey,
-              httpStatus: String(response.status),
+              httpStatus: String(failedStatus),
               page: String(page),
             });
             return Result.ok({
@@ -859,13 +869,41 @@ export const createPagePaginatedFetch = <TResponse>(
             });
           }
 
-          throw new AdapterFetchError({
-            message: `${opts.adapterKey}: HTTP ${response.status}`,
+          if (thrownError !== undefined) {
+            if (
+              thrownError instanceof AdapterFetchError &&
+              thrownError.cursor === null &&
+              cursor !== null
+            ) {
+              throw new AdapterFetchError({
+                message: thrownError.message,
+                adapterKey: thrownError.adapterKey,
+                cursor,
+                ...(thrownError.httpStatus === undefined
+                  ? {}
+                  : { httpStatus: thrownError.httpStatus }),
+                ...(thrownError.stopKind === undefined
+                  ? {}
+                  : { stopKind: thrownError.stopKind }),
+                ...(thrownError.retryAfter === undefined
+                  ? {}
+                  : { retryAfter: thrownError.retryAfter }),
+                ...(thrownError.cause === undefined
+                  ? {}
+                  : { cause: thrownError.cause }),
+              });
+            }
+            throw thrownError;
+          }
+
+          throw unreadPublisherError({
+            outcome,
+            message: opts.adapterKey,
             adapterKey: opts.adapterKey,
             cursor,
-            httpStatus: response.status,
           });
         }
+        const response = outcome.value;
 
         const retryFailed = (detail: string): AdapterFetchError =>
           new AdapterFetchError({
@@ -896,23 +934,31 @@ export const createPagePaginatedFetch = <TResponse>(
               mediaType: contentType,
             });
             // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- retries the page URL from the adapter's own buildRequest over its fixed publisher base
-            const retryResponse = await fetchWithRetry(url, init, {
+            const retryOutcome = await readPublisher(url, {
+              ...init,
               fetchStage: "listing",
-              maxRetries: 1,
+              retryPolicy: "publisher-backoff",
               timeoutMs: listTimeout,
               signal,
               adapterKey: opts.adapterKey,
             });
-            if (!retryResponse.ok) {
+            if (retryOutcome.type !== "present") {
+              if (
+                retryOutcome.type === "unavailable" &&
+                retryOutcome.cause.kind === "thrown"
+              ) {
+                throw retryOutcome.cause.error;
+              }
               return Result.err(
-                new AdapterFetchError({
-                  message: `${opts.adapterKey}: retry HTTP ${retryResponse.status}`,
+                unreadPublisherError({
+                  outcome: retryOutcome,
+                  message: `${opts.adapterKey}: retry`,
                   adapterKey: opts.adapterKey,
                   cursor,
-                  httpStatus: retryResponse.status,
                 }),
               );
             }
+            const retryResponse = retryOutcome.value;
             try {
               const retried = await opts.parseResponse(retryResponse);
               return Result.isError(retried)

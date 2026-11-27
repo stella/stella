@@ -590,10 +590,10 @@ describe("a page the origin never answered does not move the cursor", () => {
       expect(result.error.stopKind).toBe("source_unreachable");
       expect(result.error.cursor).toBe("offset:30");
     }
-    expect(requestedPages).toEqual(["10", "10", "10"]);
+    expect(requestedPages).toEqual(Array.from({ length: 6 }, () => "10"));
     requestedPages.length = 0;
     expect(await walk(fetchPage, "offset:30", 2)).toBe("offset:30");
-    expect(requestedPages).toEqual(["10", "10", "10", "10", "10", "10"]);
+    expect(requestedPages).toEqual(Array.from({ length: 12 }, () => "10"));
   });
 
   test("a bad-gateway outage holds the cursor instead of consuming the collection", async () => {
