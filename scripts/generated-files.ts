@@ -65,6 +65,8 @@ export const effectiveGeneratorInputs = (generator: Generator) => [
 
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
+    "packages/case-law-parsers/src/parser-logger.ts",
+    "packages/case-law-parsers/src/sanitize-url.ts",
     "apps/api/src/lib/db/sealed-text.ts",
     "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
@@ -827,6 +829,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-source-hash.ts",
   ],
   "status-tables": [
+    "packages/case-law-parsers/src/parser-logger.ts",
+    "packages/case-law-parsers/src/sanitize-url.ts",
     "apps/api/src/lib/db/sealed-text.ts",
     "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
@@ -947,6 +951,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/oxlint-presets/*",
   ],
   "transition-triggers": [
+    "packages/case-law-parsers/src/parser-logger.ts",
+    "packages/case-law-parsers/src/sanitize-url.ts",
     "apps/api/src/lib/db/sealed-text.ts",
     "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
