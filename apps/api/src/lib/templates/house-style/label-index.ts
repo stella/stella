@@ -275,7 +275,12 @@ const FIELD_ANNEX_LEAD =
  */
 const readFieldLabel = (block: DocxBlock, ordinal: number): RawLabel | null => {
   const at = block.selfNumbers?.at(0);
-  if (block.kind !== "paragraph" || at === undefined) {
+  // A line of the contents names a heading; it is none.
+  if (
+    block.kind !== "paragraph" ||
+    at === undefined ||
+    isContentsBlock(block)
+  ) {
     return null;
   }
   const lead = block.text.slice(0, at);
@@ -960,7 +965,8 @@ const readSpacedNumber = (
   const { shape } = raw;
   const first = shape.path?.length === 1 ? shape.path.at(0) : undefined;
   const match = SPACED_SECOND.exec(raw.remainder);
-  const second = digitsValue(match?.groups?.["second"] ?? "");
+  const digits = match?.groups?.["second"] ?? "";
+  const second = digitsValue(digits);
   if (
     raw.origin !== "manual" ||
     shape.keyword !== null ||
@@ -979,7 +985,8 @@ const readSpacedNumber = (
   const between = raw.manualLength - lead - shape.length;
   const literal = block.text.slice(
     lead,
-    raw.manualLength + String(second).length + 1,
+    // As many digits as are typed: `01` is two.
+    raw.manualLength + digits.length + 1,
   );
   const whole = parseLabelShape(`${String(first)}.${String(second)}.`);
   // Blanks only part the two numbers: a tab sets a label off from text.
@@ -1026,40 +1033,66 @@ const headedNumber = ({ shape }: RawLabel): number | null => {
  * the number of the article above, and the second numbers count 1, 2, 3
  * without a gap over two paragraphs or more. One such paragraph alone, a
  * day and a month (`1. 1. 2026`), a number in front of a word in lower case
- * stay what they were read as.
+ * stay what they were read as. Each column of a table counts for itself:
+ * two language versions side by side are two runs, not one that counts
+ * every number twice.
  */
 const joinSpacedNumbers = (
   blocks: readonly DocxBlock[],
   raws: (RawLabel | null)[],
 ): void => {
-  let article: number | null = null;
-  let run: SpacedNumber[] = [];
-  const close = () => {
-    const counted = run.every(({ second }, at) => second === at + 1);
-    if (run.length > 1 && counted) {
-      for (const { position, joined } of run) {
+  const columnOf = new Map<string, number>();
+  for (const { cells } of blocks) {
+    if (cells === undefined) {
+      continue;
+    }
+    for (const { col, blockIds } of cells) {
+      for (const blockId of blockIds) {
+        columnOf.set(blockId, col);
+      }
+    }
+  }
+  type Counting = { article: number | null; run: SpacedNumber[] };
+  /** What is counted outside tables, and in each column of them. */
+  const countings = new Map<number | null, Counting>();
+  const close = (counting: Counting) => {
+    const counted = counting.run.every(({ second }, at) => second === at + 1);
+    if (counting.run.length > 1 && counted) {
+      for (const { position, joined } of counting.run) {
         raws[position] = joined;
       }
     }
-    run = [];
+    counting.run = [];
   };
   for (const [position, raw] of raws.entries()) {
     const block = blocks[position];
     if (raw === null || block === undefined) {
       continue;
     }
+    const column = columnOf.get(block.id) ?? null;
+    // A column counts under the heading that spans the columns above it.
+    const counting = countings.get(column) ?? {
+      article: countings.get(null)?.article ?? null,
+      run: [],
+    };
+    countings.set(column, counting);
     const spaced = readSpacedNumber(block, raw, position);
-    if (spaced !== null && raw.shape.path?.at(0) === article) {
-      run.push(spaced);
+    if (spaced !== null && raw.shape.path?.at(0) === counting.article) {
+      counting.run.push(spaced);
       continue;
     }
     const headed = headedNumber(raw);
     if (headed !== null || raw.shape.keyword !== null) {
-      close();
-      article = headed;
+      // A heading outside the columns heads every column from there on.
+      for (const under of column === null ? countings.values() : [counting]) {
+        close(under);
+        under.article = headed;
+      }
     }
   }
-  close();
+  for (const counting of countings.values()) {
+    close(counting);
+  }
 };
 
 /** Reads every paragraph's label and nests the entries. */

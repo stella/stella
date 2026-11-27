@@ -238,11 +238,11 @@ describe("buildTemplatePlan, a number typed with a blank between its parts", () 
       kind: "numberPartsClosed",
       blocks: 2,
     });
-    expect(
-      built.plan.numberingPatches?.some(({ lvlText }) =>
-        lvlText?.includes(" "),
-      ) ?? false,
-    ).toBe(false);
+    // The level is restated to print the number closed up: there is a
+    // patch, and no level text of one holds a blank.
+    const patches = built.plan.numberingPatches ?? [];
+    expect(patches.length).toBeGreaterThan(0);
+    expect(patches.some(({ lvlText }) => lvlText?.includes(" "))).toBe(false);
   });
 });
 
@@ -824,6 +824,26 @@ describe("buildTemplatePlan, pages the source starts", () => {
       }),
     );
     expect(starts(plan)).toEqual(["p2"]);
+  });
+
+  test("a page the source cut short is measured from the source's own start, also when the start moved in front of a heading", () => {
+    // The start in front of 2.1 moves in front of the heading of its
+    // article. The page that follows is short by its own text; the heading
+    // the start moved to is no part of it.
+    const { plan } = build(
+      withFacts(
+        [
+          "SMLOUVA",
+          "Článek I.\nPrvní",
+          `1.1\t${"Strany se dohodly na dalších podmínkách. ".repeat(40)}`,
+          `Článek II.\n${"Druhý článek s velmi dlouhým názvem ".repeat(4)}`,
+          `2.1\t${"Krátká strana. ".repeat(72)}`,
+          "2.2\tOdstavec za stranou, kterou zdroj ukončil dříve.",
+        ],
+        { 4: { pageBreakBefore: true }, 5: { pageBreakBefore: true } },
+      ),
+    );
+    expect(starts(plan)).toContain("p5");
   });
 
   test("a page starts only where a part of the document begins", () => {
@@ -2215,11 +2235,33 @@ describe("buildTemplatePlan, the lines of the parties", () => {
   test("values of one block start at one tab stop behind its widest label", () => {
     const { plan, note } = build(manifest, "keepSource", { profile: measured });
     // The widest label has 17 characters of 11 pt text behind the style's
-    // indent; a second tab one line typed ends a point further.
-    const stops = [851 + 2057 + 170, 851 + 2057 + 170 + 20];
+    // indent. Every line's last tab ends there, so the values start at one
+    // position; the line typed with two tabs has a stop a point in front
+    // of it for its first.
+    const shared = 851 + 2057 + 170;
     for (const start of ["se sídlem", "IČO", "bankovní"]) {
-      expect(itemOf(plan, manifest, start)).toMatchObject({ tabStops: stops });
+      expect(itemOf(plan, manifest, start)?.tabStops?.at(-1)).toBe(shared);
     }
+    expect(itemOf(plan, manifest, "se sídlem")?.tabStops).toEqual([shared]);
+    expect(itemOf(plan, manifest, "IČO")?.tabStops).toEqual([
+      shared - 20,
+      shared,
+    ]);
+    // A source that tabbed its values into place over default stops types
+    // more tabs on a short label: each line still ends its last one there.
+    const tabbed = manifestOf([
+      "SMLOUVA",
+      "Univerzita Příkladná",
+      "se sídlem:\t\t\t\tOvocný trh 1, Praha 1",
+      "IČO:\t\t\t\t\t00000001",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    const lines = build(tabbed, "keepSource", { profile: measured }).plan;
+    const seat = itemOf(lines, tabbed, "se sídlem")?.tabStops ?? [];
+    const number = itemOf(lines, tabbed, "IČO")?.tabStops ?? [];
+    expect([seat.length, number.length]).toEqual([4, 5]);
+    expect(seat.at(-1)).toBe(number.at(-1));
     // A line without a label and a tab has nothing to align.
     expect(itemOf(plan, manifest, "(dále jen")).not.toHaveProperty("tabStops");
     expect(itemOf(plan, manifest, "Univerzita")).not.toHaveProperty("tabStops");
@@ -2286,6 +2328,38 @@ describe("buildTemplatePlan, the lines of the parties", () => {
     for (const cell of nested) {
       expect(cell.styleId).toBe(PROFILE.roles.body?.styleId);
     }
+    // Where the source sets such a line at the right of its cell, it stays
+    // there, read as a party's line or not.
+    const amounts = {
+      ...table,
+      blocks: table.blocks.map((block) =>
+        block.text === "00000001" ? { ...block, alignment: "right" } : block,
+      ),
+    };
+    const aligned = build({
+      ...amounts,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...amounts.blocks,
+        ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
+          (block, position) => ({ ...block, id: `after${String(position)}` }),
+        ),
+      ],
+    });
+    const number = sourceItems(aligned.plan)
+      .flatMap((item) => item.nested ?? [])
+      .find(
+        ({ blockId }) =>
+          blockId ===
+          amounts.blocks.find(({ text }) => text === "00000001")?.id,
+      );
+    expect(number).toMatchObject({
+      styleId: PROFILE.roles.body?.styleId,
+      alignment: "right",
+    });
   });
 
   test("a template whose style indent is not known leaves the lines as they are", () => {

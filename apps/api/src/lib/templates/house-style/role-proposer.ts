@@ -312,14 +312,33 @@ const findZones = (
     entries.find(({ level, listed }) => level === "annex" && !listed)
       ?.position ?? Number.POSITIVE_INFINITY;
   const isText = (block: DocxBlock) => block.text.trim() !== "";
+  // A letter or a memo has no provisions to end its front matter at, and
+  // only a line shaped as a title is read as one there: a line that is
+  // merely centred (a marking, a date) must not take the title's place.
+  const setAsTitle = Number.isFinite(firstProvision)
+    ? isSetAsTitle
+    : isTitleShaped;
   const shaped = firstPosition(
     blocks,
     0,
     firstProvision,
-    (block) => isText(block) && isSetAsTitle(block),
+    (block) => isText(block) && setAsTitle(block),
   );
-  const title = Number.isFinite(shaped)
-    ? shaped
+  // A line that is only centred and stands right above a line shaped as a
+  // title is a marking over the title (`Confidential`), not the title.
+  const below = firstPosition(blocks, shaped + 1, firstProvision, isText);
+  const shapedAt = (position: number): boolean => {
+    const block = blocks[position];
+    return block !== undefined && isTitleShaped(block);
+  };
+  const marking =
+    Number.isFinite(shaped) &&
+    Number.isFinite(below) &&
+    !shapedAt(shaped) &&
+    shapedAt(below);
+  const anchor = marking ? below : shaped;
+  const title = Number.isFinite(anchor)
+    ? anchor
     : firstPosition(blocks, 0, firstProvision, isText);
   const identified = firstPosition(all, title + 1, firstProvision, (block) =>
     PARTY_IDENTITY.test(block.text),
