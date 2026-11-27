@@ -1,3 +1,4 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: [cz-uohs] exports the printed decision-type set for the type census; parsing is unchanged.
 // parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
@@ -9,6 +10,14 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
+import {
+  assemblePdfParagraphs,
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+  pdfNotesOf,
+  pdfRunInlines,
+} from "@stll/case-law-parsers/pdf-bands";
+import type { PdfRun } from "@stll/case-law-parsers/pdf-bands";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_JUDGE_NAME_RE,
@@ -44,14 +53,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  assemblePdfParagraphs,
-  extractPdfBodyAndNotes,
-  PDF_PARAGRAPH_START,
-  pdfNotesOf,
-  pdfRunInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import type { PdfRun } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   absentDecisionTextFields,

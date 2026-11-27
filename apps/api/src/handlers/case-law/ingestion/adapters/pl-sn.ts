@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: [pl-sn] migrated proxy request transport to readPublisher; served response parsing is unchanged.
 // parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -5,6 +6,7 @@
 // parser-output-unchanged: a bot-management challenge fails the request as a publisher refusal; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
 
+import { parsePlSnDecisionPdf } from "@stll/case-law-parsers/pl-sn";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -77,7 +79,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {

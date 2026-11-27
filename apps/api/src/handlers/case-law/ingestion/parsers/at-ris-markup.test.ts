@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { load } from "@stll/html";
-import type { Block, Inline } from "@stll/legal-ast/document-ast";
-
-import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
 import {
   compareTextFidelity,
   isRisElement,
   readRisContent,
   risTextFidelity,
-} from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
+} from "@stll/case-law-parsers/at-ris-markup";
+import { load } from "@stll/html";
+import type { Block, Inline } from "@stll/legal-ast/document-ast";
+
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);

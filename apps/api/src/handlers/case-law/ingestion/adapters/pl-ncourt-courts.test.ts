@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { courtCitationGrammarOf } from "@stll/api-contract/court-citation-directory";
-
-import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
+import { PL_NCOURT_COURT_NAMES } from "@stll/case-law-parsers/pl-ncourt-courts";
 
 /** The common-court tiers the publisher's court ids encode. */
 const COMMON_COURT_RE = /^Sąd (Apelacyjny|Okręgowy|Rejonowy) /u;

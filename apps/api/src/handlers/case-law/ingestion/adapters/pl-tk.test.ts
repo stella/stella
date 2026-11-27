@@ -17,6 +17,7 @@ import {
   test,
 } from "bun:test";
 
+import { parsePlTkPage } from "@stll/case-law-parsers/pl-tk";
 import { load } from "@stll/html";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -43,7 +44,6 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { parsePlTkPage } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {

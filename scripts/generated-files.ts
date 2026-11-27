@@ -3066,7 +3066,7 @@ export const GUARD_A_EXCLUSIONS = [
   },
   { glob: "**/glossary.json", reason: "Hand-written source data" },
   {
-    glob: "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts",
+    glob: "packages/case-law-parsers/src/eu-ecj-formex.ts",
     reason: "Hand-written parser documentation",
   },
   {

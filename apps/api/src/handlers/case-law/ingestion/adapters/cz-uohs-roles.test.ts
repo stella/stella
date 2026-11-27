@@ -8,10 +8,10 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { structureFidelityIn } from "@stll/case-law-parsers/structure-fidelity";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 import { parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
-import { structureFidelityIn } from "@/api/lib/legal-search/parsers/structure-fidelity";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseCzUohsDocumentPdf = guardParser(uncheckedParseCzUohsDocumentPdf);

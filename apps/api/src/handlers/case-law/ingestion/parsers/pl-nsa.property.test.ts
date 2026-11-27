@@ -1,12 +1,11 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
-
 import {
   plNsaParagraphs,
   plNsaStatedSuperscripts,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
+} from "@stll/case-law-parsers/pl-nsa";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 /** Prose lines the dataset carries, each ending and opening differently. */
 const PROSE = [

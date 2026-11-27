@@ -15,6 +15,26 @@
       "types": "./src/at-decision-regions.ts",
       "import": "./src/at-decision-regions.ts"
     },
+    "./at-findok": {
+      "types": "./src/at-findok.ts",
+      "import": "./src/at-findok.ts"
+    },
+    "./at-ris": {
+      "types": "./src/at-ris.ts",
+      "import": "./src/at-ris.ts"
+    },
+    "./at-ris-markup": {
+      "types": "./src/at-ris-markup.ts",
+      "import": "./src/at-ris-markup.ts"
+    },
+    "./br-tjdft": {
+      "types": "./src/br-tjdft.ts",
+      "import": "./src/br-tjdft.ts"
+    },
+    "./br-tst": {
+      "types": "./src/br-tst.ts",
+      "import": "./src/br-tst.ts"
+    },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
       "import": "./src/court-paragraph-numbers.ts"
@@ -27,6 +47,30 @@
       "types": "./src/courtlistener/vocabulary.ts",
       "import": "./src/courtlistener/vocabulary.ts"
     },
+    "./cz-isir": {
+      "types": "./src/cz-isir.ts",
+      "import": "./src/cz-isir.ts"
+    },
+    "./cz-ns": {
+      "types": "./src/cz-ns.ts",
+      "import": "./src/cz-ns.ts"
+    },
+    "./cz-ns-sbirka": {
+      "types": "./src/cz-ns-sbirka.ts",
+      "import": "./src/cz-ns-sbirka.ts"
+    },
+    "./cz-nss": {
+      "types": "./src/cz-nss.ts",
+      "import": "./src/cz-nss.ts"
+    },
+    "./cz-regional": {
+      "types": "./src/cz-regional.ts",
+      "import": "./src/cz-regional.ts"
+    },
+    "./cz-us": {
+      "types": "./src/cz-us.ts",
+      "import": "./src/cz-us.ts"
+    },
     "./document-footnotes": {
       "types": "./src/document-footnotes.ts",
       "import": "./src/document-footnotes.ts"
@@ -35,9 +79,29 @@
       "types": "./src/entity-residue.ts",
       "import": "./src/entity-residue.ts"
     },
+    "./eu-ecj": {
+      "types": "./src/eu-ecj.ts",
+      "import": "./src/eu-ecj.ts"
+    },
+    "./eu-ecj-formex": {
+      "types": "./src/eu-ecj-formex.ts",
+      "import": "./src/eu-ecj-formex.ts"
+    },
+    "./eu-ecj-formex-bibliography": {
+      "types": "./src/eu-ecj-formex-bibliography.ts",
+      "import": "./src/eu-ecj-formex-bibliography.ts"
+    },
+    "./eu-ecj-notice": {
+      "types": "./src/eu-ecj-notice.ts",
+      "import": "./src/eu-ecj-notice.ts"
+    },
     "./html-whitespace": {
       "types": "./src/html-whitespace.ts",
       "import": "./src/html-whitespace.ts"
+    },
+    "./hu-bhgy": {
+      "types": "./src/hu-bhgy.ts",
+      "import": "./src/hu-bhgy.ts"
     },
     "./inline-style": {
       "types": "./src/inline-style.ts",
@@ -58,6 +122,58 @@
     "./parser-logger": {
       "types": "./src/parser-logger.ts",
       "import": "./src/parser-logger.ts"
+    },
+    "./pdf-bands": {
+      "types": "./src/pdf-bands.ts",
+      "import": "./src/pdf-bands.ts"
+    },
+    "./pl-common-court-inlines": {
+      "types": "./src/pl-common-court-inlines.ts",
+      "import": "./src/pl-common-court-inlines.ts"
+    },
+    "./pl-courts": {
+      "types": "./src/pl-courts.ts",
+      "import": "./src/pl-courts.ts"
+    },
+    "./pl-kio-layout": {
+      "types": "./src/pl-kio-layout.ts",
+      "import": "./src/pl-kio-layout.ts"
+    },
+    "./pl-kis": {
+      "types": "./src/pl-kis.ts",
+      "import": "./src/pl-kis.ts"
+    },
+    "./pl-ncourt": {
+      "types": "./src/pl-ncourt.ts",
+      "import": "./src/pl-ncourt.ts"
+    },
+    "./pl-ncourt-courts": {
+      "types": "./src/pl-ncourt-courts.ts",
+      "import": "./src/pl-ncourt-courts.ts"
+    },
+    "./pl-ncourt-lexlink": {
+      "types": "./src/pl-ncourt-lexlink.ts",
+      "import": "./src/pl-ncourt-lexlink.ts"
+    },
+    "./pl-nsa": {
+      "types": "./src/pl-nsa.ts",
+      "import": "./src/pl-nsa.ts"
+    },
+    "./pl-sn": {
+      "types": "./src/pl-sn.ts",
+      "import": "./src/pl-sn.ts"
+    },
+    "./pl-tk": {
+      "types": "./src/pl-tk.ts",
+      "import": "./src/pl-tk.ts"
+    },
+    "./pl-uodo": {
+      "types": "./src/pl-uodo.ts",
+      "import": "./src/pl-uodo.ts"
+    },
+    "./pl-uokik": {
+      "types": "./src/pl-uokik.ts",
+      "import": "./src/pl-uokik.ts"
     },
     "./rtf-control-vocabulary": {
       "types": "./src/rtf-control-vocabulary.ts",
@@ -91,17 +207,37 @@
       "types": "./src/sanitize-url.ts",
       "import": "./src/sanitize-url.ts"
     },
+    "./segment-decision": {
+      "types": "./src/segment-decision.ts",
+      "import": "./src/segment-decision.ts"
+    },
     "./shared-inlines": {
       "types": "./src/shared-inlines.ts",
       "import": "./src/shared-inlines.ts"
+    },
+    "./sk-courts": {
+      "types": "./src/sk-courts.ts",
+      "import": "./src/sk-courts.ts"
+    },
+    "./sk-us": {
+      "types": "./src/sk-us.ts",
+      "import": "./src/sk-us.ts"
     },
     "./strip-html": {
       "types": "./src/strip-html.ts",
       "import": "./src/strip-html.ts"
     },
+    "./structure-fidelity": {
+      "types": "./src/structure-fidelity.ts",
+      "import": "./src/structure-fidelity.ts"
+    },
     "./text-encoding": {
       "types": "./src/text-encoding.ts",
       "import": "./src/text-encoding.ts"
+    },
+    "./uk-fcl": {
+      "types": "./src/uk-fcl.ts",
+      "import": "./src/uk-fcl.ts"
     },
     "./validate-ast": {
       "types": "./src/validate-ast.ts",
@@ -130,8 +266,10 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/mojibake": "workspace:*",
     "@stll/text-normalize": "workspace:*",
+    "@stll/time": "0.4.3",
     "better-result": "catalog:",
     "entities": "^9.0.0",
+    "slimdom": "^4.3.5",
     "valibot": "catalog:"
   },
   "devDependencies": {

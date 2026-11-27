@@ -5,6 +5,12 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
+import {
+  normalizeInlineLayout,
+  readRisContent,
+  RIS_ELEMENTS,
+} from "@stll/case-law-parsers/at-ris-markup";
 import { load } from "@stll/html";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import {
@@ -13,12 +19,6 @@ import {
   propertySeed,
 } from "@stll/property-testing";
 
-import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import {
-  normalizeInlineLayout,
-  readRisContent,
-  RIS_ELEMENTS,
-} from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);

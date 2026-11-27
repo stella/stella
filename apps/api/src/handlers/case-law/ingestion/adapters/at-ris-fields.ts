@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -29,9 +30,9 @@
 import { panic } from "better-result";
 
 import type { DecisionTextFieldKey } from "@stll/api-contract/case-law-text-field";
+import { listRisDocumentContentTypes } from "@stll/case-law-parsers/at-ris";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { listRisDocumentContentTypes } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import type {
   SourceFieldDisposition,
   SourceFieldInventory,

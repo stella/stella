@@ -1,3 +1,4 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: [pl-courts] Bounded publisher body reads preserve successful response text, raw payloads and parsed decisions.
@@ -16,6 +17,7 @@ import * as v from "valibot";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
+import { parsePlCommonCourtDecision } from "@stll/case-law-parsers/pl-courts";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { classifyFailure } from "@stll/errors";
 import {
@@ -59,7 +61,6 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";

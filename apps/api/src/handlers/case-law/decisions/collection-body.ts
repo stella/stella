@@ -6,15 +6,15 @@ import {
   COLLECTION_PUBLICATION_CONTRIBUTION,
   COLLECTION_PUBLICATION_PROJECTION_MAX,
 } from "@stll/api-contract/case-law-body-source";
+import {
+  parseCzNsSbirkaText,
+  readCzNsSbirkaPage,
+} from "@stll/case-law-parsers/cz-ns-sbirka";
+import type { CzNsSbirkaDocumentIdentity } from "@stll/case-law-parsers/cz-ns-sbirka";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { caseLawCollectionBodies, caseLawSources } from "@/api/db/schema";
-import {
-  parseCzNsSbirkaText,
-  readCzNsSbirkaPage,
-} from "@/api/handlers/case-law/ingestion/parsers/cz-ns-sbirka";
-import type { CzNsSbirkaDocumentIdentity } from "@/api/handlers/case-law/ingestion/parsers/cz-ns-sbirka";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";

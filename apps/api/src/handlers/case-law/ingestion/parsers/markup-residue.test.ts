@@ -3,22 +3,22 @@ import { decodeHTMLStrict } from "entities";
 import fc from "fast-check";
 import path from "node:path";
 
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@stll/case-law-parsers/cz-regional";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
 import {
   markupResidueIn,
   markupResidueSweepRules,
 } from "@stll/case-law-parsers/markup-residue";
 import type { MarkupResidueRuleId } from "@stll/case-law-parsers/markup-residue";
-import { assertProperty } from "@stll/property-testing";
-
-import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
-import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import {
   assemblePdfParagraphs,
   pdfParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+} from "@stll/case-law-parsers/pdf-bands";
+import type { PdfLine } from "@stll/case-law-parsers/pdf-bands";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+import { assertProperty } from "@stll/property-testing";
+
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);

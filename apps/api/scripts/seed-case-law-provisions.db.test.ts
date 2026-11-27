@@ -10,6 +10,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import { compareCodeUnit } from "@stll/collation";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import {
@@ -40,7 +41,6 @@ import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
-import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import {
   PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,

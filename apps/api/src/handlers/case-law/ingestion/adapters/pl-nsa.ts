@@ -1,3 +1,4 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -26,6 +27,15 @@ import {
   DECISION_DASH_CLASS_SOURCE,
   polishAdministrativeDocketOf,
 } from "@stll/api-contract/decision-docket-grammar";
+import {
+  parsePlNsaDecision,
+  PL_NSA_TEXT_SECTIONS,
+  plNsaSectionHeading,
+} from "@stll/case-law-parsers/pl-nsa";
+import type {
+  PlNsaSectionTexts,
+  PlNsaTextSection,
+} from "@stll/case-law-parsers/pl-nsa";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -60,15 +70,6 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parsePlNsaDecision,
-  PL_NSA_TEXT_SECTIONS,
-  plNsaSectionHeading,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
-import type {
-  PlNsaSectionTexts,
-  PlNsaTextSection,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {

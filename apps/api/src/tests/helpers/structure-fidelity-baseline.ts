@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { STRUCTURE_FIDELITY_RULES } from "@/api/lib/legal-search/parsers/structure-fidelity";
+import { STRUCTURE_FIDELITY_RULES } from "@stll/case-law-parsers/structure-fidelity";
 
 const STRUCTURE_FIDELITY_FINDING_KINDS = [
   ...Object.values(STRUCTURE_FIDELITY_RULES),

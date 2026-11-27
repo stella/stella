@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@stll/case-law-parsers/cz-regional";
+import type { ParseRegionalInput } from "@stll/case-law-parsers/cz-regional";
 import {
   buildValidationHtml,
   validateAst,
@@ -11,8 +13,6 @@ import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseRegionalDecision as uncheckedParseRegionalDecision } from "./cz-regional";
-import type { ParseRegionalInput } from "./cz-regional";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,

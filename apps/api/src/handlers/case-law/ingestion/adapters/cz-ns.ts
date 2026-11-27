@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: [cz-ns] replay reads identity from the stored listing row where the envelope keeps one; every row that replayed before builds the same decision.
@@ -10,6 +11,7 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
+import { parseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
 import { classifyFailure } from "@stll/errors";
 import { normalizeCzechJudgeName } from "@stll/legal-ast/czech-document-roles";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -42,7 +44,6 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {

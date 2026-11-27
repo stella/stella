@@ -2,14 +2,13 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
-
-import { readPlNcourtContent } from "./pl-ncourt";
+import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
 import {
   judgeLexLink,
   LEXLINK_REJECTION,
   type LexLinkVerdict,
-} from "./pl-ncourt-lexlink";
+} from "@stll/case-law-parsers/pl-ncourt-lexlink";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 const KPC_TITLE =
   "Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego";

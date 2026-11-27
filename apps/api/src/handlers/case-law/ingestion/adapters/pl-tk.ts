@@ -1,9 +1,24 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result } from "better-result";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
 import { inlineStyleIsItalic } from "@stll/case-law-parsers/inline-style";
+import {
+  listPlTkPageFields,
+  parsePlTkPage,
+  parsePlTkText,
+  parsePolishDate,
+  PL_TK_ORIGIN,
+  readPlTkCasePage,
+  readPlTkRuling,
+} from "@stll/case-law-parsers/pl-tk";
+import type {
+  ParsedPlTkPage,
+  PlTkCaseRecord,
+  PlTkRuling,
+} from "@stll/case-law-parsers/pl-tk";
 import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
@@ -91,20 +106,6 @@ import {
   rethrowCycleStop,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  listPlTkPageFields,
-  parsePlTkPage,
-  parsePlTkText,
-  parsePolishDate,
-  PL_TK_ORIGIN,
-  readPlTkCasePage,
-  readPlTkRuling,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
-import type {
-  ParsedPlTkPage,
-  PlTkCaseRecord,
-  PlTkRuling,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   absentDecisionTextFields,

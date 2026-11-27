@@ -1,3 +1,4 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
@@ -9,6 +10,8 @@
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { parsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+import { readPlKioLayout } from "@stll/case-law-parsers/pl-kio-layout";
 import {
   legacyQuarantineHtmlText,
   visibleHtmlText,
@@ -42,8 +45,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,

@@ -2,6 +2,10 @@ import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import {
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+} from "@stll/case-law-parsers/pdf-bands";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -22,10 +26,6 @@ import {
   parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
-import {
-  extractPdfBodyAndNotes,
-  PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";

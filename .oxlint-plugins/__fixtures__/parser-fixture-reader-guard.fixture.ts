@@ -1,4 +1,4 @@
-import { parseSkUsDocumentXhtml as rawParse } from "../../apps/api/src/handlers/case-law/ingestion/parsers/sk-us";
+import { parseSkUsDocumentXhtml as rawParse } from "@stll/case-law-parsers/sk-us";
 import { guardParser } from "../../apps/api/src/tests/helpers/parser-reader-guard";
 
 // expect-clean: parser-fixture-reader-guard/parser-fixture-reader-guard

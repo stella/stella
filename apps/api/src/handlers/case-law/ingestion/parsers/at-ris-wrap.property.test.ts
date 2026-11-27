@@ -8,16 +8,15 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  joinWrappedLines,
+  MIN_WRAPPED_LINE_CHARS,
+} from "@stll/case-law-parsers/at-ris";
+import type { RisItem } from "@stll/case-law-parsers/at-ris-markup";
+import {
   assertProperty,
   propertyConfig,
   propertySeed,
 } from "@stll/property-testing";
-
-import {
-  joinWrappedLines,
-  MIN_WRAPPED_LINE_CHARS,
-} from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import type { RisItem } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 
 const config = (numRuns: number) =>
   propertyConfig({ numRuns, seed: propertySeed() });

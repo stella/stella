@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
-import { load } from "@stll/html";
-import type { Block } from "@stll/legal-ast/document-ast";
-
 import {
   blocksToPlainText,
   extractNsMetadata,
   extractRawChunks,
   parseNsDecisionHtml as uncheckedParseNsDecisionHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
-import type { ParseNsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
+} from "@stll/case-law-parsers/cz-ns";
+import type { ParseNsDecisionInput } from "@stll/case-law-parsers/cz-ns";
+import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
+import { load } from "@stll/html";
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);

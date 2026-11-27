@@ -10,9 +10,9 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@stll/case-law-parsers/eu-ecj";
 import { load } from "@stll/html";
 
-import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);

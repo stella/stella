@@ -10,6 +10,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml,
+  plUodoSourceTexts,
+} from "@stll/case-law-parsers/pl-uodo";
+import type { ParsePlUodoDecisionOutput } from "@stll/case-law-parsers/pl-uodo";
 import { load } from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 import type {
@@ -18,11 +23,6 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 
-import {
-  parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml,
-  plUodoSourceTexts,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
-import type { ParsePlUodoDecisionOutput } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { toPlainCorpusText } from "@/api/mcp/tool-utils";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 

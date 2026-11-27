@@ -1,3 +1,4 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: RIS publisher reads use typed ReadOutcome wrappers; served responses produce identical parsed decisions and metadata.
@@ -9,6 +10,8 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 
+import { parseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
+import type { RisDocumentSections } from "@stll/case-law-parsers/at-ris";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { AST_CONTENT_LOST } from "@stll/case-law-parsers/validate-ast";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
@@ -38,8 +41,6 @@ import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/i
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import type { RisDocumentSections } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,

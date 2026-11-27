@@ -1,3 +1,4 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
@@ -11,6 +12,7 @@
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
+import { parseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
 import {
   legacyQuarantineHtmlText,
   ownTableRows,
@@ -57,7 +59,6 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechConstitutionalIdentifiersFromParallelCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";

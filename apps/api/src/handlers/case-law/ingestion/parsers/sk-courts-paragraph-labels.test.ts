@@ -7,9 +7,9 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
-import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);

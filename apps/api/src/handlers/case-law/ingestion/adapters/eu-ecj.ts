@@ -1,3 +1,4 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
@@ -18,6 +19,27 @@ import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   type CaseLawWorkExpression,
 } from "@stll/api-contract/case-law-source-languages";
+import type { ParseEcjDecisionInput } from "@stll/case-law-parsers/eu-ecj";
+import {
+  ecjConverterVersion,
+  ecjDocumentHtml,
+  ecjKeywordSpacingNeedsVerbatim,
+  ecjStatesKeywordChain,
+  parseEcjDecisionHtml,
+} from "@stll/case-law-parsers/eu-ecj";
+import {
+  type EcjFormexBibliography,
+  listEcjFormexFields,
+  parseFormexBibliography,
+} from "@stll/case-law-parsers/eu-ecj-formex-bibliography";
+import {
+  listEcjNoticeFields,
+  parseEcjNotice,
+} from "@stll/case-law-parsers/eu-ecj-notice";
+import type {
+  EcjNoticeFacts,
+  EcjNoticeManifestation,
+} from "@stll/case-law-parsers/eu-ecj-notice";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 // parser-output-unchanged: [eu-ecj] the Formex archive reader keeps the same file entries in the same order.
 import { ZipArchive } from "@stll/docx-core/zip";
@@ -60,32 +82,11 @@ import {
   INGESTION_USER_AGENT,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
-import {
-  ecjConverterVersion,
-  ecjDocumentHtml,
-  ecjKeywordSpacingNeedsVerbatim,
-  ecjStatesKeywordChain,
-  parseEcjDecisionHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
-import {
-  type EcjFormexBibliography,
-  listEcjFormexFields,
-  parseFormexBibliography,
-} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
 import {
   ecjFormexDocuments,
   encodeEcjFormexArchive,
   FORMEX_ARCHIVE_PREFIX,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts";
-import {
-  listEcjNoticeFields,
-  parseEcjNotice,
-} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
-import type {
-  EcjNoticeFacts,
-  EcjNoticeManifestation,
-} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import { DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY } from "@/api/lib/case-law/decision-language";

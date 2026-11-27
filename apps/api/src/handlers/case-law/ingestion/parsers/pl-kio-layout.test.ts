@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+import { readPlKioLayout } from "@stll/case-law-parsers/pl-kio-layout";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 
-import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);

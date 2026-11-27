@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
@@ -12,7 +13,6 @@ import {
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
-import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "./sk-us";
 
 const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 

@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { parseFormexBibliography } from "@stll/case-law-parsers/eu-ecj-formex-bibliography";
+import { parseEcjNotice } from "@stll/case-law-parsers/eu-ecj-notice";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
@@ -34,8 +36,6 @@ import {
   createEuCompletionStore,
   EU_COMPLETION_STORE_LIMITS,
 } from "@/api/handlers/case-law/ingestion/eu-completion-store";
-import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
-import { parseEcjNotice } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";

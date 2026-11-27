@@ -10,14 +10,13 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
-
-import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "./cz-ns";
-import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "./cz-nss";
-import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "./cz-us";
 
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
