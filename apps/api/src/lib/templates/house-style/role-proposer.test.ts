@@ -150,6 +150,35 @@ describe("proposeBlockRoles", () => {
     expect(roles["Bez čísla a bez zarovnání"]).toBe("continuation");
   });
 
+  test("a heading right above the sentence that opens the preamble heads it; a centred heading further down the outline stays text", () => {
+    const manifest = manifestOf([
+      "PURCHASE AGREEMENT",
+      "Alfa Ltd, with its registered office at 1 Long Street, London, company number 00000001",
+      "and",
+      "Beta Ltd, with its registered office at 2 Short Street, Leeds, company number 00000002",
+      "Purpose",
+      "",
+      "The parties have agreed as follows.",
+      "Article 1\nSubject",
+      "1.1\tThe seller delivers the goods.",
+      "Delivery terms",
+      "The goods are delivered to the buyer's seat.",
+    ]);
+    for (const block of manifest.blocks) {
+      if (block.text === "Purpose" || block.text === "Delivery terms") {
+        block.alignment = "center";
+      }
+      if (block.text === "Delivery terms") {
+        block.outlineLevel = 1;
+      }
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["Purpose"]).toBe("heading");
+    expect(roles["and"]).toBe("body");
+    expect(roles["Beta Ltd, with its registere"]).toBe("party");
+    expect(roles["Delivery terms"]).not.toBe("heading");
+  });
+
   test("the line that announces the parties and the word between them are no party's lines", () => {
     const roles = rolesOf(
       manifestOf([

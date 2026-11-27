@@ -1527,6 +1527,11 @@ const headsNext = (
       ? headsText(placed, line)
       : role === "annexHeading" || role === "title";
   const text = block.text.slice(entry?.manualLength ?? 0).trim();
+  // A paragraph read as a heading without a number heads what follows it
+  // whatever its length or first letter: the reading already judged those.
+  if (role === "heading" && text !== "") {
+    return true;
+  }
   if (
     heading ||
     text === "" ||

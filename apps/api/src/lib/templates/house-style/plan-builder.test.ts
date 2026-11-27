@@ -2083,6 +2083,23 @@ describe("buildTemplatePlan, what a paragraph states for itself", () => {
     expect(note.items).toContainEqual({ kind: "linesKeptWithNext", blocks: 1 });
   });
 
+  test("a long heading without a number stays with what it heads, whatever its first letter", () => {
+    const long =
+      "podmínky, za kterých se smluvní strany dohodly na dalším postupu při plnění celého díla";
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "1.1\tZhotovitel provede dílo.",
+      { text: long, styleName: "heading 1", outlineLevel: 0 },
+      "Strany postupují podle harmonogramu.",
+    ]);
+    expect(long.length).toBeGreaterThan(80);
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "podmínky, za kterých")).toMatchObject({
+      keepNext: true,
+    });
+  });
+
   test("a heading of the source placed as text stays with what it heads", () => {
     const manifest = manifestOf([
       "SMLOUVA",
