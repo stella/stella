@@ -673,7 +673,12 @@ export const detectReferences = (
       return [];
     }
     // A heading's own typed label is not a reference to itself.
-    const from = index.entryByBlockId.get(block.id)?.manualLength ?? 0;
+    // A heading's own label is no citation, also where the heading has no
+    // entry because it counts the articles of a part of its own.
+    const from =
+      index.entryByBlockId.get(block.id)?.manualLength ??
+      index.ownLabelLengths.get(block.id) ??
+      0;
     const context = index.contextByBlockId.get(block.id) ?? EMPTY_CONTEXT;
     return readChains(block.text, from).flatMap((chain) => {
       const reference = toReference({ block, lookup, context }, chain);
