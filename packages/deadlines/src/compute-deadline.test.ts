@@ -80,6 +80,22 @@ for (const jurisdiction of ["CZ", "SK"] as const) {
   );
 }
 
+test("CZ skips Good Friday, the weekend and Easter Monday in 2027", () => {
+  const value = computeDeadline({
+    jurisdiction: "CZ",
+    trigger: date("2027-03-25"),
+    period: { amount: 1, unit: DEADLINE_UNIT.DAY },
+  }).unwrap();
+  expect(value.nominalEnd.toString()).toBe("2027-03-26");
+  expect(value.end.toString()).toBe("2027-03-30");
+  expect(value.shifts.map((shift) => shift.reason.type)).toEqual([
+    "public-holiday",
+    "weekend",
+    "weekend",
+    "public-holiday",
+  ]);
+});
+
 test("public holidays take precedence over weekends in the explanation", () => {
   const value = computeDeadline({
     jurisdiction: "SK",
@@ -116,7 +132,7 @@ test.each([
 test.each([
   { jurisdiction: "CZ", trigger: "2015-12-31", amount: 1 },
   { jurisdiction: "SK", trigger: "2018-12-31", amount: 1 },
-  { jurisdiction: "CZ", trigger: "2026-12-31", amount: 1 },
+  { jurisdiction: "CZ", trigger: "2027-12-31", amount: 1 },
   { jurisdiction: "SK", trigger: "2026-12-31", amount: 1 },
 ] as const)(
   "$jurisdiction refuses unsupported trigger or nominal dates from $trigger",

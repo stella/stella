@@ -8,7 +8,7 @@ import type { DeadlineJurisdiction } from "./rules";
 // These are verification bounds, not holiday overrides. Extend them only after
 // checking the pinned provider against the official legislation; see README.
 export const HOLIDAY_COVERAGE = {
-  CZ: { firstYear: 2016, lastYear: 2026 },
+  CZ: { firstYear: 2016, lastYear: 2027 },
   SK: { firstYear: 2019, lastYear: 2026 },
 } as const satisfies Record<
   DeadlineJurisdiction,

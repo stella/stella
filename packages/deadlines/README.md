@@ -106,12 +106,13 @@ the supported jurisdiction-years. There are no local holiday-data overrides.
 
 | Jurisdiction | Verified inclusive calendar years |
 | ------------ | --------------------------------- |
-| CZ           | 2016–2026                         |
+| CZ           | 2016–2027                         |
 | SK           | 2019–2026                         |
 
 Both the trigger and all dates consulted during adjustment must be covered.
-A shift into 2027 returns `unsupported_date`, even when the trigger and nominal
-end are in 2026. Coverage is an explicit verification boundary, not a claim
+A shift past a jurisdiction's last covered year returns `unsupported_date`,
+even when the trigger and nominal end are inside it (for example, an SK shift
+from 2026 into 2027). Coverage is an explicit verification boundary, not a claim
 that later laws or holiday rules stop existing.
 
 Known limitations in the pinned provider prevent broader coverage:
