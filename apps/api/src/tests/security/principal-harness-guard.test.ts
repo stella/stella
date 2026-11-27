@@ -72,13 +72,22 @@ const findPrincipalHarnessViolations = (
       membershipBuilderLines.push(locate(node.start).line);
     }
 
-    if (
-      node.type === "Property" &&
-      !node.computed &&
-      node.key.type === "Identifier" &&
-      node.key.name === "accessibleWorkspaceIds"
-    ) {
-      workspaceListMarkers.push(locate(node.start).line);
+    if (node.type === "ObjectExpression") {
+      const propNames = new Set(
+        node.properties.flatMap((prop) =>
+          prop.type === "Property" &&
+          !prop.computed &&
+          prop.key.type === "Identifier"
+            ? [prop.key.name]
+            : [],
+        ),
+      );
+      if (
+        propNames.has("accessibleWorkspaceIds") &&
+        (propNames.has("scopedDb") || propNames.has("safeDb"))
+      ) {
+        workspaceListMarkers.push(locate(node.start).line);
+      }
     }
 
     if (
