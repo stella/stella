@@ -221,58 +221,6 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
   });
 });
 
-describe("buildTemplatePlan, lines the source brings back to the margin", () => {
-  const HANGING = { left: 851, firstLine: -851 };
-  const UNDER = { left: 851, firstLine: 0 };
-  /** A contract whose unnumbered lines stand as `indents` says, by
-   *  position; a line without an entry has no indent. */
-  const contract = (
-    indents: Readonly<Record<number, { left: number; firstLine: number }>>,
-  ): DocxBlockManifest => {
-    const manifest = manifestOf([
-      "SMLOUVA",
-      "Článek I.\nPředmět",
-      numbered("1.1", "Dodavatel dodá zboží.", 10),
-      "Zboží je popsáno v nabídce.",
-      numbered("1.2", "Objednatel zaplatí cenu.", 10),
-      "Cena je konečná.",
-      "Tolik k předmětu této smlouvy.",
-      "Dodavatel dále zajistí:",
-      numbered("•", "dopravu,", 2),
-      numbered("•", "pojištění.", 2),
-      "Článek II.\nZávěr",
-      numbered("2.1", "Smlouva nabývá účinnosti podpisem.", 10),
-    ]);
-    return {
-      ...manifest,
-      blocks: manifest.blocks.map((block, position) => {
-        const indent = indents[position];
-        return indent === undefined ? block : { ...block, indent };
-      }),
-    };
-  };
-  const styleOf = (manifest: DocxBlockManifest, start: string) =>
-    itemOf(build(manifest).plan, manifest, start)?.styleId;
-
-  test("a line at the margin behind an indented clause is plain text where the document sets such lines under their clause", () => {
-    const manifest = contract({ 2: HANGING, 3: UNDER, 4: HANGING, 5: UNDER });
-    // Under its clause: the style for text under a clause.
-    expect(styleOf(manifest, "Cena je konečná.")).toBe("Indent");
-    // Back at the margin: no part of the clause above it.
-    expect(styleOf(manifest, "Tolik k předmětu")).toBe("Body");
-    // The line that opens a list of bullets stays where they hang from.
-    expect(styleOf(manifest, "Dodavatel dále zajistí:")).toBe("Indent");
-  });
-
-  test("a document that sets every such line at the margin keeps them under their clauses", () => {
-    const flat = contract({ 2: HANGING, 4: HANGING });
-    expect(styleOf(flat, "Zboží je popsáno")).toBe("Indent");
-    expect(styleOf(flat, "Tolik k předmětu")).toBe("Indent");
-    // And one that states no indents says nothing about its lines.
-    expect(styleOf(contract({}), "Tolik k předmětu")).toBe("Indent");
-  });
-});
-
 describe("buildTemplatePlan, a number typed with a blank between its parts", () => {
   test("the paragraph joins the list, which prints the number closed up", () => {
     const spaced = manifestOf([
@@ -2786,5 +2734,57 @@ describe("buildTemplatePlan, an article heading the index does not count", () =>
         ),
       ).toEqual([]);
     }
+  });
+});
+
+describe("buildTemplatePlan, lines the source brings back to the margin", () => {
+  const HANGING = { left: 851, firstLine: -851 };
+  const UNDER = { left: 851, firstLine: 0 };
+  /** A contract whose unnumbered lines stand as `indents` says, by
+   *  position; a line without an entry has no indent. */
+  const contract = (
+    indents: Readonly<Record<number, { left: number; firstLine: number }>>,
+  ): DocxBlockManifest => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPředmět",
+      numbered("1.1", "Dodavatel dodá zboží.", 10),
+      "Zboží je popsáno v nabídce.",
+      numbered("1.2", "Objednatel zaplatí cenu.", 10),
+      "Cena je konečná.",
+      "Tolik k předmětu této smlouvy.",
+      "Dodavatel dále zajistí:",
+      numbered("•", "dopravu,", 2),
+      numbered("•", "pojištění.", 2),
+      "Článek II.\nZávěr",
+      numbered("2.1", "Smlouva nabývá účinnosti podpisem.", 10),
+    ]);
+    return {
+      ...manifest,
+      blocks: manifest.blocks.map((block, position) => {
+        const indent = indents[position];
+        return indent === undefined ? block : { ...block, indent };
+      }),
+    };
+  };
+  const styleOf = (manifest: DocxBlockManifest, start: string) =>
+    itemOf(build(manifest).plan, manifest, start)?.styleId;
+
+  test("a line at the margin behind an indented clause is plain text where the document sets such lines under their clause", () => {
+    const manifest = contract({ 2: HANGING, 3: UNDER, 4: HANGING, 5: UNDER });
+    // Under its clause: the style for text under a clause.
+    expect(styleOf(manifest, "Cena je konečná.")).toBe("Indent");
+    // Back at the margin: no part of the clause above it.
+    expect(styleOf(manifest, "Tolik k předmětu")).toBe("Body");
+    // The line that opens a list of bullets stays where they hang from.
+    expect(styleOf(manifest, "Dodavatel dále zajistí:")).toBe("Indent");
+  });
+
+  test("a document that sets every such line at the margin keeps them under their clauses", () => {
+    const flat = contract({ 2: HANGING, 4: HANGING });
+    expect(styleOf(flat, "Zboží je popsáno")).toBe("Indent");
+    expect(styleOf(flat, "Tolik k předmětu")).toBe("Indent");
+    // And one that states no indents says nothing about its lines.
+    expect(styleOf(contract({}), "Tolik k předmětu")).toBe("Indent");
   });
 });
