@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output

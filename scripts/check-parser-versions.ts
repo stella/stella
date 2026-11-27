@@ -23,6 +23,11 @@ export const PARSER_OUTPUT_BOUNDARIES = [
     reason: "Structured logging is an output-independent side effect.",
   },
   {
+    path: "packages/case-law-parsers/src/parser-logger.ts",
+    reason:
+      "Structured parser logging sink is an output-independent side effect.",
+  },
+  {
     path: "apps/api/src/lib/version.ts",
     reason:
       "The application version configures request identification and telemetry.",

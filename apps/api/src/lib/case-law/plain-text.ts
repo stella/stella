@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: adds the address-as-label rejection reason; text conversion is unchanged.
 // parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 // parser-output-unchanged: typed URL values pass through; plain strings are projected as before

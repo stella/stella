@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: RIS publisher reads use typed ReadOutcome wrappers; served responses produce identical parsed decisions and metadata.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output

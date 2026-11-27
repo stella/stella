@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 import {
   MetadataUrlDefect,
   toMetadataUrl,
