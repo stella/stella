@@ -67,9 +67,14 @@ export const AntigravityCard = ({
       }
       title={t("antigravity.title")}
     >
-      <Button loading={checking} onClick={onCheckAgain} variant="outline">
-        {t("antigravity.checkAgain")}
-      </Button>
+      {/* Signed in needs nothing from the member, like the other agents'
+          rows; stella cannot sign Antigravity out, so no button is offered.
+          Otherwise "Check again" reads the CLI after a terminal sign-in. */}
+      {status.state === "signed_in" && !checking ? null : (
+        <Button loading={checking} onClick={onCheckAgain} variant="outline">
+          {t("antigravity.checkAgain")}
+        </Button>
+      )}
     </SettingsRow>
   );
 };

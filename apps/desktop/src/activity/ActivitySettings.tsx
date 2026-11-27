@@ -6,7 +6,6 @@ import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -43,6 +42,7 @@ import {
   SettingsSection,
 } from "@stll/ui/settings";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Switch } from "@stll/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
 
 import type { DesktopMessages } from "../i18n/index";
@@ -304,7 +304,7 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
         interaction="label"
         title={t("detectCalls")}
       >
-        <Checkbox
+        <Switch
           aria-describedby={detectCallsIds.description}
           aria-labelledby={detectCallsIds.label}
           id={detectCallsIds.control}
@@ -320,7 +320,7 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
         interaction="label"
         title={t("calendarEvents")}
       >
-        <Checkbox
+        <Switch
           aria-describedby={calendarIds.description}
           aria-labelledby={calendarIds.label}
           id={calendarIds.control}
@@ -356,7 +356,7 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
           interaction="label"
           title={t("captureDetails")}
         >
-          <Checkbox
+          <Switch
             aria-describedby={captureDetailsIds.description}
             aria-labelledby={captureDetailsIds.label}
             id={captureDetailsIds.control}

@@ -19,6 +19,7 @@ import { INLINE_FIELD_CLASS_NAME } from "./input-control";
  */
 type TextareaStyle = React.CSSProperties & {
   "--textarea-max-rows"?: number;
+  "--textarea-min-rows"?: number;
 };
 
 type TextareaProps = React.ComponentProps<"textarea"> & {
@@ -68,6 +69,7 @@ const Textarea = ({
   inline = false,
   fieldSizing = "content",
   maxRows,
+  rows,
   showCount = false,
   dir,
   onChange,
@@ -132,10 +134,7 @@ const Textarea = ({
       form.removeEventListener("reset", handleReset);
     };
   }, [control, countsUncontrolled, trackValue]);
-  const textareaStyle: TextareaStyle | undefined =
-    maxRows === undefined
-      ? style
-      : { ...style, "--textarea-max-rows": maxRows };
+  const rowLimits = textareaRowLimits({ fieldSizing, maxRows, rows, style });
   return (
     <span
       className={
@@ -174,18 +173,14 @@ const Textarea = ({
               "pt-(--textarea-pt) pb-(--textarea-pb)",
               // The count sits in the bottom padding.
               counted && "[--textarea-pb:--spacing(6)]",
-              // One line is `1lh`; the field's own block padding is added on
-              // top so the last allowed line is not cut. The floor height
-              // gives way, as `min-height` would otherwise win over a
-              // smaller cap.
-              maxRows !== undefined &&
-                "max-h-[calc(var(--textarea-max-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))] min-h-0 max-sm:min-h-0",
+              rowLimits.className,
             )}
             data-slot="textarea"
+            rows={rows}
             {...props}
             onChange={handleChange}
             dir={contentDir.dir}
-            style={textareaStyle}
+            style={rowLimits.style}
           />
         }
       />
@@ -218,6 +213,51 @@ const TEXTAREA_FLOOR_CLASS_NAMES = {
   [CONTROL_SIZE.default]: "min-h-17.5 max-sm:min-h-20.5",
   [CONTROL_SIZE.lg]: "min-h-18.5 max-sm:min-h-21.5",
 } as const satisfies Record<ControlSize, string>;
+
+/**
+ * The height limits `maxRows` sets, as classes and the variables they read.
+ * One line is `1lh`; the field's own block padding is added on top so the
+ * last allowed line is not cut. The size's floor height gives way, as
+ * `min-height` would otherwise win over a smaller cap. A field that grows
+ * with its content ignores `rows`, so an empty one would be a single line
+ * and a longer placeholder would spill out of it: with a cap, the floor is
+ * `rows` lines instead, never more than the cap.
+ */
+function textareaRowLimits({
+  fieldSizing,
+  maxRows,
+  rows,
+  style,
+}: {
+  fieldSizing: NonNullable<TextareaProps["fieldSizing"]>;
+  maxRows: number | undefined;
+  rows: number | undefined;
+  style: React.CSSProperties | undefined;
+}): { className: string | undefined; style: TextareaStyle | undefined } {
+  if (maxRows === undefined) {
+    return { className: undefined, style };
+  }
+  const minRows =
+    rows === undefined || fieldSizing !== "content"
+      ? undefined
+      : Math.min(rows, maxRows);
+  const cap =
+    "max-h-[calc(var(--textarea-max-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))]";
+  if (minRows === undefined) {
+    return {
+      className: `${cap} min-h-0 max-sm:min-h-0`,
+      style: { ...style, "--textarea-max-rows": maxRows },
+    };
+  }
+  return {
+    className: `${cap} min-h-[calc(var(--textarea-min-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))] max-sm:min-h-[calc(var(--textarea-min-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))]`,
+    style: {
+      ...style,
+      "--textarea-max-rows": maxRows,
+      "--textarea-min-rows": minRows,
+    },
+  };
+}
 
 function textLength(value: TextareaProps["value"]): number {
   if (value === undefined) {

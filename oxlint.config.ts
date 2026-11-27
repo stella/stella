@@ -8422,7 +8422,9 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/web/src/routes/_protected.settings/**/*.{ts,tsx}"],
+      // Every surface that renders a SettingsRow: web, desktop and the
+      // shared packages, so an on/off setting reads the same everywhere.
+      files: ["apps/**/*.tsx", "packages/**/*.tsx"],
       excludeFiles: [
         "**/*.{test,spec}.{ts,tsx}",
         "**/__tests__/**",

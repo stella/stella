@@ -487,7 +487,7 @@ export const openSettingsWindow = async (
     ).toBeVisible();
   }
   if (tab === "notifications") {
-    await expect(page.getByRole("checkbox").first()).toBeEnabled();
+    await expect(page.getByRole("switch").first()).toBeEnabled();
   }
   if (tab === "dictation") {
     const pane = page.locator("[data-slot=settings-page]");

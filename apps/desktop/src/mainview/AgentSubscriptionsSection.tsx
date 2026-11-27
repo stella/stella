@@ -33,6 +33,7 @@ import {
 } from "./harness-install-status";
 import type { HarnessStatus, ManagedHarness } from "./harness-install-status";
 import { HarnessInstallLine } from "./HarnessInstallLine";
+import { useNativeStatusMemory } from "./native-status-memory";
 
 /** The coding agents' group, or one agent's card. */
 export type AgentSettingsFocus = "agents" | ManagedHarness;
@@ -57,16 +58,18 @@ export const AgentSubscriptionsSection = ({
   onFocusShown: () => void;
   renderGroup: (content: React.JSX.Element) => React.JSX.Element;
 }) => {
-  const [chatGpt, refreshChatGpt] = useNativeStatus<ChatGptStatus>({
-    read: readChatGptStatus,
-    event: CHATGPT_AUTH_CHANGED_EVENT,
-    isStatus: isChatGptStatus,
-  });
-  const [claudeCode, refreshClaudeCode] = useNativeStatus<ClaudeCodeStatus>({
-    read: readClaudeCodeStatus,
-    event: CLAUDE_CODE_AUTH_CHANGED_EVENT,
-    isStatus: isClaudeCodeStatus,
-  });
+  const [chatGpt, refreshChatGpt, chatGptFresh] =
+    useNativeStatus<ChatGptStatus>({
+      read: readChatGptStatus,
+      event: CHATGPT_AUTH_CHANGED_EVENT,
+      isStatus: isChatGptStatus,
+    });
+  const [claudeCode, refreshClaudeCode, claudeCodeFresh] =
+    useNativeStatus<ClaudeCodeStatus>({
+      read: readClaudeCodeStatus,
+      event: CLAUDE_CODE_AUTH_CHANGED_EVENT,
+      isStatus: isClaudeCodeStatus,
+    });
   const [harnesses, refreshHarnesses] = useNativeStatus<
     readonly HarnessStatus[]
   >({
@@ -222,10 +225,14 @@ export const AgentSubscriptionsSection = ({
       startSignInFor(shownFocus);
       onFocusShown();
     },
+    // A link acts once this mount has read the agent's status, never on a
+    // remembered one: it may start a sign-in.
     shown: {
-      agents: chatGpt !== null || claudeCode !== null,
-      codex: chatGpt !== null,
-      "claude-code": claudeCode !== null,
+      agents:
+        (chatGptFresh && chatGpt !== null) ||
+        (claudeCodeFresh && claudeCode !== null),
+      codex: chatGptFresh && chatGpt !== null,
+      "claude-code": claudeCodeFresh && claudeCode !== null,
     },
   });
 
@@ -435,7 +442,10 @@ const readHarnessStatus = async () => invoke<unknown>("harness_get_status");
 /**
  * A native status, read when its change event is live, again on every
  * change and whenever `refresh` is called. `null` while unread, refused
- * (the local agents feature is off) or malformed.
+ * (the local agents feature is off) or malformed. Under a
+ * `NativeStatusMemoryProvider` it starts from the last answer the provider
+ * remembers, until this mount's first read answers; `fresh` says that read
+ * has answered, so an action never starts from a remembered status.
  */
 export const useNativeStatus = <T,>({
   read,
@@ -446,11 +456,21 @@ export const useNativeStatus = <T,>({
   event: string;
   isStatus: (value: unknown) => value is T;
 }) => {
-  const [status, setStatus] = useState<T | null>(null);
+  const memory = useNativeStatusMemory();
+  const [status, setStatusShown] = useState<T | null>(() => {
+    const last = memory?.get(read);
+    return last !== undefined && isStatus(last) ? last : null;
+  });
+  const [fresh, setFresh] = useState(false);
   // The mounted effect's ordered read; a no-op outside it.
   const refreshLive = useRef<() => void>(() => undefined);
   useExternalSyncEffect(() => {
     let disposed = false;
+    const setStatus = (next: T | null) => {
+      memory?.set(read, next);
+      setStatusShown(next);
+      setFresh(true);
+    };
     let latest = 0;
     const refresh = async () => {
       latest += 1;
@@ -483,11 +503,11 @@ export const useNativeStatus = <T,>({
       refreshLive.current = () => undefined;
       stop();
     };
-  }, [read, event, isStatus]);
+  }, [read, event, isStatus, memory]);
   // Reads again in order with the change events, so an older answer never
   // replaces a newer one.
   const refresh = () => {
     refreshLive.current();
   };
-  return [status, refresh] as const;
+  return [status, refresh, fresh] as const;
 };

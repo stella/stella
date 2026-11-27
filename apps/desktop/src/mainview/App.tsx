@@ -8,7 +8,6 @@ import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import {
   Combobox,
   ComboboxEmpty,
@@ -74,6 +73,7 @@ import { DictationSetting } from "./DictationSetting";
 import { KeepAwakeSection } from "./KeepAwakeSection";
 import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
+import { NativeStatusMemoryProvider } from "./native-status-memory";
 import { PermissionsSection } from "./PermissionsSection";
 import { SettingsPageHeader } from "./settings-layout";
 import { settingsView, SIDEBAR_PAGES } from "./settings-pages";
@@ -655,7 +655,7 @@ const NotificationsPane = ({
               key={item.key}
               title={item.label}
             >
-              <Checkbox
+              <Switch
                 aria-describedby={ids.description}
                 aria-labelledby={ids.label}
                 checked={notificationPreferences[item.key]}
@@ -1099,7 +1099,9 @@ const App = () => {
     try {
       const nextState = await invoke<AppSnapshot>(
         "update_notification_preferences",
-        { prefs: nextPreferences },
+        {
+          prefs: nextPreferences,
+        },
       );
       if (revision !== snapshotRevision.current) {
         return;
@@ -1292,46 +1294,49 @@ const App = () => {
   })();
 
   return (
-    <main className="bg-background text-foreground flex h-dvh overflow-hidden">
-      <WindowDragRegion />
-      <SettingsSidebar
-        accountState={accountState}
-        current={shownPage}
-        onSelect={(nextPage) => {
-          setActivePage(nextPage);
-          // Choosing a page by hand is never the link's visit.
-          setAgentSettingsFocus(null);
-        }}
-        pages={pages}
-        topInset={isMacDesktop ? "titleBar" : "none"}
-      />
-      {/* The page scrolls inside a frame kept clear of the window's edges
+    // Status answers outlive a page, so a page shown again starts from them.
+    <NativeStatusMemoryProvider>
+      <main className="bg-background text-foreground flex h-dvh overflow-hidden">
+        <WindowDragRegion />
+        <SettingsSidebar
+          accountState={accountState}
+          current={shownPage}
+          onSelect={(nextPage) => {
+            setActivePage(nextPage);
+            // Choosing a page by hand is never the link's visit.
+            setAgentSettingsFocus(null);
+          }}
+          pages={pages}
+          topInset={isMacDesktop ? "titleBar" : "none"}
+        />
+        {/* The page scrolls inside a frame kept clear of the window's edges
           and of the strip the window is dragged by. */}
-      <div
-        className={cn(
-          "flex min-w-0 flex-1 flex-col pb-4",
-          isMacDesktop ? "pt-9" : "pt-4",
-        )}
-      >
-        <ScrollArea className="min-h-0 flex-1" key={shownPage}>
-          <div
-            className="mx-auto flex max-w-[40rem] flex-col gap-6 px-6 pt-2 pb-4"
-            data-page={shownPage}
-            data-slot="settings-page"
-          >
-            {error ? (
-              <div
-                className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border px-3 py-2 text-sm"
-                role="alert"
-              >
-                {error}
-              </div>
-            ) : null}
-            {page}
-          </div>
-        </ScrollArea>
-      </div>
-    </main>
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 flex-col pb-4",
+            isMacDesktop ? "pt-9" : "pt-4",
+          )}
+        >
+          <ScrollArea className="min-h-0 flex-1" key={shownPage}>
+            <div
+              className="mx-auto flex max-w-[40rem] flex-col gap-6 px-6 pt-2 pb-4"
+              data-page={shownPage}
+              data-slot="settings-page"
+            >
+              {error ? (
+                <div
+                  className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border px-3 py-2 text-sm"
+                  role="alert"
+                >
+                  {error}
+                </div>
+              ) : null}
+              {page}
+            </div>
+          </ScrollArea>
+        </div>
+      </main>
+    </NativeStatusMemoryProvider>
   );
 };
 
