@@ -22,10 +22,10 @@ import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-mani
 import { CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionAppendTails,
-  corpusProjectionAppendStartMarginMs,
+  corpusProjectionAppendFlushMarginMs,
 } from "@/api/lib/legal-search/corpus-index-projection-executor";
 
-const V5_APPEND_START_MARGIN_MS = corpusProjectionAppendStartMarginMs(
+const V5_FLUSH_MARGIN_MS = corpusProjectionAppendFlushMarginMs(
   CORPUS_INDEX_MANIFESTS.case_law_v5,
 );
 const REVISIONS = 512;
@@ -84,7 +84,7 @@ const runCycle = async ({
       entries: [entry],
       mode: "buffer",
       nowMs: Date.now(),
-      appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
+      flushMarginMs: V5_FLUSH_MARGIN_MS,
     });
     tails = advanced.tails;
     if (advanced.flush.length === 0) {
@@ -104,7 +104,7 @@ const runCycle = async ({
     entries: [],
     mode: "flush-all",
     nowMs: Date.now(),
-    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
+    flushMarginMs: V5_FLUSH_MARGIN_MS,
   }).flush) {
     sizes.push(tail.entries.length);
   }

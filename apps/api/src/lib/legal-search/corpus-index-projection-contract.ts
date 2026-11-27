@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 export const CORPUS_INDEX_DESIRED_ACTIONS = ["upsert", "erase"] as const;
 export type CorpusIndexDesiredAction =
   (typeof CORPUS_INDEX_DESIRED_ACTIONS)[number];
@@ -240,12 +242,118 @@ export const CORPUS_INDEX_PROJECTION_WORK_STATUSES = [
   "blocked",
 ] as const;
 
+/**
+ * Values of the retired `append_mode` column. The request cap below replaced
+ * it; a row still marked `single` reads as the legacy single cap
+ * (`corpusIndexProjectionAppendRequestCapOf`) until its next state write
+ * clears the mark, and the column goes once no row carries it.
+ */
 export const CORPUS_INDEX_PROJECTION_APPEND_MODES = [
   "batchable",
   "single",
 ] as const;
-export type CorpusIndexProjectionAppendMode =
+type CorpusIndexProjectionAppendMode =
   (typeof CORPUS_INDEX_PROJECTION_APPEND_MODES)[number];
+
+/**
+ * The most revisions an entity's next append may share one request with,
+ * itself included. A request whose outcome says nothing about which of its
+ * revisions failed (unknown, or a document fault in a shared request) halves
+ * the cap of every revision in it (`corpusIndexProjectionHalvedAppendRequestCap`),
+ * so a failing batch of N is retried as batches of N/2 and only a revision
+ * that keeps failing reaches a request of its own, where it is charged.
+ * Powers of two, so the executor groups a reservation into at most ten
+ * request classes.
+ */
+export const CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS = [
+  1, 2, 4, 8, 16, 32, 64, 128, 256, 512,
+] as const;
+export type CorpusIndexProjectionAppendRequestCap =
+  (typeof CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS)[number];
+
+/** An entity no failure has isolated: any request may carry it. */
+export const CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL =
+  512 satisfies CorpusIndexProjectionAppendRequestCap;
+
+/**
+ * Where an entity the retired `single` mode isolated restarts: small shared
+ * requests that halve again on failure, instead of one request each, so a
+ * backlog of them drains in about one commit round.
+ */
+export const CORPUS_INDEX_PROJECTION_LEGACY_SINGLE_APPEND_REQUEST_CAP =
+  32 satisfies CorpusIndexProjectionAppendRequestCap;
+
+const APPEND_REQUEST_CAP_SET: ReadonlySet<number> = new Set(
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS,
+);
+
+/** The smaller of two caps, still a cap. */
+const smallerCorpusIndexProjectionAppendRequestCap = (
+  left: CorpusIndexProjectionAppendRequestCap,
+  right: CorpusIndexProjectionAppendRequestCap,
+): CorpusIndexProjectionAppendRequestCap => (left <= right ? left : right);
+
+const isCorpusIndexProjectionAppendRequestCap = (
+  value: number,
+): value is CorpusIndexProjectionAppendRequestCap =>
+  APPEND_REQUEST_CAP_SET.has(value);
+
+/** A request cap read back from PostgreSQL, checked against the value set. */
+export const requireCorpusIndexProjectionAppendRequestCap = (
+  value: number,
+): CorpusIndexProjectionAppendRequestCap =>
+  isCorpusIndexProjectionAppendRequestCap(value)
+    ? value
+    : panic(`Corpus projection append request cap is invalid: ${value}`);
+
+/**
+ * The cap of a revision that failed in a request of `sharedWith` revisions
+ * without saying which one failed: the largest cap no greater than half the
+ * request, and never above the cap it already had.
+ */
+export const corpusIndexProjectionHalvedAppendRequestCap = ({
+  sharedWith,
+  current,
+}: {
+  sharedWith: number;
+  current: CorpusIndexProjectionAppendRequestCap;
+}): CorpusIndexProjectionAppendRequestCap => {
+  if (!Number.isSafeInteger(sharedWith) || sharedWith < 2) {
+    return panic(
+      `Only a request of several revisions halves its caps: ${sharedWith}`,
+    );
+  }
+  const half = Math.floor(sharedWith / 2);
+  const halved = CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS.findLast(
+    (cap) => cap <= half,
+  );
+  return smallerCorpusIndexProjectionAppendRequestCap(
+    halved ?? panic("A request of several revisions has no halved cap"),
+    current,
+  );
+};
+
+/**
+ * An entity's effective request cap from its state row: the retired `single`
+ * mark caps it at the legacy single cap. Its SQL twin, the only other reader
+ * of the mark, is `corpusIndexProjectionAppendRequestCap`
+ * (`corpus-index-projection-sql`).
+ */
+export const corpusIndexProjectionAppendRequestCapOf = ({
+  appendMode,
+  appendRequestCap,
+}: {
+  appendMode: CorpusIndexProjectionAppendMode;
+  appendRequestCap: number;
+}): CorpusIndexProjectionAppendRequestCap => {
+  const cap = requireCorpusIndexProjectionAppendRequestCap(appendRequestCap);
+  return appendMode === "single"
+    ? smallerCorpusIndexProjectionAppendRequestCap(
+        cap,
+        CORPUS_INDEX_PROJECTION_LEGACY_SINGLE_APPEND_REQUEST_CAP,
+      )
+    : cap;
+};
 
 export const CORPUS_INDEX_PROJECTION_FAILURE_KINDS = [
   "payload_unavailable",

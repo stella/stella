@@ -7,6 +7,7 @@ import {
   inArray,
   max,
   min,
+  not,
   notInArray,
   sql,
 } from "drizzle-orm";
@@ -35,7 +36,10 @@ import {
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { recoverExpiredCorpusProjectionIntentsTx } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
-import type { CorpusIndexAppendFault } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import {
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
+  type CorpusIndexAppendFault,
+} from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   corpusIndexAppendPublishDelayMs,
@@ -87,6 +91,7 @@ import {
   settleRejectedCorpusProjectionMaterials,
   validateCorpusProjectionPayloadPolicy,
 } from "@/api/lib/legal-search/corpus-index-projection-revision-block";
+import { corpusIndexProjectionAppendRequestIsFull } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import {
   CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
@@ -161,9 +166,9 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  * at most half that size (`readCorpusProjectionOfflineRequestCapsTx`). Files
  * are grouped by request cap (`corpusProjectionOfflineShardClass`), so a
  * delivery failure halves exactly what failed together. A retired revision
- * that shared its request leaves its entity in single requests, which the
- * per-row path sends; the batch never reserves such an entity. One that
- * switched to single delivery after the batch reserved it starts alone.
+ * that shared its request halves its entity's request cap, and the per-row
+ * path sends a capped entity; the batch never reserves one. One capped after
+ * the batch reserved it starts alone.
  *
  * The walk is complete by construction. A reservation the run gives up
  * unstarted (a closed start window, a lease that ran out waiting, a row
@@ -640,11 +645,12 @@ export const requireFreshReadCommittedStartTx = async (
 };
 
 /**
- * Entities of `leases` whose state now delivers alone. The reservation takes
- * only batchable entities, but a state can switch to single delivery after
+ * Entities of `leases` whose state is now capped below a full request. The
+ * reservation takes only entities at the full cap, but a cap can drop after
  * it (a shared delivery of the entity retired), and the offline start does
  * not refuse such a revision in a larger request, so the run composes its
- * requests from what the state says when the revision is built.
+ * requests from what the state says when the revision is built: such a
+ * revision starts alone.
  */
 const readSingleDeliveryEntitiesTx = async (
   tx: Transaction,
@@ -664,7 +670,9 @@ const readSingleDeliveryEntitiesTx = async (
         inArray(corpusIndexProjectionStates.entityId, [
           ...new Set(leases.map(({ entityId }) => entityId)),
         ]),
-        eq(corpusIndexProjectionStates.appendMode, "single"),
+        not(
+          corpusIndexProjectionAppendRequestIsFull(corpusIndexProjectionStates),
+        ),
       ),
     );
   return new Set(rows.map(({ entityId }) => entityId));
@@ -1307,7 +1315,9 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               eq(corpusIndexProjectionStates.generation, generation),
               eq(corpusIndexProjectionStates.desiredIndexId, indexId),
               eq(corpusIndexProjectionStates.workStatus, "retry_scheduled"),
-              eq(corpusIndexProjectionStates.appendMode, "batchable"),
+              corpusIndexProjectionAppendRequestIsFull(
+                corpusIndexProjectionStates,
+              ),
               // Entities this run charged for a lone kill wait for another.
               this.#chargedAlone.size === 0
                 ? undefined
@@ -1840,10 +1850,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         documentCount: built.value.documentCount,
         block,
         bytes,
-        // A revision whose entity delivers alone starts in a request of
-        // its own, whatever its cap.
+        // A revision whose entity was capped below a full request starts in
+        // a request of its own, whatever its offline cap.
         shardClass:
-          material.lease.appendMode === "single" ||
+          material.lease.appendRequestCap <
+            CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL ||
           singles.has(material.lease.entityId)
             ? 1
             : corpusProjectionOfflineShardClass(

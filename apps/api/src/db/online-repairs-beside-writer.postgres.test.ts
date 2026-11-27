@@ -604,6 +604,11 @@ const SEEDS = {
     "corpus_index_projection_states_failure_kind_values",
     BLOCKED_PROJECTION_STATE_INSERT,
   ),
+  corpus_index_projection_states_append_request_cap_values: noRowSeed(
+    "corpus_index_projection_states",
+    "corpus_index_projection_states_append_request_cap_values",
+    BLOCKED_PROJECTION_STATE_INSERT,
+  ),
   "entity-feature-row-gates": {
     kind: "row-work",
     assertPending: async (client, id) => {
