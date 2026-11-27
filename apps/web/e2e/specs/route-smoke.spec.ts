@@ -20,10 +20,7 @@ import {
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 
-import {
-  partitionRoundRobin,
-  resolveRouteSmokeGroupCount,
-} from "../execution-profile";
+import { partitionRoundRobin } from "../execution-profile";
 import { apiDelete, apiGet, apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
@@ -73,6 +70,7 @@ import {
   addedLedgerEntries,
   routeScaleLedgerMembership,
 } from "../helpers/route-scale-ledger";
+import { resolveRouteSmokeGroupCount } from "../helpers/route-smoke-groups";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
   assertSmokeRouteCoverage,
