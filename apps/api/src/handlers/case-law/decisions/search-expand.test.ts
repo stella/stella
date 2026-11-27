@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 
 import { getModelDefaultReasoningEffort } from "@stll/ai-catalog";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { sleep } from "@stll/concurrency/sleep";
 import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -55,9 +56,12 @@ type ProviderRequest = {
 };
 
 const sent: ProviderRequest[] = [];
-const provider: { forceReasoningOnly: boolean; latencyMs: number } = {
+const provider: {
+  forceReasoningOnly: boolean;
+  waitBeforeAnswer: (() => Promise<unknown>) | null;
+} = {
   forceReasoningOnly: false,
-  latencyMs: 0,
+  waitBeforeAnswer: null,
 };
 
 const objectField = (
@@ -145,8 +149,8 @@ const answeringFetch: typeof globalThis.fetch = Object.assign(
       isRecord(parsed) ? parsed : {},
     );
     sent.push(providerRequest);
-    if (provider.latencyMs > 0) {
-      await Bun.sleep(provider.latencyMs);
+    if (provider.waitBeforeAnswer !== null) {
+      await provider.waitBeforeAnswer();
     }
     const { body, headers } = answerFor(providerRequest);
     return new Response(body, { status: 200, headers });
@@ -252,12 +256,22 @@ describe("case-law search expansion through the provider wire", () => {
   });
 
   test("an answer slower than a second and a half still arrives", async () => {
-    provider.latencyMs = 2000;
+    jest.useFakeTimers();
+    const requestArrived = Promise.withResolvers<undefined>();
+    provider.waitBeforeAnswer = async () => {
+      const waiting = sleep(2000);
+      requestArrived.resolve(undefined);
+      await waiting;
+    };
     try {
-      const answer = await expand(orgConfig("google"));
+      const pending = expand(orgConfig("google"));
+      await requestArrived.promise;
+      jest.advanceTimersByTime(2000);
+      const answer = await pending;
       expect(answer).toEqual(EXPANDED);
     } finally {
-      provider.latencyMs = 0;
+      provider.waitBeforeAnswer = null;
+      jest.useRealTimers();
     }
   });
 
