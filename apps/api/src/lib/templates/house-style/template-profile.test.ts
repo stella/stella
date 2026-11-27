@@ -107,6 +107,10 @@ describe("inferTemplateProfile", () => {
     // The numbered style heads a party; its details are written in the
     // style of the sample's detail lines.
     expect(roles.party).toMatchObject({ styleId: "Indent", numbering: null });
+    expect(inferTemplateProfile(contractTemplate()).partyHead).toMatchObject({
+      styleId: "Party",
+      numbering: { ilvl: 0, lvlText: "%1." },
+    });
     expect(roles.recital?.numbering).toMatchObject({ numFmt: "upperLetter" });
     expect(roles.signature?.styleId).toBe("Signature");
     expect(roles.annexHeading).toMatchObject({

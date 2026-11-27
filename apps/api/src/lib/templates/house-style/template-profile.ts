@@ -129,6 +129,12 @@ export type TemplateProfile = {
     party: { blockIds: string[] } | null;
     signature: { blockIds: string[] } | null;
   };
+  /** The style the template sets the numbered line that heads a party in
+   *  (a style named for parties, in a list of its own): a party's line
+   *  that carries a number is placed in it and counted in that list.
+   *  Absent when the template has none, and from a profile made before
+   *  this was read. */
+  partyHead?: ProfileRoleTarget;
   headings: { article: HeadingJoin; annex: HeadingJoin };
   /** Whether the template's sample starts a page between its front matter
    *  (title, parties) and its first article. Absent when the sample has no
@@ -514,6 +520,28 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
     roles.clause3 = first3;
   }
   return roles;
+};
+
+/**
+ * The style of the numbered line that heads a party: named for parties,
+ * on a level of a list that is not the main outline's and prints a number.
+ * Among several, the one the sample text uses. Undefined when the template
+ * has none.
+ */
+const inferPartyHead = (
+  facts: readonly StyleFacts[],
+  roles: TemplateProfile["roles"],
+): ProfileRoleTarget | undefined => {
+  const main = roles.articleHeading?.numbering?.abstractNumId;
+  const head = byName(
+    facts,
+    NAME.party,
+    ({ level }) =>
+      level !== null && level.abstractNumId !== main && printsLabel(level),
+  );
+  return head === undefined
+    ? undefined
+    : target(head, CONFIDENCE.nameAndLevel, "styleName", "listLevel");
 };
 
 /**
@@ -1225,6 +1253,7 @@ export const inferTemplateProfile = (
   const structure = readStructure(inspection.blocks);
   const roles = inferRoles(facts, structure.topLevel);
   const annexRoles = inferAnnexRoles(facts, roles);
+  const partyHead = inferPartyHead(facts, roles);
   const samplesOf = (role: ProfileRoleTarget | null): readonly DocxBlock[] =>
     facts.find(({ style }) => style.styleId === role?.styleId)?.samples ??
     NO_BLOCKS;
@@ -1338,6 +1367,7 @@ export const inferTemplateProfile = (
     fillerStrings: inferFillerStrings(inspection.blocks),
     annex,
     ...(annexRoles === undefined ? {} : { annexRoles }),
+    ...(partyHead === undefined ? {} : { partyHead }),
     defaultAlignment:
       inspection.styles.find(
         ({ type, isDefault }) => type === "paragraph" && isDefault,
@@ -1514,6 +1544,13 @@ export const validateTemplateProfile = (
       abstractByNum,
     }),
   );
+  // The style for a party's numbered heading line is the template's too.
+  if (
+    profile.partyHead !== undefined &&
+    !facts.has(profile.partyHead.styleId)
+  ) {
+    issues.push({ severity: "error", code: "unknownStyle", role: "party" });
+  }
 
   const { topLevel } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);
@@ -1657,6 +1694,7 @@ const profileSchema = v.strictObject({
     filler: blockIdsSchema,
   }),
   slots: v.strictObject({ party: slotSchema, signature: slotSchema }),
+  partyHead: v.exactOptional(roleTargetObjectSchema),
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
   frontMatterEndsPage: v.exactOptional(v.boolean()),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
