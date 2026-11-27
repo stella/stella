@@ -293,6 +293,34 @@ const isProvision = ({ level, annexBlockId }: LabelEntry): boolean =>
     level === "letter" ||
     level === "roman");
 
+/**
+ * Where the preamble begins. A heading right above the sentence that opens
+ * it heads it (`Purpose` over `The parties have agreed as follows.`): the
+ * preamble begins there. Not a party's line, nor the word between two
+ * parties, and nothing at or in front of `floor`, the last line that
+ * cannot be part of it.
+ */
+const preambleStart = (
+  blocks: readonly DocxBlock[],
+  marked: number,
+  floor: number,
+): number => {
+  let aboveAt = Number.isFinite(marked) ? marked - 1 : -1;
+  while (aboveAt > floor && blocks[aboveAt]?.text.trim() === "") {
+    aboveAt -= 1;
+  }
+  const above = blocks[aboveAt];
+  const headed =
+    above !== undefined &&
+    aboveAt > floor &&
+    above.kind === "paragraph" &&
+    isSectionHeading(above) &&
+    !PARTY_JOINER.test(above.text.trim()) &&
+    !PARTY_MARKER.test(above.text) &&
+    !PARTY_IDENTITY.test(above.text);
+  return headed ? aboveAt : marked;
+};
+
 const findZones = (
   all: readonly DocxBlock[],
   { entries }: LabelIndex,
@@ -312,14 +340,33 @@ const findZones = (
     entries.find(({ level, listed }) => level === "annex" && !listed)
       ?.position ?? Number.POSITIVE_INFINITY;
   const isText = (block: DocxBlock) => block.text.trim() !== "";
+  // A letter or a memo has no provisions to end its front matter at, and
+  // only a line shaped as a title is read as one there: a line that is
+  // merely centred (a marking, a date) must not take the title's place.
+  const setAsTitle = Number.isFinite(firstProvision)
+    ? isSetAsTitle
+    : isTitleShaped;
   const shaped = firstPosition(
     blocks,
     0,
     firstProvision,
-    (block) => isText(block) && isSetAsTitle(block),
+    (block) => isText(block) && setAsTitle(block),
   );
-  const title = Number.isFinite(shaped)
-    ? shaped
+  // A line that is only centred and stands right above a line shaped as a
+  // title is a marking over the title (`Confidential`), not the title.
+  const below = firstPosition(blocks, shaped + 1, firstProvision, isText);
+  const shapedAt = (position: number): boolean => {
+    const block = blocks[position];
+    return block !== undefined && isTitleShaped(block);
+  };
+  const marking =
+    Number.isFinite(shaped) &&
+    Number.isFinite(below) &&
+    !shapedAt(shaped) &&
+    shapedAt(below);
+  const anchor = marking ? below : shaped;
+  const title = Number.isFinite(anchor)
+    ? anchor
     : firstPosition(blocks, 0, firstProvision, isText);
   const identified = firstPosition(all, title + 1, firstProvision, (block) =>
     PARTY_IDENTITY.test(block.text),
@@ -336,11 +383,16 @@ const findZones = (
     !PARTY_INTRO.test(named.text.trim())
       ? identified - 1
       : identified;
-  const preamble = firstPosition(
+  const marked = firstPosition(
     all,
     (Number.isFinite(firstParty) ? firstParty : title) + 1,
     firstProvision,
     (block) => PREAMBLE_MARKER.test(block.text),
+  );
+  const preamble = preambleStart(
+    blocks,
+    marked,
+    Number.isFinite(firstParty) ? firstParty : title,
   );
   return {
     firstProvision,
@@ -483,7 +535,10 @@ const isSectionHeading = (block: DocxBlock): boolean => {
   const line = block.text.trim();
   return (
     printedLabel(block) === null &&
-    (block.outlineLevel === 0 || block.alignment === "center") &&
+    // A heading further down the source's outline stays text, centred or
+    // not; a centred line the outline does not name may head a part.
+    (block.outlineLevel === 0 ||
+      (block.outlineLevel === null && block.alignment === "center")) &&
     line.length <= SECTION_HEADING_MAX &&
     /\p{L}{2}/u.test(line) &&
     !/[.;:,]$/u.test(line) &&

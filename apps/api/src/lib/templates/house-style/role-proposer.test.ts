@@ -150,6 +150,35 @@ describe("proposeBlockRoles", () => {
     expect(roles["Bez čísla a bez zarovnání"]).toBe("continuation");
   });
 
+  test("a heading right above the sentence that opens the preamble heads it; a centred heading further down the outline stays text", () => {
+    const manifest = manifestOf([
+      "PURCHASE AGREEMENT",
+      "Alfa Ltd, with its registered office at 1 Long Street, London, company number 00000001",
+      "and",
+      "Beta Ltd, with its registered office at 2 Short Street, Leeds, company number 00000002",
+      "Purpose",
+      "",
+      "The parties have agreed as follows.",
+      "Article 1\nSubject",
+      "1.1\tThe seller delivers the goods.",
+      "Delivery terms",
+      "The goods are delivered to the buyer's seat.",
+    ]);
+    for (const block of manifest.blocks) {
+      if (block.text === "Purpose" || block.text === "Delivery terms") {
+        block.alignment = "center";
+      }
+      if (block.text === "Delivery terms") {
+        block.outlineLevel = 1;
+      }
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["Purpose"]).toBe("heading");
+    expect(roles["and"]).toBe("body");
+    expect(roles["Beta Ltd, with its registere"]).toBe("party");
+    expect(roles["Delivery terms"]).not.toBe("heading");
+  });
+
   test("the line that announces the parties and the word between them are no party's lines", () => {
     const roles = rolesOf(
       manifestOf([
@@ -296,6 +325,53 @@ describe("proposeBlockRoles", () => {
       "Věc: posouzení návrhu": "body",
       "Návrh jsme posoudili a shrnu": "body",
       "S pozdravem": "body",
+    });
+  });
+
+  test("a centred marking right above the title does not take the title's place", () => {
+    const manifest = manifestOf([
+      "Confidential",
+      "AGREEMENT IN PRINCIPLE",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Článek I.\nPředmět",
+      "1.1\tProdávající dodá zboží.",
+    ]);
+    const [marking] = manifest.blocks;
+    if (marking !== undefined) {
+      marking.alignment = "center";
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["AGREEMENT IN PRINCIPLE"]).toBe("title");
+    expect(roles["Confidential"]).toBe("body");
+    // A centred title in ordinary case stays the title when no line shaped
+    // as one stands under it.
+    const plain = manifestOf([
+      "Smlouva o dílo",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Článek I.\nPředmět",
+      "1.1\tProdávající dodá zboží.",
+    ]);
+    const [title] = plain.blocks;
+    if (title !== undefined) {
+      title.alignment = "center";
+    }
+    expect(rolesOf(plain)["Smlouva o dílo"]).toBe("title");
+  });
+
+  test("in a letter or a memo a line that is merely centred does not take the title's place", () => {
+    const manifest = manifestOf([
+      "Confidential",
+      "AGREEMENT IN PRINCIPLE",
+      "We set out below what was agreed at the meeting.",
+    ]);
+    const [marking] = manifest.blocks;
+    if (marking !== undefined) {
+      marking.alignment = "center";
+    }
+    expect(rolesOf(manifest)).toEqual({
+      Confidential: "body",
+      "AGREEMENT IN PRINCIPLE": "title",
+      "We set out below what was ag": "body",
     });
   });
 
