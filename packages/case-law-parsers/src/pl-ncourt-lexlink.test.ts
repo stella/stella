@@ -16,7 +16,7 @@ const KPC_TITLE =
   "Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego";
 
 const fixture = async (name: string) =>
-  await Bun.file(new URL(`${name}`, PARSER_FIXTURES_DIR)).text();
+  await Bun.file(new URL(name, PARSER_FIXTURES_DIR)).text();
 
 const anchorsOf = (
   html: string,

@@ -22,7 +22,7 @@ const blocksOf = async (
   const content = new TextDecoder().decode(
     Bun.gunzipSync(
       new Uint8Array(
-        await Bun.file(new URL(`${file}`, PARSER_FIXTURES_DIR)).arrayBuffer(),
+        await Bun.file(new URL(file, PARSER_FIXTURES_DIR)).arrayBuffer(),
       ),
     ),
   );

@@ -19,7 +19,7 @@ const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 type Expected = readonly (readonly [string, ParagraphRole | undefined])[];
 
 const fixtureText = async (name: string): Promise<string> =>
-  await Bun.file(new URL(`${name}`, PARSER_FIXTURES_DIR)).text();
+  await Bun.file(new URL(name, PARSER_FIXTURES_DIR)).text();
 
 const risBlocks = async (
   name: string,
