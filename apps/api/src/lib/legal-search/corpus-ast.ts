@@ -7,16 +7,13 @@ import {
   isDocumentAstInAnyBlockOrder,
   persistedDocumentAstSchema,
 } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST, emptyAstSchema } from "@stll/legal-ast/document-types";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   STORED_CORPUS_VALIDATION_CODE,
   StoredCorpusValidationError,
 } from "@/api/lib/errors/tagged-errors";
-import {
-  EMPTY_AST,
-  emptyAstSchema,
-} from "@/api/lib/legal-search/document-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";

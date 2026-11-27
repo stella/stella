@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -25,7 +26,6 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";

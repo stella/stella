@@ -22,6 +22,7 @@ import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 // parser-output-unchanged: [eu-ecj] the crawl pages a date by variant and carries an unserved variant as an unread item; a built variant's parse and stored payload are unchanged.
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
@@ -107,7 +108,6 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,

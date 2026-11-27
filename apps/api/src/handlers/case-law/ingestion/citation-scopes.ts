@@ -1,14 +1,14 @@
 import { Result, TaggedError } from "better-result";
 // parser-output-unchanged: [us-courtlistener] stored citation scopes stop being refused when head matter follows the body; every row the previous version stored passed the order check, so its scopes and their hash are unchanged.
 
+// parser-output-unchanged: imports the unchanged citation scope shape from its pure owner.
+import type { CitationOpinionScope } from "@stll/legal-ast/citation-opinion-scope";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
-// parser-output-unchanged: imports the unchanged citation scope shape from its pure owner.
-import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord } from "@/api/lib/type-guards";
 

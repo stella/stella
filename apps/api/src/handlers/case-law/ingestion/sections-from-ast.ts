@@ -1,11 +1,11 @@
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: a section holding the opening formula is the header, as it was when the formula carried the intro role; no other section changes.
 // parser-output-unchanged: document-tail callers retain their section behavior; HU explicitly opts into anchored notes
 import type { Block } from "@stll/legal-ast/document-ast";
-
 import type {
   DecisionSection,
   DecisionSectionType,
-} from "@/api/lib/legal-search/document-types";
+} from "@stll/legal-ast/document-types";
 
 /**
  * Derive a decision's sections from a parsed AST.

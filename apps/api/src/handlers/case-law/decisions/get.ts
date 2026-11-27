@@ -10,6 +10,7 @@ import {
   hasUsableAst,
   omitDerivablePlainText,
 } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 import { projectionDigest as digestAst } from "@stll/legal-ast/projection-digest";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -82,7 +83,6 @@ import {
   prefetchCorpusTombstones,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {

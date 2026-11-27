@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { directoryCourtIdentities } from "@stll/api-contract/court-identity";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -27,7 +28,6 @@ import {
   heldDecisionEcliIdentity,
   readHeldDecisionCandidates,
 } from "@/api/lib/case-law/held-decision-candidate-query";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import { HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX } from "@/api/lib/legal-search/held-decision-attachment-values";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";

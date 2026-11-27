@@ -6,9 +6,9 @@ import {
   isDocumentAst,
   persistedDocumentAstSchema,
 } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { logger } from "@/api/lib/observability/logger";
 
 const decisionAst = () =>
