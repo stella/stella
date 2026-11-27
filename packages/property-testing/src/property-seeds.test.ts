@@ -4,7 +4,9 @@ import path from "node:path";
 import { type Node, parseSync, visitorKeys } from "oxc-parser";
 
 import { PropertyTestConfigError } from "./index";
-import { parsePinnedSeeds, readPinnedSeeds, REPO_ROOT } from "./pinned-seeds";
+import { parsePinnedSeeds, readPinnedSeeds } from "./pinned-seeds";
+
+const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
 const propertyIds = (file: string, source: string): Set<string> => {
   const parsed = parseSync(file, source);

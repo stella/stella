@@ -1,4 +1,5 @@
 import fc from "fast-check";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
@@ -8,11 +9,12 @@ import {
   PROPERTY_SEEDS_FILE,
   readPinnedSeeds,
   REPLAY_PATH_PATTERN,
-  REPO_ROOT,
 } from "./pinned-seeds";
 import type { PinnedSeed } from "./pinned-seeds";
 import { PropertyTestConfigError } from "./property-test-config-error";
 import { readNumRunsFactor } from "./run-factor";
+
+const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
 export { PropertyTestConfigError } from "./property-test-config-error";
 
