@@ -232,6 +232,28 @@ describe("inferTemplateProfile", () => {
       date: "p95",
       reference: "p94",
     });
+    // A date right under the address, in the same cell and with no label
+    // in between, is the date and no line of the address.
+    const stacked = contractTemplate({
+      front: [
+        { id: "t90", cells: ["p91"] },
+        { id: "p91", text: "Company", styleId: "Normal" },
+        { id: "p92", text: "Street 1", styleId: "Normal" },
+        { id: "p93", text: "City", styleId: "Normal" },
+        { id: "p94", text: "4 September 2026", styleId: "Normal" },
+      ],
+    });
+    const oneCell = stacked.blocks.map((block) =>
+      block.id === "t90"
+        ? {
+            ...block,
+            cells: [{ row: 0, col: 0, blockIds: ["p91", "p92", "p93", "p94"] }],
+          }
+        : block,
+    );
+    expect(
+      inferTemplateProfile({ ...stacked, blocks: oneCell }).header,
+    ).toMatchObject({ addressee: ["p91", "p92", "p93"], date: "p94" });
     expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
       profile,
     );
