@@ -134,6 +134,13 @@ export type TemplateProfile = {
    *  (title, parties) and its first article. Absent when the sample has no
    *  article, and from a profile made before this was read. */
   frontMatterEndsPage?: boolean;
+  /** The paragraph styles the kept table of contents collects its entries
+   *  from, by what its field names: styles by name, the built-in headings
+   *  of a range of levels, styles with an outline level. A document none
+   *  of whose headings is placed in one of them would get contents that
+   *  fill empty. Absent when the template keeps no contents or its field's
+   *  code is not known, and from a profile made before this was read. */
+  contentsStyles?: string[];
   /** The style the template writes the text of its tables in. Absent when
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
@@ -794,13 +801,69 @@ type RegionOptions = {
   roles: TemplateProfile["roles"];
 };
 
+/** The switch of a contents field that names styles and their levels:
+ *  `\t "Name;1;Other;2"`. */
+const CONTENTS_NAMED = /\\t\s+"(?<named>[^"]*)"/u;
+/** The switch that takes the built-in headings, of a range of levels or of
+ *  all nine. */
+const CONTENTS_HEADINGS = /\\o(?:\s+"(?<low>\d)-(?<high>\d)")?/u;
+/** The switch that takes every paragraph with an outline level. */
+const CONTENTS_OUTLINED = /\\u(?![a-z])/iu;
+const BUILT_IN_HEADING = /^heading (?<level>[1-9])$/iu;
+
+/**
+ * The paragraph styles a contents field collects its entries from, read off
+ * its code. Names and levels alternate in the `\t` switch, parted by the
+ * list separator of the machine that wrote it: a semicolon or a comma.
+ * Undefined when the code is not known.
+ */
+const collectedStyles = (
+  instruction: string | undefined,
+  styles: readonly TemplateStyle[],
+): string[] | undefined => {
+  if (instruction === undefined) {
+    return undefined;
+  }
+  const named = CONTENTS_NAMED.exec(instruction)?.groups?.["named"] ?? "";
+  const names = new Set(
+    named
+      .split(named.includes(";") ? ";" : ",")
+      .filter((_part, position) => position % 2 === 0)
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name !== ""),
+  );
+  const headings = CONTENTS_HEADINGS.exec(instruction);
+  const low = Number(headings?.groups?.["low"] ?? 1);
+  const high = Number(headings?.groups?.["high"] ?? 9);
+  const outlined = CONTENTS_OUTLINED.test(instruction);
+  return styles
+    .filter(({ type, name, outlineLvl }) => {
+      if (type !== "paragraph") {
+        return false;
+      }
+      const level = Number(
+        BUILT_IN_HEADING.exec(name ?? "")?.groups?.["level"] ?? 0,
+      );
+      return (
+        names.has((name ?? "").toLowerCase()) ||
+        (headings !== null && level >= low && level <= high) ||
+        (outlined && outlineLvl !== null)
+      );
+    })
+    .map(({ styleId }) => styleId);
+};
+
 const inferRegions = ({
-  inspection: { fields },
+  inspection: { fields, styles },
   structure: { topLevel, nestedOf },
   roles,
-}: RegionOptions): Pick<TemplateProfile, "regions" | "slots"> => {
+}: RegionOptions): Pick<
+  TemplateProfile,
+  "regions" | "slots" | "contentsStyles"
+> => {
   const order = topLevel.map(({ id }) => id);
   const contents: string[] = [];
+  let contentsStyles: string[] | undefined;
   const contentsField = fields.find(
     ({ kind, blockId }) => kind === CONTENTS_FIELD && blockId !== undefined,
   );
@@ -830,6 +893,7 @@ const inferRegions = ({
         contents.push(caption.id);
       }
       contents.push(...order.slice(from, to + 1));
+      contentsStyles = collectedStyles(contentsField.instruction, styles);
     }
   }
   const inContents = new Set(contents);
@@ -931,6 +995,7 @@ const inferRegions = ({
       signature:
         signatureBlocks.length === 0 ? null : { blockIds: signatureBlocks },
     },
+    ...(contentsStyles === undefined ? {} : { contentsStyles }),
   };
 };
 
@@ -1600,6 +1665,9 @@ const profileSchema = v.strictObject({
   slots: v.strictObject({ party: slotSchema, signature: slotSchema }),
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
   frontMatterEndsPage: v.exactOptional(v.boolean()),
+  contentsStyles: v.exactOptional(
+    v.pipe(v.array(idSchema), v.maxLength(BLOCKS_MAX)),
+  ),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
   header: v.exactOptional(
     v.strictObject({

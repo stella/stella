@@ -178,6 +178,9 @@ export type TemplateField = {
   part: string;
   /** The field name in upper case: `TOC`, `REF`, `FILLIN`, `DATE`. */
   kind: string;
+  /** The field's code as the template writes it (`TOC \o "1-3" \h`).
+   *  Absent from an inspection read before it was reported. */
+  instruction?: string;
   /** Main story only: the top-level block the field starts in. */
   blockId?: string;
   /** Main story only: the top-level block the field ends in. A plan keeps
