@@ -85,12 +85,16 @@ type SafeDbError = DatabaseError | DatabaseRlsError | UnhandledException;
 export type WorkspaceScope =
   | {
       type: typeof WORKSPACE_ACCESS_MODE.explicit;
-      workspaceIds: SafeId<"workspace">[];
+      workspaceIds: readonly SafeId<"workspace">[];
     }
   | {
       type: typeof WORKSPACE_ACCESS_MODE.membership;
       serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
     };
+
+const snapshotExplicitWorkspaceIds = (
+  workspaceIds: readonly SafeId<"workspace">[],
+): readonly SafeId<"workspace">[] => [...new Set(workspaceIds)];
 
 /**
  * The deadline a whole transaction runs under. `statement_timeout` restarts
@@ -253,7 +257,7 @@ export type CurrentMembershipScope = {
 
 type ScopedDbArgs =
   | [
-      workspaceIds: SafeId<"workspace">[],
+      workspaceIds: readonly SafeId<"workspace">[],
       organizationId: SafeId<"organization">,
       userId: SafeId<"user"> | null,
     ]
@@ -378,24 +382,29 @@ const openScopedTransaction = async <
  * Create a database scope from an explicit workspace set or a declared mode.
  * Request auth uses the membership factory below.
  */
-export const createScopedDb =
-  <TTransaction extends ScopedTransactionBase>(
-    database: RlsDatabase<TTransaction>,
-    ...[workspaceScope, organizationId, userId]: ScopedDbArgs
-  ) =>
-  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+export const createScopedDb = <TTransaction extends ScopedTransactionBase>(
+  database: RlsDatabase<TTransaction>,
+  ...[workspaceScope, organizationId, userId]: ScopedDbArgs
+) => {
+  const resolvedScope: WorkspaceScope =
+    "type" in workspaceScope
+      ? workspaceScope
+      : {
+          type: WORKSPACE_ACCESS_MODE.explicit,
+          workspaceIds: snapshotExplicitWorkspaceIds(workspaceScope),
+        };
+  return async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
       database,
-      workspaceScope: Array.isArray(workspaceScope)
-        ? { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds: workspaceScope }
-        : workspaceScope,
+      workspaceScope: resolvedScope,
       organizationId,
       userId,
       fn,
     });
+};
 
 type ExplicitScopedDbOptions = {
-  workspaceIds: SafeId<"workspace">[];
+  workspaceIds: readonly SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
   /** Authenticated request decisions reused for that request only. */
@@ -484,10 +493,14 @@ export const createExplicitScopedDb = <
     deadline,
   }: ExplicitScopedDbOptions,
 ): ScopedDbRunner<TTransaction> => {
+  const frozenWorkspaceIds = snapshotExplicitWorkspaceIds(workspaceIds);
   const scopedDb: ScopedDbRunner<TTransaction> = async (fn) =>
     await runScopedTransaction({
       database,
-      workspaceScope: { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds },
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.explicit,
+        workspaceIds: frozenWorkspaceIds,
+      },
       organizationId,
       userId,
       featureAccessSnapshot,
@@ -497,7 +510,7 @@ export const createExplicitScopedDb = <
   return withWorkspaceScopeAttenuator(scopedDb, (narrowedWorkspaceIds) =>
     createExplicitScopedDb(database, {
       workspaceIds: intersectExplicitWorkspaceIds(
-        workspaceIds,
+        frozenWorkspaceIds,
         narrowedWorkspaceIds,
       ),
       organizationId,
@@ -703,6 +716,7 @@ export const createExplicitSafeDb = <
     deadline,
   }: ExplicitScopedDbOptions,
 ): SafeDbRunner<TTransaction> => {
+  const frozenWorkspaceIds = snapshotExplicitWorkspaceIds(workspaceIds);
   const safeDb: SafeDbRunner<TTransaction> = async (fn, retry) =>
     await Result.tryPromise(
       {
@@ -711,7 +725,7 @@ export const createExplicitSafeDb = <
             database,
             workspaceScope: {
               type: WORKSPACE_ACCESS_MODE.explicit,
-              workspaceIds,
+              workspaceIds: frozenWorkspaceIds,
             },
             organizationId,
             userId,
@@ -726,7 +740,7 @@ export const createExplicitSafeDb = <
   return withWorkspaceScopeAttenuator(safeDb, (narrowedWorkspaceIds) =>
     createExplicitSafeDb(database, {
       workspaceIds: intersectExplicitWorkspaceIds(
-        workspaceIds,
+        frozenWorkspaceIds,
         narrowedWorkspaceIds,
       ),
       organizationId,
@@ -740,7 +754,7 @@ export const createExplicitSafeDb = <
 /** Result-wrapped form of createScopedDb for an explicit workspace scope. */
 export const createSafeDb = <TTransaction extends ScopedTransactionBase>(
   database: RlsDatabase<TTransaction>,
-  workspaceIds: SafeId<"workspace">[],
+  workspaceIds: readonly SafeId<"workspace">[],
   organizationId: SafeId<"organization">,
   userId: SafeId<"user"> | null,
 ) => createExplicitSafeDb(database, { workspaceIds, organizationId, userId });
