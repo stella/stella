@@ -185,11 +185,9 @@ export const runVerifyStepsConcurrent = async (
   };
 
   await Promise.all(
-    Array.from({ length: Math.min(limit, parallelChecks.length) }, () =>
-      worker(),
-    ),
+    Array.from({ length: Math.min(limit, parallelChecks.length) }, worker),
   );
-  if (refused) {
+  if (parallelStatuses.includes(BOTH_GATES_REFUSED)) {
     return BOTH_GATES_REFUSED;
   }
 
@@ -645,7 +643,7 @@ if (import.meta.main) {
             ],
           }),
         probeRemote: () => probeRemote(config, repo),
-        runLocal: () => localChecks(options, config),
+        runLocal: async () => localChecks(options, config),
         runRemote: () => remoteChecks({ args, options, config }),
         report: (message) => console.error(message),
       });
