@@ -245,8 +245,7 @@ describe.serial("HTML parser helper ownership", () => {
     ).toEqual([7]);
 
     const root = fileURLToPath(new URL("../../", import.meta.url));
-    const plUodoPath =
-      "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts";
+    const plUodoPath = "packages/case-law-parsers/src/pl-uodo.ts";
     expect(
       await lintSingleRule(
         RULE_NAME,
