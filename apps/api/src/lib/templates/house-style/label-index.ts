@@ -641,7 +641,10 @@ const articleMentionPositions = (
   labelled: readonly LabelledRow[],
 ): Set<number> => {
   const mentions = new Set<number>();
+  /** The headings that are here only because they count on, by ordinal. */
+  const countedOn = new Map<number, number>();
   const scheme = numberedScheme(labelled);
+  const typed: { position: number; ordinal: number | null }[] = [];
   /** The ordinal of the typed article heading read last, when it was one
    *  of these. */
   let counted: number | null = null;
@@ -662,15 +665,32 @@ const articleMentionPositions = (
     const { core, path } = row.raw.shape;
     const ordinal = countedOrdinal(core) ?? path?.at(0) ?? null;
     const heads = path === null || path.length <= 1;
-    if (
-      isArticleMention(numberedArticles, row) ||
-      (heads && counted !== null && ordinal === counted + 1)
-    ) {
+    if (heads) {
+      typed.push({ position: row.position, ordinal });
+    }
+    const mentioned = isArticleMention(numberedArticles, row);
+    if (mentioned || (heads && counted !== null && ordinal === counted + 1)) {
       mentions.add(row.position);
+      if (!mentioned && ordinal !== null) {
+        countedOn.set(row.position, ordinal);
+      }
       // A clause of such an article (`Article 4.2`) counts nothing on.
       counted = heads ? ordinal : counted;
     } else {
       counted = null;
+    }
+  }
+  // Where the document has a typed article of that number of its own, the
+  // heading stays in the index beside it: a citation of the number then
+  // has two places it may mean and is linked to neither, instead of being
+  // linked to the one that happened to be left.
+  for (const [position, ordinal] of countedOn) {
+    if (
+      typed.some(
+        (other) => other.ordinal === ordinal && !mentions.has(other.position),
+      )
+    ) {
+      mentions.delete(position);
     }
   }
   return mentions;
@@ -1092,7 +1112,10 @@ const joinSpacedNumbers = (
 ): void => {
   const columnOf = new Map<string, number>();
   for (const { cells } of blocks) {
-    for (const { col, blockIds } of cells ?? []) {
+    if (cells === undefined) {
+      continue;
+    }
+    for (const { col, blockIds } of cells) {
       for (const blockId of blockIds) {
         columnOf.set(blockId, col);
       }
@@ -1116,7 +1139,11 @@ const joinSpacedNumbers = (
       continue;
     }
     const column = columnOf.get(block.id) ?? null;
-    const counting = countings.get(column) ?? { article: null, run: [] };
+    // A column counts under the heading that spans the columns above it.
+    const counting = countings.get(column) ?? {
+      article: countings.get(null)?.article ?? null,
+      run: [],
+    };
     countings.set(column, counting);
     const spaced = readSpacedNumber(block, raw, position);
     if (spaced !== null && raw.shape.path?.at(0) === counting.article) {
@@ -1125,8 +1152,11 @@ const joinSpacedNumbers = (
     }
     const headed = headedNumber(raw);
     if (headed !== null || raw.shape.keyword !== null) {
-      close(counting);
-      counting.article = headed;
+      // A heading outside the columns heads every column from there on.
+      for (const under of column === null ? countings.values() : [counting]) {
+        close(under);
+        under.article = headed;
+      }
     }
   }
   for (const counting of countings.values()) {

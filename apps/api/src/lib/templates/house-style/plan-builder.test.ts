@@ -2560,6 +2560,21 @@ describe("buildTemplatePlan, the lines of the parties", () => {
       shared - 20,
       shared,
     ]);
+    // A source that tabbed its values into place over default stops types
+    // more tabs on a short label: each line still ends its last one there.
+    const tabbed = manifestOf([
+      "SMLOUVA",
+      "Univerzita Příkladná",
+      "se sídlem:\t\t\t\tOvocný trh 1, Praha 1",
+      "IČO:\t\t\t\t\t00000001",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    const lines = build(tabbed, "keepSource", { profile: measured }).plan;
+    const seat = itemOf(lines, tabbed, "se sídlem")?.tabStops ?? [];
+    const number = itemOf(lines, tabbed, "IČO")?.tabStops ?? [];
+    expect([seat.length, number.length]).toEqual([4, 5]);
+    expect(seat.at(-1)).toBe(number.at(-1));
     // A line without a label and a tab has nothing to align.
     expect(itemOf(plan, manifest, "(dále jen")).not.toHaveProperty("tabStops");
     expect(itemOf(plan, manifest, "Univerzita")).not.toHaveProperty("tabStops");
@@ -2816,6 +2831,49 @@ describe("buildTemplatePlan, a typed article behind the document's numbered ones
     expect(
       index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Term")),
     ).toBe(false);
+  });
+});
+
+describe("buildTemplatePlan, a number two typed articles have", () => {
+  test("a heading that counts on stays in the index where the document has a typed article of that number", () => {
+    const manifest = manifestOf([
+      "AGREEMENT",
+      // A typed article of the document's own, out of the numbered run.
+      { text: "Article 3 Notices", styleName: "heading 1", outlineLevel: 0 },
+      "Notices are given in writing.",
+      {
+        ...numbered("1.", "Definitions", 1),
+        styleName: "heading 1",
+        outlineLevel: 0,
+      },
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      // A part that counts its own articles, up to the same number.
+      { text: "Article 1 Subject", styleName: "heading 5", outlineLevel: 4 },
+      "This contract implements the agreement.",
+      { text: "Article 2 Price", styleName: "heading 5", outlineLevel: 4 },
+      "The price is fixed.",
+      { text: "Article 3 Term", styleName: "heading 5", outlineLevel: 4 },
+      "The term is one year as stated in Article 3.",
+    ]);
+    const index = buildLabelIndex(manifest);
+    // Both articles of that number are in the index, so a citation of it
+    // has two places it may mean.
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 3 Notices")),
+    ).toBe(true);
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 3 Term")),
+    ).toBe(true);
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Price")),
+    ).toBe(false);
+    // And the citation is linked to neither.
+    const { plan } = build(manifest);
+    expect(
+      (plan.references ?? []).filter(
+        ({ blockId }) => blockId === blockIdOf(manifest, "The term is one"),
+      ),
+    ).toEqual([]);
   });
 });
 

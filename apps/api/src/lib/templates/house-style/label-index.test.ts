@@ -408,16 +408,16 @@ describe("buildLabelIndex", () => {
     ]);
     // A line of the contents that names the first annex takes no number
     // from it.
+    const [contentsLine] = manifestOf([
+      { text: "Annex  - Summary", styleName: "toc 1" },
+    ]).blocks;
+    if (contentsLine === undefined) {
+      throw new Error("fixture");
+    }
     const listed = {
       ...manifest,
       blocks: [
-        {
-          ...manifest.blocks[0],
-          id: "toc",
-          text: "Annex  - Summary",
-          styleName: "toc 1",
-          selfNumbers: [6],
-        },
+        { ...contentsLine, id: "toc", selfNumbers: [6] },
         ...manifest.blocks,
       ],
     };
@@ -494,6 +494,27 @@ describe("buildLabelIndex", () => {
     for (const start of ["1. 1. Prodávající", "1. 1. The seller"]) {
       expect(
         columns.entryByBlockId.get(blockIdOf(sideBySide, start))?.shape.length,
+      ).toBe(5);
+    }
+    // A heading above the table heads both of its columns.
+    const under = inColumns(2, [
+      "1. 1. Prodávající prodává zboží.",
+      "1. 1. The seller sells the goods.",
+      "1. 2. Kupující zboží kupuje.",
+      "1. 2. The buyer buys the goods.",
+    ]);
+    const [spanning] = manifestOf(["1. Předmět smlouvy"]).blocks;
+    if (spanning === undefined) {
+      throw new Error("fixture");
+    }
+    const headed = {
+      ...under,
+      blocks: [{ ...spanning, id: "heading" }, ...under.blocks],
+    };
+    const spanned = buildLabelIndex(headed);
+    for (const start of ["1. 1. Prodávající", "1. 1. The seller"]) {
+      expect(
+        spanned.entryByBlockId.get(blockIdOf(headed, start))?.shape.length,
       ).toBe(5);
     }
     // No run: one paragraph alone, a gap in the count, another article's

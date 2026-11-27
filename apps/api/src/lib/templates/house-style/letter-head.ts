@@ -104,7 +104,7 @@ export const readLetterHead = (
     return null;
   }
   return {
-    addressee: (addressee ?? []).map(({ id }) => id),
+    addressee: addressee === undefined ? [] : addressee.map(({ id }) => id),
     date: date?.id ?? null,
     reference: reference?.id ?? null,
   };
