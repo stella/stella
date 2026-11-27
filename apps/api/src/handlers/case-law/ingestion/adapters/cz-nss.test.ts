@@ -24,6 +24,7 @@ import {
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -73,7 +74,6 @@ import {
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

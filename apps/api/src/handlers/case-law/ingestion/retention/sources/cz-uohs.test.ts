@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -17,7 +18,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { czUohsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

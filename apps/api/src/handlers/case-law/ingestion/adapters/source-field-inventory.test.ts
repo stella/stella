@@ -27,6 +27,7 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { entityResiduesInStoredText } from "@stll/case-law-parsers/entity-residue";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 
@@ -82,7 +83,6 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 const testFetchState = createTestFetch();

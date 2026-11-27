@@ -8,6 +8,7 @@ import { Result } from "better-result";
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
 import { buildPlDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
@@ -35,7 +36,6 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

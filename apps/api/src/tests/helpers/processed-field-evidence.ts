@@ -23,6 +23,7 @@ import {
 import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
 import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@stll/case-law-parsers/eu-ecj";
 import { parseHuBhgyDecision as uncheckedParseHuBhgyDecision } from "@stll/case-law-parsers/hu-bhgy";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlTkPage,
   parsePlTkText as uncheckedParsePlTkText,
@@ -52,7 +53,6 @@ import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-field-inventory";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseCzUohsDocumentPdf = guardParser(uncheckedParseCzUohsDocumentPdf);
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);

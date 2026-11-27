@@ -7,10 +7,9 @@ import {
 } from "@stll/case-law-parsers/at-decision-regions";
 import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
 import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);

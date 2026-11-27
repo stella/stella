@@ -9,6 +9,7 @@ import {
 } from "@stll/case-law-parsers/cz-us";
 import type { ParseUsDecisionInput } from "@stll/case-law-parsers/cz-us";
 import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   embeddedTextFixtures,
   embeddedTextRtf,
@@ -26,8 +27,6 @@ import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { assertProperty } from "@stll/property-testing";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   assertNotePath,

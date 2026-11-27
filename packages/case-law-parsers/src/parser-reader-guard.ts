@@ -1,10 +1,18 @@
 import { panic, type Result } from "better-result";
 import * as v from "valibot";
 
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  type DocumentAst,
+  persistedDocumentAstSchema,
+} from "@stll/legal-ast/document-ast";
+import { emptyAstSchema } from "@stll/legal-ast/document-types";
 
-import { persistedCorpusAstSchema } from "@/api/lib/legal-search/corpus-ast";
-import { isRecord } from "@/api/lib/type-guards";
+const persistedCorpusAstSchema = v.nullable(
+  v.union([persistedDocumentAstSchema, emptyAstSchema]),
+);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const repeatsBlockIdentity = (ast: unknown): boolean => {
   if (!isRecord(ast) || !Array.isArray(ast["blocks"])) {

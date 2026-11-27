@@ -8,6 +8,7 @@ import {
   citationScopeEnvelope,
   validatedCitationScopes,
 } from "@stll/case-law-parsers/citation-scopes";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   isDocumentAst,
@@ -28,7 +29,6 @@ import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const mapCourtListenerRecord = guardParser(uncheckedMapCourtListenerRecord);
 

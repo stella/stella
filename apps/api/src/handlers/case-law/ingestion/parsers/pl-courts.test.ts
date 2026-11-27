@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlDecisionContent as uncheckedParsePlDecisionContent,
   PL_DECISION_MARKUP,
@@ -16,7 +17,6 @@ import {
   PL_KIO_HTML_BUDGET,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 

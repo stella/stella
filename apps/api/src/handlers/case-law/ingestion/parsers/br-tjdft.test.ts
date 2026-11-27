@@ -3,11 +3,11 @@ import { describe, expect, test } from "bun:test";
 
 import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "@stll/case-law-parsers/br-tjdft";
 import type { BrTjdftDocumentContent } from "@stll/case-law-parsers/br-tjdft";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { brTjdftCompletenessIssues } from "@/api/tests/helpers/br-tjdft-completeness";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseBrTjdftDocument = guardParser(uncheckedParseBrTjdftDocument);
 

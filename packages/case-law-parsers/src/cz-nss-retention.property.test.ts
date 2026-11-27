@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import {
@@ -9,8 +10,6 @@ import {
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
 import {

@@ -11,6 +11,7 @@ import {
   markupResidueSweepRules,
 } from "@stll/case-law-parsers/markup-residue";
 import type { MarkupResidueRuleId } from "@stll/case-law-parsers/markup-residue";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   assemblePdfParagraphs,
   pdfParagraphsToHtml,
@@ -18,8 +19,6 @@ import {
 import type { PdfLine } from "@stll/case-law-parsers/pdf-bands";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 import { assertProperty } from "@stll/property-testing";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
@@ -288,7 +287,18 @@ const PARSER_FAMILIES: {
 describe("the sweep documented in AGENTS.md", () => {
   test("names every rule's pattern", async () => {
     const doc = await Bun.file(
-      path.join(import.meta.dir, "..", "..", "AGENTS.md"),
+      path.join(
+        import.meta.dir,
+        "..",
+        "..",
+        "..",
+        "apps",
+        "api",
+        "src",
+        "handlers",
+        "case-law",
+        "AGENTS.md",
+      ),
     ).text();
     const sweepStart = doc.indexOf("FROM case_law_decisions d");
     expect(sweepStart).toBeGreaterThan(0);

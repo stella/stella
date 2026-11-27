@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { gunzipSync } from "node:zlib";
 
 import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlDecisionContent as uncheckedParsePlDecisionContent,
   PL_DECISION_MARKUP,
@@ -19,8 +20,6 @@ import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-la
 import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
 import { load } from "@stll/html";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);

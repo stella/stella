@@ -191,6 +191,10 @@
       "types": "./src/parser-logger.ts",
       "import": "./src/parser-logger.ts"
     },
+    "./parser-reader-guard": {
+      "types": "./src/parser-reader-guard.ts",
+      "import": "./src/parser-reader-guard.ts"
+    },
     "./pdf-bands": {
       "types": "./src/pdf-bands.ts",
       "import": "./src/pdf-bands.ts"

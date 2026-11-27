@@ -8,6 +8,7 @@ import {
   usDocumentLinesOf,
 } from "@stll/case-law-parsers/cz-us";
 import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { readRtfString } from "@stll/case-law-parsers/rtf-reader";
 import {
   buildValidationHtml,
@@ -16,8 +17,6 @@ import {
 import { load } from "@stll/html";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { LINE_WRAP_TYPE, planBlockLineWrap } from "@stll/legal-ast/line-wrap";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 

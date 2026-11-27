@@ -9,14 +9,13 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlDecisionContent as uncheckedParsePlDecisionContent,
   PL_DECISION_MARKUP,
 } from "@stll/case-law-parsers/pl-courts";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Inline } from "@stll/legal-ast/document-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 

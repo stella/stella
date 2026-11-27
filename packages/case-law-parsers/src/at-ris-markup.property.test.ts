@@ -11,6 +11,7 @@ import {
   readRisContent,
   RIS_ELEMENTS,
 } from "@stll/case-law-parsers/at-ris-markup";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { load } from "@stll/html";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import {
@@ -18,8 +19,6 @@ import {
   propertyConfig,
   propertySeed,
 } from "@stll/property-testing";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 

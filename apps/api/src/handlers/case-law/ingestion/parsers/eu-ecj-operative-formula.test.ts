@@ -7,9 +7,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@stll/case-law-parsers/eu-ecj";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 

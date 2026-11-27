@@ -6,10 +6,9 @@ import {
   ecjDocumentHtml,
   parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml,
 } from "@stll/case-law-parsers/eu-ecj";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import * as astValidation from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
