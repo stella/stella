@@ -284,6 +284,8 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
  * a page that answers this way forever holds its cursor forever.
  */
 const BAD_GATEWAY_STATUS = 502;
+const SERVER_ERROR_RETRIES = 2;
+const SERVER_ERROR_BASE_DELAY_MS = 1000;
 
 /**
  * What divides a walk's name from its offset in a cursor. A cursor is split
@@ -851,19 +853,39 @@ export const createPagePaginatedFetch = <TResponse>(
           });
         };
 
-        // readPublisher handles timeout/5xx/429 with exponential backoff
-        // and typed ReadOutcome classification. All page-paginated adapters
-        // inherit this.
-        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
-        const outcome = await readPublisher(url, {
-          ...init,
-          fetchStage: "listing",
-          refusalScope: "source",
-          retryPolicy: "publisher-backoff",
-          timeoutMs: listTimeout,
-          signal,
-          adapterKey: opts.adapterKey,
-        });
+        // readPublisher handles timeout/502/503/504/429 with publisher-backoff
+        // and typed ReadOutcome classification. Other 5xx statuses (such as
+        // HTTP 500) are not retried by publisher-backoff, so retry them twice
+        // here before treating the page as a server error and advancing past it.
+        const readListingAttempt = async () =>
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
+          await readPublisher(url, {
+            ...init,
+            fetchStage: "listing",
+            refusalScope: "source",
+            retryPolicy: "publisher-backoff",
+            timeoutMs: listTimeout,
+            signal,
+            adapterKey: opts.adapterKey,
+          });
+        let outcome = await readListingAttempt();
+        for (let retry = 0; retry < SERVER_ERROR_RETRIES; retry++) {
+          const isTransientServerError =
+            outcome.type === "unavailable" &&
+            outcome.cause.kind === "status" &&
+            outcome.cause.status >= 500 &&
+            outcome.cause.status !== BAD_GATEWAY_STATUS;
+          if (!isTransientServerError || signal?.aborted) {
+            break;
+          }
+          await Bun.sleep(
+            Math.min(SERVER_ERROR_BASE_DELAY_MS * 2 ** retry, 30_000),
+          );
+          if (signal?.aborted) {
+            break;
+          }
+          outcome = await readListingAttempt();
+        }
 
         if (outcome.type !== "present") {
           let failedStatus: number | undefined;

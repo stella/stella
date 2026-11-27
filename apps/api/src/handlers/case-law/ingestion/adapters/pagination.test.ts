@@ -619,6 +619,38 @@ describe("a page the origin never answered does not move the cursor", () => {
    * what keeps one page from stalling a source. A 504 is the publisher proxy's
    * own read timeout; a transport timeout has no response and holds the cursor.
    */
+  test("a transient 500 is retried before skipping the page", async () => {
+    const requestedPages: number[] = [];
+    testFetchState.set(
+      asFetchMock(async (input: Parameters<typeof globalThis.fetch>[0]) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        const page = Number.parseInt(url.searchParams.get("page") ?? "", 10);
+        requestedPages.push(page);
+        if (requestedPages.length <= 2) {
+          return new Response("transient error", { status: 500 });
+        }
+        return Response.json({
+          results: [{ id: 1 }, { id: 2 }, { id: 3 }],
+          total: 40,
+        });
+      }),
+    );
+    restore = () => {
+      testFetchState.restore();
+    };
+
+    const fetchPage = createTestPageFetcher({ firstPage: 0 });
+    const result = await fetchPage("offset:30", {});
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.decisions).toHaveLength(3);
+      expect(result.value.nextCursor).toBe("offset:33");
+    }
+    expect(requestedPages).toEqual([10, 10, 10]);
+  });
+
   test.each([500, 503, 504])(
     "a %i still skips its own page",
     async (status) => {
@@ -633,6 +665,9 @@ describe("a page the origin never answered does not move the cursor", () => {
 
       expect(cursor).toBe("offset:36");
       expect(endpoint.requestedPages).toContain(11);
+      if (status === 500) {
+        expect(endpoint.requestedPages.filter((p) => p === 10)).toHaveLength(3);
+      }
     },
   );
 });
