@@ -3513,3 +3513,52 @@ describe("buildTemplatePlan, lines the source brings back to the margin", () => 
     expect(styleOf(contract({}), "Tolik k předmětu")).toBe("Indent");
   });
 });
+
+describe("buildTemplatePlan, list items in a table cell", () => {
+  test("a lettered item of a cell keeps the source's indent and spacing on the template's list", () => {
+    const table = inColumns(2, [
+      "“Buyer System”",
+      numbered(
+        "(a)",
+        "is used by the Buyer in connection with this Contract;",
+        3,
+      ),
+      "“Certifications”",
+      numbered("(b)", "interfaces with the Supplier System; and", 3),
+    ]);
+    const items = table.blocks.filter(({ label }) => label !== null);
+    for (const item of items) {
+      Object.assign(item, {
+        indent: { left: 720, firstLine: -720 },
+        spacingInEffect: {
+          before: 120,
+          after: 120,
+          line: 240,
+          lineRule: "auto",
+        },
+      });
+    }
+    const nested = sourceItems(build(table).plan).flatMap(
+      ({ nested: inner }) => inner ?? [],
+    );
+    for (const item of items) {
+      const planned = nested.find(({ blockId }) => blockId === item.id);
+      if (planned?.numbering === null || planned?.numbering === undefined) {
+        // Read as no list item: nothing of a list's look to keep.
+        continue;
+      }
+      expect(planned).toMatchObject({
+        indent: { left: 720, hanging: 720 },
+        spacing: { before: 120, after: 120, line: 240, lineRule: "auto" },
+      });
+    }
+    expect(
+      nested.some(
+        ({ blockId, numbering }) =>
+          numbering !== null &&
+          numbering !== undefined &&
+          items.some(({ id }) => id === blockId),
+      ),
+    ).toBe(true);
+  });
+});

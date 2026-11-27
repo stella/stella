@@ -2321,6 +2321,65 @@ const looseCellOf = (
   };
 };
 
+/**
+ * Where a placed cell paragraph stands in its cell. A line of text keeps its
+ * place whether it was read as a party's line or not, and the rows the
+ * source sets tight stay tight. An item a list of the template numbers (a
+ * letter of a definition, a bullet) keeps the indent and spacing the source
+ * gives it in the cell: the template's levels are set for the page's width
+ * and its body's rhythm, not for a column. Not in a document whose body
+ * runs in parallel columns.
+ */
+const placedCellLookOf = (
+  placement: Placement,
+  inner: DocxBlock,
+  numbering: TemplatePlanNumbering | null | undefined,
+  { parallel }: { parallel: boolean },
+): Pick<TemplatePlanNestedParagraph, "alignment" | "spacing" | "indent"> => {
+  // In a document set in parallel columns (two languages side by side) the
+  // columns are its body, and the body takes the template's look.
+  const listed =
+    !parallel &&
+    numbering !== null &&
+    numbering !== undefined &&
+    (!CELL_TEXT_ROLES.has(placement.role) ||
+      placement.pattern?.numFmt === "bullet");
+  if (CELL_TEXT_ROLES.has(placement.role) && !listed) {
+    const alignment = inner.text.trim() === "" ? undefined : setApartOf(inner);
+    const spacing = setTightOf(inner);
+    return {
+      ...(alignment === undefined ? {} : { alignment }),
+      ...(spacing === undefined ? {} : { spacing }),
+    };
+  }
+  if (!listed) {
+    return {};
+  }
+  const indent = cellIndentOf(inner);
+  const spacing = spacingInEffectOf(inner);
+  return {
+    ...(indent === undefined ? {} : { indent }),
+    ...(spacing === undefined ? {} : { spacing }),
+  };
+};
+
+/** The spacing the source gives a paragraph through its own setting, its
+ *  style or the defaults: every side it measures, and its line spacing. */
+const spacingInEffectOf = ({
+  spacingInEffect,
+}: DocxBlock): TemplatePlanSpacing | undefined => {
+  if (spacingInEffect === undefined) {
+    return undefined;
+  }
+  const { before, after, line, lineRule = "auto" } = spacingInEffect;
+  const spacing: TemplatePlanSpacing = {
+    ...(before === undefined ? {} : { before }),
+    ...(after === undefined ? {} : { after }),
+    ...(line === undefined ? {} : { line, lineRule }),
+  };
+  return Object.keys(spacing).length === 0 ? undefined : spacing;
+};
+
 const tableItem = (
   context: Context,
   { placementById }: Placed,
@@ -2333,23 +2392,17 @@ const tableItem = (
     if (placement !== undefined) {
       const numbering = numberingOf(placement);
       const styleId = cellStyleOf(context, placement);
-      // A line of text keeps its place in the cell whether it was read as
-      // a party's line or not; a provision takes its style's.
-      const alignment =
-        CELL_TEXT_ROLES.has(placement.role) && inner.text.trim() !== ""
-          ? setApartOf(inner)
-          : undefined;
-      const spacing = CELL_TEXT_ROLES.has(placement.role)
-        ? setTightOf(inner)
-        : undefined;
       nested.push({
         blockId: inner.id,
         ...(styleId === null ? {} : { styleId }),
         numbering,
         ...stripOf(placement),
         ...asTextOf(inner, numbering),
-        ...(alignment === undefined ? {} : { alignment }),
-        ...(spacing === undefined ? {} : { spacing }),
+        ...placedCellLookOf(placement, inner, numbering, {
+          parallel:
+            (context.index.entryByBlockId.get(inner.id)?.column ?? null) !==
+            null,
+        }),
       });
     } else if (inner.kind === "paragraph") {
       const loose = looseCellOf(context, inner);
