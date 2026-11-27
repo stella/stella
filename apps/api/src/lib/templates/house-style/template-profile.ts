@@ -1544,6 +1544,13 @@ export const validateTemplateProfile = (
       abstractByNum,
     }),
   );
+  // The style for a party's numbered heading line is the template's too.
+  if (
+    profile.partyHead !== undefined &&
+    !facts.has(profile.partyHead.styleId)
+  ) {
+    issues.push({ severity: "error", code: "unknownStyle", role: "party" });
+  }
 
   const { topLevel } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);

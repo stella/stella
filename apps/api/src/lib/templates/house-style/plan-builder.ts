@@ -2297,6 +2297,7 @@ const keepsLineBreakSpacing = (
         : [
             ...Object.values(profile.roles),
             ...Object.values(profile.annexRoles ?? NO_ANNEX_ROLES),
+            profile.partyHead,
           ].find((target) => target?.styleId === styleId)?.alignment) ?? "",
     );
   let blocks = 0;
