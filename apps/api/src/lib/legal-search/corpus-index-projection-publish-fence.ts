@@ -3,7 +3,10 @@ import { type SQL, sql, type SQLWrapper } from "drizzle-orm";
 
 import { corpusIndexProjectionIntents } from "@/api/db/schema";
 import { corpusIndexMaturationPeriodMs } from "@/api/lib/legal-search/corpus-index-config";
-import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  type CorpusIndexManifest,
+  corpusIndexRevisionRetrieval,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusIndexAppendPublishDelayMs,
   corpusProjectionAppendIngestBudgetMs,
@@ -259,19 +262,31 @@ export const corpusProjectionAcceptedAppendCleanupFence = (
 /**
  * Where a state that stopped naming `retiredRevision` goes in the append
  * walk's queue, which is ordered by `coalesce(retry_not_before, updated_at)`
- * and reads only what is runnable now: the revision's cleanup fence plus the
- * generation's split maturation period, the time a delete commonly takes to
- * settle. The walk takes no entity with an outstanding revision, so before
- * this instant it could only read such a state and refuse it. Settling the
- * revision moves the state to the present at once
- * (`wakeStatesAwaitingSettlementTx`), so this bounds the wait only when no
- * settlement of this release does.
+ * and reads only what is runnable now.
+ *
+ * - `stored` retrieval: `transitionAt`. The walk appends beside a revision
+ *   whose exact delete is in flight (`CORPUS_INDEX_INTENT_APPEND_GATE`), so
+ *   the state is runnable at once and the entity is served again as soon as
+ *   its new revision applies.
+ * - `query_only` retrieval: the revision's cleanup fence plus the
+ *   generation's split maturation period, the time a delete commonly takes to
+ *   settle. The walk takes no entity with an outstanding revision, so before
+ *   this instant it could only read such a state and refuse it. Settling the
+ *   revision moves the state to the present at once
+ *   (`wakeStatesAwaitingSettlementTx`), so this bounds the wait only when no
+ *   settlement of this release does.
  */
 export const corpusProjectionRetiredRevisionRunnableAt = (
   manifest: CorpusIndexManifest,
   retiredRevision: SQLWrapper,
-): SQL =>
-  sql`((
+  transitionAt: Date | SQL,
+): SQL => {
+  const retrieval = corpusIndexRevisionRetrieval(manifest);
+  switch (retrieval.type) {
+    case "stored":
+      return sql`${transitionAt}::timestamptz`;
+    case "query_only":
+      return sql`((
     SELECT retired.cleanup_not_before
     FROM ${corpusIndexProjectionIntents} retired
     WHERE retired.id = ${retiredRevision}
@@ -279,6 +294,11 @@ export const corpusProjectionRetiredRevisionRunnableAt = (
     manifest.engine.indexConfig.indexing_settings.merge_policy
       .maturation_period,
   )}::double precision * interval '1 millisecond')`;
+    default:
+      retrieval satisfies never;
+      return panic(`Unhandled revision retrieval: ${String(retrieval)}`);
+  }
+};
 
 /**
  * The same fence for the statement that records an acceptance, which cannot
