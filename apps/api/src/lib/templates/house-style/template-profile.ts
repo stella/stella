@@ -134,12 +134,6 @@ export type TemplateProfile = {
    *  (title, parties) and its first article. Absent when the sample has no
    *  article, and from a profile made before this was read. */
   frontMatterEndsPage?: boolean;
-  /** The styles the template sets the provisions of an annex in, where it
-   *  has a list of their own for them (a heading and its clauses, named
-   *  for annexes): what stands under an annex heading is placed in these
-   *  and counted in that list. Absent when the template has no such list,
-   *  and from a profile made before this was read. */
-  annexRoles?: AnnexRoles;
   /** The style the template writes the text of its tables in. Absent when
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
@@ -154,6 +148,12 @@ export type TemplateProfile = {
   fillerStrings: string[];
   /** How the template numbers an annex heading; null when it shows none. */
   annex: { numbering: "list" | "field" | "typed" } | null;
+  /** The styles the template sets the provisions of an annex in, where it
+   *  has a list of their own for them (a heading and its clauses, named
+   *  for annexes): what stands under an annex heading is placed in these
+   *  and counted in that list. Absent when the template has no such list,
+   *  and from a profile made before this was read. */
+  annexRoles?: AnnexRoles;
   /** The alignment of the template's default paragraph style, which a
    *  paragraph placed without a style takes; null when it states none.
    *  Absent from a profile inferred before it was read. */
@@ -1323,7 +1323,6 @@ export const inferTemplateProfile = (
     ...(pageBeforeArticle === undefined
       ? {}
       : { frontMatterEndsPage: pageBeforeArticle }),
-    ...(annexRoles === undefined ? {} : { annexRoles }),
     ...(tableText === undefined ? {} : { tableText }),
     fields: {
       freezeKinds: kinds
@@ -1335,6 +1334,7 @@ export const inferTemplateProfile = (
     },
     fillerStrings: inferFillerStrings(inspection.blocks),
     annex,
+    ...(annexRoles === undefined ? {} : { annexRoles }),
     defaultAlignment:
       inspection.styles.find(
         ({ type, isDefault }) => type === "paragraph" && isDefault,
@@ -1609,6 +1609,15 @@ const profileSchema = v.strictObject({
   slots: v.strictObject({ party: slotSchema, signature: slotSchema }),
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
   frontMatterEndsPage: v.exactOptional(v.boolean()),
+  tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
+  fields: v.strictObject({
+    freezeKinds: fieldKindsSchema,
+    liveKinds: fieldKindsSchema,
+  }),
+  fillerStrings: v.pipe(v.array(textSchema), v.maxLength(FILLER_STRINGS_MAX)),
+  annex: v.nullable(
+    v.strictObject({ numbering: v.picklist(["list", "field", "typed"]) }),
+  ),
   annexRoles: v.exactOptional(
     v.strictObject({
       articleHeading: v.exactOptional(roleTargetObjectSchema),
@@ -1618,15 +1627,6 @@ const profileSchema = v.strictObject({
       letter: v.exactOptional(roleTargetObjectSchema),
       roman: v.exactOptional(roleTargetObjectSchema),
     }),
-  ),
-  tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
-  fields: v.strictObject({
-    freezeKinds: fieldKindsSchema,
-    liveKinds: fieldKindsSchema,
-  }),
-  fillerStrings: v.pipe(v.array(textSchema), v.maxLength(FILLER_STRINGS_MAX)),
-  annex: v.nullable(
-    v.strictObject({ numbering: v.picklist(["list", "field", "typed"]) }),
   ),
   defaultAlignment: v.exactOptional(v.nullable(textSchema)),
   health: v.exactOptional(
