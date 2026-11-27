@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { setImmediate } from "node:timers/promises";
 
 import { sha256Base64Url } from "../sha256.js";
 import { startLoopbackListener } from "./loopback-listener.js";
@@ -306,13 +307,12 @@ const followVerifiedRedirect = async (redirectUri: string) =>
 
 /** Whether `promise` is still pending after the event loop has had a turn. */
 const isPending = async (promise: Promise<unknown>): Promise<boolean> => {
-  // real-time: give a premature page time to arrive; a withheld one never does.
   const settled = await Promise.race([
     promise.then(
       () => true,
       () => true,
     ),
-    Bun.sleep(50).then(() => false),
+    setImmediate(false),
   ]);
   return !settled;
 };
