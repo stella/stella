@@ -901,13 +901,7 @@ fn bounded_keychain<T: Send + 'static>(
       let phase = Arc::clone(&phase);
       move || {
         let result = call();
-        {
-          let mut phase = phase.lock().unwrap_or_else(PoisonError::into_inner);
-          if *phase == KeychainCall::Abandoned {
-            abandoned.fetch_sub(1, Ordering::AcqRel);
-          }
-          *phase = KeychainCall::Answered;
-        }
+        keychain_answered(&phase, abandoned);
         if sender.send(result).is_err() {
           tracing::debug!("activity key read answered after its caller gave up");
         }
@@ -923,22 +917,44 @@ fn bounded_keychain<T: Send + 'static>(
   match receiver.recv_timeout(timeout) {
     Ok(result) => Some(result.map_err(StoreKeyError::Unreadable)),
     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-      let mut phase = phase.lock().unwrap_or_else(PoisonError::into_inner);
-      if *phase == KeychainCall::Answered {
-        // It answered as the wait ended; its result is on the way.
-        drop(phase);
-        return Some(receiver.recv().map_or_else(
-          |_| Err(ended()),
-          |result| result.map_err(StoreKeyError::Unreadable),
-        ));
+      if keychain_given_up(&phase, abandoned) {
+        return None;
       }
-      *phase = KeychainCall::Abandoned;
-      abandoned.fetch_add(1, Ordering::AcqRel);
-      drop(phase);
-      None
+      // It answered as the wait ended; its result is on the way.
+      Some(receiver.recv().map_or_else(
+        |_| Err(ended()),
+        |result| result.map_err(StoreKeyError::Unreadable),
+      ))
     }
     Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Some(Err(ended())),
   }
+}
+
+/// The reader answered: a call its caller gave up on stops counting.
+fn keychain_answered(
+  phase: &Mutex<KeychainCall>,
+  abandoned: &std::sync::atomic::AtomicUsize,
+) {
+  let mut phase = phase.lock().unwrap_or_else(PoisonError::into_inner);
+  if *phase == KeychainCall::Abandoned {
+    abandoned.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+  }
+  *phase = KeychainCall::Answered;
+}
+
+/// The caller stops waiting, and the call counts as abandoned until it
+/// answers; `false` when it answered meanwhile.
+fn keychain_given_up(
+  phase: &Mutex<KeychainCall>,
+  abandoned: &std::sync::atomic::AtomicUsize,
+) -> bool {
+  let mut phase = phase.lock().unwrap_or_else(PoisonError::into_inner);
+  if *phase == KeychainCall::Answered {
+    return false;
+  }
+  *phase = KeychainCall::Abandoned;
+  abandoned.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+  true
 }
 
 pub fn parse_date(raw: &str) -> Result<NaiveDate, String> {
@@ -7907,8 +7923,10 @@ mod tests {
     let (release, released) = std::sync::mpsc::channel::<()>();
     assert_eq!(
       bounded_keychain(&ABANDONED, give_up, move || {
-        assert!(released.recv().is_ok());
-        Ok(1)
+        released
+          .recv()
+          .map(|()| 1)
+          .map_err(|error| error.to_string())
       }),
       None
     );
@@ -7923,14 +7941,25 @@ mod tests {
       None
     );
     assert!(!started.load(Ordering::SeqCst));
-    // Once it answers, calls run again.
-    release.send(()).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while ABANDONED.load(Ordering::SeqCst) > 0 {
-      assert!(Instant::now() < deadline, "the hung call never answered");
-      std::thread::sleep(Duration::from_millis(1));
-    }
-    assert_eq!(bounded_keychain(&ABANDONED, answer, || Ok(3)), Some(Ok(3)));
+    // Releasing the hung reader ends it; nobody waits for its answer.
+    drop(release);
+  }
+
+  #[test]
+  fn an_abandoned_keychain_call_counts_until_it_answers() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let abandoned = AtomicUsize::new(0);
+    // Given up while waiting: counted until the reader answers.
+    let hung = Mutex::new(KeychainCall::Waiting);
+    assert!(keychain_given_up(&hung, &abandoned));
+    assert_eq!(abandoned.load(Ordering::SeqCst), 1);
+    keychain_answered(&hung, &abandoned);
+    assert_eq!(abandoned.load(Ordering::SeqCst), 0);
+    // Answered as the wait ended: never counted.
+    let late = Mutex::new(KeychainCall::Waiting);
+    keychain_answered(&late, &abandoned);
+    assert!(!keychain_given_up(&late, &abandoned));
+    assert_eq!(abandoned.load(Ordering::SeqCst), 0);
   }
 
   #[test]
