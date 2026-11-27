@@ -132,7 +132,7 @@ const matureSplits = () => {
       query !==
       revisions.map((id) => `projection_revision:"${id}"`).join(" OR ")
     ) {
-      return panic(`The engine was asked an unexpected delete: ${query}`);
+      panic(`The engine was asked an unexpected delete: ${query}`);
     }
     for (const deleted of revisions) {
       held.delete(deleted);
@@ -290,7 +290,7 @@ const loseAppend = async (
   const at = new Date(attemptedAt.getTime() + laterByMinutes * 60_000);
   const [lease] = await reserve(generation, n, id, at);
   if (lease === undefined) {
-    return panic("Expected the attempt to be reserved");
+    panic("Expected the attempt to be reserved");
   }
   expect(await start(lease, at)).toBe("started");
   expect(
@@ -337,7 +337,7 @@ const issueDelete = async (
     revisions: [id],
   });
   if (task.isErr()) {
-    return panic("The fake engine refused a delete");
+    panic("The fake engine refused a delete");
   }
   await runInTransaction(
     async (tx) =>
@@ -418,7 +418,7 @@ const appendAndApply = async (lease: CorpusProjectionIntentLease) => {
     expected: [{ revision: lease.intentId, documentCount: 1 }],
   });
   if (census.isErr()) {
-    return panic("The fake engine refused a census");
+    panic("The fake engine refused a census");
   }
   const proved = await runInTransaction(
     async (tx) =>
@@ -525,7 +525,7 @@ test("a stored-revision generation appends beside an old revision whose delete w
   const fresh = revision(2);
   const [lease] = await reserve(V10, 4, fresh);
   if (lease === undefined) {
-    return panic("Expected the retry to be reserved beside the delete");
+    panic("Expected the retry to be reserved beside the delete");
   }
   // The same desired epoch, as a new revision.
   expect(lease.epoch).toBe(1n);
@@ -625,7 +625,7 @@ test("an erasure during the overlap fences the new revision and waits for both",
   await issueDelete(V10, 6, old);
   const [lease] = await reserve(V10, 6, revision(32));
   if (lease === undefined) {
-    return panic("Expected the retry to be reserved beside the delete");
+    panic("Expected the retry to be reserved beside the delete");
   }
   await appendAndApply(lease);
 

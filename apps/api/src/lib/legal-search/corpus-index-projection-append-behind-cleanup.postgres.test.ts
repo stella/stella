@@ -202,11 +202,11 @@ const seed = async (db: GatedTestDb, count: number): Promise<Fixture> => {
 const decisionIdsOf = ({ entityIds }: Fixture) =>
   entityIds.map((id) => toSafeId<"caseLawDecision">(id));
 
-const reserve = (
+const reserve = async (
   tx: Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0],
   fixture: Fixture,
 ) =>
-  reserveCorpusProjectionIntentsTx(tx, {
+  await reserveCorpusProjectionIntentsTx(tx, {
     family: "case_law",
     generation: GENERATION,
     scope: { type: "subjects", entityIds: decisionIdsOf(fixture) },
@@ -674,7 +674,7 @@ if (!databaseUrl || !runPostgresTests) {
             expected: [{ revision: lease.intentId, documentCount: 1 }],
           });
           if (census.isErr()) {
-            return panic("Expected a census");
+            panic("Expected a census");
           }
           const proving = holding(firstDb, async (tx) =>
             proveAcceptedCorpusProjectionAppendsTx(tx, {

@@ -94,8 +94,12 @@ const wake = async (args: readonly string[]) => {
   const code = await runCorpusGenerationCommand({
     args: ["wake-deferred", "--family", "case_law", ...args],
     withDatabase: testDatabase,
-    write: (line) => out.push(line),
-    writeError: (line) => err.push(line),
+    write: (line) => {
+      out.push(line);
+    },
+    writeError: (line) => {
+      err.push(line);
+    },
   });
   return { code, out: out.join("\n"), err: err.join("\n") };
 };

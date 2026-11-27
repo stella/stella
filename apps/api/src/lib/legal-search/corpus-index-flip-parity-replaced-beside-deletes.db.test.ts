@@ -122,10 +122,7 @@ test("more deletes in flight than the parity walk's cap, each beside an applied 
     coverage: { pageSize: 5000, pageBudget: 100, resumeFrom: null },
   });
   if (!Result.isOk(parity)) {
-    return panic(
-      `Flip parity read failed: ${parity.error.message}`,
-      parity.error,
-    );
+    panic(`Flip parity read failed: ${parity.error.message}`, parity.error);
   }
   expect(parity.value.regressions).toMatchObject({
     type: "exact",
