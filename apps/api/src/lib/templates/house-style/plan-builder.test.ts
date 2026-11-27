@@ -2351,6 +2351,13 @@ describe("buildTemplatePlan, drawn marks fixed to the source's page", () => {
       expect(
         sourceItems(breaking).find(({ blockId }) => blockId === "p2"),
       ).toMatchObject({ dropPageShapes: true });
+      // Its note names the place and does not say the paragraph went.
+      expect(notesOf(build(paged).note)).toContainEqual({
+        kind: "pageMarksDropped",
+        blockId: "p2",
+        marks: 2,
+        nearBlockId: "p3",
+      });
     }
     const { plan, note } = build(manifest);
     expect(plan.omit).toContainEqual({ blockId: "p1", reason: "pageArtifact" });
@@ -2365,9 +2372,16 @@ describe("buildTemplatePlan, drawn marks fixed to the source's page", () => {
       "dropPageShapes",
     );
     expect(notesOf(note)).toEqual([
-      { kind: "pageMarksDropped", blockId: "p1", marks: 3, nearBlockId: "p2" },
+      {
+        kind: "pageMarksDropped",
+        blockId: "p1",
+        marks: 3,
+        nearBlockId: "p2",
+        paragraphOmitted: true,
+      },
       { kind: "pageMarksDropped", blockId: "p3", marks: 2 },
-      { kind: "pageMarksDropped", blockId: "p4", marks: 1 },
+      // The paragraph with the picture has no words to name it by.
+      { kind: "pageMarksDropped", blockId: "p4", marks: 1, nearBlockId: "p5" },
     ]);
   });
 

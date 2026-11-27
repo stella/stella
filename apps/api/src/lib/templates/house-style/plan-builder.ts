@@ -266,13 +266,15 @@ export type FormattingNoteItem =
    *  lines placed at coordinates of that page) were left out: `marks` of
    *  them, anchored in the paragraph `blockId`. Set anew, the text stands
    *  elsewhere and they would stand over it. A paragraph that held nothing
-   *  else is left out with them; `nearBlockId` is then the next paragraph
-   *  with text, to find the place by. */
+   *  else is left out with them, and `paragraphOmitted` says so. For a
+   *  paragraph without words `nearBlockId` is the next paragraph with
+   *  text, to find the place by. */
   | {
       kind: "pageMarksDropped";
       blockId: string;
       marks: number;
       nearBlockId?: string;
+      paragraphOmitted?: true;
     }
   /** Such marks next to the words of a signature were kept, `marks` of
    *  them in the paragraph `blockId`: one of them may be the line to sign
@@ -1714,10 +1716,11 @@ const placeParagraphs = (context: Context): Placed => {
     // with them, unless the source starts a page in front of it or it is
     // kept for a section or a table: then it stays, without its marks.
     if (
-      context.pageMarks.has(block.id) &&
-      holdsOnlyPageMarks(block) &&
-      !startsPage.has(block.id) &&
-      !kept.has(block.id)
+      goesWithPageMarks(
+        context,
+        block,
+        startsPage.has(block.id) || kept.has(block.id),
+      )
     ) {
       placed.omitted.set(block.id, "pageArtifact");
       continue;
@@ -1872,7 +1875,7 @@ const pageMarksToDrop = ({ blocks, items }: Context): Set<string> => {
       continue;
     }
     dropped.add(block.id);
-    const [near] = holdsOnlyPageMarks(block) ? nearest(position + 1, 1) : [];
+    const [near] = hasText(block) ? [] : nearest(position + 1, 1);
     items.push({
       kind: "pageMarksDropped",
       blockId: block.id,
@@ -1881,6 +1884,27 @@ const pageMarksToDrop = ({ blocks, items }: Context): Set<string> => {
     });
   }
   return dropped;
+};
+
+/**
+ * Whether a paragraph goes with the page marks it holds: it holds nothing
+ * else and nothing `holds` it in place (a page the source starts in front
+ * of it, a section or a table it is kept for). Its note then says so.
+ */
+const goesWithPageMarks = (
+  context: Context,
+  block: DocxBlock,
+  holds: boolean,
+): boolean => {
+  if (holds || !context.pageMarks.has(block.id) || !holdsOnlyPageMarks(block)) {
+    return false;
+  }
+  for (const item of context.items) {
+    if (item.kind === "pageMarksDropped" && item.blockId === block.id) {
+      item.paragraphOmitted = true;
+    }
+  }
+  return true;
 };
 
 const stripOf = ({

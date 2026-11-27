@@ -305,18 +305,16 @@ const noteItemOf = (
         count: item.blockIds.length,
       };
     // The place is named by the first words of the paragraph that held the
-    // marks, or of the next one when that paragraph held nothing else.
+    // marks, or of the next one when that paragraph has no words.
     case "pageMarksDropped":
       return {
         kind: "page_marks_dropped",
         blockId: item.blockId,
         count: item.marks,
-        ...(item.nearBlockId === undefined
-          ? textOf(item.blockId, 0, LABEL_EXCERPT_MAX)
-          : {
-              reason: "paragraph_omitted",
-              ...textOf(item.nearBlockId, 0, LABEL_EXCERPT_MAX),
-            }),
+        ...(item.paragraphOmitted === true
+          ? { reason: "paragraph_omitted" }
+          : {}),
+        ...textOf(item.nearBlockId ?? item.blockId, 0, LABEL_EXCERPT_MAX),
       };
     case "pageMarksKept":
       return {

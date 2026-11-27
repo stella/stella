@@ -35,9 +35,10 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
   "template_blocks_kept",
   /** Drawn marks of the source's page layout (dots, rules, lines placed at
    *  coordinates of that page) were left out: `count` of them, anchored in
-   *  the paragraph `text` starts. `reason` is `paragraph_omitted` when the
-   *  paragraph held nothing else and went with them; `text` is then the
-   *  start of the next paragraph. Check the place against the source. */
+   *  the paragraph `text` starts, or in a paragraph without words in front
+   *  of it. `reason` is `paragraph_omitted` when the paragraph held
+   *  nothing else and went with them. Check the place against the
+   *  source. */
   "page_marks_dropped",
   /** Such marks next to the words of a signature were kept, `count` of
    *  them: one may be the line to sign on. They may stand in the wrong
