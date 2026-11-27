@@ -1035,7 +1035,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "8.5.0",
+      "version": "8.6.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1198,7 +1198,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "dependencies": {
         "@stll/docx-core": "catalog:",
         "better-result": "catalog:",
