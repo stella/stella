@@ -116,10 +116,6 @@ export const ROOT_OPERATION_RESULTS = {
     file: "apps/api/src/lib/confirmation-otp.ts",
     reason: "Burns the code on its own connection and returns the verdict.",
   },
-  readOrganizationMachineApiKeyPage: {
-    file: "apps/api/src/lib/machine-api-key-queries.ts",
-    reason: "Returns one page of an organization's machine key rows.",
-  },
   recordNewOrganizationAccessState: {
     file: "apps/api/src/lib/usage/organization-access-state-owner.ts",
     reason: "Records a new organization's access state; returns nothing.",

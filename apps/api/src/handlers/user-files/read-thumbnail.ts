@@ -10,7 +10,10 @@ import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
-import { callerDownloadSource } from "@/api/lib/s3-presign";
+import {
+  callerDownloadSource,
+  MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS,
+} from "@/api/lib/s3-presign";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const readUserFileThumbnail = createSafeRootHandler(
@@ -81,7 +84,7 @@ const readUserFileThumbnail = createSafeRootHandler(
           userId: user.id,
           source: callerDownloadSource({ id: sourceSessionId }),
           s3Key: thumbnailKey,
-          expiresInSeconds: 900,
+          expiresInSeconds: MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS,
           workspaceId: file.workspaceId,
         });
 
