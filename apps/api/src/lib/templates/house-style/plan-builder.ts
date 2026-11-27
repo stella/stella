@@ -1473,12 +1473,15 @@ const standsAtMargin = (line: Placement, item: Placement): boolean => {
  * text under a clause and indents it; a line the source brings back to the
  * margin is no part of the clause above it and takes the style of plain
  * text.
+ *
+ * Only in a document that sets most of its unnumbered lines under their
+ * provision's text: there the margin is a choice. One that sets them all
+ * at the margin makes none, and its lines stay under their clauses.
  */
 const setMarginLines = (context: Context, placed: Placed): void => {
   const plain = context.profile.roles.body?.styleId;
-  if (plain === undefined) {
-    return;
-  }
+  const atMargin: Placement[] = [];
+  let under = 0;
   let item: Placement | null = null;
   for (const block of context.topLevel) {
     const placement =
@@ -1488,13 +1491,19 @@ const setMarginLines = (context: Context, placed: Placed): void => {
     }
     if (showsLabel(placement)) {
       item = placement;
-    } else if (
-      item !== null &&
-      placement.role === "continuation" &&
-      standsAtMargin(placement, item)
-    ) {
-      placement.styleId = plain;
+    } else if (item !== null && placement.role === "continuation") {
+      if (standsAtMargin(placement, item)) {
+        atMargin.push(placement);
+      } else if (standsUnder(placement, item)) {
+        under += 1;
+      }
     }
+  }
+  if (plain === undefined || under <= atMargin.length) {
+    return;
+  }
+  for (const placement of atMargin) {
+    placement.styleId = plain;
   }
 };
 
