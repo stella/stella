@@ -19,6 +19,7 @@ import {
 } from "./ci-package-scope";
 import { cachedForRepository } from "./ci-repository-cache";
 import {
+  isNonRuntimeSourceFile,
   routeSmokeAffected,
   sourceImportClosure,
 } from "./detect-route-smoke-changes";
@@ -597,7 +598,8 @@ const deriveNormalScopeFacts = (
     ".dockerignore",
   ]);
   const p = (patterns: readonly string[]) => anyMatches(files, patterns);
-  let e2eCore = e2eRequired("core", files);
+  const runtimeAppFiles = files.filter((file) => !isNonRuntimeSourceFile(file));
+  let e2eCore = e2eRequired("core", runtimeAppFiles);
   const collab = p([
     "apps/collab/*",
     "apps/api/src/handlers/folio-collab/*",
@@ -616,7 +618,7 @@ const deriveNormalScopeFacts = (
   const routeSmoke =
     ["pull_request", "merge_group"].includes(input.eventName) &&
     routeSmokeAffected(scopeFiles, root);
-  let webBuild = p([
+  let webBuild = anyMatches(runtimeAppFiles, [
     "apps/web/*",
     "packages/*",
     "patches/*",

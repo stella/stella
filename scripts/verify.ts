@@ -130,6 +130,25 @@ export type AsyncVerifyStepRunner = (
 const formatSeconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 const isHeavyCheckStep = (step: VerifyWorkflowStep): boolean =>
   step.job.startsWith("code-quality-");
+const CI_ONLY_ARM =
+  /^([ \t]*)if \[\[ "\$\{STELLA_VERIFY_LOCAL:-false\}" == true \]\]; then\n([\s\S]*?)^\1else\n[\s\S]*?^\1fi$/gmu;
+const effectiveLocalPrepareKey = (step: VerifyWorkflowStep): string => {
+  const localRun = step.run
+    .replaceAll(CI_ONLY_ARM, "$2")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.length > 0 &&
+        !line.startsWith("#") &&
+        line !== "unset CI_GENERATED_SOURCES_MANIFEST",
+    )
+    .join("\n");
+  const sortedEnv = Object.keys(step.env)
+    .toSorted()
+    .map((key) => [key, step.env[key]]);
+  return JSON.stringify({ cwd: step.cwd, env: sortedEnv, run: localRun });
+};
 
 export const runVerifyStepsConcurrent = async (
   steps: readonly VerifyWorkflowStep[],
@@ -143,7 +162,13 @@ export const runVerifyStepsConcurrent = async (
   const serialChecks = checkSteps.filter((step) => isHeavyCheckStep(step));
   const timings: { name: string; ms: number }[] = [];
 
+  const seenPrepareKeys = new Set<string>();
   for (const step of prepareSteps) {
+    const prepareKey = effectiveLocalPrepareKey(step);
+    if (seenPrepareKeys.has(prepareKey)) {
+      console.log(`verify: [skip duplicate] ${step.job} / ${step.name}`);
+      continue;
+    }
     console.log(`verify: ${step.job} / ${step.name}`);
     const stepStart = performance.now();
     const status = await run(step, { buffered: false });
@@ -151,6 +176,7 @@ export const runVerifyStepsConcurrent = async (
     if (status !== 0) {
       return status;
     }
+    seenPrepareKeys.add(prepareKey);
   }
 
   const limit = Math.max(1, concurrency);

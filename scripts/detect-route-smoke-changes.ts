@@ -16,6 +16,14 @@ const ENTRY_POINTS = [
   "apps/web/e2e/playwright.config.ts",
   // Playwright loads this by configuration string, rather than an import.
   "apps/web/e2e/global-teardown.ts",
+  // Executed by setup-e2e-stack or dev routes during route-smoke; other
+  // maintenance scripts under apps/api/scripts/ stay out of scope.
+  "scripts/prepare-mcp-apps.ts",
+  "apps/api/scripts/generate-capability-runtime.ts",
+  "apps/api/scripts/seed-test-user.ts",
+  "apps/api/scripts/seed-e2e-feature-access.ts",
+  "apps/api/scripts/seed-dev.ts",
+  "apps/api/scripts/seed-firm-knowledge.ts",
 ] as const;
 // Each extension parses with its own grammar: TSX would reject valid `.ts`
 // syntax such as generic arrows (`<T = unknown>(value: T) => value`).
@@ -84,13 +92,20 @@ const NON_RUNTIME_SOURCE_FILE =
   /\.(?:test|spec|stories)\.[cm]?[jt]sx?$|(?:^|\/)(?:__tests__|__fixtures__|__mocks__|__snapshots__)\//u;
 const NON_RUNTIME_DOC_FILE =
   /(?:^|\/)(?:README|AGENTS|CLAUDE|GEMINI|TERMINOLOGY|CHANGELOG)\.md$|\.research\.md$|(?:^|\/)docs\/.*\.mdx?$/u;
+const E2E_API_FIXTURE_FILES = new Set([
+  // Read from disk by apps/web/e2e/helpers/document.ts (imported by route-smoke).
+  "apps/api/src/lib/search/__fixtures__/mixed-3pages.pdf",
+]);
 const NON_RUNTIME_API_PREFIXES = [
   "apps/api/src/tests/",
   "apps/api/evals/",
   "apps/api/e2e/",
   "apps/api/typecheck-required/",
 ] as const;
-const isNonRuntimeSourceFile = (file: string): boolean => {
+export const isNonRuntimeSourceFile = (file: string): boolean => {
+  if (E2E_API_FIXTURE_FILES.has(file)) {
+    return false;
+  }
   if (!SOURCE_TREE_PREFIXES.some((prefix) => file.startsWith(prefix))) {
     return false;
   }
@@ -112,7 +127,7 @@ const runtimePath = (file: string): boolean => {
   if (RUNTIME_FILES.has(file)) {
     return true;
   }
-  if (isNonRuntimeSourceFile(file)) {
+  if (isNonRuntimeSourceFile(file) || file.startsWith("apps/api/scripts/")) {
     return false;
   }
   return (
