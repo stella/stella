@@ -166,14 +166,13 @@ export const ChoiceCard = ({
       </span>
     </Label>
   );
-  if (details === undefined) {
-    return card;
-  }
-  // The card's padding, radio and gap: the details start where its text does.
+  // One wrapper whether or not details show, so details appearing on a
+  // choice keep its radio, and the focus on it, in place. The card's
+  // padding, radio and gap: the details start where its text does.
   return (
     <div className="flex flex-col gap-2">
       {card}
-      <div className="ps-10">{details}</div>
+      {details === undefined ? null : <div className="ps-10">{details}</div>}
     </div>
   );
 };
