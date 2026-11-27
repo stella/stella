@@ -2688,6 +2688,8 @@ type Designator = DetectedReference["designators"][number];
 
 type CrossReference = NonNullable<DocxBlock["crossReferences"]>[number];
 
+const NO_CROSS_REFERENCES: readonly CrossReference[] = [];
+
 type Field = Pick<TemplatePlanReference, "instruction" | "expectedText"> & {
   /** Where the field starts when it covers more than the designator. */
   start?: number;
@@ -2771,6 +2773,8 @@ const carriedSwitchesOf = (instruction: string): string | null => {
   return carried.join(" ");
 };
 
+const NO_OFFSETS: readonly number[] = [];
+
 /** A number a field counts: digits, or a roman or letter count. */
 const COUNTED_NUMBER = /^(?:\d+|\p{L}+)/u;
 
@@ -2781,7 +2785,7 @@ const COUNTED_NUMBER = /^(?:\d+|\p{L}+)/u;
 const showsTextOf = (result: string, block: DocxBlock): boolean => {
   let rest = result;
   let from = 0;
-  for (const at of block.selfNumbers ?? []) {
+  for (const at of block.selfNumbers ?? NO_OFFSETS) {
     const piece = block.text.slice(from, at);
     const number = rest.startsWith(piece)
       ? COUNTED_NUMBER.exec(rest.slice(piece.length))?.[0]
@@ -2939,7 +2943,12 @@ const carryCrossReferences = ({
     ) {
       return;
     }
-    spans.set(block.id, [...(spans.get(block.id) ?? []), { start, end }]);
+    const taken = spans.get(block.id);
+    if (taken === undefined) {
+      spans.set(block.id, [{ start, end }]);
+    } else {
+      taken.push({ start, end });
+    }
     references.push({
       blockId: block.id,
       start,
@@ -2950,7 +2959,7 @@ const carryCrossReferences = ({
     });
   };
   for (const block of blocks) {
-    for (const crossReference of block.crossReferences ?? []) {
+    for (const crossReference of block.crossReferences ?? NO_CROSS_REFERENCES) {
       carry(block, crossReference);
     }
   }
