@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 /**
  * A decision's blocks read through the letter-spacing owner,
  * `collapseLetterSpacing` in `@stll/text-normalize`, with the document's

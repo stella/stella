@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: the PDF text-layer read moved unchanged into libpdf-utils.ts (readPdfTextPages): the same load, pages and extraction.
 /**
  * Slovak Courts PDF parser.
@@ -39,6 +40,7 @@
 
 import { SecurityError } from "@libpdf/core";
 
+import { createBlockAnchorAllocator } from "@stll/legal-ast/block-anchors";
 import type {
   Block,
   DocumentAst,
@@ -47,10 +49,15 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import {
+  type PdfPrintedLine,
+  readPdfLineJoins,
+} from "@stll/legal-ast/hard-wrapped-lines";
+import {
   rewriteInlineWhitespace,
   stripInlinePrefix,
   stripInlineSuffix,
 } from "@stll/legal-ast/inline-line";
+import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 import { LINE_JOIN } from "@stll/legal-ast/line-wrap";
 import {
   PRINTED_LABEL_KIND,
@@ -73,13 +80,7 @@ import {
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
-import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import {
-  type PdfPrintedLine,
-  readPdfLineJoins,
-} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
-import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   buildBoldRanges,
   isBoldFont,
