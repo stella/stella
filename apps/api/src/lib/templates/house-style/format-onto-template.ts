@@ -59,6 +59,37 @@ import type {
   TemplateProfileIssue,
 } from "@/api/lib/templates/house-style/template-profile";
 
+/** Kinds of field that print a number they count themselves. */
+const SELF_NUMBERING_KINDS = /^AUTONUM(?:LGL|OUT)?$/u;
+
+type ReferenceResult = TemplatePlanReport["references"]["results"][number];
+
+/**
+ * Whether the source vouches for a field the plan kept from it, to a
+ * paragraph whose number a field counts. The engine cannot say what such
+ * a number reads. But the plan keeps such a field only where it places
+ * every paragraph that counts one, so where the template brings no field
+ * of that kind along, the output counts the same fields in the same order
+ * as the source and the field shows what it showed there.
+ */
+const vouchedBySource = (
+  manifest: DocxBlockManifest,
+  report: TemplatePlanReport,
+  { blockId, targetBlockId, expectedText }: ReferenceResult,
+): boolean => {
+  const block = manifest.blocks.find(({ id }) => id === blockId);
+  const target = manifest.blocks.find(({ id }) => id === targetBlockId);
+  return (
+    target?.selfNumbers !== undefined &&
+    block?.crossReferences?.some(
+      ({ start, end, targetBlockId: cited }) =>
+        cited === targetBlockId &&
+        block.text.slice(start, end) === expectedText,
+    ) === true &&
+    !report.leftovers.fields.some(({ kind }) => SELF_NUMBERING_KINDS.test(kind))
+  );
+};
+
 /** Applies of one document; each repair costs one. */
 const ATTEMPTS_MAX = 8;
 
@@ -455,10 +486,14 @@ export const formatOntoTemplate = async ({
       : []) {
       repaired = exclude("numbering", blockId, "labelDiffers") || repaired;
     }
-    for (const { targetBlockId, expectedText, predictedText } of report
-      .references.results) {
-      // A field text the engine cannot vouch for counts as contradicted.
-      if (predictedText !== expectedText) {
+    for (const result of report.references.results) {
+      const { targetBlockId, expectedText, predictedText } = result;
+      // A field text neither the engine nor the source vouches for counts
+      // as contradicted.
+      if (
+        predictedText !== expectedText &&
+        !(predictedText === null && vouchedBySource(manifest, report, result))
+      ) {
         const cause =
           predictedText === null ? "fieldTextUnverified" : "fieldTextDiffers";
         repaired = exclude("targets", targetBlockId, cause) || repaired;

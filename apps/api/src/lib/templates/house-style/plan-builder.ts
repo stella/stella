@@ -2611,7 +2611,7 @@ type CarryOptions = {
  * as it did. With the spans they take, by block.
  */
 const carryCrossReferences = ({
-  context: { blocks, exclusions },
+  context: { blocks, exclusions, tableOf },
   placed: { placementById, mergedInto, titleOf },
   claim,
   strippedLength,
@@ -2621,6 +2621,15 @@ const carryCrossReferences = ({
 } => {
   const paragraphOf = (blockId: string): string =>
     mergedInto.get(blockId) ?? blockId;
+  // A number a field counts reads as in the source only where every
+  // paragraph that counts one is placed.
+  const countsKept = blocks.every(
+    ({ id, selfNumbers }) =>
+      selfNumbers === undefined ||
+      placementById.has(id) ||
+      mergedInto.has(id) ||
+      tableOf.has(id),
+  );
   const references: TemplatePlanReference[] = [];
   const spans = new Map<string, { start: number; end: number }[]>();
   const carry = (
@@ -2636,6 +2645,7 @@ const carryCrossReferences = ({
       target === undefined ||
       switches === null ||
       !targetWhole ||
+      (target.block.selfNumbers !== undefined && !countsKept) ||
       exclusions.targets.has(targetBlockId) ||
       paragraphOf(block.id) === paragraphOf(targetBlockId) ||
       // The paragraph reads as in the source: no label of its own goes or

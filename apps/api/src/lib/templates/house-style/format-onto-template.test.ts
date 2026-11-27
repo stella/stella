@@ -14,6 +14,7 @@ import { formatOntoTemplate } from "@/api/lib/templates/house-style/format-onto-
 import {
   blockIdOf,
   czechContract,
+  manifestOf,
 } from "@/api/lib/templates/house-style/manifest.test-helpers";
 import { inferTemplateProfile } from "@/api/lib/templates/house-style/template-profile";
 import { contractTemplate } from "@/api/lib/templates/house-style/template.test-helpers";
@@ -30,6 +31,8 @@ type Answer =
       fieldDiffers?: string[];
       fieldUnverified?: string[];
       labelLost?: string[];
+      /** The template brings a field that counts its own number. */
+      countingFieldLeft?: true;
     };
 
 type FakeEngine = TemplatePlanEngine & { plans: TemplatePlan[] };
@@ -97,7 +100,12 @@ const fakeEngine = (
       footnotes: { source: 1, output: 1 },
       endnotes: { source: 0, output: 0 },
       leftovers: {
-        fields: [{ part: "word/footer1.xml", kind: "PAGE", count: 1 }],
+        fields: [
+          { part: "word/footer1.xml", kind: "PAGE", count: 1 },
+          ...("countingFieldLeft" in answer
+            ? [{ part: "word/document.xml", kind: "AUTONUMLGL", count: 1 }]
+            : []),
+        ],
         frozenFields: [{ part: "word/footer2.xml", kind: "TIME", count: 1 }],
         filler: [],
       },
@@ -410,6 +418,58 @@ describe("formatOntoTemplate", () => {
         ({ targetBlockId }) => targetBlockId === article,
       ),
     ).toEqual([]);
+  });
+
+  test("keeps a field of the source to a heading whose number a field counts, unless the template counts one too", async () => {
+    // The heading reads `Příloha č. 1 Ceník` with its number counted, and
+    // the clause cites it with a field of its own.
+    const annexCitation = "1.1\tCeny jsou uvedeny v Příloha č. 1 Ceník.";
+    const counted = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      annexCitation,
+      "Příloha č.  Ceník",
+      "Položky ceníku.",
+    ]);
+    const heading = blockIdOf(counted, "Příloha č.  Ceník");
+    const start = annexCitation.indexOf("Příloha");
+    counted.blocks = counted.blocks.map((block) => {
+      if (block.id === heading) {
+        return { ...block, selfNumbers: [11] };
+      }
+      return block.text === annexCitation
+        ? {
+            ...block,
+            crossReferences: [
+              {
+                start,
+                end: annexCitation.length - 1,
+                instruction: String.raw` REF annex1 \h `,
+                bookmark: "annex1",
+                targetBlockId: heading,
+                targetWhole: true,
+              },
+            ],
+          }
+        : block;
+    });
+    const kept = (
+      await format(fakeEngine(counted, [{ fieldUnverified: [heading] }]))
+    ).unwrap();
+    expect(kept.outcome.repairs).toEqual([]);
+    expect(kept.plan.references).toContainEqual(
+      expect.objectContaining({ targetBlockId: heading }),
+    );
+    const counting = (
+      await format(
+        fakeEngine(counted, [
+          { fieldUnverified: [heading], countingFieldLeft: true },
+        ]),
+      )
+    ).unwrap();
+    expect(counting.outcome.repairs).toEqual([
+      { cause: "fieldTextUnverified", blockId: heading },
+    ]);
   });
 
   test("returns no document when the output would drop a label the source shows", async () => {
