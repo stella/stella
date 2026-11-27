@@ -491,6 +491,85 @@ test("runVerifyStepsConcurrent runs prepare serially, lightweight checks with bo
   expect(maxSerialActive).toBe(1);
 });
 
+test("runVerifyStepsConcurrent deduplicates identical local prepare commands", async () => {
+  const steps: VerifyWorkflowStep[] = [
+    {
+      job: "generated-sources",
+      name: "Produce generated sources",
+      run: [
+        `if [[ "\${STELLA_VERIFY_LOCAL:-false}" == true ]]; then`,
+        "  unset CI_GENERATED_SOURCES_MANIFEST",
+        "  bun scripts/ci-generated-sources.ts prepare",
+        "else",
+        '  bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"',
+        "fi",
+      ].join("\n"),
+      cwd: ".",
+      env: {},
+      phase: "prepare",
+    },
+    {
+      job: "ci-checks-generated",
+      name: "Load merge base measurement",
+      run: "bash scripts/prepare-typecheck-base.sh",
+      cwd: ".",
+      env: {},
+      phase: "prepare",
+    },
+    {
+      job: "e2e-vite-canary",
+      name: "Prepare generated sources",
+      run: "bun scripts/ci-generated-sources.ts prepare",
+      cwd: ".",
+      env: {},
+      phase: "prepare",
+    },
+  ];
+  const executed: string[] = [];
+  const status = await runVerifyStepsConcurrent(
+    steps,
+    async (current) => {
+      executed.push(current.name);
+      return 0;
+    },
+    2,
+  );
+  expect(status).toBe(0);
+  expect(executed).toEqual([
+    "Produce generated sources",
+    "Load merge base measurement",
+  ]);
+
+  const heredocExecuted: string[] = [];
+  const heredocStatus = await runVerifyStepsConcurrent(
+    [
+      {
+        job: "generated-sources",
+        name: "Heredoc A",
+        run: "cat <<'EOF'\n  indented\nEOF",
+        cwd: ".",
+        env: {},
+        phase: "prepare",
+      },
+      {
+        job: "generated-sources",
+        name: "Heredoc B",
+        run: "cat <<'EOF'\nindented\nEOF",
+        cwd: ".",
+        env: {},
+        phase: "prepare",
+      },
+    ],
+    async (current) => {
+      heredocExecuted.push(current.name);
+      return 0;
+    },
+    1,
+  );
+  expect(heredocStatus).toBe(0);
+  expect(heredocExecuted).toEqual(["Heredoc A", "Heredoc B"]);
+});
+
 test("runVerifyStepsConcurrent stops scheduling on admission refusal", async () => {
   const step = (name: string): VerifyWorkflowStep => ({
     job: "ci-checks-rest",
