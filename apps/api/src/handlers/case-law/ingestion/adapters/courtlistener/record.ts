@@ -1,3 +1,4 @@
+// parser-output-unchanged: CourtListener parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 import { panic, Result } from "better-result";
