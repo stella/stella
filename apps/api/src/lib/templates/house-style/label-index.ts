@@ -439,6 +439,9 @@ type Walk = {
   articleMentions: ReadonlySet<number>;
   /** Positions of numbered list items that only list the headings. */
   listedHeadings: ReadonlySet<number>;
+  /** Positions of headings over the articles (the parts of a pack: order
+   *  form, terms, annexes), which head no article. */
+  partHeadings: ReadonlySet<number>;
   article: LabelEntry | null;
   clauses: LabelEntry[];
   letter: LabelEntry | null;
@@ -562,6 +565,47 @@ const numberedArticleOrdinals = (
     }
   }
   return ordinals;
+};
+
+/** Bare numbered headings it takes to show that bare numbers head the
+ *  articles. */
+const NUMBERED_HEADINGS_MIN = 2;
+
+/**
+ * Headings above the articles: roman-numbered headings (`IV. Short form
+ * Terms`) at a higher outline level than automatic bare numbers that head
+ * articles of their own (`4 The Buyer's obligations` over `4.1`). Such a
+ * heading names a part of the document, not an article; the articles are
+ * the bare numbers under it. Empty where no bare numbers head at a lower
+ * level, as in a contract whose roman articles hold numbered clauses.
+ */
+const partHeadingPositions = (
+  labelled: readonly LabelledRow[],
+): Set<number> => {
+  const bareLevels = labelled.flatMap(({ raw, block }) =>
+    raw.origin === "auto" &&
+    raw.shape.keyword === null &&
+    raw.shape.path?.length === 1 &&
+    raw.shape.close === "" &&
+    block.outlineLevel !== null
+      ? [block.outlineLevel]
+      : [],
+  );
+  if (bareLevels.length < NUMBERED_HEADINGS_MIN) {
+    return new Set();
+  }
+  const articleLevel = Math.min(...bareLevels);
+  return new Set(
+    labelled
+      .filter(
+        (row) =>
+          row.raw.shape.keyword === null &&
+          isNamedArticle(row) &&
+          row.block.outlineLevel !== null &&
+          row.block.outlineLevel < articleLevel,
+      )
+      .map(({ position }) => position),
+  );
 };
 
 /** A list of headings runs at least this long without text between. */
@@ -934,6 +978,9 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
   if (shape.keyword === "annex") {
     return isAnnexRow(row) ? openAnnex(walk, row) : null;
   }
+  if (walk.partHeadings.has(row.position)) {
+    return null;
+  }
   if (isNamedArticle(row)) {
     if (walk.annex === null && walk.articleMentions.has(row.position)) {
       return null;
@@ -1207,8 +1254,11 @@ export const buildLabelIndex = ({
   // Mentions say nothing about how the document numbers itself. A heading
   // that only counts on from one still says how its part is numbered: it
   // stays among the rows the schemes are read from.
+  const partHeadings = partHeadingPositions(labelled);
   const structural = labelled.filter(
-    (row) => !isArticleMention(numberedArticles, row),
+    (row) =>
+      !isArticleMention(numberedArticles, row) &&
+      !partHeadings.has(row.position),
   );
   const listedAnnexes = listedAnnexPositions(rows, structural);
   const firstAnnex =
@@ -1237,6 +1287,7 @@ export const buildLabelIndex = ({
       listedAnnexes,
       articleMentions,
       listedHeadings,
+      partHeadings,
       schemes,
       article: spanning?.article ?? null,
       clauses: [],
