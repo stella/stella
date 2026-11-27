@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 /**
  * The Court's own HTML, which the Office publishes for a translation before
  * (and sometimes instead of) the converter's XHTML.
@@ -8,17 +9,17 @@
  * text, and the response is read as a decision rather than as a page.
  */
 
-import { describe, expect, test } from "bun:test";
-
 import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@stll/case-law-parsers/eu-ecj";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { load } from "@stll/html";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
 const FIXTURE = new URL(
-  "__fixtures__/eu-ecj-court-html/62026CO0122.cs.html.gz",
-  import.meta.url,
+  "eu-ecj-court-html/62026CO0122.cs.html.gz",
+  PARSER_FIXTURES_DIR,
 );
 
 const html = new TextDecoder().decode(

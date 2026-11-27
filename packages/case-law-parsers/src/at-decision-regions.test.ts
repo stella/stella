@@ -11,13 +11,15 @@ import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 
 type Expected = readonly (readonly [string, ParagraphRole | undefined])[];
 
 const fixtureText = async (name: string): Promise<string> =>
-  await Bun.file(new URL(`__fixtures__/${name}`, import.meta.url)).text();
+  await Bun.file(new URL(`${name}`, PARSER_FIXTURES_DIR)).text();
 
 const risBlocks = async (
   name: string,

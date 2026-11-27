@@ -11,6 +11,8 @@ import { load } from "@stll/html";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
+import { COURTLISTENER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const walk = (html: string, options?: WalkInlinesOptions): Inline[] => {
   const $ = load(html);
   return walkInlines($, $("body"), options);
@@ -192,8 +194,8 @@ describe("walkInlines", () => {
   test("keeps the page boundary space in a recorded opinion heading", () => {
     const html = readFileSync(
       new URL(
-        "courtlistener/__fixtures__/html/heading-4696496-discussion-ii.html",
-        import.meta.url,
+        "html/heading-4696496-discussion-ii.html",
+        COURTLISTENER_FIXTURES_DIR,
       ),
       "utf-8",
     );

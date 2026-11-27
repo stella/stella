@@ -14,6 +14,8 @@ import {
 } from "@stll/case-law-parsers/cz-isir";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseCzIsirDecision = guardParser(parseUnguarded);
 
 const paragraphsSchema = v.array(
@@ -23,9 +25,7 @@ const paragraphsSchema = v.array(
 const fixture = async (name: string): Promise<CzIsirParagraph[]> =>
   v.parse(
     paragraphsSchema,
-    await Bun.file(
-      new URL(`__fixtures__/${name}.json`, import.meta.url),
-    ).json(),
+    await Bun.file(new URL(`${name}.json`, PARSER_FIXTURES_DIR)).json(),
   );
 
 const CONTEXT = {

@@ -51,6 +51,7 @@ import {
   notePathDocument,
   noteTableRtf,
 } from "./document-note-paths.fixtures";
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
 import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
 
 const parseHuBhgyDecision = guardParser(uncheckedParseHuBhgyDecision);
@@ -61,7 +62,7 @@ const readRtf = (input: Uint8Array) => {
   return document;
 };
 
-const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
+const FIXTURES_DIR = PARSER_FIXTURES_DIR;
 
 const CENTERED: ParagraphAlignment = "center";
 

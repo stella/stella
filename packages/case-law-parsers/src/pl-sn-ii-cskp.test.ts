@@ -13,15 +13,13 @@ import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import provenance from "./__fixtures__/pl-sn-ii-cskp-1456-22.pdf.provenance.json";
+import provenance from "../../../apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/pl-sn-ii-cskp-1456-22.pdf.provenance.json";
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
 
 const parsePlSnDecisionPdf = guardParser(uncheckedParsePlSnDecisionPdf);
 
 const CASE_NUMBER = "II CSKP 1456/22";
-const FIXTURE = new URL(
-  "__fixtures__/pl-sn-ii-cskp-1456-22.pdf",
-  import.meta.url,
-);
+const FIXTURE = new URL("pl-sn-ii-cskp-1456-22.pdf", PARSER_FIXTURES_DIR);
 const SIGNATORIES = "Monika Koba Dariusz Dończyk Marta Romańska";
 const RULING_ITEM_TWO =
   "2) zasądza od pozwanej na rzecz powódek kwotę 5.400 (pięć tysięcy czterysta) zł z odsetkami w wysokości odsetek ustawowych za opóźnienie w spełnieniu świadczenia pieniężnego za czas po upływie tygodnia od doręczenia pozwanej odpisu niniejszego orzeczenia.";

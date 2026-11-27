@@ -6,9 +6,11 @@ import { readPlKioLayout } from "@stll/case-law-parsers/pl-kio-layout";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 
+import { ADAPTER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
-const FIXTURES_DIR = new URL("../adapters/__fixtures__/", import.meta.url);
+const FIXTURES_DIR = ADAPTER_FIXTURES_DIR;
 
 const gzFixtureText = async (name: string): Promise<string> =>
   new TextDecoder().decode(

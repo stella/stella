@@ -1945,7 +1945,11 @@
     },
     "@stll/case-law-parsers#test": {
       "dependsOn": ["transit"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/AGENTS.md"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/AGENTS.md",
+        "$TURBO_ROOT$/apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/**"
+      ]
     },
     // The path-grammar test pins api-contract's browser copy of the pattern.
     "@stll/skills#test": {

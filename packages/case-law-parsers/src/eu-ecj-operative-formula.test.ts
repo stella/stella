@@ -10,9 +10,11 @@ import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@stll/cas
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
-const FIXTURES_DIR = new URL("__fixtures__/eu-ecj/", import.meta.url);
+const FIXTURES_DIR = new URL("eu-ecj/", PARSER_FIXTURES_DIR);
 
 const decoder = new TextDecoder();
 
