@@ -2071,6 +2071,25 @@ describe("buildTemplatePlan, tables and omissions", () => {
     // Once: the recital under the heading does not bring them again.
     expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
   });
+
+  test("what follows the kept contents starts a page where the template's contents end theirs", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = czechContract("Text.");
+    const behind = (ends: boolean) => {
+      const { plan } = build(manifest, "keepSource", {
+        profile: { ...profile, contentsEndsPage: ends },
+      });
+      const contents = plan.body.findIndex(({ kind }) => kind === "template");
+      return [plan.body[contents + 1], plan.body[contents + 2]];
+    };
+    const [first, second] = behind(true);
+    expect(first).toMatchObject({ kind: "source", pageBreakBefore: true });
+    // Only the paragraph right behind them.
+    expect(second).not.toHaveProperty("pageBreakBefore");
+    expect(behind(false)[0]).not.toHaveProperty("pageBreakBefore");
+  });
 });
 
 describe("buildTemplatePlan invariants", () => {

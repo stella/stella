@@ -2126,6 +2126,8 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     contents.length > 0 &&
     topLevel.some(({ id }) => placementById.get(id)?.role === "articleHeading");
   let contentsKept = false;
+  /** Whether the template starts a page in front of the next paragraph. */
+  let behindContents = false;
   let placedCount = 0;
   for (const block of topLevel) {
     if (mergedInto.has(block.id) || omitted.has(block.id)) {
@@ -2152,13 +2154,16 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
         region: "contents",
         blockIds: contents,
       });
+      // Where the template's contents end their page, the text behind
+      // them starts one.
+      behindContents = profile.contentsEndsPage === true;
     }
     const paragraph = paragraphItems({
       context,
       placement,
       title: titleOf.get(block.id),
       breaks,
-      pageStart: placed.pageStarts.has(block.id),
+      pageStart: placed.pageStarts.has(block.id) || behindContents,
       keepNext:
         placed.keptWithNext.has(block.id) || placed.closingLines.has(block.id),
       tabStops: placed.tabStops.get(block.id),
@@ -2166,6 +2171,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       alignment: placed.alignments.get(block.id),
       endsSection: context.keptSections.ends.get(block.id),
     });
+    behindContents = false;
     placedCount += paragraph.length;
     body.push(...paragraph);
   }

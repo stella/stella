@@ -667,10 +667,12 @@ export const proposeBlockRoles = ({
     if (nested.has(block.id)) {
       // A cell paragraph is placed with its table. It is read on its own
       // where it is a provision in its own right: numbered by a list, or a
-      // paragraph of a text that runs in parallel columns.
+      // paragraph of a text that runs in parallel columns. A number with
+      // no words behind it counts the table's rows and is no provision.
       const entry = index.entryByBlockId.get(block.id);
       if (
         entry !== undefined &&
+        block.text.trim() !== "" &&
         (entry.origin === "auto" || index.columnByBlockId.has(block.id))
       ) {
         proposals.push({
