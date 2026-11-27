@@ -362,18 +362,25 @@ describe("folioTemplatePlanEngine", () => {
         resolveAmbiguities: resolveAmbiguitiesByRule,
       })
     ).unwrap();
+    // Both cells keep what the source gives them: no space around the
+    // first by hand, none around the second by the defaults, and single
+    // lines, where the template's text style would space them out.
     expect(formatted.note.items).toContainEqual({
       kind: "cellSpacingKept",
-      blocks: 1,
+      blocks: 2,
     });
     const output = (
       await folioTemplatePlanEngine.analyze(formatted.docx)
     ).unwrap();
-    const spacingOf = (text: string) =>
-      output.blocks.find((block) => block.text === text)?.spacing;
-    // The engine wrote the spacing the plan asked for, and no other.
-    expect(spacingOf("Item")).toEqual({ before: 0, after: 0 });
-    expect(spacingOf("Price")).toBeUndefined();
+    const inEffect = (text: string) =>
+      output.blocks.find((block) => block.text === text)?.spacingInEffect;
+    expect(inEffect("Item")).toEqual({
+      before: 0,
+      after: 0,
+      line: 240,
+      lineRule: "auto",
+    });
+    expect(inEffect("Price")).toEqual(inEffect("Item"));
   });
 
   test("a field of the source to a heading whose number a field counts stays a field", async () => {

@@ -2218,19 +2218,15 @@ const setTightOf = ({
  * placed with its table in no style of the template, keeps them.
  */
 const looseSpacingOf = (
-  { spacingInEffect }: DocxBlock,
+  { spacingInEffect = {} }: DocxBlock,
   byHand: TemplatePlanSpacing | undefined,
 ): TemplatePlanSpacing | undefined => {
+  const { before, after, line, lineRule = "auto" } = spacingInEffect;
   const spacing: TemplatePlanSpacing = {
-    ...(spacingInEffect?.before === 0 ? { before: 0 } : {}),
-    ...(spacingInEffect?.after === 0 ? { after: 0 } : {}),
+    ...(before === 0 ? { before: 0 } : {}),
+    ...(after === 0 ? { after: 0 } : {}),
     ...byHand,
-    ...(spacingInEffect !== undefined && spacingInEffect.line !== undefined
-      ? {
-          line: spacingInEffect.line,
-          lineRule: spacingInEffect.lineRule ?? "auto",
-        }
-      : {}),
+    ...(line === undefined ? {} : { line, lineRule }),
   };
   return Object.keys(spacing).length === 0 ? undefined : spacing;
 };
