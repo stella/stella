@@ -179,6 +179,10 @@
       "types": "./src/libpdf-utils.ts",
       "import": "./src/libpdf-utils.ts"
     },
+    "./marker-injection.test-helper": {
+      "types": "./src/marker-injection.test-helper.ts",
+      "import": "./src/marker-injection.test-helper.ts"
+    },
     "./markup-residue": {
       "types": "./src/markup-residue.ts",
       "import": "./src/markup-residue.ts"
