@@ -84,9 +84,11 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // and device key the upgrade proved. The binding and the refusal of another
   // device's proof are covered by `lib/desktop-runner/gateway.db.test.ts`.
   "desktop-runner": WAIVER_REASON.isolatedOutsideRlsHarness,
-  // Local-development-gated inline completion stream that answers from the
-  // cursor text in the request body using the caller's own active-organization
-  // AI config and reads no stored tenant record.
+  // Local-development-gated inline completion stream that takes no caller-
+  // supplied tenant or resource ID and queries no tenant tables directly.
+  // Request middleware loads and decrypts the stored AI provider config solely
+  // by the caller's authenticated activeOrganizationId, so there is no
+  // cross-tenant target parameter for the handler matrix to swap.
   "ai-autocomplete": WAIVER_REASON.noTenantReadSurface,
   // Probes a caller-supplied AI provider API key against the external vendor
   // after verifying the caller's own session membership; reads no stored
