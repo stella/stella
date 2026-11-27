@@ -39,6 +39,11 @@ export type ProfileRoleTarget = {
   alignment: string | null;
   /** Null for a role the template does not number. */
   numbering: ProfileListLevel | null;
+  /** The left indent the style gives, in twentieths of a point, and the
+   *  size of its text in half-points; null where the template states
+   *  none. Both absent from a profile made before they were read. */
+  indentLeft?: number | null;
+  size?: number | null;
   confidence: number;
   evidence: RoleEvidence[];
 };
@@ -125,6 +130,14 @@ export type TemplateProfile = {
     signature: { blockIds: string[] } | null;
   };
   headings: { article: HeadingJoin; annex: HeadingJoin };
+  /** Whether the template's sample starts a page between its front matter
+   *  (title, parties) and its first article. Absent when the sample has no
+   *  article, and from a profile made before this was read. */
+  frontMatterEndsPage?: boolean;
+  /** The style the template writes the text of its tables in. Absent when
+   *  it names none for that or its sample uses none, and from a profile
+   *  made before this was read. */
+  tableText?: { styleId: string };
   fields: {
     /** Kinds replaced by their shown text: they prompt, or change on open. */
     freezeKinds: string[];
@@ -176,6 +189,7 @@ const NAME = {
   body: /základní|zakladni|body text|standard|fließtext|textkörper/iu,
   annexList: /seznam příloh|annex list|list of annexes|anlagenverzeichnis/iu,
   contents: /^(?:toc|obsah|verzeichnis|inhaltsverzeichnis)\b/iu,
+  tableText: /tabul|\btable\b|tabelle/iu,
 } as const;
 
 const ANNEX_SAMPLE =
@@ -236,6 +250,8 @@ const target = (
   // A level that prints nothing numbers nothing: the style keeps its role
   // and its place in the outline, without a list.
   numbering: level !== null && printsLabel(level) ? level : null,
+  ...(style.indentLeft === undefined ? {} : { indentLeft: style.indentLeft }),
+  ...(style.size === undefined ? {} : { size: style.size }),
   confidence,
   evidence,
 });
@@ -310,30 +326,47 @@ const collectStyleFacts = ({
 /** Sample paragraphs counted when two outlines are ranked. */
 const SAMPLES_RANKED_MAX = 999;
 
+/** A style made for the annexes of a document, by its name. */
+const ANNEX_STYLE = /příloh|priloh|annex|anlage|anhang|schedule|appendi/iu;
+
 /**
  * The template's outline: of the lists with styles on two levels or more,
  * the one its sample text is written in. A template often carries further
  * lists with as many levels (schedules, a second language) that its sample
  * body never uses. Among lists used alike, the one with more levels, then
- * the one with more sample paragraphs.
+ * one whose styles are not named for annexes (the annexes of a report run
+ * longer than its body), then the one with more sample paragraphs.
  */
+
 const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
   const byAbstract = Map.groupBy(
     facts.filter(({ level }) => level !== null),
     ({ level }) => level?.abstractNumId ?? -1,
   );
+  /** What a list is ranked by, most telling first. */
+  type Rank = { used: boolean; levels: number; body: boolean; samples: number };
+  const outranks = (left: Rank, right: Rank): boolean => {
+    if (left.used !== right.used) {
+      return left.used;
+    }
+    if (left.levels !== right.levels) {
+      return left.levels > right.levels;
+    }
+    return left.body === right.body ? left.samples > right.samples : left.body;
+  };
   let best: StyleFacts[] = [];
-  let bestScore = 0;
+  let bestRank: Rank | null = null;
   for (const group of byAbstract.values()) {
-    const levels = new Set(group.map(({ level }) => level?.ilvl)).size;
     const samples = group.reduce((sum, fact) => sum + fact.samples.length, 0);
-    const score =
-      (samples > 0 ? 1_000_000 : 0) +
-      levels * 1000 +
-      Math.min(samples, SAMPLES_RANKED_MAX);
-    if (levels >= 2 && score > bestScore) {
+    const rank: Rank = {
+      used: samples > 0,
+      levels: new Set(group.map(({ level }) => level?.ilvl)).size,
+      body: !group.some((fact) => ANNEX_STYLE.test(nameOf(fact))),
+      samples: Math.min(samples, SAMPLES_RANKED_MAX),
+    };
+    if (rank.levels >= 2 && (bestRank === null || outranks(rank, bestRank))) {
       best = group;
-      bestScore = score;
+      bestRank = rank;
     }
   }
   // By level; within a level the style the sample text uses comes first.
@@ -629,6 +662,28 @@ const joinOf = (samples: readonly DocxBlock[]): HeadingJoin =>
   samples.some(({ text }) => text.trim().includes("\n"))
     ? "lineBreak"
     : "sameLine";
+
+/**
+ * The style of the text in the template's tables: a paragraph style named
+ * for tables, in no list, that the sample writes in table cells only. Of
+ * several, the one the sample uses most.
+ */
+const inferTableText = (
+  facts: readonly StyleFacts[],
+  nested: ReadonlySet<string>,
+): TemplateProfile["tableText"] => {
+  const [most] = facts
+    .filter(
+      ({ style, level, samples }) =>
+        style.type === "paragraph" &&
+        level === null &&
+        NAME.tableText.test(style.name ?? style.styleId) &&
+        samples.length > 0 &&
+        samples.every(({ id }) => nested.has(id)),
+    )
+    .toSorted((left, right) => right.samples.length - left.samples.length);
+  return most === undefined ? undefined : { styleId: most.style.styleId };
+};
 
 type Structure = {
   topLevel: DocxBlock[];
@@ -1046,6 +1101,31 @@ const inferMarkLevels = (
  * template gives the same profile. Readings carry a confidence and their
  * evidence; a person confirms or corrects them before the profile is stored.
  */
+/**
+ * Whether the sample starts a page somewhere between its first block and
+ * its first article: by a break among the runs, a paragraph's own page
+ * start, or a section's end. Undefined when the sample has no article.
+ */
+const startsPageBeforeArticle = (
+  topLevel: readonly DocxBlock[],
+  article: ProfileRoleTarget | null,
+): boolean | undefined => {
+  const first = topLevel.findIndex(
+    ({ kind, styleId }) => kind === "paragraph" && styleId === article?.styleId,
+  );
+  if (article === null || first <= 0) {
+    return undefined;
+  }
+  return topLevel
+    .slice(0, first + 1)
+    .some(
+      (block, position) =>
+        (position > 0 && block.pageBreakBefore === true) ||
+        (position < first &&
+          ((block.pageBreaks ?? 0) > 0 || block.endsSection === true)),
+    );
+};
+
 export const inferTemplateProfile = (
   inspection: TemplateInspection,
 ): TemplateProfile => {
@@ -1120,6 +1200,18 @@ export const inferTemplateProfile = (
 
   const markLevels = inferMarkLevels(inspection, roles, outlineLevel);
 
+  const tableText = inferTableText(
+    facts,
+    new Set(
+      [...structure.nestedOf.values()].flatMap((blocks) =>
+        blocks.map(({ id }) => id),
+      ),
+    ),
+  );
+  const pageBeforeArticle = startsPageBeforeArticle(
+    structure.topLevel,
+    roles.articleHeading,
+  );
   const kinds = [...new Set(inspection.fields.map(({ kind }) => kind))];
   const structural = STRUCTURAL_ROLES.map(
     (role) => roles[role]?.confidence ?? 0,
@@ -1138,6 +1230,10 @@ export const inferTemplateProfile = (
       ),
       annex: joinOf(annexSamples),
     },
+    ...(pageBeforeArticle === undefined
+      ? {}
+      : { frontMatterEndsPage: pageBeforeArticle }),
+    ...(tableText === undefined ? {} : { tableText }),
     fields: {
       freezeKinds: kinds
         .filter((kind) => VOLATILE_FIELD_KINDS.has(kind))
@@ -1233,6 +1329,12 @@ export const validateTemplateProfile = (
         role: finding.role,
       });
     }
+  }
+  if (
+    profile.tableText !== undefined &&
+    !facts.has(profile.tableText.styleId)
+  ) {
+    issues.push({ severity: "error", code: "unknownStyle" });
   }
   const levelUsers = new Map<string, HouseStyleRole>();
   for (const role of HOUSE_STYLE_ROLES) {
@@ -1358,6 +1460,8 @@ const roleTargetSchema = v.nullable(
     styleId: idSchema,
     alignment: v.nullable(textSchema),
     numbering: v.nullable(listLevelSchema),
+    indentLeft: v.exactOptional(twipsSchema),
+    size: v.exactOptional(v.nullable(v.pipe(v.number(), v.minValue(1)))),
     confidence: confidenceSchema,
     evidence: v.pipe(
       v.array(v.picklist(ROLE_EVIDENCE)),
@@ -1412,6 +1516,8 @@ const profileSchema = v.strictObject({
   }),
   slots: v.strictObject({ party: slotSchema, signature: slotSchema }),
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
+  frontMatterEndsPage: v.exactOptional(v.boolean()),
+  tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
   fields: v.strictObject({
     freezeKinds: fieldKindsSchema,
     liveKinds: fieldKindsSchema,

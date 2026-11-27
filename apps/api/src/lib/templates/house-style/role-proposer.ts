@@ -215,6 +215,42 @@ const readEntry = (entry: LabelEntry, zones: Zones): Reading => {
   }
 };
 
+/**
+ * Whether a paragraph is set like a title: in a title's style or in
+ * capitals, or a short line that is no sentence and stands centred or in
+ * the document's first heading style.
+ */
+export const isSetAsTitle = (block: DocxBlock): boolean => {
+  if (isTitleShaped(block)) {
+    return true;
+  }
+  const line = block.text.trim();
+  return (
+    (block.alignment === "center" || block.outlineLevel === 0) &&
+    line.length <= TITLE_MAX &&
+    /\p{L}/u.test(line) &&
+    !/[.;:,]$/u.test(line)
+  );
+};
+
+/**
+ * Whether a paragraph is a further line of the title in front of it: set
+ * in the same style and alignment, as a heading or centred, and no
+ * sentence.
+ */
+const continuesCaption = (block: DocxBlock, title: DocxBlock): boolean => {
+  const line = block.text.trim();
+  return (
+    block.styleName === title.styleName &&
+    block.alignment === title.alignment &&
+    (block.outlineLevel !== null || block.alignment === "center") &&
+    block.label === null &&
+    line.length <= TITLE_MAX &&
+    /\p{L}/u.test(line) &&
+    !/[.;:,]$/u.test(line)
+  );
+};
+
 /** The document's zones by block position; `Infinity` for a zone the
  *  document does not have. */
 type Zones = {
@@ -274,14 +310,33 @@ const findZones = (
     entries.find(({ level, listed }) => level === "annex" && !listed)
       ?.position ?? Number.POSITIVE_INFINITY;
   const isText = (block: DocxBlock) => block.text.trim() !== "";
+  // A letter or a memo has no provisions to end its front matter at, and
+  // only a line shaped as a title is read as one there: a line that is
+  // merely centred (a marking, a date) must not take the title's place.
+  const setAsTitle = Number.isFinite(firstProvision)
+    ? isSetAsTitle
+    : isTitleShaped;
   const shaped = firstPosition(
     blocks,
     0,
     firstProvision,
-    (block) => isText(block) && isTitleShaped(block),
+    (block) => isText(block) && setAsTitle(block),
   );
-  const title = Number.isFinite(shaped)
-    ? shaped
+  // A line that is only centred and stands right above a line shaped as a
+  // title is a marking over the title (`Confidential`), not the title.
+  const below = firstPosition(blocks, shaped + 1, firstProvision, isText);
+  const shapedAt = (position: number): boolean => {
+    const block = blocks[position];
+    return block !== undefined && isTitleShaped(block);
+  };
+  const marking =
+    Number.isFinite(shaped) &&
+    Number.isFinite(below) &&
+    !shapedAt(shaped) &&
+    shapedAt(below);
+  const anchor = marking ? below : shaped;
+  const title = Number.isFinite(anchor)
+    ? anchor
     : firstPosition(blocks, 0, firstProvision, isText);
   const identified = firstPosition(all, title + 1, firstProvision, (block) =>
     PARTY_IDENTITY.test(block.text),
@@ -364,7 +419,10 @@ const readFrontMatter = (
   // Between the title and the parties a line belongs to the title when it
   // is set like one: centred, or in capitals. Anything else there is text
   // (a note on how to fill the form in, a sentence that opens the deed).
-  return block.alignment === "center" || isTitleShaped(block)
+  // A line in brackets under the title (`(dále jen „Smlouva“)`) names the
+  // document for the text that follows; it is no line of the title.
+  const bracketed = /^\(.*\)$/su.test(block.text.trim());
+  return !bracketed && (block.alignment === "center" || isTitleShaped(block))
     ? reading("title", CONFIDENCE.subtitle, {
         role: "body",
         confidence: CONFIDENCE.beforeTitle,
@@ -375,12 +433,41 @@ const readFrontMatter = (
       });
 };
 
+/** A typed article label at the start of a line: `Article 3`, `Článek IV`,
+ *  `§ 2`. */
+const NAMED_ARTICLE =
+  /^(?:article|clause|section|článek|čl\.|artikel|§)[ \u00A0]*(?:\d+|[IVXLC]+)(?![\p{L}\d.])/iu;
+
+/**
+ * Whether a paragraph the label index reads no label on is still set as an
+ * article's heading: a heading of the source that opens with an article's
+ * name and goes on as a title. A part of the document that counts its own
+ * articles (a model contract in an annex) has such headings; the index
+ * leaves them out, because the number is taken, and they keep their typed
+ * label.
+ */
+const isTypedArticleHeading = (block: DocxBlock): boolean => {
+  const line = block.text.trim();
+  return (
+    block.outlineLevel !== null &&
+    NAMED_ARTICLE.test(line) &&
+    line.length <= TITLE_MAX &&
+    !/[.;:,]$/u.test(line)
+  );
+};
+
 const readUnlabelled = (
   block: DocxBlock,
   position: number,
   zones: Zones,
   index: LabelIndex,
 ): Reading => {
+  if (isTypedArticleHeading(block)) {
+    return reading("articleHeading", CONFIDENCE.titleByPosition, {
+      role: "body",
+      confidence: CONFIDENCE.alternative,
+    });
+  }
   if (position >= zones.firstAnnexHeading) {
     return reading("body", CONFIDENCE.annexBody);
   }
@@ -464,12 +551,15 @@ export const proposeBlockRoles = ({
     ),
   );
   const proposals: RoleProposal[] = [];
+  /** The title paragraph read last, with nothing but its own lines since. */
+  let caption: { owner: LabelEntry; title: DocxBlock } | null = null;
   for (const [position, block] of blocks.entries()) {
     if (
       block.kind === "table" ||
       index.contentsBlockIds.has(block.id) ||
       isBlankParagraph(block)
     ) {
+      caption = null;
       continue;
     }
     if (nested.has(block.id)) {
@@ -503,9 +593,25 @@ export const proposeBlockRoles = ({
         blockId: block.id,
         mergedIntoBlockId: owner.blockId,
       });
+      caption = { owner, title: block };
       continue;
     }
     const entry = index.entryByBlockId.get(block.id);
+    // A title that runs over two paragraphs: the line behind a heading's
+    // title, set as the title is, belongs to the heading too.
+    if (
+      entry === undefined &&
+      caption !== null &&
+      continuesCaption(block, caption.title)
+    ) {
+      proposals.push({
+        ...readEntry(caption.owner, zones),
+        blockId: block.id,
+        mergedIntoBlockId: caption.owner.blockId,
+      });
+      continue;
+    }
+    caption = null;
     proposals.push({
       ...(entry === undefined
         ? readUnlabelled(block, position, zones, index)

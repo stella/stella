@@ -28,7 +28,7 @@ import type {
  *  or report by name, or `other`. Total over the engine's codes, so a code a
  *  later release adds does not compile until it is placed. */
 const REFUSALS = {
-  "archive-unreadable": "other",
+  "archive-unreadable": "archive-unreadable",
   "part-missing": "other",
   "xml-unreadable": "other",
   "plan-invalid": "other",
@@ -47,7 +47,7 @@ const REFUSALS = {
   "style-unknown": "other",
   "tracked-changes": "tracked-changes",
   "unsupported-content": "unsupported-content",
-  "verification-failed": "other",
+  "verification-failed": "verification-failed",
 } as const satisfies Record<TemplatePlanError["code"], TemplateEngineRefusal>;
 
 const refused = ({

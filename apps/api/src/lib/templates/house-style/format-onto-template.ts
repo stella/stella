@@ -24,6 +24,7 @@ import {
   collectAmbiguities,
 } from "@/api/lib/templates/house-style/ambiguity";
 import type { AmbiguityResolver } from "@/api/lib/templates/house-style/ambiguity";
+import { closeNumberParts } from "@/api/lib/templates/house-style/designators";
 import { TemplateEngineError } from "@/api/lib/templates/house-style/folio-contract";
 import type {
   DocxBlockManifest,
@@ -39,7 +40,10 @@ import type {
   FormattingNote,
   PlannedLabelIssue,
 } from "@/api/lib/templates/house-style/plan-builder";
-import type { NumberingMode } from "@/api/lib/templates/house-style/plan-numbering";
+import type {
+  NumberingMode,
+  PlanLanguages,
+} from "@/api/lib/templates/house-style/plan-numbering";
 import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
 import { findTopicSuspicions } from "@/api/lib/templates/house-style/reference-suspicions";
 import {
@@ -87,7 +91,7 @@ type FormattingOutcome = {
   pages: PageCounts;
 };
 
-class TemplateProfileRejectedError extends TaggedError(
+export class TemplateProfileRejectedError extends TaggedError(
   "TemplateProfileRejectedError",
 )<{
   message: string;
@@ -99,7 +103,7 @@ const LABEL_ISSUES_MAX = 50;
 
 /** The output would not show a label the source shows. Nothing is
  *  returned for such a document. */
-class TemplateLabelsNotKeptError extends TaggedError(
+export class TemplateLabelsNotKeptError extends TaggedError(
   "TemplateLabelsNotKeptError",
 )<{
   message: string;
@@ -124,10 +128,17 @@ type FormatOptions = {
   /** The view of a document with tracked changes to format. Left out,
    *  every change is accepted and the note says so. */
   trackedChanges?: TrackedChangesView;
+  /** The languages of the document and of the template, when known: a
+   *  template in another language is used as the closest one, and the note
+   *  says so. */
+  languages?: PlanLanguages;
 };
 
-type Formatted = {
+export type Formatted = {
   docx: Uint8Array;
+  /** The source as it was formatted: the chosen view of a document with
+   *  tracked changes. The note's block ids are ids of its blocks. */
+  manifest: DocxBlockManifest;
   plan: TemplatePlan;
   profile: TemplateProfile;
   note: FormattingNote;
@@ -154,10 +165,14 @@ const exclusionFor = (
     case "reference-target-unplaced":
     case "highlight-span-invalid":
       return "marks";
-    // Writing the label as text was the way out already.
+    // Writing the label as text was the way out already; a file that
+    // cannot be opened or an output that did not hold up leaves nothing of
+    // the plan to take back.
     case "label-not-writable":
     case "tracked-changes":
     case "unsupported-content":
+    case "archive-unreadable":
+    case "verification-failed":
     case "other":
       return null;
     default: {
@@ -210,7 +225,8 @@ const changedLabels = (
         // stripped.
         sourceLabel !== null &&
         sourceLabel.trim() !== "" &&
-        sourceLabel.trim() !== (outputLabel ?? "").trim(),
+        // A number typed with blanks between its parts is printed closed up.
+        closeNumberParts(sourceLabel.trim()) !== (outputLabel ?? "").trim(),
     )
     .map(({ blockId }) => blockId);
 };
@@ -227,7 +243,10 @@ const unkeptLabels = (
 ): PlannedLabelIssue[] => {
   const issues: PlannedLabelIssue[] = [];
   for (const block of blocks) {
-    const source = (block.sourceLabel ?? "").trim();
+    const typed = (block.sourceLabel ?? "").trim();
+    // A label the list prints is held to the number closed up.
+    const source =
+      (block.outputLabel ?? "").trim() === "" ? typed : closeNumberParts(typed);
     if (block.disposition === "omitted" || source === "") {
       continue;
     }
@@ -252,6 +271,25 @@ const bulletIdsOf = ({ blocks }: DocxBlockManifest): Set<string> =>
 
 const sum = (entries: readonly { count: number }[]): number =>
   entries.reduce((total, { count }) => total + count, 0);
+
+/** What the engine's report counts for the outcome of a formatting. */
+const leftOf = ({
+  footnotes,
+  endnotes,
+  leftovers,
+  dropped,
+}: TemplatePlanReport): Omit<
+  FormattingOutcome,
+  "attempts" | "repairs" | "pages"
+> => ({
+  footnotes,
+  endnotes,
+  frozenFields: sum(leftovers.frozenFields),
+  liveFields: sum(leftovers.fields),
+  fillerLeft: sum(leftovers.filler),
+  droppedComments: dropped.comments,
+  droppedSectionBreaks: dropped.sectionBreaks,
+});
 
 /**
  * The manifest a document is formatted from. One that tracks changes is
@@ -281,6 +319,7 @@ export const formatOntoTemplate = async ({
   mode,
   resolveAmbiguities,
   trackedChanges,
+  languages,
 }: FormatOptions): Promise<
   Result<
     Formatted,
@@ -378,6 +417,7 @@ export const formatOntoTemplate = async ({
       exclusions,
       sourceHighlightColors: highlighted.value,
       trackedChangesStated: trackedChanges !== undefined,
+      ...(languages === undefined ? {} : { languages }),
     });
     if (built.labelsNotKept.length > 0) {
       return Result.err(
@@ -417,8 +457,7 @@ export const formatOntoTemplate = async ({
     }
     for (const { targetBlockId, expectedText, predictedText } of report
       .references.results) {
-      // A field whose text the engine cannot vouch for is no more
-      // returned than one it contradicts.
+      // A field text the engine cannot vouch for counts as contradicted.
       if (predictedText !== expectedText) {
         const cause =
           predictedText === null ? "fieldTextUnverified" : "fieldTextDiffers";
@@ -469,20 +508,10 @@ export const formatOntoTemplate = async ({
   }
   return Result.ok({
     docx,
+    manifest,
     plan: built.plan,
     profile,
     note: built.note,
-    outcome: {
-      attempts,
-      repairs,
-      footnotes: report.footnotes,
-      endnotes: report.endnotes,
-      frozenFields: sum(report.leftovers.frozenFields),
-      liveFields: sum(report.leftovers.fields),
-      fillerLeft: sum(report.leftovers.filler),
-      droppedComments: report.dropped.comments,
-      droppedSectionBreaks: report.dropped.sectionBreaks,
-      pages,
-    },
+    outcome: { attempts, repairs, ...leftOf(report), pages },
   });
 };

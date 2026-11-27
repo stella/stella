@@ -8,6 +8,7 @@ import {
   englishAgreement,
   germanContract,
   heading,
+  inColumns,
   manifestOf,
   numbered,
   partsContract,
@@ -376,6 +377,163 @@ describe("buildLabelIndex", () => {
       "article 1",
       "clause 1/1",
     ]);
+  });
+
+  test("an annex a field numbers is an annex, counted among its kind", () => {
+    const manifest = manifestOf([
+      { ...heading("Services"), label: "1." },
+      numbered("1.1", "Clause."),
+      "Signed by the parties.",
+      "Annex  - Summary",
+      numbered("1.", "Annex paragraph.", 2),
+      "Příloha č.  Seznam",
+      numbered("1.", "Bod přílohy.", 3),
+      "Annex  of the lease is binding on both parties and stays in force.",
+    ]);
+    // The field stands where the number is missing from the text.
+    const at = (text: string, offset: number) => {
+      const block = manifest.blocks.find(
+        (candidate) => candidate.text === text,
+      );
+      if (block !== undefined) {
+        block.selfNumbers = [offset];
+      }
+    };
+    at("Annex  - Summary", 6);
+    at("Příloha č.  Seznam", 11);
+    // The line without a field is a sentence about an annex, not one.
+    expect(keysOf(manifest).filter((key) => key.startsWith("annex"))).toEqual([
+      "annex 1",
+      "annex 2",
+    ]);
+    // A line of the contents that names the first annex takes no number
+    // from it.
+    const [contentsLine] = manifestOf([
+      { text: "Annex  - Summary", styleName: "toc 1" },
+    ]).blocks;
+    if (contentsLine === undefined) {
+      throw new Error("fixture");
+    }
+    const listed = {
+      ...manifest,
+      blocks: [
+        { ...contentsLine, id: "toc", selfNumbers: [6] },
+        ...manifest.blocks,
+      ],
+    };
+    expect(
+      provisionKey(
+        buildLabelIndex(listed),
+        blockIdOf(manifest, "Příloha č.  Seznam"),
+      ),
+    ).toBe("annex 2");
+    const index = buildLabelIndex(manifest);
+    const summary = index.entryByBlockId.get(
+      blockIdOf(manifest, "Annex  - Summary"),
+    );
+    expect(summary).toMatchObject({
+      origin: "field",
+      level: "annex",
+      ordinal: 1,
+    });
+    expect(manifest.blocks[3]?.text.slice(summary?.manualLength ?? 0)).toBe(
+      "- Summary",
+    );
+  });
+
+  test("a number typed with a blank between its parts is one number when its run proves it", () => {
+    const spaced = manifestOf([
+      "1. Předmět smlouvy",
+      "1. 1. Prodávající prodává zboží.",
+      "a) první položka",
+      "1. 2. Kupující zboží kupuje.",
+      "2. Cena",
+      "2. 1. Cena činí 100 Kč.",
+      "2. 2. Cena je splatná do 30 dnů.",
+      "2. 3. Smluvní pokuta se sjednává.",
+    ]);
+    expect(keysOf(spaced)).toEqual([
+      "article 1",
+      "clause 1/1",
+      "letter 1/1/a",
+      "clause 1/2",
+      "article 2",
+      "clause 2/1",
+      "clause 2/2",
+      "clause 2/3",
+    ]);
+    const index = buildLabelIndex(spaced);
+    const first = index.entryByBlockId.get(blockIdOf(spaced, "1. 1. "));
+    // The label is the text as typed; what follows it is the provision.
+    expect(first?.shape.length).toBe(5);
+    expect(spaced.blocks[1]?.text.slice(first?.manualLength ?? 0)).toBe(
+      "Prodávající prodává zboží.",
+    );
+    // A second part typed with a leading zero is a label of that length.
+    const padded = manifestOf([
+      "1. Předmět smlouvy",
+      "1. 01. Prodávající prodává zboží.",
+      "1. 02. Kupující zboží kupuje.",
+    ]);
+    const paddedFirst = buildLabelIndex(padded).entryByBlockId.get(
+      blockIdOf(padded, "1. 01. "),
+    );
+    expect(padded.blocks[1]?.text.slice(paddedFirst?.manualLength ?? 0)).toBe(
+      "Prodávající prodává zboží.",
+    );
+    // Two language versions side by side count each for itself.
+    const sideBySide = inColumns(2, [
+      "1. Předmět smlouvy",
+      "1. Subject matter",
+      "1. 1. Prodávající prodává zboží.",
+      "1. 1. The seller sells the goods.",
+      "1. 2. Kupující zboží kupuje.",
+      "1. 2. The buyer buys the goods.",
+    ]);
+    const columns = buildLabelIndex(sideBySide);
+    for (const start of ["1. 1. Prodávající", "1. 1. The seller"]) {
+      expect(
+        columns.entryByBlockId.get(blockIdOf(sideBySide, start))?.shape.length,
+      ).toBe(5);
+    }
+    // A heading above the table heads both of its columns.
+    const under = inColumns(2, [
+      "1. 1. Prodávající prodává zboží.",
+      "1. 1. The seller sells the goods.",
+      "1. 2. Kupující zboží kupuje.",
+      "1. 2. The buyer buys the goods.",
+    ]);
+    const [spanning] = manifestOf(["1. Předmět smlouvy"]).blocks;
+    if (spanning === undefined) {
+      throw new Error("fixture");
+    }
+    const headed = {
+      ...under,
+      blocks: [{ ...spanning, id: "heading" }, ...under.blocks],
+    };
+    const spanned = buildLabelIndex(headed);
+    for (const start of ["1. 1. Prodávající", "1. 1. The seller"]) {
+      expect(
+        spanned.entryByBlockId.get(blockIdOf(headed, start))?.shape.length,
+      ).toBe(5);
+    }
+    // No run: one paragraph alone, a gap in the count, another article's
+    // number, a date, a word in lower case.
+    for (const lines of [
+      ["1. Předmět", "1. 1. Jediný odstavec."],
+      ["1. Předmět", "1. 1. První.", "1. 3. Třetí."],
+      ["1. Předmět", "2. 1. První.", "2. 2. Druhý."],
+      [
+        "1. Předmět",
+        "1. 1. 2026 nabývá smlouva účinnosti.",
+        "1. 2. 2026 končí.",
+      ],
+      ["1. Předmět", "1. 1. ledna začíná lhůta.", "1. 2. února končí."],
+    ]) {
+      expect(
+        keysOf(manifestOf(lines)).filter((key) => /^clause \d+\/\d/u.test(key)),
+      ).toEqual([]);
+    }
   });
 
   test("an annex named in front of the first article is not the annex", () => {

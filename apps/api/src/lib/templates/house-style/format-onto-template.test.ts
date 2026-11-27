@@ -247,6 +247,38 @@ describe("formatOntoTemplate", () => {
     ).toEqual([]);
   });
 
+  test("numbers a typed label on a paragraph whose own list prints nothing", async () => {
+    // A heading style bound to a list for its outline only: the engine
+    // reports an empty label for the paragraph and the typed one is
+    // stripped onto the template's list.
+    const silent = {
+      ...manifest,
+      blocks: manifest.blocks.map((block) =>
+        block.id === article
+          ? {
+              ...block,
+              label: "",
+              numbering: { numId: 9, ilvl: 0, abstractNumId: 9 },
+            }
+          : block,
+      ),
+    };
+    const engine = fakeEngine(silent, []);
+    const formatted = (
+      await formatOntoTemplate({
+        engine,
+        source: SOURCE,
+        template: TEMPLATE,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.outcome).toMatchObject({ attempts: 1, repairs: [] });
+    expect(numberingOf(engine.plans.at(0), article)).toMatchObject({
+      stripLabel: expect.stringContaining("II"),
+    });
+  });
+
   test("formats one view of a document with tracked changes and says which", async () => {
     const tracked = {
       insertions: 3,
@@ -287,6 +319,8 @@ describe("formatOntoTemplate", () => {
     const accepted = (await format(byDefault)).unwrap();
     expect(views).toEqual([undefined, "accept"]);
     expect(accepted.plan.trackedChanges).toBe("accept");
+    // The result carries the source as it was formatted: that view.
+    expect(accepted.manifest.trackedChangesResolved?.view).toBe("accept");
     expect(accepted.note.items.at(0)).toEqual({
       kind: "trackedChangesResolved",
       view: "accept",
@@ -359,38 +393,6 @@ describe("formatOntoTemplate", () => {
     expect(formatted.outcome).toMatchObject({ attempts: 1, repairs: [] });
     expect(numberingOf(engine.plans.at(0), bulletId)).toMatchObject({
       numbering: expect.objectContaining({ ilvl: expect.any(Number) }),
-    });
-  });
-
-  test("numbers a typed label on a paragraph whose own list prints nothing", async () => {
-    // A heading style bound to a list for its outline only: the engine
-    // reports an empty label for the paragraph and the typed one is
-    // stripped onto the template's list.
-    const silent = {
-      ...manifest,
-      blocks: manifest.blocks.map((block) =>
-        block.id === article
-          ? {
-              ...block,
-              label: "",
-              numbering: { numId: 9, ilvl: 0, abstractNumId: 9 },
-            }
-          : block,
-      ),
-    };
-    const engine = fakeEngine(silent, []);
-    const formatted = (
-      await formatOntoTemplate({
-        engine,
-        source: SOURCE,
-        template: TEMPLATE,
-        mode: "keepSource",
-        resolveAmbiguities: resolveAmbiguitiesByRule,
-      })
-    ).unwrap();
-    expect(formatted.outcome).toMatchObject({ attempts: 1, repairs: [] });
-    expect(numberingOf(engine.plans.at(0), article)).toMatchObject({
-      stripLabel: expect.stringContaining("II"),
     });
   });
 
