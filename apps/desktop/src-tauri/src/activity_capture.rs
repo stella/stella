@@ -1691,11 +1691,11 @@ mod tests {
     }
   }
 
-  fn failed(failure: StoreFailure) -> Option<FailedStore> {
-    Some(FailedStore {
+  fn failed(failure: StoreFailure) -> FailedStore {
+    FailedStore {
       namespace: NAMESPACE.into(),
       failure,
-    })
+    }
   }
 
   /// The checks that bring a member who records into `reason`, after one
@@ -1707,7 +1707,7 @@ mod tests {
     };
     // The store cannot open, so no choice is loaded; the record keeps it.
     let store = |failure| CheckInput {
-      store: failed(failure),
+      store: Some(failed(failure)),
       ..input(FeatureAccess::Enabled, 5)
     };
     match reason {
@@ -1783,7 +1783,7 @@ mod tests {
     assert!(!monitor.is_stopped());
     // The server's reason comes first.
     let effects = monitor.check(&CheckInput {
-      store: failed(StoreFailure::KeyUnavailable),
+      store: Some(failed(StoreFailure::KeyUnavailable)),
       ..input(off(OffReason::ReconnectNeeded), 10)
     });
     assert_eq!(effects.notify, Some(StopReason::ReconnectNeeded));
@@ -1810,7 +1810,7 @@ mod tests {
   fn a_keychain_that_does_not_answer_is_asked_again_at_its_pace() {
     let mut monitor = CaptureMonitor::new(None);
     let waiting = |seconds| CheckInput {
-      store: failed(StoreFailure::KeychainNotAnswering),
+      store: Some(failed(StoreFailure::KeychainNotAnswering)),
       ..input(FeatureAccess::Enabled, seconds)
     };
     let mut retries = Vec::new();
