@@ -1,6 +1,7 @@
-import { useId } from "react";
+import { createContext, use, useId } from "react";
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -11,8 +12,9 @@ import { Switch } from "@stll/ui/switch";
 /**
  * The pieces every one-choice-per-screen setup step is built from, so
  * Dictation and Activity look and read like the rest of setup: the title
- * with one plain line, the screen's cards, a switch card, choice cards,
- * facts, and the line that offers to read again. Where a screen is among
+ * with one plain line, the screen's cards, a switch card, a choice and its
+ * cards, facts, and the line that offers to read again. Only this file draws
+ * radios and choice cards (`no-hand-rolled-setup-choice`). Where a screen is among
  * the others shows in the footer's dots (`StepFooter`).
  */
 
@@ -89,41 +91,91 @@ export const SwitchCard = ({
   );
 };
 
+/** The `name` the radios of one choice share. */
+const ChoiceName = createContext<string | null>(null);
+
+/** One choice: its cards in one radio group named `label`, so the arrow
+ *  keys move between the answers and Tab enters and leaves the group. */
+export const ChoiceGroup = ({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label: string;
+}) => {
+  const name = useId();
+  return (
+    <ChoiceName value={name}>
+      <div aria-label={label} className="flex flex-col gap-3" role="radiogroup">
+        {children}
+      </div>
+    </ChoiceName>
+  );
+};
+
 /** One answer of a choice with its name and what it means, as a card of
- *  its own; the cards of one choice sit in one `role="radiogroup"` and
- *  share a `name`. */
+ *  its own inside a `ChoiceGroup`. A `note` says why an answer is not
+ *  offered; `details` sit under the card, lined up with its text, for
+ *  controls that belong to the answer (a download, a model). */
 export const ChoiceCard = ({
   checked,
   description,
-  name,
+  details,
+  disabled = false,
+  note,
   onChoose,
   title,
   value,
 }: {
   checked: boolean;
   description: string;
-  name: string;
+  details?: ReactNode;
+  disabled?: boolean;
+  note?: string | undefined;
   onChoose: () => void;
   title: string;
   value: string;
-}) => (
-  <Label variant="choice-card">
-    <input
-      checked={checked}
-      className="accent-primary mt-0.5 size-4 shrink-0"
-      name={name}
-      onChange={onChoose}
-      type="radio"
-      value={value}
-    />
-    <span className="min-w-0">
-      <span className="text-foreground block text-sm font-medium">{title}</span>
-      <span className="text-muted-foreground mt-0.5 block text-sm leading-relaxed text-pretty">
-        {description}
+}) => {
+  const name = use(ChoiceName) ?? panic("A ChoiceCard needs a ChoiceGroup");
+  const card = (
+    <Label variant="choice-card">
+      <input
+        checked={checked}
+        className="accent-primary mt-0.5 size-4 shrink-0"
+        disabled={disabled}
+        name={name}
+        onChange={onChoose}
+        type="radio"
+        value={value}
+      />
+      <span className="min-w-0">
+        <span className="text-foreground block text-sm font-medium">
+          {title}
+        </span>
+        <span className="text-muted-foreground mt-0.5 block text-sm leading-relaxed text-pretty">
+          {description}
+        </span>
+        {note === undefined ? null : (
+          <span
+            className="text-muted-foreground mt-1 block text-xs"
+            role="note"
+          >
+            {note}
+          </span>
+        )}
       </span>
-    </span>
-  </Label>
-);
+    </Label>
+  );
+  // One wrapper whether or not details show, so details appearing on a
+  // choice keep its radio, and the focus on it, in place. The card's
+  // padding, radio and gap: the details start where its text does.
+  return (
+    <div className="flex flex-col gap-2">
+      {card}
+      {details === undefined ? null : <div className="ps-10">{details}</div>}
+    </div>
+  );
+};
 
 /** What a screen sends and keeps, one plain line each. */
 export const Facts = ({ facts }: { facts: readonly string[] }) => (

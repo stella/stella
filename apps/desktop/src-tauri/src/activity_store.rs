@@ -62,6 +62,33 @@ struct ActivityDayFile {
   extra: BTreeMap<String, serde_json::Value>,
 }
 
+/// A day file holding the given records and a pending batch, as stored,
+/// for the Activity data map (`activity_data_map.rs`).
+#[cfg(test)]
+pub(crate) fn day_file_data_map_samples(
+  segments: Vec<ActivitySegment>,
+  gaps: Vec<ActivityGap>,
+  manual_assignments: Vec<ActivityManualAssignment>,
+  drafted_entries: Vec<ActivityDraftedEntry>,
+) -> Vec<serde_json::Value> {
+  let day = ActivityDayFile {
+    segments,
+    drafted_entries,
+    manual_assignments,
+    pending_batch: Some(ActivityPendingBatch {
+      idempotency_key: "batch".into(),
+      entries: serde_json::Value::Array(Vec::new()),
+      ranges: vec![vec![crate::activity::ActivityRange {
+        start: "2026-01-01T00:00:00Z".into(),
+        end: "2026-01-01T00:01:00Z".into(),
+      }]],
+    }),
+    gaps,
+    extra: BTreeMap::new(),
+  };
+  vec![serde_json::to_value(day).expect("a day file serializes")]
+}
+
 enum PendingMutation<'a> {
   Preserve,
   Reserve(&'a ActivityPendingBatch),

@@ -140,6 +140,8 @@ const EXCLUDED_AUTOFIX = {
   "infosoud-codes": "Fetches live code tables",
   "mojibake-exemplars": "Extracts upstream exemplars",
   "mcp-surface": "Human-reviewed protected baseline",
+  "desktop-activity-data-map":
+    "Cargo test requires native platform dependencies and toolchain state",
   "desktop-rpc":
     "Cargo test requires native platform dependencies and toolchain state",
   "scan-engine-wasm":

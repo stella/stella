@@ -68,6 +68,7 @@
     "browserQuestionLater": "Otsusta hiljem",
     "browserQuestionRecordTitles": "Salvesta pealkirjad",
     "browserQuestionTitle": "Kas salvestada ka vahekaartide pealkirjad brauseris <bdi>{browser}</bdi>?",
+    "browserTitlesManaged": "Teie organisatsioon on selles arvutis brauseri vahekaartide pealkirjade salvestamise välja lülitanud. Brauseritest salvestatakse ainult rakenduse nimi.",
     "browserTitlesRecordedFromNow": "Brauseri {browser} akende pealkirju salvestatakse nüüdsest.",
     "browserTitlesWithheld": "Brauseri {browser} akende pealkirju ei salvestata.",
     "byApp": "Rakenduste kaupa",

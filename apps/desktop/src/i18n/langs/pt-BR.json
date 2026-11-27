@@ -68,6 +68,7 @@
     "browserQuestionLater": "Decidir depois",
     "browserQuestionRecordTitles": "Registrar títulos",
     "browserQuestionTitle": "Registrar também os títulos das abas em <bdi>{browser}</bdi>?",
+    "browserTitlesManaged": "Sua organização desativou os títulos de abas do navegador neste computador. Dos navegadores, só o nome do app é registrado.",
     "browserTitlesRecordedFromNow": "Os títulos das janelas do {browser} são registrados a partir de agora.",
     "browserTitlesWithheld": "Os títulos das janelas do {browser} não são registrados.",
     "byApp": "Por aplicativo",

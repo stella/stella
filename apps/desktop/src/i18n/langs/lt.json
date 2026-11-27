@@ -68,6 +68,7 @@
     "browserQuestionLater": "Nuspręsti vėliau",
     "browserQuestionRecordTitles": "Įrašyti pavadinimus",
     "browserQuestionTitle": "Ar įrašyti ir kortelių pavadinimus naršyklėje <bdi>{browser}</bdi>?",
+    "browserTitlesManaged": "Jūsų organizacija šiame kompiuteryje išjungė naršyklės skirtukų pavadinimų įrašymą. Iš naršyklių įrašomas tik programos pavadinimas.",
     "browserTitlesRecordedFromNow": "Naršyklės {browser} langų pavadinimai įrašomi nuo dabar.",
     "browserTitlesWithheld": "Naršyklės {browser} langų pavadinimai neįrašomi.",
     "byApp": "Pagal programą",

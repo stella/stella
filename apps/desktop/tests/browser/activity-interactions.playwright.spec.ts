@@ -48,6 +48,7 @@ const SNAPSHOT = {
   browserApps: [],
   sourceAppVisuals: [],
   browserTitleApps: [],
+  browserTitlesManaged: false,
   detailsAccess: "disabled",
   persistence: "encrypted",
   recordingStatus: "recording",
@@ -343,6 +344,7 @@ const installNativeBoundary = async ({
             detailsAccess: day.detailsAccess,
             browserApps: day.browserApps,
             browserTitleApps: day.browserTitleApps,
+            browserTitlesManaged: day.browserTitlesManaged,
             sourceAppVisuals: day.sourceAppVisuals,
             apps: [...totals.values()]
               .toSorted(

@@ -720,6 +720,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
     "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
   ]),
+  fixtureRuleOverride("no-hand-rolled-setup-choice.fixture.tsx", [
+    "no-hand-rolled-setup-choice/no-hand-rolled-setup-choice",
+  ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
   ]),
@@ -2473,6 +2476,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-justified-reader-text.ts",
     "./.oxlint-plugins/no-raw-reader-scroll.ts",
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
+    "./.oxlint-plugins/no-hand-rolled-setup-choice.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
@@ -4863,6 +4867,18 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.{ts,tsx}"],
       rules: {
         "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop": "error",
+      },
+    },
+    {
+      // Setup screens offer a choice through the shared `ChoiceGroup` and
+      // `ChoiceCard`; only their owner draws radios and choice cards.
+      files: ["apps/desktop/src/onboarding/**/*.tsx"],
+      excludeFiles: [
+        "apps/desktop/src/onboarding/SetupScreenParts.tsx",
+        "**/*.test.tsx",
+      ],
+      rules: {
+        "no-hand-rolled-setup-choice/no-hand-rolled-setup-choice": "error",
       },
     },
     {

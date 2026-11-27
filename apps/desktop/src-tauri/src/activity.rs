@@ -156,6 +156,36 @@ impl ActivitySettings {
   ) -> bool {
     self.capture_details && !policy.activity_details_disabled
   }
+
+  /// Whether a browser's tab and window titles are recorded, with details
+  /// on: the user's choice for that browser, which managed policy can only
+  /// turn off.
+  pub fn records_browser_titles(&self, identifier: &str) -> bool {
+    self.records_browser_titles_under(crate::managed_policy::current(), identifier)
+  }
+
+  fn records_browser_titles_under(
+    &self,
+    policy: &crate::managed_policy::ManagedPolicy,
+    identifier: &str,
+  ) -> bool {
+    !policy.activity_browser_titles_disabled
+      && is_excluded(&self.browser_title_apps, identifier)
+  }
+
+  /// The browsers whose titles are recorded: the ones the user chose, none
+  /// while managed policy turns browser titles off.
+  fn effective_browser_title_apps(&self) -> Vec<AppExclusion> {
+    if crate::managed_policy::current().activity_browser_titles_disabled {
+      return Vec::new();
+    }
+    self.browser_title_apps.clone()
+  }
+}
+
+/// Whether managed policy keeps every browser to its app name.
+fn browser_titles_managed() -> bool {
+  crate::managed_policy::current().activity_browser_titles_disabled
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -563,6 +593,9 @@ pub struct ActivityDaySnapshot {
   app_name_only_apps: Vec<AppExclusion>,
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
+  /// Managed policy keeps every browser to its app name, whatever the user
+  /// chose; `browser_title_apps` is then empty.
+  browser_titles_managed: bool,
   browser_apps: Vec<AppExclusion>,
   calendar_source: ActivityCalendarSource,
   segments: Vec<ActivitySegment>,
@@ -648,6 +681,7 @@ pub struct ActivitySetupSnapshot {
   capture_details: bool,
   detect_calls: bool,
   details_access: ActivityDetailsAccess,
+  browser_titles_managed: bool,
 }
 
 /// What the activity settings show: their values, deletion state, and the
@@ -670,6 +704,9 @@ pub struct ActivitySettingsSnapshot {
   app_name_only_apps: Vec<AppExclusion>,
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
+  /// Managed policy keeps every browser to its app name, whatever the user
+  /// chose; `browser_title_apps` is then empty.
+  browser_titles_managed: bool,
   browser_apps: Vec<AppExclusion>,
   calendar_source: ActivityCalendarSource,
   /// The apps recorded on `date`, longest first.
@@ -736,7 +773,7 @@ fn details_enabled(settings: &ActivitySettings, app: DetailCaptureApp<'_>) -> bo
   settings.records_details()
     && !is_excluded(&settings.app_name_only_apps, app.identifier)
     && (!crate::activity_details::is_browser(app.identifier, app.name)
-      || is_excluded(&settings.browser_title_apps, app.identifier))
+      || settings.records_browser_titles(app.identifier))
 }
 
 static MONOTONIC_EPOCH: OnceLock<Instant> = OnceLock::new();
@@ -1496,6 +1533,31 @@ impl ActivityManager {
     enabled: bool,
     now: DateTime<Utc>,
   ) -> Result<(), String> {
+    self.set_browser_title_capture_under(
+      crate::managed_policy::current(),
+      identifier,
+      name,
+      enabled,
+      now,
+    )
+  }
+
+  /// Managed policy only turns browser titles off; turning a browser off
+  /// stays possible under it, and the saved choices are kept for when it
+  /// lifts.
+  fn set_browser_title_capture_under(
+    &mut self,
+    policy: &crate::managed_policy::ManagedPolicy,
+    identifier: &str,
+    name: &str,
+    enabled: bool,
+    now: DateTime<Utc>,
+  ) -> Result<(), String> {
+    if enabled && policy.activity_browser_titles_disabled {
+      return Err(
+        "activity browser titles are turned off by managed policy".to_string(),
+      );
+    }
     let preference = AppExclusion::new(identifier, name)
       .ok_or_else(|| "activity application is invalid".to_string())?;
     self.require_writable()?;
@@ -2835,10 +2897,9 @@ impl ActivityManager {
           &open.segment.app_identifier,
           &open.segment.app_name,
         ) || (self.settings.capture_details
-          && is_excluded(
-            &self.settings.browser_title_apps,
-            &open.segment.app_identifier,
-          )))
+          && self
+            .settings
+            .records_browser_titles(&open.segment.app_identifier)))
         && open.privacy == CapturedWindowPrivacy::Ordinary
     });
     let now = current.map(|open| {
@@ -2949,7 +3010,8 @@ impl ActivityManager {
       detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
-      browser_title_apps: self.settings.browser_title_apps.clone(),
+      browser_title_apps: self.settings.effective_browser_title_apps(),
+      browser_titles_managed: browser_titles_managed(),
       browser_apps,
       calendar_source: self.settings.calendar_source,
       source_app_visuals: Vec::new(),
@@ -3028,7 +3090,8 @@ impl ActivityManager {
       detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
-      browser_title_apps: self.settings.browser_title_apps.clone(),
+      browser_title_apps: self.settings.effective_browser_title_apps(),
+      browser_titles_managed: browser_titles_managed(),
       browser_apps: self.browser_apps(&segments),
       calendar_source: self.settings.calendar_source,
       apps: day_apps(&segments),
@@ -3046,6 +3109,7 @@ impl ActivityManager {
       capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       details_access,
+      browser_titles_managed: browser_titles_managed(),
     }
   }
 
@@ -3534,7 +3598,7 @@ fn observe_now(
   let details = if include_details {
     let details = crate::activity_details::capture(
       &foreground,
-      is_excluded(&settings.browser_title_apps, &identifier),
+      settings.records_browser_titles(&identifier),
     );
     // The capture module verifies focused-window identity internally. Recheck
     // the owning app/process after the bounded OS call before attributing it.
@@ -4164,6 +4228,69 @@ mod tests {
   }
 
   #[test]
+  fn managed_policy_keeps_browser_titles_off_without_changing_the_choice() {
+    let chosen = ActivitySettings {
+      capture_details: true,
+      browser_title_apps: vec![
+        AppExclusion::new("com.google.chrome", "Chrome").unwrap(),
+      ],
+      ..ActivitySettings::default()
+    };
+    let open = crate::managed_policy::ManagedPolicy::default();
+    let managed = crate::managed_policy::ManagedPolicy {
+      activity_browser_titles_disabled: true,
+      ..crate::managed_policy::ManagedPolicy::default()
+    };
+    assert!(chosen.records_browser_titles_under(&open, "com.google.chrome"));
+    assert!(!chosen.records_browser_titles_under(&managed, "com.google.chrome"));
+    assert!(!chosen.records_browser_titles_under(&open, "com.apple.safari"));
+    // Details for apps other than browsers are not the key's to change.
+    assert!(chosen.records_details_under(&managed));
+    assert_eq!(chosen.browser_title_apps.len(), 1);
+  }
+
+  #[test]
+  fn managed_policy_refuses_turning_browser_titles_on_but_not_off() {
+    let managed = crate::managed_policy::ManagedPolicy {
+      activity_browser_titles_disabled: true,
+      ..crate::managed_policy::ManagedPolicy::default()
+    };
+    let mut manager = recording_manager();
+    manager
+      .set_browser_title_capture_under(
+        &crate::managed_policy::ManagedPolicy::default(),
+        "com.google.chrome",
+        "Chrome",
+        true,
+        at(0),
+      )
+      .unwrap();
+    assert_eq!(
+      manager
+        .set_browser_title_capture_under(
+          &managed,
+          "com.apple.safari",
+          "Safari",
+          true,
+          at(1)
+        )
+        .unwrap_err(),
+      "activity browser titles are turned off by managed policy"
+    );
+    assert_eq!(manager.settings.browser_title_apps.len(), 1);
+    manager
+      .set_browser_title_capture_under(
+        &managed,
+        "com.google.chrome",
+        "Chrome",
+        false,
+        at(2),
+      )
+      .unwrap();
+    assert!(manager.settings.browser_title_apps.is_empty());
+  }
+
+  #[test]
   fn pending_date_index_tracks_only_successful_batch_transitions() {
     let mut manager = recording_manager();
     let date = local_date(at(0));
@@ -4498,6 +4625,7 @@ mod tests {
         "apps",
         "browserApps",
         "browserTitleApps",
+        "browserTitlesManaged",
         "calendarSource",
         "captureDetails",
         "date",

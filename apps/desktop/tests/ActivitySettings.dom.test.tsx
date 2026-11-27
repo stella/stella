@@ -41,16 +41,20 @@ const SETTINGS = {
   detailsAccess: "disabled",
   browserApps: [],
   browserTitleApps: [],
+  browserTitlesManaged: false,
   apps: [],
   sourceAppVisuals: [],
 };
+
+const CHROME = { identifier: "com.google.chrome", name: "Google Chrome" };
 
 /** Renders the pane over a native side whose reads follow `native`. */
 const renderPane = async (native: {
   readable: boolean;
   captureDetails?: boolean;
-  detailsAccess?: "disabled" | "managed";
+  detailsAccess?: "disabled" | "managed" | "ready";
   draftPolicy?: "account" | "managedOff";
+  browserTitlesManaged?: boolean;
 }) => {
   mockIPC(
     (command, args) => {
@@ -62,6 +66,13 @@ const renderPane = async (native: {
           ...SETTINGS,
           captureDetails: native.captureDetails ?? SETTINGS.captureDetails,
           detailsAccess: native.detailsAccess ?? SETTINGS.detailsAccess,
+          ...(native.browserTitlesManaged === undefined
+            ? {}
+            : {
+                apps: [CHROME],
+                browserApps: [CHROME],
+                browserTitlesManaged: native.browserTitlesManaged,
+              }),
         };
       }
       if (
@@ -175,6 +186,41 @@ test("where policy keeps details off, the row says so and offers nothing to turn
   expect(
     document.body.textContent.includes(messages.captureModesDetailsOff),
   ).toBe(false);
+});
+
+test("where policy keeps browser titles off, a browser offers no titles and the list says who decided", async () => {
+  const { findByRole, findByText } = await renderPane({
+    readable: true,
+    captureDetails: true,
+    detailsAccess: "ready",
+    browserTitlesManaged: true,
+  });
+  const note = await findByText(messages.browserTitlesManaged);
+  const group = await findByRole("group", {
+    name: messages.captureModeLabel.replace("{name}", () => CHROME.name),
+  });
+  expect(group.getAttribute("aria-describedby")).toBe(note.id);
+  const titles = [...group.querySelectorAll("button")].find(
+    (button) => button.textContent === messages.captureModeTitles,
+  );
+  expect(titles?.disabled).toBe(true);
+});
+
+test("without the browser policy, a browser can still be chosen for titles", async () => {
+  const { findByRole, queryByText } = await renderPane({
+    readable: true,
+    captureDetails: true,
+    detailsAccess: "ready",
+    browserTitlesManaged: false,
+  });
+  const group = await findByRole("group", {
+    name: messages.captureModeLabel.replace("{name}", () => CHROME.name),
+  });
+  expect(queryByText(messages.browserTitlesManaged)).toBeNull();
+  const titles = [...group.querySelectorAll("button")].find(
+    (button) => button.textContent === messages.captureModeTitles,
+  );
+  expect(titles?.disabled).toBe(false);
 });
 
 test("where policy turns drafts off, the drafts row says so and asks for no consent", async () => {

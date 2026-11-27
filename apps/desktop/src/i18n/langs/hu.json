@@ -68,6 +68,7 @@
     "browserQuestionLater": "Döntés később",
     "browserQuestionRecordTitles": "Címek rögzítése",
     "browserQuestionTitle": "A(z) <bdi>{browser}</bdi> lapcímeit is rögzítse?",
+    "browserTitlesManaged": "A szervezete ezen a számítógépen kikapcsolta a böngészőlapok címének rögzítését. A böngészőknél csak az alkalmazás neve rögzül.",
     "browserTitlesRecordedFromNow": "A(z) {browser} ablakcímei mostantól rögzülnek.",
     "browserTitlesWithheld": "A(z) {browser} ablakcímei nem rögzülnek.",
     "byApp": "Alkalmazásonként",

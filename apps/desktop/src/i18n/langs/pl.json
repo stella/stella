@@ -68,6 +68,7 @@
     "browserQuestionLater": "Zdecyduj później",
     "browserQuestionRecordTitles": "Rejestruj tytuły",
     "browserQuestionTitle": "Rejestrować też tytuły kart w <bdi>{browser}</bdi>?",
+    "browserTitlesManaged": "Twoja organizacja wyłączyła na tym komputerze rejestrowanie tytułów kart przeglądarki. Z przeglądarek rejestrowana jest tylko nazwa aplikacji.",
     "browserTitlesRecordedFromNow": "Tytuły okien z {browser} są rejestrowane od teraz.",
     "browserTitlesWithheld": "Tytuły okien z {browser} nie są rejestrowane.",
     "byApp": "Według aplikacji",

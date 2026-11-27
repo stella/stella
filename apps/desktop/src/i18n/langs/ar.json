@@ -68,6 +68,7 @@
     "browserQuestionLater": "القرار لاحقًا",
     "browserQuestionRecordTitles": "تسجيل العناوين",
     "browserQuestionTitle": "هل تريد تسجيل عناوين علامات التبويب في <bdi>{browser}</bdi> أيضًا؟",
+    "browserTitlesManaged": "أوقفت مؤسستك تسجيل عناوين علامات تبويب المتصفح على هذا الكمبيوتر. لا يُسجَّل من المتصفحات إلا اسم التطبيق.",
     "browserTitlesRecordedFromNow": "تُسجَّل عناوين النوافذ في {browser} من الآن.",
     "browserTitlesWithheld": "لا تُسجَّل عناوين النوافذ في {browser}.",
     "byApp": "حسب التطبيق",

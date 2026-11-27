@@ -68,6 +68,7 @@
     "browserQuestionLater": "Decide later",
     "browserQuestionRecordTitles": "Record titles",
     "browserQuestionTitle": "Also record tab titles in <bdi>{browser}</bdi>?",
+    "browserTitlesManaged": "Your organization has turned off browser tab titles on this computer. Browsers record their app name only.",
     "browserTitlesRecordedFromNow": "Window titles from {browser} are recorded from now on.",
     "browserTitlesWithheld": "Window titles from {browser} are not recorded.",
     "byApp": "By app",

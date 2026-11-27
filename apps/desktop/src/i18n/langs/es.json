@@ -68,6 +68,7 @@
     "browserQuestionLater": "Decidir más tarde",
     "browserQuestionRecordTitles": "Registrar títulos",
     "browserQuestionTitle": "¿Registrar también los títulos de las pestañas en <bdi>{browser}</bdi>?",
+    "browserTitlesManaged": "Tu organización ha desactivado los títulos de pestañas del navegador en este ordenador. De los navegadores solo se registra el nombre de la aplicación.",
     "browserTitlesRecordedFromNow": "Los títulos de las ventanas de {browser} se registran a partir de ahora.",
     "browserTitlesWithheld": "Los títulos de las ventanas de {browser} no se registran.",
     "byApp": "Por aplicación",

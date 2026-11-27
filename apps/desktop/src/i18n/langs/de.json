@@ -68,6 +68,7 @@
     "browserQuestionLater": "Später entscheiden",
     "browserQuestionRecordTitles": "Titel aufzeichnen",
     "browserQuestionTitle": "Auch Tab-Titel in <bdi>{browser}</bdi> aufzeichnen?",
+    "browserTitlesManaged": "Ihre Organisation hat Tab-Titel von Browsern auf diesem Computer deaktiviert. Browser werden nur mit ihrem App-Namen aufgezeichnet.",
     "browserTitlesRecordedFromNow": "Fenstertitel aus {browser} werden ab jetzt aufgezeichnet.",
     "browserTitlesWithheld": "Fenstertitel aus {browser} werden nicht aufgezeichnet.",
     "byApp": "Nach App",

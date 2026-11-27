@@ -68,6 +68,7 @@
     "browserQuestionLater": "Rozhodnout později",
     "browserQuestionRecordTitles": "Zaznamenávat názvy",
     "browserQuestionTitle": "Zaznamenávat i názvy karet v <bdi>{browser}</bdi>?",
+    "browserTitlesManaged": "Vaše organizace v tomto počítači vypnula záznam názvů panelů prohlížeče. Prohlížeče zaznamenávají jen název aplikace.",
     "browserTitlesRecordedFromNow": "Názvy oken z {browser} se od teď zaznamenávají.",
     "browserTitlesWithheld": "Názvy oken z {browser} se nezaznamenávají.",
     "byApp": "Podle aplikací",
