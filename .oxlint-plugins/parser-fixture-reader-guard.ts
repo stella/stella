@@ -33,7 +33,7 @@ const memberName = (node: { computed: boolean; property: unknown }) => {
 };
 
 const PARSER_MODULE_PATH =
-  /(?:^|\/)(?:handlers\/case-law\/ingestion\/(?:parsers|adapters)|lib\/legal-search\/parsers)(?:\/[^/]+)+$/u;
+  /(?:^|\/)(?:handlers\/case-law\/ingestion\/(?:parsers|adapters)|lib\/legal-search\/parsers|packages\/case-law-parsers\/src)(?:\/[^/]+)+$/u;
 
 /**
  * Whether an import names a parser-owning module. A relative source resolves
@@ -41,6 +41,7 @@ const PARSER_MODULE_PATH =
  * name is not mistaken for the parser.
  */
 const importsParserModule = (source: string, filename: string): boolean =>
+  source.startsWith("@stll/case-law-parsers/") ||
   PARSER_MODULE_PATH.test(
     source.startsWith(".")
       ? path.posix.join(path.posix.dirname(filename), source)

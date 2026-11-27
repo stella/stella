@@ -439,7 +439,7 @@ export const parseUkFclDecision = ({
       ? []
       : elements(header, "judge")
           .map((judge) => ({
-            role: "panel-member" satisfies DecisionJudgeRole,
+            role: "panel-member" as const satisfies DecisionJudgeRole,
             nameAsPrinted:
               text(judge) ||
               people

@@ -3,6 +3,9 @@
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored document; the parse itself is unchanged.
 import { panic } from "better-result";
+
+// parser-output-unchanged: uses parseIntegerToken/parseDecimalToken from @stll/agent-input/numeric-token; parsed values unchanged.
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) decision parser.
  *
@@ -25,7 +28,6 @@ import { panic } from "better-result";
  * this parser does not recognise is emitted as a plain paragraph in document
  * order, and only a line it does recognise gains a heading or a role.
  */
-
 // parser-output-unchanged: inlines small helper/type aliases to decouple from apps/api; output unchanged.
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import {
@@ -813,12 +815,13 @@ export const huDecisionDateFrom = (line: string): string | undefined => {
   const monthName = groups["monthName"];
   const month =
     monthName === undefined
-      ? Number(groups["monthNumber"])
+      ? parseIntegerToken(groups["monthNumber"]).unwrapOr(undefined)
       : MONTH_NUMBERS.get(monthName.toLocaleLowerCase("hu-HU"));
   if (month === undefined) {
     return panic("Matched Hungarian month has no calendar number");
   }
-  const date = `${year}-${pad(month)}-${pad(Number(groups["day"]))}`;
+  const day = parseIntegerToken(groups["day"]).unwrapOr(0);
+  const date = `${year}-${pad(month)}-${pad(day)}`;
   return parsePlainDate(date) === null ? undefined : date;
 };
 
@@ -1466,7 +1469,7 @@ export const parseHuBhgyDecision = (
     builder.paragraph({
       type: "paragraph",
       role,
-      number: Number(number),
+      number: parseIntegerToken(number).unwrapOr(undefined),
       inlines: unnumbered.inlines,
       plainText: unnumbered.plainText,
     });

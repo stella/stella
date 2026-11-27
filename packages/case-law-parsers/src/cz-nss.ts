@@ -1,3 +1,4 @@
+// parser-output-unchanged: uses parseIntegerToken/parseDecimalToken from @stll/agent-input/numeric-token; parsed values unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
@@ -31,7 +32,10 @@
 
 import { Result } from "better-result";
 
-import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
 import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 import {
   inlineStyleDeclaresProperty,
@@ -756,7 +760,9 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       const ordered = tag === "ol";
       const decimalList = ordered && ($el.attr("type") ?? "1") === "1";
       const startAttr = $el.attr("start");
-      let listStart = startAttr ? Number.parseInt(startAttr, 10) : 1;
+      let listStart = startAttr
+        ? parseIntegerToken(startAttr.trim()).unwrapOr(1)
+        : 1;
 
       $el.contents().each((_li, liEl) => {
         if (!("tagName" in liEl) || liEl.tagName.toLowerCase() !== "li") {
@@ -819,7 +825,7 @@ const tableCellText = ($cell: cheerio.Cheerio<AnyNode>): string => {
 
 const parseFontSize = (style: string): number => {
   const match = /font-size:\s*(?<size>\d+)pt/u.exec(style);
-  return match ? Number(match.groups?.["size"]) : 12;
+  return match ? parseIntegerToken(match.groups?.["size"]).unwrapOr(12) : 12;
 };
 
 // ── Patterns ───────────────────────────────────────────────

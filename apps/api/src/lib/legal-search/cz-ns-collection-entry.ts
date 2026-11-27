@@ -61,7 +61,7 @@ const reportEditionSchema = v.variant("extent", [
   sectionEditionSchema,
   v.object({ extent: v.literal("complete") }),
 ]);
-export type CzNsReportEdition = v.InferOutput<typeof reportEditionSchema>;
+type CzNsReportEdition = v.InferOutput<typeof reportEditionSchema>;
 
 /** A URL as the entry carries it once built: typed, or the defect found. */
 type EntryUrl = SafeHref | MetadataUrlDefect | undefined;

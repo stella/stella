@@ -1,3 +1,4 @@
+// parser-output-unchanged: uses parseIntegerToken/parseDecimalToken from @stll/agent-input/numeric-token; parsed values unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
@@ -31,7 +32,10 @@
 
 import { panic } from "better-result";
 
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
 import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 import {
   ANONYMIZED_CLASS,
@@ -137,7 +141,9 @@ const FONT_SIZE_PATTERN = /font-size:\s*(?<size>\d+(?:\.\d+)?)px/u;
 
 const fontSizeOf = (style: string | undefined): number => {
   const size = FONT_SIZE_PATTERN.exec(style ?? "")?.groups?.["size"];
-  return size === undefined ? DEFAULT_FONT_SIZE : Number(size);
+  return size === undefined
+    ? DEFAULT_FONT_SIZE
+    : parseDecimalToken(size).unwrapOr(DEFAULT_FONT_SIZE);
 };
 
 /** What a span with no declaration of its own is rendered at. */
@@ -1551,7 +1557,9 @@ const courtRepeatsAfterList = (
 /** The court paragraph number each line opens with, if any. */
 const openingNumberOf = (text: string): number | undefined => {
   const raw = COURT_PARAGRAPH_OPENING_RE.exec(text)?.groups?.["number"];
-  return raw === undefined ? undefined : Number(raw);
+  return raw === undefined
+    ? undefined
+    : parseIntegerToken(raw).unwrapOr(undefined);
 };
 
 /**

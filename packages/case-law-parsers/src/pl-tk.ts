@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
@@ -19,8 +20,8 @@
  * names, and {@link listPlTkPageFields} reads them back for the inventory.
  */
 
-import { panic } from "better-result";
-
+// parser-output-unchanged: uses parseIntegerToken/parseDecimalToken from @stll/agent-input/numeric-token; parsed values unchanged.
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { collapseHtmlWhitespace } from "@stll/case-law-parsers/html-whitespace";
 import { inlineStyleValue } from "@stll/case-law-parsers/inline-style";
 import {
@@ -96,7 +97,7 @@ export const parsePolishDate = (text: string): string | undefined => {
   ) {
     return undefined;
   }
-  const dayNumber = Number(day);
+  const dayNumber = parseIntegerToken(day).unwrapOr(0);
   if (dayNumber < 1 || dayNumber > 31) {
     return undefined;
   }
@@ -1263,7 +1264,9 @@ const buildBlocks = ($: Root, text: cheerio.Cheerio<AnyNode>): Block[] => {
         body.children(".wyrok_akapitNr").remove();
         emit(body, {
           ...next,
-          number: PARAGRAPH_NUMBER.test(counted) ? Number(counted) : undefined,
+          number: PARAGRAPH_NUMBER.test(counted)
+            ? parseIntegerToken(counted).unwrapOr(undefined)
+            : undefined,
         });
         continue;
       }

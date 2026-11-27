@@ -119,7 +119,7 @@ import { readCommonCourtInlines } from "./pl-common-court-inlines";
 const includes = <T extends string>(
   list: readonly T[],
   value: string,
-): value is T => (list as readonly string[]).includes(value);
+): value is T => list.some((item) => item === value);
 
 type ParsePlDecisionInput = {
   caseNumber: string;

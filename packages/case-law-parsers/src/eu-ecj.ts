@@ -467,7 +467,10 @@ const classDepth = (
   for (const name of classNames) {
     const depth = pattern.exec(name)?.groups?.["depth"];
     if (depth !== undefined) {
-      return Number.parseInt(depth, 10);
+      const parsed = parseIntegerToken(depth);
+      if (parsed.isOk()) {
+        return parsed.value;
+      }
     }
   }
   return undefined;
@@ -1741,7 +1744,7 @@ const visitTable = (
     } else {
       builder.zone = builder.zone === "header" ? "body" : builder.zone;
       visitCell($, builder, $(contentCell), {
-        number: Number.parseInt(pointNumber, 10),
+        number: parseIntegerToken(pointNumber).unwrapOr(0),
       });
     }
 

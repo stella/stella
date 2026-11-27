@@ -2,6 +2,8 @@
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result } from "better-result";
 
+// parser-output-unchanged: uses parseIntegerToken/parseDecimalToken from @stll/agent-input/numeric-token; parsed values unchanged.
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
 import {
   type AtPrintedLine,
@@ -107,7 +109,7 @@ const distinctTexts = ($: cheerio.CheerioAPI, selector: string): string[] => [
 ];
 
 const headingLevel = (element: Element): 1 | 2 | 3 => {
-  const raw = Number(element.tagName.slice(1));
+  const raw = parseIntegerToken(element.tagName.slice(1)).unwrapOr(3);
   if (raw <= 1) {
     return 1;
   }
