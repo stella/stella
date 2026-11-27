@@ -162,9 +162,9 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
     let hasMore = true;
     while (hasMore) {
       // Keyset pagination: O(1) per batch vs O(N) for offset
-      // db-await-in-loop: keyset page per iteration; the page is the batch
       const afterId: SafeId<"entity"> | null = lastId;
       const batch: { id: SafeId<"entity"> }[] =
+        // db-await-in-loop: keyset page per iteration; the page is the batch
         await withOwnerOrganizationScope(
           rootDb,
           orgId,

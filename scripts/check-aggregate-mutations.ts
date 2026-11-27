@@ -926,6 +926,12 @@ const JOINING_RUNNERS = {
       argument: 1,
       suppliesTransaction: true,
     },
+    {
+      module: `${API}lib/db/owner-organization-scope.ts`,
+      exported: "withOwnerOrganizationScope",
+      argument: 2,
+      suppliesTransaction: true,
+    },
     // Awaits its callback and returns its result, then pings the turns it
     // wrote: the transaction the callback opens is the handler's own.
     {
