@@ -2082,7 +2082,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       region: "keepBefore",
       blockIds: keepBefore,
     });
-    for (const slot of context.headerFill?.slots ?? []) {
+    for (const slot of context.headerFill?.slots ?? NO_SLOTS) {
       body.push({ kind: "slot", ...slot });
     }
     if (context.headerFill !== null) {
@@ -2151,6 +2151,9 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
 
 type HeaderField = "addressee" | "date" | "reference";
 
+const NO_SLOTS: HeaderFill["slots"] = [];
+const NO_LINES: readonly string[] = [];
+
 type HeaderFill = {
   slots: { templateBlockId: string; sourceBlockIds: string[] }[];
   /** Sample lines of the addressee the letter has no line for. */
@@ -2177,7 +2180,7 @@ const fillHeader = ({ profile, topLevel }: Context): HeaderFill | null => {
   const head = readLetterHead(topLevel);
   const fill: HeaderFill = { slots: [], emptied: [], filled: [], left: [] };
   const cells = header.addressee;
-  const lines = head?.addressee ?? [];
+  const lines = head?.addressee ?? NO_LINES;
   if (cells.length > 0 && lines.length > 0) {
     for (const [position, templateBlockId] of cells.entries()) {
       const last = position === cells.length - 1;
