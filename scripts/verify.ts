@@ -5,7 +5,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -14,7 +14,7 @@ import {
   type HostConfig,
   hostConfig,
   probeRemote,
-  withCheckAdmission,
+  withCheckAdmissionAsync,
 } from "./verify-admission";
 import { VerifyError } from "./verify-error";
 import {
@@ -28,9 +28,27 @@ export type VerifyOptions = {
   scope: "affected" | "all";
   mode: "check" | "fix-check" | "fix" | "list";
   emitPatch?: true;
+  concurrency?: number;
+};
+const parsePositiveInteger = (
+  value: string | undefined,
+  label: string,
+): number => {
+  if (value === undefined || !/^[1-9]\d*$/u.test(value)) {
+    throw new VerifyError(`${label} requires a positive integer`);
+  }
+  return Number.parseInt(value, 10);
+};
+export const defaultVerifyConcurrency = (): number => {
+  const configured = process.env["STELLA_VERIFY_CONCURRENCY"];
+  if (configured !== undefined && configured.trim() !== "") {
+    return parsePositiveInteger(configured.trim(), "STELLA_VERIFY_CONCURRENCY");
+  }
+  return Math.min(4, Math.max(1, Math.floor(availableParallelism() / 2)));
 };
 export const parseVerifyArgs = (args: readonly string[]): VerifyOptions => {
   let emitPatch: true | undefined;
+  let concurrency: number | undefined;
   let base = "origin/main";
   let scope: VerifyOptions["scope"] = "affected";
   let mode: VerifyOptions["mode"] = "check";
@@ -62,6 +80,10 @@ export const parseVerifyArgs = (args: readonly string[]): VerifyOptions => {
         base = value;
         break;
       }
+      case "--concurrency": {
+        concurrency = parsePositiveInteger(args[++index], "--concurrency");
+        break;
+      }
       default:
         throw new VerifyError(`Unknown verify argument: ${argument}`);
     }
@@ -71,6 +93,7 @@ export const parseVerifyArgs = (args: readonly string[]): VerifyOptions => {
     scope,
     mode,
     ...(emitPatch === undefined ? {} : { emitPatch }),
+    ...(concurrency === undefined ? {} : { concurrency }),
   };
 };
 
@@ -92,6 +115,115 @@ export const runVerifySteps = (
     }
     failures.push(step.name);
   }
+  if (failures.length > 0) {
+    console.error(`verify: failed: ${failures.join(", ")}`);
+    return 1;
+  }
+  return 0;
+};
+
+export type AsyncVerifyStepRunner = (
+  step: VerifyWorkflowStep,
+  options: { buffered: boolean },
+) => Promise<number>;
+
+const formatSeconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+const isHeavyCheckStep = (step: VerifyWorkflowStep): boolean =>
+  step.job.startsWith("code-quality-");
+
+export const runVerifyStepsConcurrent = async (
+  steps: readonly VerifyWorkflowStep[],
+  run: AsyncVerifyStepRunner,
+  concurrency = defaultVerifyConcurrency(),
+): Promise<number> => {
+  const startedAt = performance.now();
+  const prepareSteps = steps.filter(({ phase }) => phase === "prepare");
+  const checkSteps = steps.filter(({ phase }) => phase === "check");
+  const parallelChecks = checkSteps.filter((step) => !isHeavyCheckStep(step));
+  const serialChecks = checkSteps.filter((step) => isHeavyCheckStep(step));
+  const timings: { name: string; ms: number }[] = [];
+
+  for (const step of prepareSteps) {
+    console.log(`verify: ${step.job} / ${step.name}`);
+    const stepStart = performance.now();
+    const status = await run(step, { buffered: false });
+    timings.push({ name: step.name, ms: performance.now() - stepStart });
+    if (status !== 0) {
+      return status;
+    }
+  }
+
+  const limit = Math.max(1, concurrency);
+  const buffered = limit > 1 && parallelChecks.length > 1;
+  const parallelStatuses = Array.from<number | undefined>({
+    length: parallelChecks.length,
+  });
+  let nextIndex = 0;
+  let refused = false;
+
+  const worker = async (): Promise<void> => {
+    while (!refused) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const step = parallelChecks[index];
+      if (step === undefined) {
+        return;
+      }
+      if (!buffered) {
+        console.log(`verify: ${step.job} / ${step.name}`);
+      }
+      const stepStart = performance.now();
+      const status = await run(step, { buffered });
+      const elapsed = performance.now() - stepStart;
+      timings.push({ name: step.name, ms: elapsed });
+      parallelStatuses[index] = status;
+      if (status === BOTH_GATES_REFUSED) {
+        refused = true;
+        return;
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, parallelChecks.length) }, () =>
+      worker(),
+    ),
+  );
+  if (refused) {
+    return BOTH_GATES_REFUSED;
+  }
+
+  const failures: string[] = [];
+  for (const [index, step] of parallelChecks.entries()) {
+    const status = parallelStatuses[index];
+    if (status !== undefined && status !== 0) {
+      failures.push(step.name);
+    }
+  }
+
+  for (const step of serialChecks) {
+    console.log(`verify: ${step.job} / ${step.name}`);
+    const stepStart = performance.now();
+    const status = await run(step, { buffered: false });
+    timings.push({ name: step.name, ms: performance.now() - stepStart });
+    if (status === BOTH_GATES_REFUSED) {
+      return BOTH_GATES_REFUSED;
+    }
+    if (status !== 0) {
+      failures.push(step.name);
+    }
+  }
+
+  const totalMs = performance.now() - startedAt;
+  const slowest = timings
+    .toSorted((left, right) => right.ms - left.ms)
+    .slice(0, 3)
+    .map(({ name, ms }) => `${name} (${formatSeconds(ms)})`)
+    .join(", ");
+  console.log(
+    `verify: completed ${timings.length} steps in ${formatSeconds(totalMs)}${slowest === "" ? "" : ` (slowest: ${slowest})`}`,
+  );
+
   if (failures.length > 0) {
     console.error(`verify: failed: ${failures.join(", ")}`);
     return 1;
@@ -164,7 +296,40 @@ export const runAutofixSteps = (
   return 0;
 };
 
-const localChecks = (options: VerifyOptions, config: HostConfig): number => {
+const createAsyncStepRunner =
+  (env: NodeJS.ProcessEnv, run: VerifyStepRunner): AsyncVerifyStepRunner =>
+  async (step, { buffered }) => {
+    if (!buffered) {
+      return run(step);
+    }
+    const stepStart = performance.now();
+    const proc = Bun.spawn(["bash", "-euo", "pipefail", "-c", step.run], {
+      cwd: path.resolve(repo, step.cwd),
+      env: { ...env, ...step.env },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    const elapsed = formatSeconds(performance.now() - stepStart);
+    const badge = exitCode === 0 ? "ok" : `FAIL(${exitCode})`;
+    console.log(`verify: [${badge} ${elapsed}] ${step.job} / ${step.name}`);
+    if (stdout.length > 0) {
+      process.stdout.write(stdout);
+    }
+    if (stderr.length > 0) {
+      process.stderr.write(stderr);
+    }
+    return exitCode;
+  };
+
+const localChecks = async (
+  options: VerifyOptions,
+  config: HostConfig,
+): Promise<number> => {
   const temporary = mkdtempSync(path.join(tmpdir(), "stella-verify-"));
   const mergeBase = git(["merge-base", options.base, "HEAD"]).trim();
   const installerArgs = path.join(temporary, "installer-argv");
@@ -224,8 +389,9 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
       stdout: "inherit",
       stderr: "inherit",
     }).exitCode;
+  const runAsync = createAsyncStepRunner(env, run);
   try {
-    const runChecks = (): number => {
+    const runChecks = async (): Promise<number> => {
       if (options.mode === "fix" || options.mode === "fix-check") {
         // Compare the live tree, so staged, unstaged and new files all participate.
         const untracked = git([
@@ -323,12 +489,13 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
         }
       }
       assertRunnerTempEntries(temporary, "verify");
-      return runVerifySteps(
+      return await runVerifyStepsConcurrent(
         readVerifyWorkflow({ root: repo, mode: "verify" }),
-        run,
+        runAsync,
+        options.concurrency,
       );
     };
-    const status = runChecks();
+    const status = await runChecks();
     if (initialTree !== undefined) {
       if (spawn(["git", "add", "--all", "--", "."], indexEnv) !== 0) {
         throw new VerifyError("Unable to collect remote autofix files");
@@ -430,7 +597,12 @@ const remoteChecks = ({
     const apply = (check: boolean) =>
       Bun.spawnSync(
         ["git", "apply", ...(check ? ["--check"] : []), "--binary", "-"],
-        { cwd: repo, stdin: patch, stdout: "inherit", stderr: "inherit" },
+        {
+          cwd: repo,
+          stdin: patch,
+          stdout: "inherit",
+          stderr: "inherit",
+        },
       ).exitCode;
     if (apply(true) !== 0 || apply(false) !== 0) {
       console.error(
@@ -460,7 +632,7 @@ if (import.meta.main) {
           ? readVerifyWorkflow({ root: repo, mode: "verify" })
           : []),
       ];
-      const status = withCheckAdmission({
+      const status = await withCheckAdmissionAsync({
         alreadyRemote: process.env["REMOTE_CHECK"] === "1",
         admitLocal: () =>
           admitLocal({

@@ -74,6 +74,8 @@ describe("route traffic changes require the route smoke", () => {
     "scripts/retry.sh",
     "patches/dependency.patch",
     "apps/web/e2e/fixtures/simple.docx",
+    "apps/api/src/lib/search/__fixtures__/mixed-3pages.pdf",
+    "packages/template-packs/src/content/packs/default/templates/advisor-agreement/README.md",
   ])("plans a smoke for %s", (file) => {
     expect(routeSmokeAffected([file])).toBe(true);
   });
@@ -103,6 +105,25 @@ describe("route traffic changes require the route smoke", () => {
     "apps/web/e2e/specs/unrelated.spec.ts",
     "apps/web/e2e/marketing/landing.spec.ts",
     "scripts/unrelated.ts",
+    "apps/api/src/routes/contacts.test.ts",
+    "apps/api/src/db/queries.db.test.ts",
+    "apps/api/src/db/rls.postgres.test.ts",
+    "apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sample.html",
+    "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.research.md",
+    "apps/api/src/tests/helpers/chat-oracles.ts",
+    "apps/api/evals/chat-eval.ts",
+    "apps/api/e2e/smoke.spec.ts",
+    "apps/api/typecheck-required/tests.json",
+    "apps/api/AGENTS.md",
+    "apps/api/scripts/seed-test-user.test.ts",
+    "apps/web/src/routes/index.test.tsx",
+    "apps/web/src/components/button.stories.tsx",
+    "apps/web/src/__fixtures__/route-shell/fixture.tsx",
+    "apps/web/src/i18n/TERMINOLOGY.md",
+    "packages/ui/src/button.test.tsx",
+    "packages/ui/src/__tests__/button.spec.ts",
+    "packages/api-contract/src/__fixtures__/sample.json",
+    "packages/ui/README.md",
   ])("does not plan a smoke for %s", (file) => {
     expect(routeSmokeAffected([file])).toBe(false);
   });
