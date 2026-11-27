@@ -197,6 +197,65 @@ describe("proposeBlockRoles", () => {
     expect(roles["Beta a.s., se sídlem Krátká "]).toBe("party");
   });
 
+  test("numbered lines that head the parties are parties, and the provisions begin behind them", () => {
+    const numberedParties = manifestOf([
+      "KUPNÍ SMLOUVA",
+      "mezi:",
+      numbered("1.", "Alfa s.r.o.", 5),
+      "se sídlem Dlouhá 1, Praha",
+      "IČO: 00000001",
+      "- dále jen „Prodávající“ -",
+      "a",
+      numbered("2.", "Beta a.s.", 5),
+      "se sídlem Krátká 2, Brno",
+      "- dále jen „Kupující“ -",
+      "Článek I.\nPředmět",
+      numbered("1.", "Prodávající dodá zboží.", 10),
+      numbered("2.", "Kupující zaplatí cenu.", 10),
+    ]);
+    const roles = rolesOf(numberedParties);
+    expect(roles["Alfa s.r.o."]).toBe("party");
+    expect(roles["Beta a.s."]).toBe("party");
+    expect(roles["se sídlem Dlouhá 1, Praha"]).toBe("party");
+    expect(roles["- dále jen „Kupující“ -"]).toBe("party");
+    expect(roles["a"]).toBe("body");
+    expect(roles["Prodávající dodá zboží."]).toBe("clause1");
+    expect(roles["Kupující zaplatí cenu."]).toBe("clause1");
+
+    // Letters head them as numbers do, and the second party may have no
+    // details of its own behind the word that joins the two.
+    const lettered = rolesOf(
+      manifestOf([
+        "SUPPORT CONTRACT",
+        "a) Alpha Ltd, registered office 1 Long Street, London",
+        "of the one part and",
+        "b) [full official name]",
+        "have agreed as follows:",
+        "Article 1\nSubject",
+        "1.1\tThe supplier delivers the goods.",
+      ]),
+    );
+    expect(lettered["a) Alpha Ltd, registered off"]).toBe("party");
+    expect(lettered["b) [full official name]"]).toBe("party");
+    expect(lettered["1.1\tThe supplier delivers the goods.".slice(0, 28)]).toBe(
+      "clause1",
+    );
+
+    // Numbered provisions that name no party stay provisions, also where
+    // a later one speaks of a registered office.
+    const provisions = rolesOf(
+      manifestOf([
+        "SMLOUVA",
+        numbered("1.", "Prodávající dodá zboží.", 10),
+        numbered("2.", "Kupující, se sídlem v Brně, zaplatí cenu.", 10),
+      ]),
+    );
+    expect(provisions["Prodávající dodá zboží."]).toBe("clause1");
+    expect(
+      provisions["Kupující, se sídlem v Brně, zaplatí cenu.".slice(0, 28)],
+    ).toBe("clause1");
+  });
+
   test("the line that announces the parties is no line of the title, centred or in capitals", () => {
     const lines = (intro: string) => [
       "PURCHASE AGREEMENT",

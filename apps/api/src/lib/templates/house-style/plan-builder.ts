@@ -571,6 +571,37 @@ const bulletPatternOf = (
 };
 
 /** One paragraph's style and what it asks of the numbering. */
+/**
+ * The level a paragraph of `role` counts on and the style it is set in, by
+ * `profile`.
+ */
+const targetsOf = (
+  context: Context,
+  profile: TemplateProfile,
+  {
+    block,
+    role,
+    entry,
+  }: { block: DocxBlock; role: HouseStyleRole; entry: LabelEntry | null },
+): { ownLevel: ProfileListLevel | null; target: ProfileRoleTarget | null } => {
+  // A party's line that carries a number is its heading line: the template
+  // may have a numbered style for it beside the one for a party's details.
+  const head =
+    role === "party" && entry !== null ? (profile.partyHead ?? null) : null;
+  const ownLevel = (head ?? profile.roles[role])?.numbering ?? null;
+  // Running text numbered like an article keeps the article's level, and
+  // with it its number, and reads as the clause it is.
+  const styleRole =
+    role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
+  const unnumbered =
+    entry === null && ownLevel !== null && NUMBERED_ONLY.has(role);
+  return {
+    ownLevel,
+    target:
+      head ?? styleTarget(context, unnumbered ? "body" : styleRole, profile),
+  };
+};
+
 const placementOf = (
   context: Context,
   block: DocxBlock,
@@ -579,16 +610,11 @@ const placementOf = (
   const { index, exclusions } = context;
   const entry = index.entryByBlockId.get(block.id) ?? null;
   const { profile, outline } = settingOf(context, entry);
-  const own = profile.roles[role];
-  const ownLevel = own?.numbering ?? null;
-  // Running text numbered like an article keeps the article's level, and
-  // with it its number, and reads as the clause it is.
-  const styleRole =
-    role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
-  const target =
-    entry === null && ownLevel !== null && NUMBERED_ONLY.has(role)
-      ? styleTarget(context, "body", profile)
-      : styleTarget(context, styleRole, profile);
+  const { ownLevel, target } = targetsOf(context, profile, {
+    block,
+    role,
+    entry,
+  });
   const mark = (block.label ?? "").trim();
   const bulleted = entry === null && isBulleted(block);
   const placement: Placement = {

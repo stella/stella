@@ -223,6 +223,54 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
   });
 });
 
+describe("buildTemplatePlan, parties headed by a number", () => {
+  const manifest = manifestOf([
+    "KUPNÍ SMLOUVA",
+    "mezi:",
+    numbered("1.", "Alfa s.r.o.", 5),
+    "se sídlem Dlouhá 1, Praha",
+    "a",
+    numbered("2.", "Beta a.s.", 5),
+    "se sídlem Krátká 2, Brno",
+    "Článek I.\nPředmět",
+    numbered("1.", "Prodávající dodá zboží.", 10),
+  ]);
+
+  test("the numbered line takes the template's style for a party's heading and counts in its list", () => {
+    const { plan } = build(manifest);
+    const head = PROFILE.partyHead;
+    expect(head?.styleId).toBe("Party");
+    for (const name of ["Alfa s.r.o.", "Beta a.s."]) {
+      expect(itemOf(plan, manifest, name)).toMatchObject({
+        styleId: "Party",
+        numbering: { numId: head?.numbering?.numId, ilvl: 0 },
+      });
+    }
+    // The details under it are set as a party's details are, and the word
+    // between the parties as text.
+    expect(itemOf(plan, manifest, "se sídlem Dlouhá")).toMatchObject({
+      styleId: PROFILE.roles.party?.styleId,
+    });
+    expect(
+      itemOf(plan, manifest, "se sídlem Dlouhá")?.numbering ?? null,
+    ).toBeNull();
+    expect(itemOf(plan, manifest, "a")?.styleId).toBe(
+      PROFILE.roles.body?.styleId,
+    );
+  });
+
+  test("a template without such a style sets the line as a party's line and keeps its number", () => {
+    const { partyHead: _none, ...plain } = PROFILE;
+    const { plan } = build(manifest, "keepSource", { profile: plain });
+    const item = itemOf(plan, manifest, "Alfa s.r.o.");
+    expect(item?.styleId).toBe(PROFILE.roles.party?.styleId);
+    // By a list level or as text: the number is not lost.
+    expect(
+      (item?.numbering ?? null) !== null || item?.labelAsText === true,
+    ).toBe(true);
+  });
+});
+
 describe("buildTemplatePlan, a template with an outline of its own for annexes", () => {
   const manifest = manifestOf([
     "SMLOUVA",
