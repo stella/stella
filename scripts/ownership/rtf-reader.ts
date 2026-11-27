@@ -26,7 +26,7 @@ export default {
         reason: "Enumerates reader implementations.",
       },
       {
-        path: "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy.test.ts",
+        path: "packages/case-law-parsers/src/hu-bhgy.test.ts",
         reason: "Provides synthetic RTF input to the source parser.",
       },
       {
