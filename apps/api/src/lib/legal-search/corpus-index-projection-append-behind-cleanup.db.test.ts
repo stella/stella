@@ -714,7 +714,7 @@ test("the reservation gate holds back exactly what the contract says, for any mi
     field: "projection_revision",
   };
   await assertProperty(
-    "corpus-projection-append-gate-matches-contract",
+    "the reservation gate holds back exactly what the contract says, for any mix of other revisions",
     fc.asyncProperty(
       fc.array(fc.constantFrom(...CORPUS_INDEX_INTENT_STATUSES), {
         maxLength: 6,

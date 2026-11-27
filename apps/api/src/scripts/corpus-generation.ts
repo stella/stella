@@ -2528,9 +2528,9 @@ const runWakeDeferred = async (
   const applied = await withDatabase(ACCESS.write, async (rootDb) => {
     let woken = 0;
     for (let batch = 0; batch < WAKE_MAX_BATCHES; batch += 1) {
-      // db-await-in-loop: one bounded batch per transaction, each committed before the next
       const step = await Result.tryPromise({
         try: async () =>
+          // db-await-in-loop: one bounded batch per transaction, each committed before the next
           await withAggregateTransaction(
             rootDb,
             async (tx) =>

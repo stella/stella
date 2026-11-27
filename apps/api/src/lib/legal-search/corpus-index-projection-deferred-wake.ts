@@ -21,6 +21,7 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { corpusIndexProjectionStates } from "@/api/db/schema";
+import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import type { Transaction } from "@/api/db/types";
 import {
   corpusProjectionDeferredAppendStates,
@@ -86,9 +87,7 @@ export const wakeDeferredAppendStatesBatchTx = async (
   target: DeferredWakeTarget,
   limit: number,
 ): Promise<number> => {
-  await tx.execute(
-    sql`SELECT set_config('lock_timeout', ${`${String(DEFERRED_WAKE_LOCK_TIMEOUT_MS)}ms`}, true)`,
-  );
+  await setSharedLockTimeout(tx, DEFERRED_WAKE_LOCK_TIMEOUT_MS);
   // audit: skip - scheduling bookkeeping on the derived public corpus projection
   return executedRows(
     await tx.execute(
