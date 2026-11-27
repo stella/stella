@@ -1905,6 +1905,23 @@ const settledContentsHolder = (
   return null;
 };
 
+/** An automatic bullet: a mark of a font, which no engine writes as text. */
+const isListBullet = (block: DocxBlock): boolean =>
+  block.numbering?.bullet === true && shownLabelOf(block) !== null;
+
+/** The placements of a table's cell paragraphs that have a reading; one
+ *  without is placed with its table. A bullet without one keeps its mark
+ *  as a bullet of the body does, on the template's bullet level. */
+const cellPlacementsOf = (context: Context, table: DocxBlock): Placement[] =>
+  insideOf(table, context.blockById).flatMap((inner) => {
+    if (inner.kind !== "paragraph") {
+      return [];
+    }
+    const role =
+      roleOf(context, inner) ?? (isListBullet(inner) ? "body" : null);
+    return role === null ? [] : [placementOf(context, inner, role)];
+  });
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
@@ -1939,13 +1956,7 @@ const placeParagraphs = (context: Context): Placed => {
     if (block.kind === "table") {
       lastPlaced = null;
       lead = null;
-      for (const inner of insideOf(block, blockById)) {
-        const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
-        // A cell paragraph without a reading is placed with its table.
-        if (role !== null) {
-          placed.placements.push(placementOf(context, inner, role));
-        }
-      }
+      placed.placements.push(...cellPlacementsOf(context, block));
       continue;
     }
     if (index.contentsBlockIds.has(block.id)) {

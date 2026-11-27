@@ -995,6 +995,36 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
     expect(labelsNotKept).toEqual([]);
   });
 
+  test("a bullet of a cell read as no role keeps its mark on a list", () => {
+    const table = inColumns(2, [
+      "Requirement",
+      numbered("•", "The company was a domestic corporation.", 6),
+      "Assets",
+      "Yes",
+    ]);
+    const bullet = table.blocks.find(({ text }) =>
+      text.startsWith("The company"),
+    );
+    if (bullet?.numbering) {
+      bullet.numbering = { ...bullet.numbering, bullet: true };
+    }
+    const { plan, labelsNotKept } = build(table);
+    const nested = sourceItems(plan).at(0)?.nested ?? [];
+    const item = nested.find(({ blockId }) => blockId === bullet?.id);
+    // The engine writes no bullet's glyph as text: the mark stays a list's.
+    expect(item).not.toHaveProperty("labelAsText");
+    expect(item?.numbering).toEqual(
+      expect.objectContaining({ numId: expect.any(Number) }),
+    );
+    expect(
+      (plan.numberingPatches ?? []).map(({ numFmt, lvlText }) => [
+        numFmt,
+        lvlText,
+      ]),
+    ).toContainEqual(["bullet", "•"]);
+    expect(labelsNotKept).toEqual([]);
+  });
+
   test("every label of a contract is printed by a list or written as text", () => {
     for (const contract of [
       czechContract("Viz čl. II odst. 2 této smlouvy."),
