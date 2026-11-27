@@ -2260,8 +2260,8 @@ const fillHeaderFields = (
   { profile, topLevel, blockById }: Context,
   fill: HeaderFill | null,
 ): HeaderFill | null => {
-  const cells = profile.headerFields ?? [];
-  if (cells.length === 0) {
+  const cells = profile.headerFields;
+  if (cells === undefined || cells.length === 0) {
     return fill;
   }
   const lines = readHeadLines(topLevel).filter(({ blockId, lead }) => {
@@ -2293,12 +2293,17 @@ const fillHeaderFields = (
     });
     filled.push({ field, from: line.word, to: name });
   }
+  const letter = fill ?? {
+    slots: [],
+    fields: null,
+    emptied: [],
+    filled: [],
+    left: [],
+  };
   return {
-    slots: [...(fill?.slots ?? []), ...slots],
+    ...letter,
+    slots: [...letter.slots, ...slots],
     fields: { filled, left },
-    emptied: fill?.emptied ?? [],
-    filled: fill?.filled ?? [],
-    left: fill?.left ?? [],
   };
 };
 

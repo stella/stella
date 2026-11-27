@@ -771,15 +771,16 @@ const inferHeaderFields = (
   const found: TemplateHeaderField[] = [];
   for (const table of topLevel) {
     const nested = nestedOf.get(table.id);
+    const { cells } = table;
     if (
       table.kind !== "table" ||
       !keepBefore.includes(table.id) ||
-      nested === undefined
+      nested === undefined ||
+      cells === undefined
     ) {
       continue;
     }
     const byId = new Map(nested.map((block) => [block.id, block]));
-    const cells = table.cells ?? [];
     for (const cell of cells) {
       const beside = cells.find(
         ({ row, col }) => row === cell.row && col === cell.col + 1,
