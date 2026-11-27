@@ -34,6 +34,8 @@ import { member, user as authUser } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  agentSkills,
+  auditLogs,
   billingArrangements,
   caseLawDecisions,
   caseLawResearchAnswers,
@@ -54,11 +56,13 @@ import {
   desktopRunnerFolderRestores,
   desktopTimeEntryBatches,
   documentTranslationRuns,
+  documentTypes,
   entities,
   entityVersions,
   entityViews,
   featureEnrolments,
   fields,
+  flowDefinitions,
   invoiceLines,
   invoices,
   legalLists,
@@ -69,22 +73,30 @@ import {
   organizationDataExports,
   organizationSettings,
   outboundActions,
+  playbookDefinitions,
   recordingTranscriptionRuns,
+  reportExports,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
   searchHistoryOwners,
   sellerProfiles,
   signals,
+  styleSets,
   templateLookupFormats,
+  templateRecipes,
   timeEntries,
   timeTimers,
+  usageSeatAssignments,
   vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
+  workspaceViews,
+  workspaceViewTemplates,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import readAuditLogs from "@/api/handlers/audit-logs/list";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
@@ -161,6 +173,8 @@ import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import steerChatTurn from "@/api/handlers/chat/turns/steer";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
+import getClause from "@/api/handlers/clauses/get";
+import listClauses from "@/api/handlers/clauses/list";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
 import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
 import listConflictChecks from "@/api/handlers/conflict-checks/list";
@@ -188,6 +202,7 @@ import { createDesktopTimeEntryEndpoint } from "@/api/handlers/desktop-time-entr
 import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entries/matters";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
+import listDocumentTypes from "@/api/handlers/document-types/list";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
@@ -197,7 +212,10 @@ import readVersionById from "@/api/handlers/entities/versions/get";
 import readVersions from "@/api/handlers/entities/versions/list";
 import listEntityViews from "@/api/handlers/entity-views/list";
 import readExpenses from "@/api/handlers/expenses/list";
+import updateCellMetadata from "@/api/handlers/fields/cell-metadata/update";
 import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
+import getFlowDefinition from "@/api/handlers/flows/get";
+import listFlowDefinitions from "@/api/handlers/flows/list";
 import createInvoice from "@/api/handlers/invoices/create";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
@@ -213,33 +231,50 @@ import listNotifications from "@/api/handlers/notifications/list";
 import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
+import readAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/get";
 import { createConfirmOutboundActionHandler } from "@/api/handlers/outbound-actions/confirm";
 import discardOutboundAction from "@/api/handlers/outbound-actions/discard";
 import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
 import readOutboundAction from "@/api/handlers/outbound-actions/read";
 import { prepareOutboundAction } from "@/api/handlers/outbound-actions/store";
+import getPlaybookDefinition from "@/api/handlers/playbooks/get";
+import listPlaybookDefinitions from "@/api/handlers/playbooks/list";
+import readProperties from "@/api/handlers/properties/list";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import readRecordingTranscriptionRun from "@/api/handlers/recording-transcriptions/runs/get";
+import readReportExport from "@/api/handlers/reports/exports/get";
+import listReportExports from "@/api/handlers/reports/exports/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
 import { prepareSearchHistoryRows } from "@/api/handlers/search-history/entries";
 import listSearchHistory from "@/api/handlers/search-history/list";
+import searchResults from "@/api/handlers/search/results/list";
+import { searchBodySchema } from "@/api/handlers/search/search";
 import getSellerProfile from "@/api/handlers/seller-profiles/get";
 import listSellerProfiles from "@/api/handlers/seller-profiles/list";
 import listSignals from "@/api/handlers/signals/list";
+import getSkill from "@/api/handlers/skills/get";
+import listSkills from "@/api/handlers/skills/list";
+import listStyleSets from "@/api/handlers/style-sets/list";
 import readTaskById from "@/api/handlers/tasks/get";
+import listTemplateRecipes from "@/api/handlers/template-recipes/list";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
 import listAdminTimers from "@/api/handlers/time-timers/admin/list";
 import stopAdminTimer from "@/api/handlers/time-timers/admin/stop";
 import listMyTimeTimers from "@/api/handlers/time-timers/list";
+import listSeatAssignments from "@/api/handlers/usage/list-seat-assignments";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listVatRates from "@/api/handlers/vat-rates/list";
 import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
+import listViewTemplates from "@/api/handlers/view-templates/list";
+import readViews from "@/api/handlers/views/list";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
+import readWorkspace from "@/api/handlers/workspaces/get";
+import readWorkspaces from "@/api/handlers/workspaces/list";
 import { createHttpApp } from "@/api/http/app";
 import { createResponseSet } from "@/api/http/context";
 import type { ResponseSet } from "@/api/http/context";
@@ -248,6 +283,11 @@ import { status } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -473,6 +513,35 @@ const dataExportB = toSafeId<"dataExport">(
 );
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
+);
+let auditLogB: SafeId<"auditLog">;
+const documentTypeB = toSafeId<"documentType">(
+  "22222222-2222-4222-8222-2222222229a2",
+);
+const flowDefinitionB = toSafeId<"flowDefinition">(
+  "22222222-2222-4222-8222-2222222229a3",
+);
+const playbookDefinitionB = toSafeId<"playbookDefinition">(
+  "22222222-2222-4222-8222-2222222229a4",
+);
+const reportExportB = toSafeId<"reportExport">(
+  "22222222-2222-4222-8222-2222222229a5",
+);
+const agentSkillB = toSafeId<"agentSkill">(
+  "22222222-2222-4222-8222-2222222229a6",
+);
+const styleSetB = toSafeId<"styleSet">("22222222-2222-4222-8222-2222222229a7");
+const templateRecipeB = toSafeId<"templateRecipe">(
+  "22222222-2222-4222-8222-2222222229a8",
+);
+const usageSeatAssignmentB = toSafeId<"usageSeatAssignment">(
+  "22222222-2222-4222-8222-2222222229a9",
+);
+const viewTemplateB = toSafeId<"workspaceViewTemplate">(
+  "22222222-2222-4222-8222-2222222229aa",
+);
+const workspaceViewB = toSafeId<"workspaceView">(
+  "22222222-2222-4222-8222-2222222229ab",
 );
 const foreignSignalB = toSafeId<"signal">(
   "22222222-2222-4222-8222-222222222248",
@@ -3966,6 +4035,312 @@ const isolationCases: IsolationCase[] = [
         testIds.chatThreadWorkspaceA1,
       ),
   },
+  {
+    name: "audit logs list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readAuditLogs, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(readAuditLogs, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, auditLogB),
+    expectPositive: (result) => expectPageContainsId(result, auditLogB),
+  },
+  {
+    name: "clauses list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listClauses, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listClauses, workspaceB, { query: {} }),
+    expectDenied: (result, { ids: testIds }) =>
+      expectPageExcludesId(result, testIds.clauseB),
+    expectPositive: (result, { ids: testIds }) =>
+      expectPageContainsId(result, testIds.clauseB),
+  },
+  {
+    name: "clause read by id",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(getClause, workspaceA, {
+        params: { clauseId: testIds.clauseB },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(getClause, workspaceB, {
+        params: { clauseId: testIds.clauseB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.clauseB),
+  },
+  {
+    name: "document types list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listDocumentTypes, workspaceA, {}),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listDocumentTypes, workspaceB, {}),
+    expectDenied: (result) => expectPageExcludesId(result, documentTypeB),
+    expectPositive: (result) => expectPageContainsId(result, documentTypeB),
+  },
+  {
+    name: "field cell metadata update",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(updateCellMetadata, workspaceA, {
+        body: {
+          entityId: testIds.entityB1,
+          propertyId: testIds.propertyB1,
+          manualFlags: ["verified"],
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(updateCellMetadata, workspaceB, {
+        body: {
+          entityId: testIds.entityB1,
+          propertyId: testIds.propertyB1,
+          manualFlags: ["verified"],
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ success: true }),
+  },
+  {
+    name: "flows list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listFlowDefinitions, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listFlowDefinitions, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, flowDefinitionB),
+    expectPositive: (result) => expectPageContainsId(result, flowDefinitionB),
+  },
+  {
+    name: "flow read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getFlowDefinition, workspaceA, {
+        params: { flowId: flowDefinitionB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(getFlowDefinition, workspaceB, {
+        params: { flowId: flowDefinitionB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", flowDefinitionB),
+  },
+  {
+    name: "organization anonymization blacklist read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readAnonymizationBlacklist, workspaceA, {}),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(readAnonymizationBlacklist, workspaceB, {}),
+    expectDenied: (result, { ids: testIds }) =>
+      expectFieldArrayExcludesId(
+        result,
+        "entries",
+        testIds.anonymizationBlacklistEntryB,
+      ),
+    expectPositive: (result, { ids: testIds }) =>
+      expectFieldArrayContainsId(
+        result,
+        "entries",
+        testIds.anonymizationBlacklistEntryB,
+      ),
+  },
+  {
+    name: "playbooks list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listPlaybookDefinitions, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listPlaybookDefinitions, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, playbookDefinitionB),
+    expectPositive: (result) =>
+      expectPageContainsId(result, playbookDefinitionB),
+  },
+  {
+    name: "playbook read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getPlaybookDefinition, workspaceA, {
+        params: { playbookId: playbookDefinitionB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(getPlaybookDefinition, workspaceB, {
+        params: { playbookId: playbookDefinitionB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", playbookDefinitionB),
+  },
+  {
+    name: "properties list",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readProperties, workspaceA, {
+        workspaceId: testIds.wsB1,
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(readProperties, workspaceB, {
+        workspaceId: testIds.wsB1,
+      }),
+    expectDenied: (result, { ids: testIds }) =>
+      expectArrayExcludesId(result, testIds.propertyB1),
+    expectPositive: (result, { ids: testIds }) =>
+      expectArrayContainsId(result, testIds.propertyB1),
+  },
+  {
+    name: "report exports list",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listReportExports, workspaceA, {
+        params: { workspaceId: testIds.wsB1 },
+        query: {},
+      }),
+    runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>
+      await runHandler(listReportExports, sameUserWorkspaceB, {
+        params: { workspaceId: testIds.wsB1 },
+        query: {},
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, reportExportB),
+    expectPositive: (result) => expectPageContainsId(result, reportExportB),
+  },
+  {
+    name: "report export read by id",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readReportExport, workspaceA, {
+        params: { workspaceId: testIds.wsB1, exportId: reportExportB },
+      }),
+    runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>
+      await runHandler(readReportExport, sameUserWorkspaceB, {
+        params: { workspaceId: testIds.wsB1, exportId: reportExportB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "status", "queued"),
+  },
+  {
+    name: "search results across organizations",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(searchResults, workspaceA, {
+        body: v.parse(searchBodySchema, {
+          query: "",
+          workspaceIds: [],
+          types: ["document"],
+          kinds: [],
+          editedByUserIds: [],
+          mimeTypes: [],
+        }),
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(searchResults, workspaceB, {
+        body: v.parse(searchBodySchema, {
+          query: "",
+          workspaceIds: [],
+          types: ["document"],
+          kinds: [],
+          editedByUserIds: [],
+          mimeTypes: [],
+        }),
+      }),
+    expectDenied: (result, { ids: testIds }) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(JSON.stringify(result)).not.toContain(testIds.entityB1);
+    },
+    expectPositive: (result, { ids: testIds }) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(JSON.stringify(result)).toContain(testIds.entityB1);
+    },
+  },
+  {
+    name: "skills list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSkills, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listSkills, workspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expectFieldArrayExcludesId(result, "installed", agentSkillB),
+    expectPositive: (result) =>
+      expectFieldArrayContainsId(result, "installed", agentSkillB),
+  },
+  {
+    name: "skill read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getSkill, workspaceA, {
+        params: { skillId: agentSkillB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(getSkill, workspaceB, {
+        params: { skillId: agentSkillB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", agentSkillB),
+  },
+  {
+    name: "style sets list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listStyleSets, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listStyleSets, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, styleSetB),
+    expectPositive: (result) => expectPageContainsId(result, styleSetB),
+  },
+  {
+    name: "template recipes list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listTemplateRecipes, workspaceA, {}),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listTemplateRecipes, workspaceB, {}),
+    expectDenied: (result) =>
+      expectFieldArrayExcludesId(result, "recipes", templateRecipeB),
+    expectPositive: (result) =>
+      expectFieldArrayContainsId(result, "recipes", templateRecipeB),
+  },
+  {
+    name: "usage seat assignments list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSeatAssignments, workspaceA, {}),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listSeatAssignments, workspaceB, {}),
+    expectDenied: (result) =>
+      expectFieldArrayExcludesId(result, "assignments", usageSeatAssignmentB),
+    expectPositive: (result) =>
+      expectFieldArrayContainsId(result, "assignments", usageSeatAssignmentB),
+  },
+  {
+    name: "view templates list across organizations for same user",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listViewTemplates, workspaceA, {}),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listViewTemplates, sameUserWorkspaceB, {}),
+    expectDenied: (result) => expectArrayExcludesId(result, viewTemplateB),
+    expectPositive: (result) => expectArrayContainsId(result, viewTemplateB),
+  },
+  {
+    name: "views list",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readViews, workspaceA, { workspaceId: testIds.wsB1 }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(readViews, workspaceB, { workspaceId: testIds.wsB1 }),
+    expectDenied: (result) => expectArrayExcludesId(result, workspaceViewB),
+    expectPositive: (result) => expectArrayContainsId(result, workspaceViewB),
+  },
+  {
+    name: "workspace read by id",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readWorkspace, workspaceA, {
+        workspaceId: testIds.wsB1,
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(readWorkspace, workspaceB, {
+        workspaceId: testIds.wsB1,
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.wsB1),
+  },
+  {
+    name: "workspaces list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readWorkspaces, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(readWorkspaces, workspaceB, { query: {} }),
+    expectDenied: (result, { ids: testIds }) =>
+      expectFieldArrayExcludesId(result, "workspaces", testIds.wsB1),
+    expectPositive: (result, { ids: testIds }) =>
+      expectFieldArrayContainsId(result, "workspaces", testIds.wsB1),
+  },
 ];
 
 const chatExportBody = {
@@ -4766,6 +5141,117 @@ testState.beforeAll(async () => {
       text: "Use the Next link.",
     },
   ]);
+  const recordOrgBAudit = createAuditRecorder({
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    userId: ids.userB1,
+    request: new Request("https://example.test/security/audit-seed"),
+    server: null,
+  });
+  await testDb.transaction(async (tx) => {
+    await recordOrgBAudit(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+      resourceId: ids.wsB1,
+    });
+  });
+  const [seededAuditLogB] = await testDb
+    .select({ id: auditLogs.id })
+    .from(auditLogs)
+    .where(eq(auditLogs.organizationId, ids.orgB))
+    .limit(1);
+  if (!seededAuditLogB) {
+    throw new Error("Expected seeded organization B audit log row");
+  }
+  auditLogB = seededAuditLogB.id;
+  await testDb.insert(documentTypes).values({
+    id: documentTypeB,
+    organizationId: ids.orgB,
+    key: "isolation-contract-b",
+    label: "Isolation Contract B",
+    sortOrder: 99,
+  });
+  await testDb.insert(flowDefinitions).values({
+    id: flowDefinitionB,
+    organizationId: ids.orgB,
+    name: "Isolation Flow B",
+    steps: [],
+    trigger: { type: "manual" },
+    createdByUserId: ids.userB1,
+  });
+  await testDb.insert(playbookDefinitions).values({
+    id: playbookDefinitionB,
+    organizationId: ids.orgB,
+    name: "Isolation Playbook B",
+    positions: { version: 3, items: [] },
+  });
+  const tableViewLayout = {
+    version: 1 as const,
+    type: "table" as const,
+    filters: [],
+    sorts: [],
+    hiddenProperties: [],
+    calculations: [],
+    columnOrder: [],
+    columnPinning: [],
+  };
+  await testDb.insert(reportExports).values({
+    id: reportExportB,
+    workspaceId: ids.wsB1,
+    requestedBy: ids.userA1,
+    templateRef: { type: "builtin", key: "summary" },
+    layout: tableViewLayout,
+    status: "queued",
+    mode: "download",
+  });
+  await testDb.insert(agentSkills).values({
+    id: agentSkillB,
+    organizationId: ids.orgB,
+    userId: ids.userB1,
+    scope: "team",
+    origin: "authored",
+    slug: "isolation-skill-b",
+    name: "Isolation Skill B",
+    description: "Org B isolation skill",
+    contentHash: sha256Hex("isolation-skill-b"),
+    body: "Skill B instructions",
+  });
+  await testDb.insert(styleSets).values({
+    id: styleSetB,
+    organizationId: ids.orgB,
+    name: "Isolation Style Set B",
+    fileName: "style-b.docx",
+    s3Key: `${ids.orgB}/style-sets/${styleSetB}.docx`,
+    sizeBytes: 128,
+    createdBy: ids.userB1,
+  });
+  await testDb.insert(templateRecipes).values({
+    id: templateRecipeB,
+    organizationId: ids.orgB,
+    name: "Isolation Recipe B",
+    definition: { fields: [{ path: "party.name" }] },
+    createdBy: ids.userB1,
+  });
+  await testDb.insert(usageSeatAssignments).values({
+    id: usageSeatAssignmentB,
+    organizationId: ids.orgB,
+    userId: ids.userB1,
+    assignedByUserId: ids.userB1,
+  });
+  await testDb.insert(workspaceViewTemplates).values({
+    id: viewTemplateB,
+    organizationId: ids.orgB,
+    userId: ids.userA1,
+    name: "Isolation View Template B",
+    layout: tableViewLayout,
+  });
+  await testDb.insert(workspaceViews).values({
+    id: workspaceViewB,
+    workspaceId: ids.wsB1,
+    name: "Isolation View B",
+    layout: tableViewLayout,
+    position: 0,
+  });
 });
 
 describe("cross-tenant handler isolation", () => {
@@ -5083,6 +5569,56 @@ function expectPageExcludesId(result: unknown, excludedId: string): void {
   expect(getPageItems(result).some((item) => item["id"] === excludedId)).toBe(
     false,
   );
+}
+
+function expectArrayContainsId(result: unknown, expectedId: string): void {
+  expect(getStatusCode(result)).toBeNull();
+  if (!Array.isArray(result)) {
+    throw new TypeError("Expected an array response");
+  }
+  expect(
+    result.some((item) => isRecord(item) && item["id"] === expectedId),
+  ).toBe(true);
+}
+
+function expectArrayExcludesId(result: unknown, excludedId: string): void {
+  expect(getStatusCode(result)).toBeNull();
+  if (!Array.isArray(result)) {
+    throw new TypeError("Expected an array response");
+  }
+  expect(
+    result.some((item) => isRecord(item) && item["id"] === excludedId),
+  ).toBe(false);
+}
+
+function expectFieldArrayContainsId(
+  result: unknown,
+  field: string,
+  expectedId: string,
+): void {
+  expect(getStatusCode(result)).toBeNull();
+  const items = recordField(result, field);
+  if (!Array.isArray(items)) {
+    throw new TypeError(`Expected an array at response.${field}`);
+  }
+  expect(
+    items.some((item) => isRecord(item) && item["id"] === expectedId),
+  ).toBe(true);
+}
+
+function expectFieldArrayExcludesId(
+  result: unknown,
+  field: string,
+  excludedId: string,
+): void {
+  expect(getStatusCode(result)).toBeNull();
+  const items = recordField(result, field);
+  if (!Array.isArray(items)) {
+    throw new TypeError(`Expected an array at response.${field}`);
+  }
+  expect(
+    items.some((item) => isRecord(item) && item["id"] === excludedId),
+  ).toBe(false);
 }
 
 function expectPageContainsField(
