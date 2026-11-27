@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::{
   collections::{BTreeMap, BTreeSet, btree_map::Entry},
   path::PathBuf,
-  sync::{Arc, Mutex, OnceLock},
+  sync::{Arc, Mutex, OnceLock, PoisonError},
   time::{Duration, Instant},
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -275,9 +275,15 @@ pub enum ActivityPersistenceStatus {
 
 enum ActivityPersistence {
   Initializing,
+  /// The Keychain did not answer for the store's key; opened again until it
+  /// does.
+  KeychainNotAnswering,
   Encrypted(ActivityStore),
   MemoryOnly,
   DeletionOnly(PathBuf),
+  /// The Keychain answered with an error for the key of a store that has
+  /// data.
+  KeyUnreadable(PathBuf),
   KeyMissing(PathBuf),
   Unreadable(PathBuf),
   Incompatible(PathBuf),
@@ -610,11 +616,9 @@ static PREVIEW_APPS: std::sync::LazyLock<Vec<PreviewApp>> =
 
 impl ActivityDaySnapshot {
   /// Adds why Activity cannot record now, while it cannot.
-  pub(crate) fn add_capture<R: Runtime>(&mut self, app: &AppHandle<R>) {
-    self.stopped_reason = match capture_binding(app) {
-      Some(_) => None,
-      None => crate::activity_capture::stopped().map(|stopped| stopped.reason),
-    };
+  pub(crate) fn add_capture(&mut self) {
+    self.stopped_reason =
+      crate::activity_capture::stopped().map(|stopped| stopped.reason);
   }
   pub(crate) fn resolve_app_visuals(&mut self) {
     self.source_app_visuals = crate::foreground_app_visual::cached_app_visuals(
@@ -831,10 +835,128 @@ pub(crate) fn keyed_store(namespace: &str) -> Option<ActivityStore> {
     return None;
   }
   let root = store_root()?.join(namespace);
-  match keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace)) {
+  match read_store_key(namespace) {
     Ok(LocalDataKeyLookup::Found(key)) => Some(ActivityStore::new(key, root)),
-    Ok(LocalDataKeyLookup::Missing) | Err(_) => None,
+    Ok(LocalDataKeyLookup::Missing)
+    | Err(StoreKeyError::Unreadable(_) | StoreKeyError::NotAnswering) => None,
   }
+}
+
+/// How long Activity waits for the Keychain to answer for a store key.
+const STORE_KEY_READ_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Store key reads that stopped waiting for the Keychain and have not
+/// answered since. While one is out, no new read starts.
+static ABANDONED_KEY_READS: std::sync::atomic::AtomicUsize =
+  std::sync::atomic::AtomicUsize::new(0);
+
+/// Why an Activity store key could not be read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StoreKeyError {
+  /// The Keychain answered with an error.
+  Unreadable(String),
+  /// The Keychain did not answer within [`STORE_KEY_READ_TIMEOUT`], or an
+  /// earlier read still has not answered.
+  NotAnswering,
+}
+
+/// Reads `namespace`'s store key, giving up after [`STORE_KEY_READ_TIMEOUT`].
+fn read_store_key(namespace: &str) -> Result<LocalDataKeyLookup, StoreKeyError> {
+  let namespace = namespace.to_string();
+  bounded_keychain(&ABANDONED_KEY_READS, STORE_KEY_READ_TIMEOUT, move || {
+    keychain::get_local_data_key(LocalDataKey::ActivityTimeline(&namespace))
+  })
+  .unwrap_or(Err(StoreKeyError::NotAnswering))
+}
+
+/// Where one bounded Keychain call stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeychainCall {
+  Waiting,
+  /// The caller stopped waiting; the call is counted as abandoned.
+  Abandoned,
+  Answered,
+}
+
+/// Runs a Keychain call on its own thread and waits at most `timeout` for
+/// it; `None` when it did not answer in time. A call that does not answer is
+/// left to finish on its own and counted in `abandoned` until it does; while
+/// any is counted, a new call returns `None` at once, so a Keychain that
+/// hangs holds one thread, not one per try.
+fn bounded_keychain<T: Send + 'static>(
+  abandoned: &'static std::sync::atomic::AtomicUsize,
+  timeout: Duration,
+  call: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Option<Result<T, StoreKeyError>> {
+  use std::sync::atomic::Ordering;
+
+  if abandoned.load(Ordering::Acquire) > 0 {
+    return None;
+  }
+  let phase = Arc::new(Mutex::new(KeychainCall::Waiting));
+  let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+  let spawned = std::thread::Builder::new()
+    .name("stella-activity-key".to_string())
+    .spawn({
+      let phase = Arc::clone(&phase);
+      move || {
+        let result = call();
+        keychain_answered(&phase, abandoned);
+        if sender.send(result).is_err() {
+          tracing::debug!("activity key read answered after its caller gave up");
+        }
+      }
+    });
+  if spawned.is_err() {
+    return Some(Err(StoreKeyError::Unreadable(
+      "activity key reader could not start".to_string(),
+    )));
+  }
+  let ended =
+    || StoreKeyError::Unreadable("activity key reader ended without an answer".into());
+  match receiver.recv_timeout(timeout) {
+    Ok(result) => Some(result.map_err(StoreKeyError::Unreadable)),
+    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+      if keychain_given_up(&phase, abandoned) {
+        return None;
+      }
+      // It answered as the wait ended; its result is on the way.
+      Some(receiver.recv().map_or_else(
+        |_| Err(ended()),
+        |result| result.map_err(StoreKeyError::Unreadable),
+      ))
+    }
+    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Some(Err(ended())),
+  }
+}
+
+/// The reader answered: a call its caller gave up on stops counting.
+fn keychain_answered(
+  phase: &Mutex<KeychainCall>,
+  abandoned: &std::sync::atomic::AtomicUsize,
+) {
+  let mut phase = phase.lock().unwrap_or_else(PoisonError::into_inner);
+  if *phase == KeychainCall::Abandoned {
+    abandoned.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+  }
+  *phase = KeychainCall::Answered;
+}
+
+/// The caller stops waiting, and the call counts as abandoned until it
+/// answers; `false` when it answered meanwhile.
+fn keychain_given_up(
+  phase: &Mutex<KeychainCall>,
+  abandoned: &std::sync::atomic::AtomicUsize,
+) -> bool {
+  let mut phase = phase.lock().unwrap_or_else(PoisonError::into_inner);
+  if *phase == KeychainCall::Answered {
+    return false;
+  }
+  *phase = KeychainCall::Abandoned;
+  // Counted under the lock, so the reader cannot uncount it first.
+  abandoned.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+  drop(phase);
+  true
 }
 
 pub fn parse_date(raw: &str) -> Result<NaiveDate, String> {
@@ -1026,15 +1148,21 @@ impl ActivityManager {
   }
 
   fn is_initialized(&self) -> bool {
-    !matches!(self.persistence, ActivityPersistence::Initializing)
+    !matches!(
+      self.persistence,
+      ActivityPersistence::Initializing | ActivityPersistence::KeychainNotAnswering
+    )
   }
 
   fn persistence_status(&self) -> ActivityPersistenceStatus {
     match self.persistence {
-      ActivityPersistence::Initializing => ActivityPersistenceStatus::Initializing,
+      ActivityPersistence::Initializing | ActivityPersistence::KeychainNotAnswering => {
+        ActivityPersistenceStatus::Initializing
+      }
       ActivityPersistence::Encrypted(_) => ActivityPersistenceStatus::Encrypted,
       ActivityPersistence::MemoryOnly => ActivityPersistenceStatus::MemoryOnly,
       ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_)
       | ActivityPersistence::Incompatible(_) => ActivityPersistenceStatus::DeletionOnly,
@@ -1090,7 +1218,9 @@ impl ActivityManager {
         .map_err(|error| error.to_string()),
       ActivityPersistence::MemoryOnly => Ok(BTreeSet::new()),
       ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
       | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_)
       | ActivityPersistence::Incompatible(_) => {
@@ -1160,8 +1290,10 @@ impl ActivityManager {
     match &self.persistence {
       ActivityPersistence::Encrypted(store) => Some(store),
       ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
       | ActivityPersistence::MemoryOnly
       | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_)
       | ActivityPersistence::Incompatible(_) => None,
@@ -1171,10 +1303,11 @@ impl ActivityManager {
   fn require_writable(&self) -> Result<(), String> {
     match self.persistence {
       ActivityPersistence::Encrypted(_) | ActivityPersistence::MemoryOnly => Ok(()),
-      ActivityPersistence::Initializing => {
+      ActivityPersistence::Initializing | ActivityPersistence::KeychainNotAnswering => {
         Err("activity timeline is still loading".to_string())
       }
       ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_)
       | ActivityPersistence::Incompatible(_) => {
@@ -1240,7 +1373,9 @@ impl ActivityManager {
       ActivityPersistence::Encrypted(_) => true,
       ActivityPersistence::MemoryOnly => false,
       ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
       | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_)
       | ActivityPersistence::Incompatible(_) => return None,
@@ -1249,6 +1384,27 @@ impl ActivityManager {
       namespace: self.namespace.clone()?,
       intent: self.settings.recording_status,
       persisted,
+    })
+  }
+
+  /// The loaded account's store, when it cannot be opened to record.
+  pub(crate) fn failed_store(&self) -> Option<crate::activity_capture::FailedStore> {
+    use crate::activity_capture::StoreFailure;
+    let failure = match self.persistence {
+      ActivityPersistence::Initializing
+      | ActivityPersistence::Encrypted(_)
+      | ActivityPersistence::MemoryOnly => return None,
+      ActivityPersistence::KeychainNotAnswering => StoreFailure::KeychainNotAnswering,
+      ActivityPersistence::KeyUnreadable(_) | ActivityPersistence::KeyMissing(_) => {
+        StoreFailure::KeyUnavailable
+      }
+      ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => StoreFailure::Unreadable,
+    };
+    Some(crate::activity_capture::FailedStore {
+      namespace: self.namespace.clone()?,
+      failure,
     })
   }
 
@@ -1820,14 +1976,15 @@ impl ActivityManager {
     match &self.persistence {
       ActivityPersistence::Encrypted(store) => store.load_gaps(date),
       ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_)
       | ActivityPersistence::Incompatible(_) => {
         Err("activity history is unreadable".into())
       }
-      ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
-        Ok(Vec::new())
-      }
+      ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
+      | ActivityPersistence::MemoryOnly => Ok(Vec::new()),
     }
   }
 
@@ -2008,7 +2165,9 @@ impl ActivityManager {
   pub fn prune_expired(&mut self, now: DateTime<Utc>) -> Result<bool, String> {
     match self.persistence {
       ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
       | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_)
       | ActivityPersistence::Incompatible(_) => return Ok(false),
@@ -2060,7 +2219,9 @@ impl ActivityManager {
         .map_err(ActivityDeletionError::from)?,
       ActivityPersistence::MemoryOnly => self.pending_batches.get(&date).cloned(),
       ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
       | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_) => {
         return Err(ActivityDeletionError::Unavailable(
@@ -2123,7 +2284,9 @@ impl ActivityManager {
         return Err(ActivityDeletionError::KeyMissing);
       }
       ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
       | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::MemoryOnly => {
         return Err(ActivityDeletionError::Unavailable(
           "activity unreadable-file recovery is unavailable".into(),
@@ -2586,12 +2749,13 @@ impl ActivityManager {
     let root = match &self.persistence {
       ActivityPersistence::Encrypted(store) => store.root().parent().map(PathBuf::from),
       ActivityPersistence::DeletionOnly(root)
+      | ActivityPersistence::KeyUnreadable(root)
       | ActivityPersistence::KeyMissing(root)
       | ActivityPersistence::Unreadable(root)
       | ActivityPersistence::Incompatible(root) => root.parent().map(PathBuf::from),
-      ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
-        store_root()
-      }
+      ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
+      | ActivityPersistence::MemoryOnly => store_root(),
     };
     root.ok_or_else(|| "activity history is unavailable".to_string())
   }
@@ -2630,10 +2794,13 @@ impl ActivityManager {
           Err(_) => (Vec::new(), true),
         },
         ActivityPersistence::DeletionOnly(_)
+        | ActivityPersistence::KeyUnreadable(_)
         | ActivityPersistence::KeyMissing(_)
         | ActivityPersistence::Unreadable(_)
         | ActivityPersistence::Incompatible(_) => (Vec::new(), true),
-        _ => (Vec::new(), false),
+        ActivityPersistence::Initializing
+        | ActivityPersistence::KeychainNotAnswering
+        | ActivityPersistence::MemoryOnly => (Vec::new(), false),
       },
     };
     for (_, piece) in self
@@ -2819,12 +2986,13 @@ impl ActivityManager {
           ActivityDayOutages::Unreadable
         }
       },
-      ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
-        ActivityDayOutages::Read {
-          outages: Vec::new(),
-        }
-      }
+      ActivityPersistence::Initializing
+      | ActivityPersistence::KeychainNotAnswering
+      | ActivityPersistence::MemoryOnly => ActivityDayOutages::Read {
+        outages: Vec::new(),
+      },
       ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyUnreadable(_)
       | ActivityPersistence::KeyMissing(_)
       | ActivityPersistence::Unreadable(_)
       | ActivityPersistence::Incompatible(_) => ActivityDayOutages::Unreadable,
@@ -2959,7 +3127,10 @@ impl ActivityManager {
           ActivityDeletionStatus::KeyMissing
         } else if matches!(
           self.persistence,
-          ActivityPersistence::Initializing | ActivityPersistence::DeletionOnly(_)
+          ActivityPersistence::Initializing
+            | ActivityPersistence::KeychainNotAnswering
+            | ActivityPersistence::DeletionOnly(_)
+            | ActivityPersistence::KeyUnreadable(_)
         ) {
           ActivityDeletionStatus::Unavailable
         } else if pending_dates.is_empty() {
@@ -3028,7 +3199,7 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
     return (ActivityPersistence::MemoryOnly, ActivitySettings::default());
   };
   let key = if ActivityStore::has_data(&root) {
-    match keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace)) {
+    match read_store_key(namespace) {
       Ok(LocalDataKeyLookup::Found(key)) => key,
       Ok(LocalDataKeyLookup::Missing) => {
         let persistence = match ActivityStore::check_root_envelope_compatibility(&root)
@@ -3041,19 +3212,46 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
         };
         return (persistence, ActivitySettings::default());
       }
-      Err(_) => {
+      Err(StoreKeyError::Unreadable(_)) => {
         tracing::warn!("activity history key is unavailable");
         return (
-          ActivityPersistence::DeletionOnly(root),
+          ActivityPersistence::KeyUnreadable(root),
+          ActivitySettings::default(),
+        );
+      }
+      Err(StoreKeyError::NotAnswering) => {
+        tracing::warn!("activity history key read did not answer");
+        return (
+          ActivityPersistence::KeychainNotAnswering,
           ActivitySettings::default(),
         );
       }
     }
   } else {
-    match local_store::resolve_key(
-      LocalDataKey::ActivityTimeline(namespace),
-      ActivityStore::has_data(&root),
-    ) {
+    let resolving = {
+      let namespace = namespace.to_string();
+      let data_exists = ActivityStore::has_data(&root);
+      bounded_keychain(&ABANDONED_KEY_READS, STORE_KEY_READ_TIMEOUT, move || {
+        Ok(local_store::resolve_key(
+          LocalDataKey::ActivityTimeline(&namespace),
+          data_exists,
+        ))
+      })
+    };
+    let resolved = match resolving {
+      Some(Ok(resolved)) => resolved,
+      Some(Err(StoreKeyError::Unreadable(_) | StoreKeyError::NotAnswering)) => {
+        StoreKey::MemoryOnly
+      }
+      None => {
+        tracing::warn!("activity history key read did not answer");
+        return (
+          ActivityPersistence::KeychainNotAnswering,
+          ActivitySettings::default(),
+        );
+      }
+    };
+    match resolved {
       StoreKey::Key(key) => key,
       StoreKey::MemoryOnly => {
         return (ActivityPersistence::MemoryOnly, ActivitySettings::default());
@@ -3137,10 +3335,11 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
 
 /// The tray's Activity entry; `None` when there is nothing to show.
 pub fn tray_activity(app: &AppHandle) -> Option<TrayActivity> {
-  if capture_binding(app).is_some() {
-    return Some(TrayActivity::Live(tray_snapshot(app)));
-  }
-  let stopped = crate::activity_capture::stopped()?;
+  // The last check's stop comes first: Activity can be enabled for an
+  // account whose store cannot open.
+  let Some(stopped) = crate::activity_capture::stopped() else {
+    return capture_binding(app).map(|_| TrayActivity::Live(tray_snapshot(app)));
+  };
   Some(TrayActivity::Stopped(
     stopped,
     if history_binding(app).is_some() {
@@ -3631,6 +3830,17 @@ mod tests {
     refused: bool,
     /// Active samples since the last one that recorded.
     quiet: u32,
+    /// How often each assertion had something to check, so a smaller
+    /// generator cannot stop reaching them unnoticed.
+    reached: Reached,
+  }
+
+  #[derive(Debug, Default, Clone, Copy)]
+  struct Reached {
+    /// Samples taken while a refusal stood.
+    refused_samples: u32,
+    /// Samples taken after a quiet stretch long enough to be shown.
+    quiet_stops: u32,
   }
 
   impl CaptureModel {
@@ -3649,6 +3859,7 @@ mod tests {
         loaded: None,
         refused: false,
         quiet: 0,
+        reached: Reached::default(),
       }
     }
 
@@ -3716,6 +3927,7 @@ mod tests {
         binding: self.gates.local_binding(),
         credential_expiry: self.gates.credential_expiry(),
         loaded: self.loaded.clone(),
+        store: self.manager.failed_store(),
       });
       let binding = crate::activity_capture::capture_binding_in(
         &self.gates,
@@ -3743,6 +3955,9 @@ mod tests {
       let permitted = binding
         .is_some_and(|binding| self.manager.require_account_binding(&binding).is_ok());
       assert!(!(self.refused && permitted), "recording after a refusal");
+      if self.refused {
+        self.reached.refused_samples += 1;
+      }
       let idle = if active {
         Duration::ZERO
       } else {
@@ -3777,6 +3992,7 @@ mod tests {
         self.quiet + 1
       };
       if self.quiet >= QUIET_LIMIT {
+        self.reached.quiet_stops += 1;
         assert!(self.monitor.is_stopped(), "a quiet stop is not shown");
         assert!(
           self.monitor.outage_covers(CAPTURE_NAMESPACE, self.wall),
@@ -3799,9 +4015,20 @@ mod tests {
     }
   }
 
+  /// Sequences checked, and steps in each. Every step that matters (a read,
+  /// a restart, a sleep, a clock step) stays in each sequence; what was cut
+  /// is repetition: the same sampled states over more seeds and longer runs
+  /// of samples, which mostly rewrote the same outage file.
+  const CAPTURE_SEQUENCES: u64 = 16;
+  const CAPTURE_STEPS: usize = 200;
+  /// The longest run of samples one step takes; past the confirmation wait
+  /// and long enough to build a quiet stretch over a few steps.
+  const CAPTURE_MAX_RUN: u64 = 30;
+
   #[test]
   fn recording_intent_ends_in_a_segment_or_a_typed_outage_and_never_after_a_refusal() {
-    for seed in 0..48_u64 {
+    let mut reached = Reached::default();
+    for seed in 0..CAPTURE_SEQUENCES {
       let records = std::env::temp_dir()
         .join(format!("stella-capture-property-{}", uuid::Uuid::new_v4()));
       let mut model = CaptureModel::new(records.clone());
@@ -3809,7 +4036,7 @@ mod tests {
       // The member turned recording on while Activity was enabled.
       model.read(ServerRead::Enabled);
       model.tick(true);
-      for _ in 0..300 {
+      for _ in 0..CAPTURE_STEPS {
         match random.below(20) {
           0 => model.read(server_read(&mut random)),
           1 => model.restart(server_read(&mut random)),
@@ -3825,7 +4052,7 @@ mod tests {
           }
           _ => {
             let active = random.below(10) != 0;
-            for _ in 0..(1 + random.below(60)) {
+            for _ in 0..(1 + random.below(CAPTURE_MAX_RUN)) {
               model.tick(active);
             }
           }
@@ -3835,10 +4062,20 @@ mod tests {
       for _ in 0..(QUIET_LIMIT + 1) {
         model.tick(true);
       }
+      reached.refused_samples += model.reached.refused_samples;
+      reached.quiet_stops += model.reached.quiet_stops;
       if records.exists() {
         std::fs::remove_dir_all(&records).unwrap();
       }
     }
+    assert!(
+      reached.refused_samples > 0,
+      "no sample after a refusal: {reached:?}"
+    );
+    assert!(
+      reached.quiet_stops > 0,
+      "no quiet stop was checked: {reached:?}"
+    );
   }
 
   fn segments(manager: &ActivityManager) -> Vec<(String, i64, i64)> {
@@ -7670,5 +7907,122 @@ mod tests {
       .set_calendar_source(ActivityCalendarSource::Off)
       .unwrap();
     assert_eq!(manager.calendar_source(), ActivityCalendarSource::Off);
+  }
+
+  #[test]
+  fn a_keychain_call_that_does_not_answer_is_given_up_and_not_repeated() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    static ABANDONED: AtomicUsize = AtomicUsize::new(0);
+    let answer = Duration::from_secs(5);
+    let give_up = Duration::from_millis(20);
+    // An answer and an error come back as they are.
+    assert_eq!(bounded_keychain(&ABANDONED, answer, || Ok(7)), Some(Ok(7)));
+    assert_eq!(
+      bounded_keychain(&ABANDONED, answer, || Err::<u8, _>("denied".to_string())),
+      Some(Err(StoreKeyError::Unreadable("denied".into())))
+    );
+    // A call that hangs is given up.
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    assert_eq!(
+      bounded_keychain(&ABANDONED, give_up, move || {
+        released
+          .recv()
+          .map(|()| 1)
+          .map_err(|error| error.to_string())
+      }),
+      None
+    );
+    // While it hangs, no other call starts.
+    let started = Arc::new(AtomicBool::new(false));
+    let call_started = Arc::clone(&started);
+    assert_eq!(
+      bounded_keychain(&ABANDONED, answer, move || {
+        call_started.store(true, Ordering::SeqCst);
+        Ok(2)
+      }),
+      None
+    );
+    assert!(!started.load(Ordering::SeqCst));
+    // Releasing the hung reader ends it; nobody waits for its answer.
+    drop(release);
+  }
+
+  #[test]
+  fn an_abandoned_keychain_call_counts_until_it_answers() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let abandoned = AtomicUsize::new(0);
+    // Given up while waiting: counted until the reader answers.
+    let hung = Mutex::new(KeychainCall::Waiting);
+    assert!(keychain_given_up(&hung, &abandoned));
+    assert_eq!(abandoned.load(Ordering::SeqCst), 1);
+    keychain_answered(&hung, &abandoned);
+    assert_eq!(abandoned.load(Ordering::SeqCst), 0);
+    // Answered as the wait ended: never counted.
+    let late = Mutex::new(KeychainCall::Waiting);
+    keychain_answered(&late, &abandoned);
+    assert!(!keychain_given_up(&late, &abandoned));
+    assert_eq!(abandoned.load(Ordering::SeqCst), 0);
+  }
+
+  #[test]
+  fn a_store_that_cannot_open_names_why_for_its_account() {
+    use crate::activity_capture::{FailedStore, StoreFailure};
+    let root = PathBuf::from("activity-store");
+    let cases = [
+      (ActivityPersistence::Initializing, None),
+      (ActivityPersistence::MemoryOnly, None),
+      (
+        ActivityPersistence::KeychainNotAnswering,
+        Some(StoreFailure::KeychainNotAnswering),
+      ),
+      (
+        ActivityPersistence::KeyUnreadable(root.clone()),
+        Some(StoreFailure::KeyUnavailable),
+      ),
+      (
+        ActivityPersistence::KeyMissing(root.clone()),
+        Some(StoreFailure::KeyUnavailable),
+      ),
+      (
+        ActivityPersistence::DeletionOnly(root.clone()),
+        Some(StoreFailure::Unreadable),
+      ),
+      (
+        ActivityPersistence::Unreadable(root.clone()),
+        Some(StoreFailure::Unreadable),
+      ),
+      (
+        ActivityPersistence::Incompatible(root),
+        Some(StoreFailure::Unreadable),
+      ),
+    ];
+    for (persistence, expected) in cases {
+      let mut manager = ActivityManager::new();
+      manager.install_account(
+        (1, CAPTURE_NAMESPACE.into()),
+        persistence,
+        ActivitySettings::default(),
+        at(0),
+      );
+      assert_eq!(
+        manager.failed_store(),
+        expected.map(|failure| FailedStore {
+          namespace: CAPTURE_NAMESPACE.into(),
+          failure,
+        })
+      );
+    }
+    // A Keychain that did not answer is asked again: the store does not count
+    // as open.
+    let mut waiting = ActivityManager::new();
+    waiting.install_account(
+      (1, CAPTURE_NAMESPACE.into()),
+      ActivityPersistence::KeychainNotAnswering,
+      ActivitySettings::default(),
+      at(0),
+    );
+    assert!(!waiting.is_initialized());
+    // Without an account, nothing is named.
+    assert_eq!(ActivityManager::new().failed_store(), None);
   }
 }

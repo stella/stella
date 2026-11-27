@@ -5,8 +5,9 @@
 //! decision is refreshed at startup, on every account link or unlink, right
 //! after the computer wakes, and every 2 minutes. Anything but an explicit
 //! `enabled` (no account, a refusal, an unknown status) turns a feature off,
-//! and the gate records why: a refused credential (401) asks the member to
-//! reconnect, any other refusal means the feature is not available.
+//! and the gate records why: a refused credential (401) or a refused renewal
+//! of the saved link asks the member to reconnect, any other refusal means
+//! the feature is not available.
 //!
 //! A read that could not happen (the network is down after a wake, the
 //! server failed or answered something unreadable, the Keychain did not
@@ -22,7 +23,9 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 
-use crate::account::{self, AccountRequest, AccountState, LinkObservation};
+use crate::account::{
+  self, AccountRequest, AccountState, BackgroundAccountError, LinkObservation,
+};
 use crate::feature_gate::{AccountDecision, DesktopFeature, FeatureGates};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::logging::{json_cause_logged, request_cause_logged};
@@ -231,7 +234,7 @@ async fn current_decision(app: &AppHandle) -> Outcome {
   let Some(state) = app.try_state::<AccountState>() else {
     return Outcome::Decided(AccountDecision::SignedOut);
   };
-  let request = match account::request_account(&state).await {
+  let request = match account::background_account(&state).await {
     Ok(Some(request)) => {
       account::observe_link(app, LinkObservation::DeviceProofReadable);
       request
@@ -240,14 +243,26 @@ async fn current_decision(app: &AppHandle) -> Outcome {
       account::observe_link(app, LinkObservation::LinkReplaced);
       return Outcome::Decided(AccountDecision::SignedOut);
     }
-    Err(error) if error == crate::device_proof::RECONNECT => {
+    // The server refused to renew the link: like a refused credential, only
+    // linking again helps, and retrying cannot.
+    Err(BackgroundAccountError::RenewalRefused { namespace }) => {
+      account::observe_link(app, LinkObservation::ServerRefused);
+      tracing::warn!("feature access refused the renewal; account needs reconnecting");
+      return Outcome::Decided(AccountDecision::ReconnectNeeded {
+        namespace: Some(namespace),
+      });
+    }
+    Err(BackgroundAccountError::Unavailable(error))
+      if error == crate::device_proof::RECONNECT =>
+    {
       account::observe_link(app, LinkObservation::DeviceProofLost);
       tracing::warn!(error = %error, "feature access skipped: account needs reconnecting");
       return Outcome::Decided(AccountDecision::ReconnectNeeded { namespace: None });
     }
-    // The Keychain did not answer (often while the computer sleeps): the
-    // account is still linked, so nothing is decided until it can be read.
-    Err(error) => {
+    // The Keychain did not answer (often while the computer sleeps), or the
+    // renewal could not be settled yet: the account is still linked, so
+    // nothing is decided until it can be read.
+    Err(BackgroundAccountError::Unavailable(error)) => {
       tracing::warn!(error = %error, "feature access deferred: account is unreadable now");
       return Outcome::Unknown { unconfirmed: None };
     }

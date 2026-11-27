@@ -73,7 +73,7 @@ pub fn activity_get_day(
   drop(manager);
   snapshot.resolve_app_visuals();
   if caller.account_binding().is_some() {
-    snapshot.add_capture(&app);
+    snapshot.add_capture();
   }
   Ok(snapshot)
 }
