@@ -22,8 +22,12 @@ pub(crate) struct ClipboardImageExports {
 
 impl ClipboardImageExports {
   pub(crate) fn new() -> Self {
+    Self::from_cache_dir(dirs::cache_dir())
+  }
+
+  fn from_cache_dir(cache_dir: Option<PathBuf>) -> Self {
     Self {
-      directory: dirs::cache_dir()
+      directory: cache_dir
         .map(|root| root.join(APP_DATA_DIR_NAME).join("clipboard-export")),
       active: None,
     }
@@ -156,12 +160,7 @@ fn remove_export_file(path: &Path) -> Result<(), String> {
 mod tests {
   use super::*;
   use std::io::Write;
-  use std::{
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt, symlink},
-    process::Command,
-  };
-
-  const CONSTRUCTOR_CHILD_ENV: &str = "STELLA_CLIPBOARD_EXPORT_CONSTRUCTOR_CHILD";
+  use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, symlink};
 
   struct TestDirectory {
     path: PathBuf,
@@ -231,37 +230,20 @@ mod tests {
 
   #[test]
   fn constructing_exports_creates_no_files() {
-    if std::env::var_os(CONSTRUCTOR_CHILD_ENV).is_some() {
-      let expected = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap()
-        .join("Library/Caches")
-        .join(APP_DATA_DIR_NAME)
-        .join("clipboard-export");
-
-      let exports = ClipboardImageExports::new();
-
-      assert_eq!(exports.directory.as_deref(), Some(expected.as_path()));
-      assert!(!expected.exists());
-      return;
-    }
-
     let sandbox = TestDirectory::new();
-    let _children = crate::test_child_processes::exclusive();
-    let output = Command::new(std::env::current_exe().unwrap())
-      .args([
-        "--exact",
-        "clipboard_image_export::tests::constructing_exports_creates_no_files",
-      ])
-      .env(CONSTRUCTOR_CHILD_ENV, "1")
-      .env("HOME", &sandbox.path)
-      .output()
-      .unwrap();
+    let expected = sandbox
+      .path
+      .join(APP_DATA_DIR_NAME)
+      .join("clipboard-export");
 
+    let exports = ClipboardImageExports::from_cache_dir(Some(sandbox.path.clone()));
+
+    assert_eq!(exports.directory.as_deref(), Some(expected.as_path()));
+    assert!(!expected.exists());
     assert!(
-      output.status.success(),
-      "constructor child failed: {}",
-      String::from_utf8_lossy(&output.stderr)
+      ClipboardImageExports::from_cache_dir(None)
+        .directory
+        .is_none()
     );
   }
 
