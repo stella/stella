@@ -21,6 +21,8 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { createGunzip } from "node:zlib";
 
+import { isOpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
+
 import {
   COURTLISTENER_SOURCE_FIELD_INVENTORY,
   COURTLISTENER_SOURCE_SURFACES,
@@ -39,7 +41,6 @@ import {
   isCsvRow,
   OPINION_COLUMNS,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
-import { isOpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import {
   composeCourtListenerText,
   type CourtListenerTextOpinion,

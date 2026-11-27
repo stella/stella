@@ -7,6 +7,8 @@
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
 
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
+import { AST_STRUCTURE_DEGRADED } from "@stll/case-law-parsers/validate-ast";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: typed publisher reads classify HTTP and body failures without changing parsed decision output.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -123,12 +125,10 @@ import type {
   StoredRawReparseValue,
   SyncPage,
 } from "@/api/lib/legal-search/ingestion-types";
-import { AST_STRUCTURE_DEGRADED } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";

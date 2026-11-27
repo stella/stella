@@ -1,17 +1,16 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { load } from "@stll/html";
-import type * as cheerio from "@stll/html";
-import type { AnyNode } from "@stll/html/nodes";
-import { assertProperty } from "@stll/property-testing";
-
 import {
   inlinesToPlainText,
   ownTableRows,
   visibleHtmlText,
   walkInlines,
-} from "./shared-inlines";
+} from "@stll/case-law-parsers/shared-inlines";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
+import { assertProperty } from "@stll/property-testing";
 
 test("HTML text excludes scripts and styles at every nesting depth", () => {
   assertProperty(

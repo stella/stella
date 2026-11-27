@@ -8,6 +8,8 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
+import { AST_CONTENT_LOST } from "@stll/case-law-parsers/validate-ast";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
@@ -72,10 +74,8 @@ import type {
   ReconciliationSlicePageOptions,
   SourceAdapter,
 } from "@/api/lib/legal-search/ingestion-types";
-import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {

@@ -48,6 +48,17 @@
 import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { sanitizeUrl } from "@stll/case-law-parsers/sanitize-url";
+import {
+  ANONYMIZED_CLASS,
+  appendTextInline,
+  inlinesToPlainText,
+  ownTableRows,
+  visibleHtmlText,
+  walkInlines,
+  type WalkInlinesOptions,
+} from "@stll/case-law-parsers/shared-inlines";
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -65,18 +76,6 @@ import {
   normalizeInlineLine,
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
-
-import {
-  ANONYMIZED_CLASS,
-  appendTextInline,
-  inlinesToPlainText,
-  ownTableRows,
-  visibleHtmlText,
-  walkInlines,
-  type WalkInlinesOptions,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 // ── Public API ─────────────────────────────────────────────
 

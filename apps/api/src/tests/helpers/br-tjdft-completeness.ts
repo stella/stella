@@ -1,7 +1,6 @@
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
-
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** The validator codes that mean text was lost or markup leaked (rule 10). */
 const COMPLETENESS_CODES: ReadonlySet<string> = new Set([

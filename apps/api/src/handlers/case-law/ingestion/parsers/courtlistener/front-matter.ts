@@ -1,9 +1,8 @@
+// parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: front matter is validated against its source paragraphs, the text its validation markup held.
 import type { Block } from "@stll/legal-ast/document-ast";
-
-// parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { parseHeadmatter } from "./html";
 import type { TextBudget } from "./outcome";

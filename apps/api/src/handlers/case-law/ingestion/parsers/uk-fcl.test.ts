@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 
-import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
+import * as astValidation from "@stll/case-law-parsers/validate-ast";
+
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { parseUkFclDecision as uncheckedParseUkFclDecision } from "./uk-fcl";

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import {
   buildBoldRanges,
   buildFontStyleRanges,
-} from "@/api/lib/legal-search/parsers/libpdf-utils";
+} from "@stll/case-law-parsers/libpdf-utils";
 
 test("keeps the entire line when span spacing differs or a prefix is unmatched", () => {
   for (const lineText of [

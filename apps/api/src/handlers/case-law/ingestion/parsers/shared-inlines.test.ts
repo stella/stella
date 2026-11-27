@@ -1,16 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { load } from "@stll/html";
-import type { Inline } from "@stll/legal-ast/document-ast";
-import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
-
 import {
   ASPOSE_SPACER_GAP,
   inlinesToPlainText,
   walkInlines,
   type WalkInlinesOptions,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "@stll/case-law-parsers/shared-inlines";
+import { load } from "@stll/html";
+import type { Inline } from "@stll/legal-ast/document-ast";
+import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
 const walk = (html: string, options?: WalkInlinesOptions): Inline[] => {
   const $ = load(html);

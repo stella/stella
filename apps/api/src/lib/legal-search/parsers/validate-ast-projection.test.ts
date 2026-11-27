@@ -2,6 +2,10 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  validateAst as validateSharedAst,
+  validationInlineText,
+} from "@stll/case-law-parsers/validate-ast";
+import {
   type Block,
   type Inline,
   projectPlainText,
@@ -9,11 +13,6 @@ import {
 import { assertProperty } from "@stll/property-testing";
 
 import { courtListenerValidationPolicy } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/validation-policy";
-
-import {
-  validateAst as validateSharedAst,
-  validationInlineText,
-} from "./validate-ast";
 
 const validateAst = (
   html: string,

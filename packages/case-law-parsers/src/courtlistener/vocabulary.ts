@@ -2,7 +2,7 @@ import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 // parser-output-unchanged: imports byte-identical canonical ID ordering from its pure parser module.
-import { compareCanonicalIds } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
+import { compareCanonicalIds } from "./canonical-id-order";
 
 type OpinionTypeDeclaration = {
   /** The documented numeric prefix, which orders rows within a cluster. */

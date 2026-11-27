@@ -34,7 +34,8 @@ import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { flattenInlineText } from "@stll/legal-ast/inline";
 import { BRACKET_PARAGRAPH_MARKER_WORD_RE } from "@stll/legal-ast/printed-paragraph-labels";
 
-import { logger } from "@/api/lib/observability/logger";
+// parser-output-unchanged: delegates logging through the host-registered parser logger sink.
+import { getParserLogger } from "./parser-logger";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -952,7 +953,7 @@ export const validateAndLog = (
     ...(subject.url === undefined ? {} : { url: subject.url }),
   };
   if (result.stats.boundaryWhitespaceWords.length > 0) {
-    logger.warn(AST_BOUNDARY_WHITESPACE, {
+    getParserLogger()?.warn(AST_BOUNDARY_WHITESPACE, {
       ...subjectFields,
       codes: BOUNDARY_WHITESPACE,
       boundaryWordCount: result.stats.boundaryWhitespaceWords.length,
@@ -983,12 +984,12 @@ export const validateAndLog = (
   };
 
   if (signal.level === "warn") {
-    logger.warn(signal.event, common);
+    getParserLogger()?.warn(signal.event, common);
     return result;
   }
 
   const residue = result.stats.markupResidue.at(0);
-  logger.error(signal.event, {
+  getParserLogger()?.error(signal.event, {
     ...common,
     ...(residue === undefined
       ? {}

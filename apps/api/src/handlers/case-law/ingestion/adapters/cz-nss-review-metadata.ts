@@ -4,6 +4,10 @@ import {
   foldDecisionIdentifierInput,
   parseDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import {
+  ownTableRows,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 
 import { detectCitationDecisionDate } from "@/api/handlers/case-law/citation-decision-date";
@@ -11,10 +15,6 @@ import {
   canonicalCzechReviewCourt,
   type CzechAppealReview,
 } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
-import {
-  ownTableRows,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 const metadataOutcome = (value: string): CzechAppealReview["outcome"] => {
   const normalized = value.toLocaleLowerCase("cs");

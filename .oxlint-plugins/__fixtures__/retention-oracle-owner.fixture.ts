@@ -9,7 +9,7 @@ import {
   // oxlint-disable-next-line retention-oracle-owner/retention-oracle-owner -- logging oracle outside its owner
   validateAndLog,
   validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+} from "@stll/case-law-parsers/validate-ast";
 
 export const fixtureSource: ValidationSource = buildValidationHtml(["text"]);
 export const fixtureVerdict = validateAst(fixtureSource, []).ok;

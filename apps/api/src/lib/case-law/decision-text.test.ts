@@ -9,6 +9,7 @@ import {
   type DecisionTextFieldKey,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -30,7 +31,6 @@ import {
   MAX_METADATA_URL_DIAGNOSTICS,
   META_URL_DIAGNOSTICS,
 } from "@/api/lib/legal-search/metadata-urls";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 test("publisher metadata cannot collide with generated URL diagnostics", () => {

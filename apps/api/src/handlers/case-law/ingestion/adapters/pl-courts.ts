@@ -15,6 +15,7 @@ import * as v from "valibot";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { classifyFailure } from "@stll/errors";
 import {
   readBodyJsonWithIdleDeadline,
@@ -109,7 +110,6 @@ import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fie
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";

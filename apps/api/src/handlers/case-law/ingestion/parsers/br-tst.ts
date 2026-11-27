@@ -31,6 +31,10 @@
  */
 import { panic, Result, TaggedError } from "better-result";
 
+import {
+  isExcludedHtmlTag,
+  walkInlines,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
@@ -47,11 +51,6 @@ import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
-
-import {
-  isExcludedHtmlTag,
-  walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 const SOURCE_SYSTEM = "jurisprudencia.tst.jus.br";
 

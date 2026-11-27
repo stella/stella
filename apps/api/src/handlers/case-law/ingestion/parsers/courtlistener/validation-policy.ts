@@ -1,6 +1,5 @@
+import type { ValidationSourcePolicy } from "@stll/case-law-parsers/validate-ast";
 import { projectPlainText } from "@stll/legal-ast/document-ast";
-
-import type { ValidationSourcePolicy } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { markupResidueIn } from "./markup-residue";
 

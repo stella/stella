@@ -10,6 +10,7 @@ import {
   VISIBLE_RUN_CASES,
   visibleRunDocument,
 } from "@stll/case-law-parsers/run-content-text.fixtures";
+import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import type {
   BlockContent,
   Document as FolioDocument,
@@ -41,7 +42,6 @@ import {
   huDocketFrom,
   parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
-import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {

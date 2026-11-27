@@ -972,15 +972,18 @@
       "name": "@stll/case-law-parsers",
       "version": "0.0.0",
       "dependencies": {
+        "@libpdf/core": "catalog:",
         "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/docx-core": "catalog:",
+        "@stll/errors": "workspace:*",
         "@stll/html": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/mojibake": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "entities": "^9.0.0",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",

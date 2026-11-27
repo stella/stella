@@ -2,9 +2,9 @@ import { Glob } from "bun";
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import * as astValidation from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 
-import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {

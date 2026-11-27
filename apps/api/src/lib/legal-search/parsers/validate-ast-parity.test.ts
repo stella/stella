@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 
 import {
@@ -7,7 +8,6 @@ import {
   buildValidateAstInputs,
 } from "@/api/tests/helpers/validate-ast-inputs";
 
-import { validateAst } from "./validate-ast";
 import verdicts from "./validate-ast-verdicts.golden.json";
 
 test("stored case-law and deterministic malformed AST verdicts stay exact", async () => {

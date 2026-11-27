@@ -7,6 +7,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_JUDGE_NAME_RE,
@@ -90,7 +91,6 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseValue,
 } from "@/api/lib/legal-search/ingestion-types";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";

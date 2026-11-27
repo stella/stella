@@ -12,6 +12,10 @@ import { panic, Result } from "better-result";
 
 import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
+import {
+  sanitizeUrl,
+  toMetadataUrl,
+} from "@stll/case-law-parsers/sanitize-url";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import {
@@ -128,7 +132,6 @@ import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-parser"
 import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
-import { sanitizeUrl, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { OPINION_TYPES } from "@stll/case-law-parsers/courtlistener/vocabulary";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -36,7 +37,6 @@ import {
   opinionRow,
   recordedClusters,
 } from "./test-records";
-import { OPINION_TYPES } from "./vocabulary";
 
 const mapCourtListenerRecord = guardParser(uncheckedMapCourtListenerRecord);
 

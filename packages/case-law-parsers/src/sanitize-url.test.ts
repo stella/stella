@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { SAFE_HREF_EMPTY, sanitizeUrl } from "@/api/lib/sanitize-url";
+import {
+  SAFE_HREF_EMPTY,
+  sanitizeUrl,
+} from "@stll/case-law-parsers/sanitize-url";
 
 describe("sanitizeUrl", () => {
   test("accepts http URLs", () => {

@@ -1,6 +1,7 @@
 import { ops, PDF, PdfString } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
+import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/inline";
@@ -11,7 +12,6 @@ import {
   PDF_PARAGRAPH_START,
 } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import provenance from "./__fixtures__/pl-sn-ii-cskp-1456-22.pdf.provenance.json";

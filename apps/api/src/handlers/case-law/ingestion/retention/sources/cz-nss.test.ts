@@ -1,15 +1,15 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  validateAst,
+  type ValidationResult,
+} from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { RETENTION_TEXT_ABSENCE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  validateAst,
-  type ValidationResult,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,

@@ -15,6 +15,7 @@
 
 // parser-output-unchanged: [pl-uokik] @stll/time now resolves to the published 0.4.1 release with the same exports as the removed workspace copy.
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { parsePlainDate } from "@stll/time";
@@ -34,7 +35,6 @@ import type {
   PdfLine,
 } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_UOKIK_SOURCE_SYSTEM = "decyzje.uokik.gov.pl";

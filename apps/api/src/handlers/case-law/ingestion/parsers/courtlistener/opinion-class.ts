@@ -5,10 +5,9 @@
  * never read as one.
  */
 
+import type { OpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { ParagraphRole } from "@stll/legal-ast/document-ast";
-
-import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 
 type BodyClass = Extract<
   ParagraphRole,

@@ -21,6 +21,7 @@
  * sentence.
  */
 
+import { ANONYMIZED_CLASS } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import {
   type AnyNode,
@@ -29,8 +30,6 @@ import {
   isTag,
   isText,
 } from "@stll/html/nodes";
-
-import { ANONYMIZED_CLASS } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 import { judgeLexLink, type LexLinkRejection } from "./pl-ncourt-lexlink";
 

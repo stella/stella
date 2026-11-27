@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
-
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { conservesText } from "./blocks";
 import { parseHarvardXml } from "./harvard-xml";

@@ -15,12 +15,11 @@
 import { panic } from "better-result";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
+import { sanitizeUrl } from "@stll/case-law-parsers/sanitize-url";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import { flattenInlineText } from "@stll/legal-ast/inline";
-
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 type RisElementSpec =
   /** Wraps block elements; read child by child. */

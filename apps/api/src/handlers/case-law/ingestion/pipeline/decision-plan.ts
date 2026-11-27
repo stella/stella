@@ -14,6 +14,10 @@ import {
   TEXT_MISDECODED,
   textEncodingReport,
 } from "@stll/case-law-parsers/text-encoding";
+import {
+  AST_MARKUP_RESIDUE,
+  storedDecisionSignal,
+} from "@stll/case-law-parsers/validate-ast";
 import { replacedBlockAnchorsOf } from "@stll/legal-ast/anchor-redirects";
 import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -82,10 +86,6 @@ import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombst
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  AST_MARKUP_RESIDUE,
-  storedDecisionSignal,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";

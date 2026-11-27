@@ -7,6 +7,10 @@
 import { panic, Result } from "better-result";
 import { parseXmlDocument } from "slimdom";
 
+import {
+  isExcludedHtmlTag,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/shared-inlines";
 import { declareFingerprintFields } from "@stll/errors";
 import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
@@ -15,10 +19,6 @@ import {
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
-import {
-  isExcludedHtmlTag,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 type PublisherPageReason =

@@ -5,6 +5,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -17,7 +18,6 @@ import {
   readPlTkCasePage,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { plTkRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-tk";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 const FIXTURES = new URL("../../parsers/__fixtures__/", import.meta.url);

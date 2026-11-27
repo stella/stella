@@ -14,11 +14,10 @@
 import { Result } from "better-result";
 import * as slimdom from "slimdom";
 
+import type { OpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
+import { validationParagraphs } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import { type Element, isTag } from "@stll/html/nodes";
-
-import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
-import { validationParagraphs } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   type BodyVocabulary,

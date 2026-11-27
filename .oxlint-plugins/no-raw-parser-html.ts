@@ -20,8 +20,8 @@ import {
 
 const RULE_NAME = "no-raw-parser-html";
 const OWNERS = [
-  "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts",
-  "apps/api/src/lib/legal-search/parsers/visible-html-text.ts",
+  "packages/case-law-parsers/src/shared-inlines.ts",
+  "packages/case-law-parsers/src/visible-html-text.ts",
 ];
 const CHEERIO_TYPES = new Set(["Cheerio", "CheerioAPI"]);
 // Parsers load documents and take Cheerio types through @stll/html.

@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { composeCourtListenerText } from "./compose";
 import { COURTLISTENER_HTML_PARSERS } from "./html";

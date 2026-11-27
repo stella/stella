@@ -6,6 +6,11 @@ import { Result, TaggedError } from "better-result";
 import { decodeHTMLStrict } from "entities";
 import * as v from "valibot";
 
+import {
+  MetadataUrlDefect,
+  type SafeHref,
+  toMetadataUrl,
+} from "@stll/case-law-parsers/sanitize-url";
 import { declareFingerprintFields } from "@stll/errors";
 
 import {
@@ -17,11 +22,6 @@ import {
   metadataUrlItemSchema,
   rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
-import {
-  MetadataUrlDefect,
-  type SafeHref,
-  toMetadataUrl,
-} from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const plainTextBrand = Symbol("PlainText");

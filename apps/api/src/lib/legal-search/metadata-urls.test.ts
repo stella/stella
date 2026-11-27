@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  MetadataUrlDefect,
+  toMetadataUrl,
+} from "@stll/case-law-parsers/sanitize-url";
 import { assertProperty } from "@stll/property-testing";
 
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
@@ -14,7 +18,6 @@ import {
   opaqueMetadataValue,
   rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
-import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const SCHEMA = { url: "url", documents: { items: { href: "url" } } } as const;

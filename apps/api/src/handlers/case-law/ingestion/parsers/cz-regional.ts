@@ -20,6 +20,7 @@
  * styles[]: { localId, alignment, bold, italic, ... }
  */
 
+import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
@@ -44,8 +45,6 @@ import {
   isRunningHeaderLine,
   withoutSoftHyphens,
 } from "@stll/legal-ast/page-furniture";
-
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 

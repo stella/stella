@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import {
   assertProperty,
@@ -8,7 +9,6 @@ import {
   propertyTestTimeout,
 } from "@stll/property-testing";
 
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "./cz-nss";

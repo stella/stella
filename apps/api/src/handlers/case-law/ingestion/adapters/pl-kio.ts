@@ -8,6 +8,10 @@
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
+import {
+  legacyQuarantineHtmlText,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/shared-inlines";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import type * as cheerio from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
@@ -39,10 +43,6 @@ import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/ret
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
-import {
-  legacyQuarantineHtmlText,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,

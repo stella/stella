@@ -12,7 +12,8 @@
  * the source inventory; it is never classified as an exclusion.
  */
 
-import { compareCanonicalIds } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
+import { compareCanonicalIds } from "@stll/case-law-parsers/courtlistener/canonical-id-order";
+
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
 import type { SourceFieldDisposition } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -20,7 +21,7 @@ import { isRecord } from "@/api/lib/type-guards";
 export {
   compareBytewise,
   compareCanonicalIds,
-} from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
+} from "@stll/case-law-parsers/courtlistener/canonical-id-order";
 
 type StoredSourceField = Extract<
   SourceFieldDisposition,

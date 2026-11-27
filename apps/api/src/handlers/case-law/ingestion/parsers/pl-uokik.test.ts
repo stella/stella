@@ -11,6 +11,11 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import {
+  AST_STRUCTURE_DEGRADED,
+  buildValidationHtml,
+  validateAst,
+} from "@stll/case-law-parsers/validate-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import {
@@ -31,11 +36,6 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import {
-  AST_STRUCTURE_DEGRADED,
-  buildValidationHtml,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { logger } from "@/api/lib/observability/logger";

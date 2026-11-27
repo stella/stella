@@ -1,5 +1,10 @@
 import { panic, Result } from "better-result";
 
+import {
+  validateAndLog,
+  type ValidationSourcePolicy,
+  type ValidationSubject,
+} from "@stll/case-law-parsers/validate-ast";
 import { type Block, hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -10,11 +15,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  validateAndLog,
-  type ValidationSourcePolicy,
-  type ValidationSubject,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
 
 /** A parsed decision whose retention the pipeline could not measure. */

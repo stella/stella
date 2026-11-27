@@ -12,11 +12,12 @@ import { panic } from "better-result";
  * not hold.
  */
 
-import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
+import type { OpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
+
 // parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
 // parser-output-unchanged: imports the same snapshot row shape from its pure parser module.
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   type FormatInput,
