@@ -403,18 +403,6 @@ checks:
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Full error toast text census')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_027 != 'true') }}
     run: bun run check:toast-errors
 
-  - name: Query data state baseline
-    continue-on-error: ${{ github.event_name == 'merge_group' }}
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Query data state baseline')) }}
-    env:
-      CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-      STELLA_VERIFY: check
-      BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
-    run: |
-      bun test scripts/query-data-state-baseline.test.ts
-      bun run check:query-data-state
-
   - name: SQL performance baseline
     continue-on-error: ${{ github.event_name == 'merge_group' }}
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/SQL performance baseline')) }}
@@ -426,18 +414,6 @@ checks:
     run: |
       bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
       bun scripts/sql-perf-baseline.ts --check
-
-  - name: Failure-as-empty baseline
-    continue-on-error: ${{ github.event_name == 'merge_group' }}
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Failure-as-empty baseline')) }}
-    env:
-      CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-      STELLA_VERIFY: check
-      BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
-    run: |
-      bun test scripts/failure-as-empty-baseline.test.ts
-      bun run check:failure-as-empty
 
   - name: Oxlint override union guard
     env:

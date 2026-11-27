@@ -405,26 +405,12 @@
       "p99Seconds": 8,
       "peakRssMiB": 129
     },
-    "Query data state baseline": {
-      "minutes": 5,
-      "samples": 19,
-      "p95Seconds": 5,
-      "p99Seconds": 5,
-      "peakRssMiB": 2129
-    },
     "SQL performance baseline": {
       "minutes": 5,
       "samples": 18,
       "p95Seconds": 29,
       "p99Seconds": 29,
       "peakRssMiB": 218
-    },
-    "Failure-as-empty baseline": {
-      "minutes": 5,
-      "samples": 18,
-      "p95Seconds": 3,
-      "p99Seconds": 3,
-      "peakRssMiB": 624
     },
     "Oxlint override union guard": {
       "minutes": 5,

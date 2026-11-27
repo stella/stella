@@ -1,6 +1,5 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
-import baseline from "./query-data-requires-state-baseline.json" with { type: "json" };
 import {
   type AstNode,
   getImportedName,
@@ -973,11 +972,6 @@ const reportQueryViolations = (
   context: QueryReportContext,
   syntax: QuerySyntax,
 ) => {
-  const options = context.options.at(0);
-  const census =
-    typeof options === "object" &&
-    options !== null &&
-    Reflect.get(options, "census") === true;
   for (const call of syntax.calls) {
     const hook = hookName({ context, callee: call.callee, syntax });
     if (!hook) {
@@ -988,9 +982,6 @@ const reportQueryViolations = (
       continue;
     }
     const key = `${repoRelativeFilename(context)}::${functionName(binding.owner)}::${binding.name}`;
-    if (!census && Object.hasOwn(baseline.entries, key)) {
-      continue;
-    }
     context.report({
       node: binding.node,
       messageId: "queryState",
@@ -1009,13 +1000,6 @@ export default eslintCompatPlugin({
           queryState:
             "Query data requires its error state. Pass the result to queryView from @/lib/query-view.logic, or handle and preserve its error/status. Query binding: {{key}}.",
         },
-        schema: [
-          {
-            type: "object",
-            properties: { census: { type: "boolean" } },
-            additionalProperties: false,
-          },
-        ],
       },
       createOnce(context) {
         const syntax: QuerySyntax = {

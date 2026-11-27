@@ -138,5 +138,13 @@
   {
     "name": "React state-write baselines",
     "reason": "The baselines it held shrink-only are empty and deleted: no-effect-state-write and no-render-phase-update now report every finding, so no count is left to keep from growing."
+  },
+  {
+    "name": "Query data state baseline",
+    "reason": "The baseline it held shrink-only is empty and deleted: query-data-requires-state now reports every finding directly in oxlint, so no exception list is left to keep from growing."
+  },
+  {
+    "name": "Failure-as-empty baseline",
+    "reason": "Both baselines it held shrink-only (no-failure-as-empty and case-law read-fault guard) are empty and deleted: no-failure-as-empty and read-fault-guard.test.ts now fail outright on every finding, so no exception list is left to keep from growing."
   }
 ]

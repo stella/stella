@@ -51,18 +51,6 @@ export const PRUNABLE_BASELINE_WRITERS = [
     baselines: [{ path: BASELINE_PATHS.aggregateLocks, collection: [] }],
   },
   {
-    write: ["bun", "scripts/failure-as-empty-baseline.ts", "--write"],
-    baselines: [
-      { path: BASELINE_PATHS.failureAsEmpty, collection: ["entries"] },
-    ],
-  },
-  {
-    write: ["bun", "scripts/query-data-state-baseline.ts", "--write"],
-    baselines: [
-      { path: BASELINE_PATHS.queryDataState, collection: ["entries"] },
-    ],
-  },
-  {
     write: ["bun", "scripts/sql-perf-baseline.ts", "--write"],
     baselines: [{ path: BASELINE_PATHS.sqlPerf, collection: [] }],
   },
