@@ -50,6 +50,9 @@ export type DocxBlock = {
   /** Offsets in `text` at which the paragraph holds a field that numbers
    *  itself: the number it prints is in no text. Absent without one. */
   selfNumbers?: number[];
+  /** The tracked changes the paragraph holds, in a manifest read with the
+   *  changes kept: where each sits in `text`. Absent without one. */
+  revisions?: DocxBlockRevision[];
   /** The paragraph starts on a new page by its own formatting or its
    *  style's. */
   pageBreakBefore?: true;
@@ -65,6 +68,19 @@ export type DocxBlock = {
    *  from a manifest read before it was reported. */
   indent?: { left: number; firstLine: number };
   cells?: { row: number; col: number; blockIds: string[] }[];
+};
+
+/** A tracked change inside a paragraph. An insertion spans the text it
+ *  added; a deletion takes no place in the text read with the changes
+ *  accepted, so its `start` and `end` are the one offset it was made at. */
+type DocxBlockRevision = {
+  kind: "insertion" | "deletion";
+  start: number;
+  end: number;
+  author: string;
+  date: string | null;
+  /** The change is of a paragraph mark, not of text. */
+  paragraphMark?: true;
 };
 
 /** One section of a document: how it begins after the one before it, and
@@ -581,6 +597,18 @@ const blockSchema = v.strictObject({
   pageBreaks: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   selfNumbers: v.exactOptional(
     v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  ),
+  revisions: v.exactOptional(
+    v.array(
+      v.strictObject({
+        kind: v.picklist(["insertion", "deletion"]),
+        start: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        end: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        author: v.string(),
+        date: v.nullable(v.string()),
+        paragraphMark: v.exactOptional(v.literal(true)),
+      }),
+    ),
   ),
   pageBreakBefore: v.exactOptional(v.literal(true)),
   endsSection: v.exactOptional(v.literal(true)),

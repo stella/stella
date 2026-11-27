@@ -2498,7 +2498,7 @@ describe("buildTemplatePlan, a memo on a template with a header of fields", () =
     // The last line ends in a line break, as a form's line may.
     const manifest = memo(
       "To:\tJane Roe",
-      "From: John Doe",
+      "From: Peter Lang",
       "Věc: Posouzení návrhu\n",
     );
     const { plan, note } = build(manifest, "keepSource", {
@@ -2563,7 +2563,7 @@ describe("buildTemplatePlan, a memo on a template with a header of fields", () =
   });
 
   test("a line that names two fields keeps its place in the body", () => {
-    const manifest = memo("To: Jane Roe\tFrom: John Doe", "Date: 3 May 2026");
+    const manifest = memo("To: Jane Roe\tFrom: Peter Lang", "Date: 3 May 2026");
     const { plan } = build(manifest, "keepSource", { profile: memoHeader });
     expect(slotsOf(plan).map(({ templateBlockId }) => templateBlockId)).toEqual(
       ["h6"],
@@ -2609,7 +2609,7 @@ describe("buildTemplatePlan, a memo on a template with a header of fields", () =
   });
 
   test("a line a kept tracked change reaches into keeps its place in the body", () => {
-    const manifest = memo("To: Jane Roe", "From: John Doe");
+    const manifest = memo("To: Jane Roe", "From: Peter Lang");
     const by = { author: "First Author", date: "2026-01-05T10:00:00Z" };
     const to = manifest.blocks[1];
     const from = manifest.blocks[2];

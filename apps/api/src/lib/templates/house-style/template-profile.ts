@@ -755,7 +755,7 @@ type TemplateHeader = {
   reference: string | null;
 };
 
-export type TemplateHeaderField = {
+type TemplateHeaderField = {
   field: HeadField;
   /** The word the template names the field with: `Subject`. */
   name: string;

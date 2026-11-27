@@ -47,7 +47,7 @@ export const readFieldName = (
   return word === undefined || field === null ? null : { field, word };
 };
 
-export type HeadLine = {
+type HeadLine = {
   field: HeadField;
   blockId: string;
   /** The field's name as the line types it, through the colon. */
@@ -64,7 +64,7 @@ const HEAD_LINE_MAX = 200;
 /** One line: a value that goes on behind a line break is no value of one
  *  field for sure; a break that only ends the line is no part of it. */
 const HEAD_LINE =
-  /^[ \t\u00A0]*(?<lead>(?<word>\p{L}{2,8})[ \u00A0]*:)[ \t\u00A0]*(?<value>\S[^\n]*?)\s*$/u;
+  /^[ \t\u00A0]*(?<lead>(?<word>\p{L}{2,8})[ \u00A0]*:)[ \t\u00A0]*(?<value>\S[^\n]*)$/u;
 /** A further name of a field inside a line's value. */
 const NAME_INSIDE = /(?:^|[ \t\u00A0])(?<word>\p{L}{2,8})[ \u00A0]*:/gu;
 
@@ -87,7 +87,7 @@ export const readHeadLines = (topLevel: readonly DocxBlock[]): HeadLine[] => {
   for (const block of shown) {
     const read =
       block.text.length <= HEAD_LINE_MAX
-        ? HEAD_LINE.exec(block.text)?.groups
+        ? HEAD_LINE.exec(block.text.trimEnd())?.groups
         : undefined;
     const word = read?.["word"] ?? "";
     const field = fieldOfWord(word);

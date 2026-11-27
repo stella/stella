@@ -287,7 +287,7 @@ describe("folioTemplatePlanEngine", () => {
       body: [
         paragraph("MEMORANDUM"),
         paragraph("To: Jane Roe"),
-        paragraph("From: John Doe"),
+        paragraph("From: Peter Lang"),
         paragraph("Re: Lease of the warehouse"),
         paragraph("The lease ends in June."),
       ].join(""),
@@ -313,7 +313,7 @@ describe("folioTemplatePlanEngine", () => {
     // The values stand in the cells, word for word, without their own
     // names; the cell without a line stays empty.
     expect(texts).toContain("Jane Roe");
-    expect(texts).toContain("John Doe");
+    expect(texts).toContain("Peter Lang");
     expect(texts).toContain("Lease of the warehouse");
     expect(texts).not.toContain("To: Jane Roe");
     expect(texts).toContain("The lease ends in June.");
