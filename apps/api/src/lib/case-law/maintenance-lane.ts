@@ -334,7 +334,10 @@ type ScopedMaintenanceLaneBudget<T> = {
  */
 type BoundedMaintenanceLaneOptions<T> = ScopedMaintenanceLaneBudget<T> & {
   mode: "bounded";
+  /** How long the pass waits for the lane, counted from its first try. */
   laneWaitMs: number;
+  /** How long the work may hold the lane once granted; aborts it after. */
+  workTimeoutMs: number;
 };
 
 /**
@@ -509,17 +512,17 @@ type AcquireScopedLaneOptions = {
   connection: LaneConnection;
   mode: ScopedMaintenanceLaneOptions<unknown>["mode"];
   laneWaitMs: number;
-  startedAt: number;
   now: () => number;
 };
 
+/** The wait budget counts from the first try, never connection admission. */
 const acquireScopedLane = async ({
   connection,
   mode,
   laneWaitMs,
-  startedAt,
   now,
 }: AcquireScopedLaneOptions): Promise<LaneAcquisition> => {
+  const startedAt = now();
   const acquired = (
     await connection.unsafe<{ acquired: boolean }[]>(
       "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
@@ -553,15 +556,29 @@ const acquireScopedLane = async ({
   }
 };
 
-const laneWaitBudget = (options: ScopedMaintenanceLaneOptions<unknown>) => {
+type ScopedLaneBudgets = {
+  laneWaitMs: number;
+  /** Null: the caller's signal alone bounds the work. */
+  workTimeoutMs: number | null;
+};
+
+const scopedLaneBudgets = (
+  options: ScopedMaintenanceLaneOptions<unknown>,
+): ScopedLaneBudgets => {
   switch (options.mode) {
     case "bounded":
-      return positiveDedicatedTimeoutMilliseconds(
-        options.laneWaitMs,
-        "laneWaitMs",
-      );
+      return {
+        laneWaitMs: positiveDedicatedTimeoutMilliseconds(
+          options.laneWaitMs,
+          "laneWaitMs",
+        ),
+        workTimeoutMs: positiveDedicatedTimeoutMilliseconds(
+          options.workTimeoutMs,
+          "workTimeoutMs",
+        ),
+      };
     case "periodic":
-      return 0;
+      return { laneWaitMs: 0, workTimeoutMs: null };
     default:
       options satisfies never;
       return panic("Unhandled maintenance lane mode");
@@ -572,11 +589,14 @@ const laneWaitBudget = (options: ScopedMaintenanceLaneOptions<unknown>) => {
 const runScopedMaintenanceLane = async <T>(
   options: ScopedMaintenanceLaneOptions<T>,
 ): Promise<MaintenanceLaneOutcome<T>> => {
-  const { signal, statementTimeout, lockTimeout, work } = options;
-  signal.throwIfAborted();
-  const laneWaitMs = laneWaitBudget(options);
+  const { signal: callerSignal, statementTimeout, lockTimeout, work } = options;
+  callerSignal.throwIfAborted();
+  const { laneWaitMs, workTimeoutMs } = scopedLaneBudgets(options);
   const now = () => Temporal.Now.instant().epochMilliseconds;
-  const startedAt = now();
+  // The work budget starts at the grant, so a long wait never shortens the
+  // work and a quick grant never lengthens it.
+  const workDeadline = new AbortController();
+  const signal = AbortSignal.any([callerSignal, workDeadline.signal]);
   const [
     { withLongRunningConnection },
     { createIngestionDb, markRlsDatabase },
@@ -591,12 +611,22 @@ const runScopedMaintenanceLane = async <T>(
         connection,
         mode: options.mode,
         laneWaitMs,
-        startedAt,
         now,
       });
       if (acquisition.status === "busy") {
         return acquisition;
       }
+      const workTimer =
+        workTimeoutMs === null
+          ? undefined
+          : setTimeout(() => {
+              workDeadline.abort(
+                new DOMException(
+                  "Maintenance lane work outlived its budget",
+                  "TimeoutError",
+                ),
+              );
+            }, workTimeoutMs);
       // Indicators and role-scoped pipeline work cannot overlap transactions
       // on the one session that owns the maintenance lock.
       let pending = Promise.resolve();
@@ -646,7 +676,11 @@ const runScopedMaintenanceLane = async <T>(
           signal.throwIfAborted();
           return result;
         });
-      return { status: "ran", value: await work({ rootDb, ingestionDb }) };
+      try {
+        return { status: "ran", value: await work({ rootDb, ingestionDb }) };
+      } finally {
+        clearTimeout(workTimer);
+      }
     },
   );
 };

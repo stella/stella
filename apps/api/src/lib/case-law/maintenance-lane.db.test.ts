@@ -122,6 +122,7 @@ if (!databaseUrl || !runPostgresTests) {
           await enterCaseLawMaintenanceLane({
             mode: "bounded",
             laneWaitMs: 5000,
+            workTimeoutMs: 10_000,
             signal: AbortSignal.timeout(10_000),
             statementTimeout: 5000,
             lockTimeout: 5000,

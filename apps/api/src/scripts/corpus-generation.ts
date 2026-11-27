@@ -1042,6 +1042,7 @@ const withOperatorDatabase: WithCorpusDatabase = async (access, work) => {
       const ran = await enterCaseLawMaintenanceLane({
         mode: "bounded",
         laneWaitMs: APPLY_LANE_WAIT_MS,
+        workTimeoutMs: APPLY_TIMEOUT_MS,
         signal: AbortSignal.timeout(APPLY_LANE_WAIT_MS + APPLY_TIMEOUT_MS),
         statementTimeout: APPLY_QUERY_TIMEOUT_MS,
         lockTimeout: APPLY_QUERY_TIMEOUT_MS,

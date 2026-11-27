@@ -638,6 +638,7 @@ const resetReplayDryRun = async ({
   const reset = await enterCaseLawMaintenanceLane({
     mode: "bounded",
     laneWaitMs: BACKGROUND_REPLAY_LIMITS.hardDurationMs - RESET_WORK_BUDGET_MS,
+    workTimeoutMs: RESET_WORK_BUDGET_MS,
     statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
     lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
     signal,

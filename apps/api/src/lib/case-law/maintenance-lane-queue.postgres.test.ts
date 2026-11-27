@@ -6,9 +6,10 @@
  * own database clone (`EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS`): another suite
  * holding the same lane would move these timings.
  */
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { Temporal } from "@stll/time";
@@ -90,6 +91,7 @@ if (!databaseUrl || !runPostgresTests) {
           const operator = enterCaseLawMaintenanceLane({
             mode: "bounded",
             laneWaitMs: 30_000,
+            workTimeoutMs: 10_000,
             signal: AbortSignal.timeout(60_000),
             ...STATEMENT_BUDGET,
             work: async () => "operator ran",
@@ -119,6 +121,7 @@ if (!databaseUrl || !runPostgresTests) {
             const refused = await enterCaseLawMaintenanceLane({
               mode: "bounded",
               laneWaitMs: 1500,
+              workTimeoutMs: 10_000,
               signal: AbortSignal.timeout(60_000),
               ...STATEMENT_BUDGET,
               work: async () =>
@@ -138,6 +141,26 @@ if (!databaseUrl || !runPostgresTests) {
         },
         { closeMode: "force" },
       );
+    });
+
+    test("a bounded pass's work budget starts at the grant and aborts work that outlives it", async () => {
+      const startedAt = now();
+      const outcome = await Result.tryPromise({
+        try: async () =>
+          await enterCaseLawMaintenanceLane({
+            mode: "bounded",
+            laneWaitMs: 30_000,
+            workTimeoutMs: 300,
+            signal: AbortSignal.timeout(60_000),
+            statementTimeout: 30_000,
+            lockTimeout: 30_000,
+            work: async ({ rootDb }) =>
+              await rootDb.execute(sql`SELECT pg_sleep(20)`),
+          }),
+        catch: (cause) => cause,
+      });
+      expect(outcome.isErr()).toBe(true);
+      expect(now() - startedAt).toBeLessThan(15_000);
     });
 
     test("a periodic tick skips a held lane and never takes it ahead of a queued operator pass", async () => {
@@ -166,6 +189,7 @@ if (!databaseUrl || !runPostgresTests) {
           const operator = enterCaseLawMaintenanceLane({
             mode: "bounded",
             laneWaitMs: 30_000,
+            workTimeoutMs: 10_000,
             signal: AbortSignal.timeout(60_000),
             ...STATEMENT_BUDGET,
             work: async () => {

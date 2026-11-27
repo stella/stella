@@ -209,6 +209,7 @@ describe("case-law maintenance lane", () => {
         await enterCaseLawMaintenanceLane({
           mode: "bounded",
           laneWaitMs: 5000,
+          workTimeoutMs: 10_000,
           signal: controller.signal,
           statementTimeout: 5000,
           lockTimeout: 5000,
