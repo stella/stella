@@ -226,6 +226,10 @@ export type FormattingNoteItem =
    *  picture; the output is written without them, so numbers and text are
    *  text. The template's own findings are in its profile. */
   | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
+  /** Fields of the source the output shows as their text, by kind: a
+   *  form field's box or list, a citation's link, an entry of the source's
+   *  contents no longer update. */
+  | { kind: "fieldsAsText"; fields: { kind: string; count: number }[] }
   /** The template's style for a numbered level sets it apart from its
    *  sibling levels (bold, or another size). `blocks` paragraphs of the
    *  role were placed in the sibling's style instead, on their own level of
@@ -1961,7 +1965,12 @@ const placeParagraphs = (context: Context): Placed => {
       }
       continue;
     }
-    if (index.contentsBlockIds.has(block.id)) {
+    // The source's own contents give way to the template's; a template
+    // without contents keeps the source's, so no entry goes missing.
+    if (
+      index.contentsBlockIds.has(block.id) &&
+      context.profile.regions.contents.length > 0
+    ) {
       placed.omitted.set(block.id, "sourceToc");
       continue;
     }
