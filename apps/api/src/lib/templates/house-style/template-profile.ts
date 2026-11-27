@@ -1343,7 +1343,6 @@ export const inferTemplateProfile = (
     spareLevels,
     markLevels,
     ...inferRegions({ inspection, structure, roles }),
-    ...(partyHead === undefined ? {} : { partyHead }),
     headings: {
       article: joinOf(
         samplesOf(roles.articleHeading).filter(({ label }) => label !== null),
@@ -1365,6 +1364,7 @@ export const inferTemplateProfile = (
     fillerStrings: inferFillerStrings(inspection.blocks),
     annex,
     ...(annexRoles === undefined ? {} : { annexRoles }),
+    ...(partyHead === undefined ? {} : { partyHead }),
     defaultAlignment:
       inspection.styles.find(
         ({ type, isDefault }) => type === "paragraph" && isDefault,
