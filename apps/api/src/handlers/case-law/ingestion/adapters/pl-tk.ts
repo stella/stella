@@ -1,6 +1,8 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result } from "better-result";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import { inlineStyleIsItalic } from "@stll/case-law-parsers/inline-style";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -111,7 +113,6 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { inlineStyleIsItalic } from "@/api/lib/legal-search/document-builders/inline-style";
 import {
   defineSourceAdapter,
   EMPTY_AST,

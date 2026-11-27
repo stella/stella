@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: failure stop kinds and fingerprint fields classify rejected pages only; accepted page validation and parsed records are unchanged.
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.

@@ -4,20 +4,21 @@ Administrators can fix these settings for every user of a Mac or PC. The
 app reads them once at launch; a change applies the next time stella desktop
 starts.
 
-| Key                       | Type    | Effect                                                                                   |
-| ------------------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `DisableUpdates`          | Boolean | No update checks: background, tray and handoff. The tray says updates are managed.       |
-| `DisableActivity`         | Boolean | The activity timeline stays off even when the server enables it for the account.         |
-| `DisableActivityDetails`  | Boolean | The activity timeline records app names only: no window titles or documents.             |
-| `DisableActivityAiDrafts` | Boolean | No stella AI drafts from the activity timeline, whatever the user and the server allow.  |
-| `DisableClipboard`        | Boolean | No clipboard history: nothing is recorded, and no shortcut, tray item or link opens it.  |
-| `ServerWebOrigin`         | String  | With `ServerApiURL`: the self-hosted server trusted without the approval prompt.         |
-| `ServerApiURL`            | String  | With `ServerWebOrigin`: that server's API. "Connect to stella web" links to this server. |
+| Key                            | Type    | Effect                                                                                   |
+| ------------------------------ | ------- | ---------------------------------------------------------------------------------------- |
+| `DisableUpdates`               | Boolean | No update checks: background, tray and handoff. The tray says updates are managed.       |
+| `DisableActivity`              | Boolean | The activity timeline stays off even when the server enables it for the account.         |
+| `DisableActivityDetails`       | Boolean | The activity timeline records app names only: no window titles or documents.             |
+| `DisableActivityBrowserTitles` | Boolean | The activity timeline records browsers by app name only: no tab or window titles.        |
+| `DisableActivityAiDrafts`      | Boolean | No stella AI drafts from the activity timeline, whatever the user and the server allow.  |
+| `DisableClipboard`             | Boolean | No clipboard history: nothing is recorded, and no shortcut, tray item or link opens it.  |
+| `ServerWebOrigin`              | String  | With `ServerApiURL`: the self-hosted server trusted without the approval prompt.         |
+| `ServerApiURL`                 | String  | With `ServerWebOrigin`: that server's API. "Connect to stella web" links to this server. |
 
 Every switch only turns something off. No key turns a feature on or makes a
-choice for the user: whether the activity timeline records at all, and whether
-it records window titles and documents, stays the user's choice wherever the
-organization has not turned it off.
+choice for the user: whether the activity timeline records at all, whether
+it records window titles and documents, and which browsers record tab titles,
+stays the user's choice wherever the organization has not turned it off.
 
 `DisableUpdates` leaves deployment to the organization. The server supports a
 desktop build until a newer one has been published for 30 days and then refuses
@@ -38,6 +39,14 @@ activity, whatever the user chose; setup skips the details question, and
 Settings say the organization turned details off. Titles recorded before are
 not shown. The user's own choice is kept and applies again once the key is
 removed.
+
+`DisableActivityBrowserTitles` keeps every browser to its app name in new
+activity, whatever the user chose for each browser, while other apps keep
+the details choice. The Activity window does not ask about browsers, a
+browser cannot be set to record titles, and Settings say the organization
+turned browser titles off. Turning a browser's titles off stays possible.
+Titles recorded before are not shown. The user's choices are kept and apply
+again once the key is removed.
 
 `DisableActivityAiDrafts` keeps every stella AI draft on the device: no draft
 request leaves it, and consent cannot be granted. Settings say the
@@ -82,6 +91,8 @@ General › Device Management; its values are forced in the same way.
   <true/>
   <key>DisableActivityDetails</key>
   <true/>
+  <key>DisableActivityBrowserTitles</key>
+  <true/>
   <key>DisableActivityAiDrafts</key>
   <true/>
   <key>DisableClipboard</key>
@@ -110,6 +121,7 @@ Windows Registry Editor Version 5.00
 "DisableUpdates"=dword:00000001
 "DisableActivity"=dword:00000001
 "DisableActivityDetails"=dword:00000001
+"DisableActivityBrowserTitles"=dword:00000001
 "DisableActivityAiDrafts"=dword:00000001
 "DisableClipboard"=dword:00000001
 "ServerWebOrigin"="https://stella.firm.example"

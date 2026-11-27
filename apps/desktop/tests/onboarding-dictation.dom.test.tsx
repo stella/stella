@@ -234,6 +234,8 @@ test("with stella AI the screen is a choice of two, and stella AI shows its mode
     });
   });
   await view.findByText(dictation.destination.model);
+  // The model appearing under the card keeps the chosen radio in place.
+  expect(cloud?.isConnected).toBe(true);
   await view.findByText("Mistral AI");
   expect(view.queryByRole("alert")).toBeNull();
 

@@ -327,4 +327,39 @@ describe("scoped transaction deadline", () => {
       warn.mockRestore();
     }
   });
+
+  it("snapshots and deduplicates explicit workspace IDs on scope creation", async () => {
+    const clock = createTestClock();
+    const { database, params } = pooledDatabase(clock, 0);
+    const allowedWorkspaceId = createSafeId<"workspace">();
+    const laterWorkspaceId = createSafeId<"workspace">();
+    const callerWorkspaceIds = [allowedWorkspaceId, allowedWorkspaceId];
+
+    const explicitScopedDb = createExplicitScopedDb(database, {
+      workspaceIds: callerWorkspaceIds,
+      organizationId: mintAuthProviderId<"organization">(),
+      userId: mintAuthProviderId<"user">(),
+    });
+    const explicitSafeDb = createExplicitSafeDb(database, {
+      workspaceIds: callerWorkspaceIds,
+      organizationId: mintAuthProviderId<"organization">(),
+      userId: mintAuthProviderId<"user">(),
+    });
+
+    // Mutating the caller's array after construction must not widen the scope.
+    callerWorkspaceIds.push(laterWorkspaceId);
+
+    await explicitScopedDb(async () => undefined);
+    const safeOutcome = await explicitSafeDb(async () => undefined);
+    expect(Result.isOk(safeOutcome)).toBe(true);
+
+    const workspaceIdParams = params.filter(
+      (value): value is string =>
+        typeof value === "string" && value.startsWith("{"),
+    );
+    expect(workspaceIdParams).toEqual([
+      `{${allowedWorkspaceId}}`,
+      `{${allowedWorkspaceId}}`,
+    ]);
+  });
 });

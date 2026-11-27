@@ -495,6 +495,15 @@ pub fn install_update(
     .map_err(|error| error.to_string())
 }
 
+// Repository code generation writes a fixed documentation page, outside application data.
+#[cfg(test)]
+pub(crate) fn write_generated_activity_data_map(page: &str) -> std::io::Result<()> {
+  fs::write(
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/activity-data-map.gen.md"),
+    page,
+  )
+}
+
 // Repository code generation writes a fixed source artifact, outside application data.
 #[cfg(test)]
 pub(crate) fn write_generated_rpc_bindings(bindings: &str) -> std::io::Result<()> {

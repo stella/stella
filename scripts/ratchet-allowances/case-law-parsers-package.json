@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 5,
+  "reason": "The new @stll/case-law-parsers package extracts case-law parser modules from apps/api and declares the five existing third-party packages those modules already use (@stll/docx-core, better-result, entities, bun-types, fast-check); no new third-party dependency is added to the repository."
+}

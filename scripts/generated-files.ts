@@ -307,7 +307,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/source-locator.ts",
     "apps/api/src/lib/lists/verification/*",
     "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts",
-    "apps/api/src/lib/legal-search/document-builders/inline-style.ts",
+    "packages/case-law-parsers/src/*",
     "apps/api/src/lib/load/request-latency-budget.ts",
     "apps/api/src/lib/load/work-admission.ts",
     "apps/api/src/lib/load/work-budget.ts",
@@ -2676,6 +2676,18 @@ const GENERATOR_DECLARATIONS = [
     write: ["bun", "run", "selfhost:generate"],
     check: ["bun", "run", "selfhost:check"],
     autofix: true,
+    after: [],
+  },
+  {
+    id: "desktop-activity-data-map",
+    outputKind: "committed",
+    outputs: ["apps/desktop/docs/activity-data-map.gen.md"],
+    inputs: ["apps/desktop/src-tauri/src/activity_data_map.rs"],
+    write: ["bun", "--filter", "@stll/desktop", "activity-data-map:generate"],
+    check: null,
+    unchecked:
+      "Desktop Rust tests compare the page with its rows and the rows with the stored records",
+    autofix: false,
     after: [],
   },
   {

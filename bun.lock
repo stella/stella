@@ -93,6 +93,7 @@
         "@stll/brand": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/calculations": "workspace:*",
+        "@stll/case-law-parsers": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/chat": "workspace:*",
         "@stll/chat-limits": "workspace:*",
@@ -967,6 +968,27 @@
         "tsrs": "catalog:",
       },
     },
+    "packages/case-law-parsers": {
+      "name": "@stll/case-law-parsers",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/agent-input": "workspace:*",
+        "@stll/api-contract": "workspace:*",
+        "@stll/docx-core": "catalog:",
+        "@stll/html": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
+        "@stll/mojibake": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
+        "entities": "^9.0.0",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
+      },
+    },
     "packages/catalogue": {
       "name": "@stll/catalogue",
       "version": "0.0.0",
@@ -1035,7 +1057,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "8.5.0",
+      "version": "8.6.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1198,7 +1220,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "dependencies": {
         "@stll/docx-core": "catalog:",
         "better-result": "catalog:",
@@ -3551,6 +3573,8 @@
     "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
 
     "@stll/calculations": ["@stll/calculations@workspace:packages/calculations"],
+
+    "@stll/case-law-parsers": ["@stll/case-law-parsers@workspace:packages/case-law-parsers"],
 
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
 

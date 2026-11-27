@@ -12,6 +12,7 @@ export type TitleCaptureSettings = Pick<
   | "appNameOnlyApps"
   | "browserApps"
   | "browserTitleApps"
+  | "browserTitlesManaged"
   | "captureDetails"
   | "detailsAccess"
 >;
@@ -19,8 +20,8 @@ export type TitleCaptureSettings = Pick<
 /**
  * The first gate that keeps an app's window titles from being recorded from
  * now on, in the order the native recorder checks them: the details choice,
- * the app's own app-name-only choice, platform access, then a browser's own
- * opt-in. `open` means titles are recorded.
+ * the app's own app-name-only choice, platform access, then managed policy
+ * for browsers and a browser's own opt-in. `open` means titles are recorded.
  */
 export type TitleGate =
   | { type: "open" }
@@ -28,6 +29,7 @@ export type TitleGate =
   | { type: "appNameOnly" }
   | { type: "accessibilityRequired" }
   | { type: "unavailable" }
+  | { browser: ActivityAppExclusion; type: "browserManaged" }
   | { browser: ActivityAppExclusion; type: "browserOff" };
 
 /** Stored app lists hold the trimmed, lowercased identifier the native side
@@ -78,6 +80,11 @@ export const titleGate = (
     return shared;
   }
   const browser = findApp(settings.browserApps, identifier);
+  // Managed policy, not the browser's own choice, keeps its titles out: no
+  // action here opens that gate.
+  if (browser !== undefined && settings.browserTitlesManaged) {
+    return { browser, type: "browserManaged" };
+  }
   if (
     browser !== undefined &&
     findApp(settings.browserTitleApps, identifier) === undefined

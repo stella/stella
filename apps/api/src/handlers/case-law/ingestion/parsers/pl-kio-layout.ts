@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: [pl-kio] the shared paragraph helpers keep the same default markers and calculations; only the named argument shape changes for this caller.
@@ -67,7 +68,7 @@ import {
 } from "@stll/legal-ast/printed-paragraph-labels";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { isExcludedHtmlTag } from "./shared-inlines";
+import { isExcludedHtmlTag } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 const BIDI_MARK = /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
 const STARTS_WITH_BIDI_MARK = /^[\u200E\u200F\u202A-\u202E\u2066-\u2069]/u;

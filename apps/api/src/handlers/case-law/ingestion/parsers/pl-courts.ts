@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: Map and narrow-union lookup refactor preserves identical runtime output
 // parser-output-unchanged: [pl-kio] only adds the common-court reader with its paragraph numbering, which the procurement chamber's reader does not call.
@@ -38,6 +39,8 @@
 import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { inlineStyleValue } from "@stll/case-law-parsers/inline-style";
+import { stripHtml } from "@stll/case-law-parsers/strip-html";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import {
@@ -96,24 +99,22 @@ import {
 import { SUBHEADING_OUTLINE_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
-import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
-import {
-  isHtmlBlock,
-  renderHtmlWhiteSpace,
-} from "@/api/lib/legal-search/document-builders/html-whitespace";
-import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
-import { includes } from "@/api/lib/type-guards";
-
-import { readCommonCourtInlines } from "./pl-common-court-inlines";
 import {
   appendTextInline,
   inlinesToPlainText,
   isExcludedHtmlTag,
   ownTableRows,
   walkInlines as walkInlinesShared,
-} from "./shared-inlines";
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import {
+  isHtmlBlock,
+  renderHtmlWhiteSpace,
+} from "@/api/lib/legal-search/document-builders/html-whitespace";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
+import { includes } from "@/api/lib/type-guards";
+
+import { readCommonCourtInlines } from "./pl-common-court-inlines";
 
 type ParsePlDecisionInput = {
   caseNumber: string;

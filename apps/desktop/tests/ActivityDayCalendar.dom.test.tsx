@@ -66,6 +66,7 @@ const SNAPSHOT = {
   browserApps: [],
   sourceAppVisuals: [],
   browserTitleApps: [],
+  browserTitlesManaged: false,
   detailsAccess: "disabled",
   persistence: "encrypted",
   recordingStatus: "recording",

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: [pl-kis] imports the shared PDF reader from its new owner, pdf-bands.ts, under its new names; the default reading is the same code.
 /**
@@ -22,6 +23,7 @@
 import { Result } from "better-result";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { inlineStyleValue } from "@stll/case-law-parsers/inline-style";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -45,7 +47,6 @@ import {
   PL_DECISION_MARKUP,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_KIS_SOURCE_SYSTEM = "eureka.mf.gov.pl";

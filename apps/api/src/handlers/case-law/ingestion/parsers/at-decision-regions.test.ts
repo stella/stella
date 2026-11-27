@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
 
+import {
+  type AtCourtTextSection,
+  type AtPrintedLine,
+  readAtDecisionRoles,
+} from "@stll/case-law-parsers/at-decision-regions";
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import {
-  type AtCourtTextSection,
-  type AtPrintedLine,
-  readAtDecisionRoles,
-} from "./at-decision-regions";
 import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "./at-findok";
 import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "./at-ris";
 
