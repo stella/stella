@@ -94,6 +94,7 @@ import { loadGateHealthConfig } from "@/api/env-online-index";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   type CaseLawRootHandle,
+  describeMaintenanceLaneHolder,
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
@@ -331,8 +332,10 @@ const RETIRE_PROGRESS_EVERY_PAGES = 100;
 
 /** Rows `status` and the planners read; the registry holds a handful per family. */
 const REGISTRY_READ_LIMIT = 200;
-/** Budget for the whole write: lane, re-check, flip, audit. */
+/** Budget for the write beyond its lane wait: re-check, flip, audit. */
 const APPLY_TIMEOUT_MS = 60_000;
+/** How long an operator write queues for the lane: past a scheduled tick, short of a long pass. */
+const APPLY_LANE_WAIT_MS = 10 * 60_000;
 const APPLY_QUERY_TIMEOUT_MS = 10_000;
 
 const MODES = { dryRun: "dry_run", apply: "apply" } as const;
@@ -1033,20 +1036,21 @@ const withOperatorDatabase: WithCorpusDatabase = async (access, work) => {
       return Result.ok(await work(rootDb));
     }
     case "write": {
-      // Bounded: a busy lane refuses instead of queueing a flip for hours
-      // behind another operator pass.
+      // Bounded: the write queues behind a pass already running, outlasting
+      // a scheduled tick, but refuses instead of queueing a flip for hours
+      // behind a long operator pass.
       const ran = await enterCaseLawMaintenanceLane({
         mode: "bounded",
-        signal: AbortSignal.timeout(APPLY_TIMEOUT_MS),
+        laneWaitMs: APPLY_LANE_WAIT_MS,
+        signal: AbortSignal.timeout(APPLY_LANE_WAIT_MS + APPLY_TIMEOUT_MS),
         statementTimeout: APPLY_QUERY_TIMEOUT_MS,
         lockTimeout: APPLY_QUERY_TIMEOUT_MS,
-        work: async ({ rootDb }) => ({ value: await work(rootDb) }),
+        work: async ({ rootDb }) => await work(rootDb),
       });
-      return ran === null
+      return ran.status === "busy"
         ? Result.err(
             new CorpusGenerationLaneBusyError({
-              message:
-                "Another case-law maintenance pass holds the lane; retry once it finishes",
+              message: `Another case-law maintenance pass (${describeMaintenanceLaneHolder(ran.holder)}) held the lane for ${APPLY_LANE_WAIT_MS / 60_000} minutes; retry once it finishes`,
             }),
           )
         : Result.ok(ran.value);

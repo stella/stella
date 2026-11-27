@@ -523,7 +523,7 @@ const runEnabledWithOptions = async (
     queryTimeoutMs: QUERY_TIMEOUT_MS,
   });
   const report = await enterCaseLawMaintenanceLane({
-    mode: "bounded",
+    mode: "periodic",
     signal,
     statementTimeout: QUERY_TIMEOUT_MS,
     lockTimeout: QUERY_TIMEOUT_MS,
@@ -560,7 +560,7 @@ const runEnabledWithOptions = async (
       );
     },
   });
-  return report ?? emptyReport("held");
+  return report.status === "ran" ? report.value : emptyReport("held");
 };
 
 const runEnabledEuCompletionTick = async (signal: AbortSignal) =>
