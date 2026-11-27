@@ -2697,9 +2697,19 @@ const countReviewOnlyInstructionRules: FileCounter = (content) => {
   return parsed.reviewOnlyRules;
 };
 
+type CachedOutboundRefs = {
+  readonly content: string;
+  readonly refs: readonly string[];
+};
+
 const OUTBOUND_TRANSPORT_REFS_CACHE = new WeakMap<
   ScanContext,
-  Map<string, readonly string[]>
+  Map<string, CachedOutboundRefs>
+>();
+
+const PREVIOUS_OUTBOUND_REFS = new WeakMap<
+  ScanContext,
+  ReadonlyMap<string, CachedOutboundRefs>
 >();
 
 const cachedOutboundTransportReferences = (
@@ -2708,18 +2718,23 @@ const cachedOutboundTransportReferences = (
 ): readonly string[] => {
   let byFile = OUTBOUND_TRANSPORT_REFS_CACHE.get(context);
   if (byFile === undefined) {
-    byFile = new Map<string, readonly string[]>();
+    byFile = new Map<string, CachedOutboundRefs>();
     OUTBOUND_TRANSPORT_REFS_CACHE.set(context, byFile);
   }
   const cached = byFile.get(file);
   if (cached !== undefined) {
-    return cached;
+    return cached.refs;
   }
-  const refs = outboundTransportReferences({
-    file,
-    text: readSource(context, file),
-  });
-  byFile.set(file, refs);
+  const content = readSource(context, file);
+  const earlier = PREVIOUS_OUTBOUND_REFS.get(context)?.get(file);
+  const refs =
+    earlier !== undefined && earlier.content === content
+      ? earlier.refs
+      : outboundTransportReferences({
+          file,
+          text: content,
+        });
+  byFile.set(file, { content, refs });
   return refs;
 };
 
@@ -4198,6 +4213,7 @@ type TreeScan = {
   readonly snapshot: Baseline;
   readonly role: MeasurementRole;
   readonly files: ReadonlyMap<string, FileCounts>;
+  readonly outboundRefs?: ReadonlyMap<string, CachedOutboundRefs> | undefined;
 };
 
 type ScanTreeOptions = {
@@ -4218,6 +4234,9 @@ export const scanTree = ({
   previous,
 }: ScanTreeOptions): TreeScan => {
   assertMetricRegistry();
+  if (previous?.outboundRefs !== undefined) {
+    PREVIOUS_OUTBOUND_REFS.set(tree, previous.outboundRefs);
+  }
   const metricsByFile = new Map<string, FileMetric[]>();
   for (const metric of metrics) {
     if (metric.scope !== "file") {
@@ -4305,7 +4324,12 @@ export const scanTree = ({
   if (inspection.status === "invalid") {
     panic(inspection.errors.join("\n"));
   }
-  return { snapshot: inspection.baseline, role: tree.role, files };
+  return {
+    snapshot: inspection.baseline,
+    role: tree.role,
+    files,
+    outboundRefs: OUTBOUND_TRANSPORT_REFS_CACHE.get(tree),
+  };
 };
 
 type ScanOptions = {
@@ -6933,7 +6957,9 @@ const runSelfTest = (): number => {
       name: "duplicate metric IDs",
       inspection: inspectConfiguration(
         [{ id: "one-metric" }, { id: "one-metric" }],
-        { "one-metric": { count: 0, files: {} } },
+        {
+          "one-metric": { count: 0, files: {} },
+        },
       ),
       expectedError: "is duplicated",
     },

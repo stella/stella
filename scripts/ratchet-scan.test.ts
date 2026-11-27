@@ -416,3 +416,39 @@ test("outbound transport identities only shrink within each owner", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("reusing a prior scan preserves outbound transport results and invalidates on edits", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ratchet-outbound-reuse-"));
+  const file = "apps/api/src/handlers/transport-reuse.ts";
+  const metrics = RATCHET_METRICS.filter(
+    ({ id }) =>
+      id === "outbound-indirect-access-exceptions" ||
+      id === "api-legacy-outbound-transports",
+  );
+  try {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), "void fetch(url);\n");
+    const first = scanTree({ tree: openSourceTree(root), metrics });
+    const reused = scanTree({
+      tree: openSourceTree(root, { role: "base" }),
+      metrics,
+      previous: first,
+    });
+    expect(reused.snapshot).toEqual(first.snapshot);
+
+    writeFileSync(
+      path.join(root, file),
+      'import * as http from "node:http";\nvoid http;\n',
+    );
+    const updatedFresh = scanTree({ tree: openSourceTree(root), metrics });
+    const updatedReused = scanTree({
+      tree: openSourceTree(root, { role: "base" }),
+      metrics,
+      previous: first,
+    });
+    expect(updatedReused.snapshot).toEqual(updatedFresh.snapshot);
+    expect(updatedReused.snapshot).not.toEqual(first.snapshot);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
