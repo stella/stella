@@ -59,6 +59,21 @@ export const API_ALL_RULES = {
   data: /^(?:apps\/api|packages)\/(?!.*\.(?:[cm]?[jt]s|[jt]sx)$)/u,
 } as const;
 
+// Changes to core auth, permissions, tenant-boundary, MCP, or security test
+// modules always select the full `apps/api/src/tests/security/` suite even
+// when a security test does not directly import the edited file.
+export const API_SECURITY_BOUNDARY_RULES = {
+  auth: /^apps\/api\/src\/(?:agent-auth\/|lib\/auth(?:\/|\.ts$|-adapter-options\.ts$|-artifacts\.ts$))/u,
+  authModel: /^packages\/auth-model\//u,
+  permissions: /^packages\/permissions\//u,
+  handlerBoundary:
+    /^apps\/api\/src\/lib\/(?:api-handlers|branded-types|workspaces\/authorized-workspace-ids)\.ts$/u,
+  mcpBoundary: /^(?:apps\/api\/src\/mcp\/|packages\/mcp-kit\/)/u,
+  securitySuite: /^apps\/api\/src\/tests\/security\//u,
+} as const;
+
+const API_SECURITY_TEST_PREFIX = "apps/api/src/tests/security/";
+
 // Turbo owns cross-workspace test inputs. Matching one must widen before
 // the import graph, which cannot observe arbitrary root-level file readers.
 const apiExternalInputs = (root: string): string[] => {
@@ -545,6 +560,11 @@ export const selectApiTestImpact = ({
     const touchesApiOrPackages = changed.some((file) =>
       /^(?:apps\/api|packages)\//u.test(file),
     );
+    const touchesSecurityBoundary = changed.some((file) =>
+      Object.values(API_SECURITY_BOUNDARY_RULES).some((rule) =>
+        rule.test(file),
+      ),
+    );
     const changedApps = new Set(
       changed.flatMap((file) => {
         const match = /^apps\/([^/]+)\//u.exec(file);
@@ -572,6 +592,12 @@ export const selectApiTestImpact = ({
     }
     const files = tests
       .filter((test) => {
+        if (
+          touchesSecurityBoundary &&
+          test.startsWith(API_SECURITY_TEST_PREFIX)
+        ) {
+          return true;
+        }
         const closure = graph.closure(test);
         return (
           [...closure].some((file) => changedSet.has(file)) ||
