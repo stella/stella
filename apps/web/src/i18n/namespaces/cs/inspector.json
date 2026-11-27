@@ -853,6 +853,19 @@
     },
     "showPane": "Zobrazit panel",
     "swapViews": "Prohodit hlavní zobrazení a boční panel",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "transcribe": {
+      "action": "Přepsat",
+      "failed": {
+        "changed": "Nahrávka se během přepisu změnila. Zkuste to znovu.",
+        "generic": "Nahrávku se nepodařilo přepsat. Zkuste to znovu.",
+        "noSpeech": "V nahrávce nebyla nalezena žádná řeč.",
+        "provider": "Vaše organizace nemá k dispozici žádný model pro přepis. Požádejte správce, aby ho nastavil v nastavení AI.",
+        "tooLong": "Nahrávka je na přepis příliš dlouhá.",
+        "unsupported": "Formát této nahrávky nelze přepsat."
+      },
+      "progress": "Přepisuje se… {percent, number} %",
+      "saved": "Přepis uložen jako {fileName}"
+    }
   }
 }

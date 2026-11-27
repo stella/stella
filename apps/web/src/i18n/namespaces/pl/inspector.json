@@ -853,6 +853,19 @@
     },
     "showPane": "Pokaż panel",
     "swapViews": "Zamień widok główny z panelem bocznym",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "transcribe": {
+      "action": "Transkrybuj",
+      "failed": {
+        "changed": "Nagranie zmieniło się podczas transkrypcji. Spróbuj ponownie.",
+        "generic": "Nie udało się przetranskrybować nagrania. Spróbuj ponownie.",
+        "noSpeech": "W tym nagraniu nie znaleziono mowy.",
+        "provider": "Twoja organizacja nie ma dostępnego modelu transkrypcji. Poproś administratora o skonfigurowanie go w ustawieniach AI.",
+        "tooLong": "To nagranie jest za długie do transkrypcji.",
+        "unsupported": "Formatu tego nagrania nie można przetranskrybować."
+      },
+      "progress": "Trwa transkrypcja… {percent, number}%",
+      "saved": "Transkrypcję zapisano jako {fileName}"
+    }
   }
 }

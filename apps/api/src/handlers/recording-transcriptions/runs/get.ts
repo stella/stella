@@ -39,6 +39,7 @@ const RUN_COLUMNS = {
   durationMs: recordingTranscriptionRuns.durationMs,
   transcribedMs: recordingTranscriptionRuns.transcribedMs,
   outputEntityId: recordingTranscriptionRuns.outputEntityId,
+  outputFieldId: recordingTranscriptionRuns.outputFieldId,
   outputFileName: recordingTranscriptionRuns.outputFileName,
   createdAt: recordingTranscriptionRuns.createdAt,
   finishedAt: recordingTranscriptionRuns.finishedAt,
@@ -53,7 +54,6 @@ const UNPROJECTED_RUN_COLUMNS = [
   "sourceFileId", // A stored-file id is internal to the worker's read.
   "sourceFileName", // The recording's entity already carries its name.
   "sourceMimeType", // Read by the worker to decode the recording.
-  "outputFieldId", // The transcript is named by its entity.
   "requestedBy", // Run attribution is not part of the run's status.
   "modelRef", // Internal record of the model the run used.
   "startedAt", // Worker bookkeeping; createdAt and finishedAt bound the run.
