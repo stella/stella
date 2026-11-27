@@ -828,12 +828,25 @@ posixTest(
         intervalMs: 20,
         timeoutMs: 5000,
         read: () => {
-          try {
-            process.kill(descendantPid, 0);
-            return false;
-          } catch {
+          if (Result.try(() => process.kill(descendantPid, 0)).isErr()) {
             return true;
           }
+          if (process.platform === "linux") {
+            const status = Result.try(() =>
+              readFileSync(`/proc/${String(descendantPid)}/status`, "utf-8"),
+            );
+            return status.isErr() || /^State:\s+Z\b/mu.test(status.value);
+          }
+          const state = Bun.spawnSync([
+            "ps",
+            "-o",
+            "stat=",
+            "-p",
+            String(descendantPid),
+          ])
+            .stdout.toString()
+            .trim();
+          return state === "" || state.startsWith("Z");
         },
       });
     } finally {
