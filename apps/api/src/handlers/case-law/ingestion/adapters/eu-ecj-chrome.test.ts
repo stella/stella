@@ -2,6 +2,7 @@ import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
 import { load } from "@stll/html";
 
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -10,7 +11,6 @@ import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
-import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 
 setDefaultTimeout(30_000);
 

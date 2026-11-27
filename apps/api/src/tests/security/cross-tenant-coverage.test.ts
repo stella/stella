@@ -61,9 +61,8 @@ type WaiverReason = (typeof WAIVER_REASON)[keyof typeof WAIVER_REASON];
  * Handler domains deliberately not in the cross-tenant matrix. Deleting an
  * entry here is the natural act once a domain gains a matrix case: the
  * "no covered domain stays waived" test below fails on a stale waiver, forcing
- * it out. Most `preExistingGap` rows are genuine read handlers awaiting a
- * matrix case (e.g. `usage`, `properties`, and `fields`); adding those is
- * incremental follow-up work.
+ * it out. Remaining `preExistingGap` rows are read/action handlers awaiting a
+ * matrix case; adding those is incremental follow-up work.
  */
 const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // Machine API keys live in better-auth's `apikey` table, which the scoped
@@ -87,7 +86,6 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "desktop-runner": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
-  "audit-logs": WAIVER_REASON.preExistingGap,
   catalogue: WAIVER_REASON.preExistingGap,
   // Caller-supplied audio is transient; optional matter access is authorized
   // through MemberCaller and covered by dictation/transcribe.test.ts.
@@ -95,19 +93,8 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // The Outlook add-in's email helpers answer from the email text in the
   // request body and read no stored record.
   ai: WAIVER_REASON.noTenantReadSurface,
-  clauses: WAIVER_REASON.preExistingGap,
-  "document-types": WAIVER_REASON.preExistingGap,
-  fields: WAIVER_REASON.preExistingGap,
-  flows: WAIVER_REASON.preExistingGap,
   legislation: WAIVER_REASON.preExistingGap,
   me: WAIVER_REASON.preExistingGap,
-  "organization-settings": WAIVER_REASON.preExistingGap,
-  playbooks: WAIVER_REASON.preExistingGap,
-  properties: WAIVER_REASON.preExistingGap,
-  reports: WAIVER_REASON.preExistingGap,
-  search: WAIVER_REASON.preExistingGap,
-  skills: WAIVER_REASON.preExistingGap,
-  "style-sets": WAIVER_REASON.preExistingGap,
   // The pack catalogue itself is deployment content, not tenant data; the
   // only tenant-scoped read is which of a pack's templates the organization
   // has already installed, and that is empty until the content submodule is
@@ -116,11 +103,6 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // committed fixture content and asserts one organization neither sees nor
   // reuses another's copy.
   "template-packs": WAIVER_REASON.contentConditionedRead,
-  "template-recipes": WAIVER_REASON.preExistingGap,
-  usage: WAIVER_REASON.preExistingGap,
-  "view-templates": WAIVER_REASON.preExistingGap,
-  views: WAIVER_REASON.preExistingGap,
-  workspaces: WAIVER_REASON.preExistingGap,
   // Account-owned export ledger keyed by the authenticated user, never by
   // organization or matter; no tenant-scoped input.
   "account-exports": WAIVER_REASON.noTenantReadSurface,

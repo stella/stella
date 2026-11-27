@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import {
   decisionDocketGrammarForJurisdiction,
   foldDecisionIdentifierInput,

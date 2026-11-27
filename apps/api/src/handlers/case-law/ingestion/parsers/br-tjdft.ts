@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 /**
  * Reader for the full text the TJDFT jurisprudence search serves as
  * `inteiroTeorHtml`.
@@ -731,7 +732,10 @@ const readRecord = (
     pushRunsBlock(
       state,
       [{ type: "text", text: collapseSpaces(ementa), marks: NO_MARKS }],
-      { quote: false, heading: false },
+      {
+        quote: false,
+        heading: false,
+      },
     );
   }
   if (decisao === undefined) {
@@ -741,7 +745,10 @@ const readRecord = (
   pushRunsBlock(
     state,
     [{ type: "text", text: collapseSpaces(decisao), marks: NO_MARKS }],
-    { quote: false, heading: false },
+    {
+      quote: false,
+      heading: false,
+    },
   );
   const holding = state.blocks.at(before);
   if (holding?.type === "paragraph") {

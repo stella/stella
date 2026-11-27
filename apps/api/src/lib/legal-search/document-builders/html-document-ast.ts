@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 /**
  * A `DocumentAst` from a publisher's HTML page, for any guidance source.
  *
@@ -37,6 +38,7 @@ import {
   ownTableRows,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import type { BlockKey, KeyedBlock } from "./block-ids";
@@ -45,7 +47,6 @@ import {
   DocumentBuildError,
   draftText,
 } from "./document-assembly";
-import { collapseHtmlWhitespace } from "./html-whitespace";
 import { headingKeyOf } from "./section-labels";
 
 /** Page chrome a content root can still contain; none of it is document text. */

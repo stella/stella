@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -9,6 +10,7 @@
 // parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
 import { panic, Result } from "better-result";
 
+import { isRtf, readRtf } from "@stll/case-law-parsers/rtf-reader";
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) adapter.
@@ -132,7 +134,6 @@ import type {
   UnreadListedItem,
   UnreadOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
-import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";

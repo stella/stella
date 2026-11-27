@@ -14,6 +14,7 @@ import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import {
   analyzeModule,
   API_ALL_RULES,
+  API_SECURITY_BOUNDARY_RULES,
   API_SHARD_SECONDS,
   buildImportGraph,
   selectApiTestImpact,
@@ -80,7 +81,11 @@ test("runtime imports select a handler test, a changed test itself and workspace
     }
     expect(
       selectApiTestImpact({ root, changed: ["apps/web/src/screen.tsx"] }),
-    ).toEqual({ mode: "none", files: [], shards: 0 });
+    ).toEqual({
+      mode: "none",
+      files: [],
+      shards: 0,
+    });
     expect(selectApiTestImpact({ root, changed: [] }).mode).toBe("none");
   });
 });
@@ -803,6 +808,51 @@ test("runner rule and runner import closure widen only test-runner scripts and t
     ).toEqual({
       mode: "selected",
       files: ["scripts/seed-example.test.ts"],
+      shards: 1,
+    });
+  });
+});
+
+const securityBoundaryCases = {
+  auth: "apps/api/src/lib/auth/session-check.ts",
+  authModel: "packages/auth-model/src/index.ts",
+  permissions: "packages/permissions/src/grants.ts",
+  handlerBoundary: "apps/api/src/lib/workspaces/authorized-workspace-ids.ts",
+  mcpBoundary: "apps/api/src/mcp/server.ts",
+  securitySuite: "apps/api/src/tests/security/helper.ts",
+} satisfies Record<keyof typeof API_SECURITY_BOUNDARY_RULES, string>;
+
+test("changes to auth, permissions, MCP, or tenant-boundary modules always select the full security suite", () => {
+  expect(Object.keys(securityBoundaryCases).toSorted()).toEqual(
+    Object.keys(API_SECURITY_BOUNDARY_RULES).toSorted(),
+  );
+  withRepository((root, write) => {
+    write(
+      "apps/api/src/tests/security/cross-tenant.test.ts",
+      "export const crossTenant = true;",
+    );
+    write(
+      "apps/api/src/tests/security/mcp-isolation.db.test.ts",
+      "export const mcpIsolation = true;",
+    );
+    for (const name of Object.keys(API_SECURITY_BOUNDARY_RULES)) {
+      const rule = Reflect.get(API_SECURITY_BOUNDARY_RULES, name);
+      const file: string = Reflect.get(securityBoundaryCases, name);
+      expect(rule.test(file), name).toBe(true);
+      write(file, "export const boundary = true;");
+      const impact = selectApiTestImpact({ root, changed: [file] });
+      expect(impact.mode, name).toBe("selected");
+      expect(impact.files, name).toEqual([
+        "src/tests/security/cross-tenant.test.ts",
+        "src/tests/security/mcp-isolation.db.test.ts",
+      ]);
+    }
+    // An ordinary unrelated API module does not force the security suite.
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/api/src/handler.ts"] }),
+    ).toEqual({
+      mode: "selected",
+      files: ["src/handler.test.ts"],
       shards: 1,
     });
   });

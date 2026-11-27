@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
-import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
+
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,

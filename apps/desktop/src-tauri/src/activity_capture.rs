@@ -15,6 +15,11 @@
 //! stands until its credential expires, and a refusal stands as a stop. Any
 //! new answer replaces it.
 //!
+//! Activity also cannot record while the account's encrypted store cannot
+//! open on this computer: its key cannot be read, the Keychain does not
+//! answer, or its files cannot be read. These stops come from the store, not
+//! the server, and take the same path.
+//!
 //! The sampler checks the state every few seconds. The tray reads the last
 //! result; the first check of each stop shows one system notification while
 //! the member's choice is Recording, and leaving the stop ends it.
@@ -52,11 +57,15 @@ const OUTAGE_FLUSH: Duration = Duration::from_secs(60);
 /// The wall clock may drift this far from the monotonic clock between two
 /// checks before an open outage is ended at the earlier check.
 const WALL_CLOCK_TOLERANCE: Duration = Duration::from_secs(1);
+/// While the Keychain does not answer, the store is opened again at most
+/// this often.
+const KEYCHAIN_RETRY: Duration = Duration::from_secs(30);
 
 /// Why Activity cannot record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StopReason {
+  /// The server refused the desktop credential or the renewal of the link.
   ReconnectNeeded,
   NotAvailable,
   BlockedByPolicy,
@@ -64,6 +73,15 @@ pub enum StopReason {
   /// The server has not been reached since the app started and no grant was
   /// confirmed before.
   NotConfirmed,
+  /// The key of the account's encrypted store could not be read from the
+  /// Keychain, or it is missing while recorded history depends on it.
+  StoreKeyUnavailable,
+  /// The Keychain did not answer within its time; the store is opened again
+  /// until it does.
+  KeychainNotAnswering,
+  /// The store's key was read, but its files cannot be read or were written
+  /// by a newer version.
+  StoreUnreadable,
 }
 
 impl StopReason {
@@ -74,6 +92,9 @@ impl StopReason {
     Self::BlockedByPolicy,
     Self::SignedOut,
     Self::NotConfirmed,
+    Self::StoreKeyUnavailable,
+    Self::KeychainNotAnswering,
+    Self::StoreUnreadable,
   ];
 
   pub const fn tray_key(self) -> &'static str {
@@ -83,6 +104,9 @@ impl StopReason {
       Self::BlockedByPolicy => "tray.activityStoppedPolicy",
       Self::SignedOut => "tray.activityStoppedSignedOut",
       Self::NotConfirmed => "tray.activityStoppedNotConfirmed",
+      Self::StoreKeyUnavailable => "tray.activityStoppedStoreKey",
+      Self::KeychainNotAnswering => "tray.activityStoppedKeychain",
+      Self::StoreUnreadable => "tray.activityStoppedStoreUnreadable",
     }
   }
 
@@ -93,6 +117,9 @@ impl StopReason {
       Self::BlockedByPolicy => "notification.activityStoppedPolicyBody",
       Self::SignedOut => "notification.activityStoppedSignedOutBody",
       Self::NotConfirmed => "notification.activityStoppedNotConfirmedBody",
+      Self::StoreKeyUnavailable => "notification.activityStoppedStoreKeyBody",
+      Self::KeychainNotAnswering => "notification.activityStoppedKeychainBody",
+      Self::StoreUnreadable => "notification.activityStoppedStoreUnreadableBody",
     }
   }
 
@@ -100,20 +127,56 @@ impl StopReason {
   pub const fn reconnect_helps(self) -> bool {
     match self {
       Self::ReconnectNeeded | Self::SignedOut => true,
-      Self::NotAvailable | Self::BlockedByPolicy | Self::NotConfirmed => false,
+      Self::NotAvailable
+      | Self::BlockedByPolicy
+      | Self::NotConfirmed
+      | Self::StoreKeyUnavailable
+      | Self::KeychainNotAnswering
+      | Self::StoreUnreadable => false,
     }
   }
 
-  /// Whether recorded history stays readable while the stop lasts. A refused
-  /// credential (which also answers for a member who left the organization),
-  /// a sign-out and managed policy close it; it stays readable while Activity
-  /// is only not enabled for the account or the server has not been reached.
+  /// Whether the Activity window stays open for the account while the stop
+  /// lasts. A refused credential (which also answers for a member who left
+  /// the organization), a sign-out and managed policy close it; it stays
+  /// open, read-only, while Activity is only not enabled for the account or
+  /// the server has not been reached, and while the store cannot open, so the
+  /// window can say why and offer what the store still allows.
   pub const fn history_readable(self) -> bool {
     match self {
-      Self::NotAvailable | Self::NotConfirmed => true,
+      Self::NotAvailable
+      | Self::NotConfirmed
+      | Self::StoreKeyUnavailable
+      | Self::KeychainNotAnswering
+      | Self::StoreUnreadable => true,
       Self::ReconnectNeeded | Self::SignedOut | Self::BlockedByPolicy => false,
     }
   }
+}
+
+/// Why the loaded account's encrypted store cannot be opened to record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StoreFailure {
+  KeyUnavailable,
+  KeychainNotAnswering,
+  Unreadable,
+}
+
+impl StoreFailure {
+  const fn stop_reason(self) -> StopReason {
+    match self {
+      Self::KeyUnavailable => StopReason::StoreKeyUnavailable,
+      Self::KeychainNotAnswering => StopReason::KeychainNotAnswering,
+      Self::Unreadable => StopReason::StoreUnreadable,
+    }
+  }
+}
+
+/// The account whose store could not be opened, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FailedStore {
+  pub namespace: String,
+  pub failure: StoreFailure,
 }
 
 /// Activity cannot record for an account whose member turned it on.
@@ -196,14 +259,22 @@ enum CaptureView {
 
 fn capture_view(
   permission: Permission,
+  store: Option<StoreFailure>,
   intent: Option<ActivityRecordingStatus>,
   waited_for_confirmation: bool,
 ) -> CaptureView {
-  let reason = match permission {
-    Permission::Live | Permission::Remembered { .. } => return CaptureView::Live,
-    Permission::Pending if waited_for_confirmation => StopReason::NotConfirmed,
-    Permission::Pending => return CaptureView::Hidden,
-    Permission::Stopped(reason) => reason,
+  // The server's reason comes first: it decides whether the store is opened
+  // at all.
+  let reason = match (permission, store) {
+    (Permission::Live | Permission::Remembered { .. }, None) => {
+      return CaptureView::Live;
+    }
+    (Permission::Live | Permission::Remembered { .. }, Some(failure)) => {
+      failure.stop_reason()
+    }
+    (Permission::Pending, _) if waited_for_confirmation => StopReason::NotConfirmed,
+    (Permission::Pending, _) => return CaptureView::Hidden,
+    (Permission::Stopped(reason), _) => reason,
   };
   match intent {
     Some(
@@ -571,6 +642,8 @@ pub(crate) struct CheckInput {
   pub binding: Option<(u64, String)>,
   pub credential_expiry: Option<DateTime<Utc>>,
   pub loaded: Option<LoadedChoice>,
+  /// The loaded account's store, when it could not be opened.
+  pub store: Option<FailedStore>,
 }
 
 /// What a check asks its caller to do.
@@ -619,6 +692,8 @@ pub(crate) struct CaptureMonitor {
   episode: Episode,
   view: CaptureView,
   published: Option<Published>,
+  /// When the store was last opened again while the Keychain did not answer.
+  keychain_retried: Option<Duration>,
 }
 
 impl CaptureMonitor {
@@ -637,6 +712,7 @@ impl CaptureMonitor {
       episode: Episode::Clear,
       view: CaptureView::Hidden,
       published: None,
+      keychain_retried: None,
     }
   }
 
@@ -845,7 +921,12 @@ impl CaptureMonitor {
       (Some(_), _) => record.as_ref().map(|record| record.intent),
       (None, _) => None,
     };
-    let view = capture_view(permission, intent, waited);
+    let store = input
+      .store
+      .as_ref()
+      .filter(|store| namespace.as_ref() == Some(&store.namespace))
+      .map(|store| store.failure);
+    let view = capture_view(permission, store, intent, waited);
     let outage = match (view, &namespace) {
       (
         CaptureView::Stopped(ActivityStopped {
@@ -860,7 +941,10 @@ impl CaptureMonitor {
           StopReason::ReconnectNeeded
           | StopReason::NotAvailable
           | StopReason::BlockedByPolicy
-          | StopReason::SignedOut => input.now,
+          | StopReason::SignedOut
+          | StopReason::StoreKeyUnavailable
+          | StopReason::KeychainNotAnswering
+          | StopReason::StoreUnreadable => input.now,
         };
         Some((namespace.clone(), reason, start))
       }
@@ -871,24 +955,35 @@ impl CaptureMonitor {
     self.episode = episode;
     let view_changed = view != self.view;
     self.view = view;
+    // A stop comes first: a grant remembered for an account whose store
+    // cannot open records nothing.
     self.published = match (permission, view, &input.binding) {
-      (Permission::Remembered { until }, _, Some(binding)) => {
-        Some(Published::Remembered {
-          binding: binding.clone(),
-          until,
-        })
-      }
       (_, CaptureView::Stopped(stopped), binding) => Some(Published::Stopped {
         binding: binding
           .clone()
           .filter(|_| stopped.reason.history_readable()),
         stopped,
       }),
+      (Permission::Remembered { until }, _, Some(binding)) => {
+        Some(Published::Remembered {
+          binding: binding.clone(),
+          until,
+        })
+      }
       _ => None,
     };
-    let initialize = matches!(permission, Permission::Remembered { .. })
-      && input.loaded.as_ref().map(|loaded| &loaded.namespace)
-        != input.binding.as_ref().map(|binding| &binding.1);
+    // A Keychain that did not answer may answer now.
+    let retry_keychain = store == Some(StoreFailure::KeychainNotAnswering)
+      && self
+        .keychain_retried
+        .is_none_or(|last| input.monotonic.saturating_sub(last) >= KEYCHAIN_RETRY);
+    if retry_keychain {
+      self.keychain_retried = Some(input.monotonic);
+    }
+    let initialize = retry_keychain
+      || (matches!(permission, Permission::Remembered { .. })
+        && input.loaded.as_ref().map(|loaded| &loaded.namespace)
+          != input.binding.as_ref().map(|binding| &binding.1));
     CheckEffects {
       view_changed,
       outages_saved: std::mem::take(&mut self.outages_saved),
@@ -901,19 +996,16 @@ impl CaptureMonitor {
   }
 
   /// Whether the open outage or one written for `namespace` covers `at`.
+  /// The written list is read only when the open outage does not.
   #[cfg(test)]
   pub(crate) fn outage_covers(&self, namespace: &str, at: DateTime<Utc>) -> bool {
-    let written = self
-      .records
-      .as_ref()
-      .and_then(|records| records.load_outages(namespace).ok())
-      .unwrap_or_default();
-    self
-      .open
-      .iter()
-      .map(|open| &open.outage)
-      .chain(written.iter())
-      .any(|outage| outage.start <= at && at <= outage.end)
+    let covers = |outage: &CaptureOutage| outage.start <= at && at <= outage.end;
+    self.open.as_ref().is_some_and(|open| covers(&open.outage))
+      || self
+        .records
+        .as_ref()
+        .and_then(|records| records.load_outages(namespace).ok())
+        .is_some_and(|written| written.iter().any(covers))
   }
 
   #[cfg(test)]
@@ -925,6 +1017,9 @@ impl CaptureMonitor {
     let Some(gates) = app.try_state::<FeatureGates>() else {
       return;
     };
+    let (loaded, store) = state.lock().map_or((None, None), |manager| {
+      (manager.loaded_choice(), manager.failed_store())
+    });
     let input = CheckInput {
       now: Utc::now(),
       monotonic: crate::activity::monotonic_now(),
@@ -933,10 +1028,8 @@ impl CaptureMonitor {
       access: gates.access(DesktopFeature::ActivityTimeline),
       binding: gates.local_binding(),
       credential_expiry: gates.credential_expiry(),
-      loaded: state
-        .lock()
-        .ok()
-        .and_then(|manager| manager.loaded_choice()),
+      loaded,
+      store,
     };
     let effects = self.check(&input);
     *PUBLISHED
@@ -1012,6 +1105,7 @@ mod tests {
       binding: Some((1, NAMESPACE.into())),
       credential_expiry: Some(start + chrono::Duration::days(30)),
       loaded: None,
+      store: None,
     }
   }
 
@@ -1031,22 +1125,28 @@ mod tests {
         ActivityRecordingStatus::Paused,
       ] {
         assert_eq!(
-          capture_view(permission, Some(intent), false),
+          capture_view(permission, None, Some(intent), false),
           CaptureView::Stopped(ActivityStopped { reason, intent })
         );
       }
       assert_eq!(
-        capture_view(permission, Some(ActivityRecordingStatus::Off), false),
+        capture_view(permission, None, Some(ActivityRecordingStatus::Off), false),
         CaptureView::Hidden
       );
-      assert_eq!(capture_view(permission, None, false), CaptureView::Hidden);
+      assert_eq!(
+        capture_view(permission, None, None, false),
+        CaptureView::Hidden
+      );
     }
     let recording = Some(ActivityRecordingStatus::Recording);
     let pending = permission(off(OffReason::Undecided), None, None, now);
     assert_eq!(pending, Permission::Pending);
-    assert_eq!(capture_view(pending, recording, false), CaptureView::Hidden);
     assert_eq!(
-      capture_view(pending, recording, true),
+      capture_view(pending, None, recording, false),
+      CaptureView::Hidden
+    );
+    assert_eq!(
+      capture_view(pending, None, recording, true),
       CaptureView::Stopped(ActivityStopped {
         reason: StopReason::NotConfirmed,
         intent: ActivityRecordingStatus::Recording,
@@ -1055,6 +1155,7 @@ mod tests {
     assert_eq!(
       capture_view(
         permission(FeatureAccess::Enabled, None, None, now),
+        None,
         None,
         false
       ),
@@ -1248,6 +1349,7 @@ mod tests {
       binding: restarted.local_binding(),
       credential_expiry: restarted.credential_expiry(),
       loaded: None,
+      store: None,
     });
     assert!(effects.initialize);
     assert_eq!(
@@ -1281,6 +1383,7 @@ mod tests {
       binding: restarted.local_binding(),
       credential_expiry: restarted.credential_expiry(),
       loaded: None,
+      store: None,
     });
     assert_eq!(
       capture_binding_in(&restarted, denied.published(), now),
@@ -1358,10 +1461,14 @@ mod tests {
   }
 
   #[test]
-  fn history_stays_readable_only_while_activity_is_not_enabled_or_unreached() {
+  fn history_stays_readable_unless_the_account_itself_is_refused() {
     for reason in StopReason::ALL {
       let expected = match reason {
-        StopReason::NotAvailable | StopReason::NotConfirmed => true,
+        StopReason::NotAvailable
+        | StopReason::NotConfirmed
+        | StopReason::StoreKeyUnavailable
+        | StopReason::KeychainNotAnswering
+        | StopReason::StoreUnreadable => true,
         StopReason::ReconnectNeeded
         | StopReason::SignedOut
         | StopReason::BlockedByPolicy => false,
@@ -1563,5 +1670,161 @@ mod tests {
         "missing {key}"
       );
     }
+  }
+
+  #[test]
+  fn all_lists_every_stop_reason_once() {
+    // A new reason fails to compile here until it has a place in `ALL`.
+    let place = |reason: StopReason| match reason {
+      StopReason::ReconnectNeeded => 0,
+      StopReason::NotAvailable => 1,
+      StopReason::BlockedByPolicy => 2,
+      StopReason::SignedOut => 3,
+      StopReason::NotConfirmed => 4,
+      StopReason::StoreKeyUnavailable => 5,
+      StopReason::KeychainNotAnswering => 6,
+      StopReason::StoreUnreadable => 7,
+    };
+    assert_eq!(StopReason::ALL.len(), 8);
+    for (index, reason) in StopReason::ALL.iter().enumerate() {
+      assert_eq!(place(*reason), index, "{reason:?}");
+    }
+  }
+
+  fn failed(failure: StoreFailure) -> FailedStore {
+    FailedStore {
+      namespace: NAMESPACE.into(),
+      failure,
+    }
+  }
+
+  /// The checks that bring a member who records into `reason`, after one
+  /// where Activity recorded and kept the member's choice.
+  fn checks_into(reason: StopReason) -> Vec<CheckInput> {
+    let recording = |access, seconds| CheckInput {
+      loaded: Some(loaded(ActivityRecordingStatus::Recording)),
+      ..input(access, seconds)
+    };
+    // The store cannot open, so no choice is loaded; the record keeps it.
+    let store = |failure| CheckInput {
+      store: Some(failed(failure)),
+      ..input(FeatureAccess::Enabled, 5)
+    };
+    match reason {
+      StopReason::ReconnectNeeded => {
+        vec![recording(off(OffReason::ReconnectNeeded), 5)]
+      }
+      StopReason::NotAvailable => vec![recording(off(OffReason::NotAvailable), 5)],
+      StopReason::BlockedByPolicy => {
+        vec![recording(off(OffReason::BlockedByPolicy), 5)]
+      }
+      StopReason::SignedOut => vec![recording(off(OffReason::SignedOut), 5)],
+      StopReason::NotConfirmed => vec![
+        recording(off(OffReason::Undecided), 5),
+        recording(off(OffReason::Undecided), 5 + CONFIRMATION_WAIT.as_secs()),
+      ],
+      StopReason::StoreKeyUnavailable => vec![store(StoreFailure::KeyUnavailable)],
+      StopReason::KeychainNotAnswering => {
+        vec![store(StoreFailure::KeychainNotAnswering)]
+      }
+      StopReason::StoreUnreadable => vec![store(StoreFailure::Unreadable)],
+    }
+  }
+
+  #[test]
+  fn every_stop_reason_shows_in_the_tray_and_notifies_once() {
+    crate::i18n::init_en();
+    for reason in StopReason::ALL {
+      let records = records();
+      let dir = records.dir.clone();
+      let mut monitor = CaptureMonitor::new(Some(records));
+      let effects = monitor.check(&CheckInput {
+        loaded: Some(loaded(ActivityRecordingStatus::Recording)),
+        ..input(FeatureAccess::Enabled, 0)
+      });
+      assert_eq!(effects.notify, None, "{reason:?}");
+      let mut notified = Vec::new();
+      for check in checks_into(*reason) {
+        notified.extend(monitor.check(&check).notify);
+      }
+      assert_eq!(notified, vec![*reason], "{reason:?} notifies once");
+      let Some(Published::Stopped { stopped, binding }) = monitor.published() else {
+        panic!("{reason:?} is not published as a stop");
+      };
+      assert_eq!(stopped.reason, *reason);
+      assert_eq!(stopped.intent, ActivityRecordingStatus::Recording);
+      assert_eq!(binding.is_some(), reason.history_readable(), "{reason:?}");
+      // What the tray and the notification show.
+      for key in [reason.tray_key(), reason.notification_key()] {
+        assert_ne!(crate::i18n::t(key), key, "{reason:?} has no text for {key}");
+      }
+      std::fs::remove_dir_all(dir).unwrap();
+    }
+  }
+
+  #[test]
+  fn a_store_that_cannot_open_stops_only_its_own_account_after_the_server() {
+    let records = records();
+    let dir = records.dir.clone();
+    let mut monitor = CaptureMonitor::new(Some(records));
+    monitor.check(&CheckInput {
+      loaded: Some(loaded(ActivityRecordingStatus::Recording)),
+      ..input(FeatureAccess::Enabled, 0)
+    });
+    // Another account's store says nothing about this one.
+    let effects = monitor.check(&CheckInput {
+      store: Some(FailedStore {
+        namespace: "other".into(),
+        failure: StoreFailure::KeyUnavailable,
+      }),
+      ..input(FeatureAccess::Enabled, 5)
+    });
+    assert_eq!(effects.notify, None);
+    assert!(!monitor.is_stopped());
+    // The server's reason comes first.
+    let effects = monitor.check(&CheckInput {
+      store: Some(failed(StoreFailure::KeyUnavailable)),
+      ..input(off(OffReason::ReconnectNeeded), 10)
+    });
+    assert_eq!(effects.notify, Some(StopReason::ReconnectNeeded));
+    // A remembered grant records nothing while the store cannot open.
+    let remembered = Permission::Remembered {
+      until: input(FeatureAccess::Enabled, 0).now + chrono::Duration::days(1),
+    };
+    assert_eq!(
+      capture_view(
+        remembered,
+        Some(StoreFailure::Unreadable),
+        Some(ActivityRecordingStatus::Paused),
+        false
+      ),
+      CaptureView::Stopped(ActivityStopped {
+        reason: StopReason::StoreUnreadable,
+        intent: ActivityRecordingStatus::Paused,
+      })
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_keychain_that_does_not_answer_is_asked_again_at_its_pace() {
+    let mut monitor = CaptureMonitor::new(None);
+    let waiting = |seconds| CheckInput {
+      store: Some(failed(StoreFailure::KeychainNotAnswering)),
+      ..input(FeatureAccess::Enabled, seconds)
+    };
+    let mut retries = Vec::new();
+    for seconds in [0, 5, 25, 30, 35, 60] {
+      if monitor.check(&waiting(seconds)).initialize {
+        retries.push(seconds);
+      }
+    }
+    assert_eq!(retries, vec![0, 30, 60]);
+    // Once the store opens, nothing is retried.
+    let opened = monitor.check(&CheckInput {
+      loaded: Some(loaded(ActivityRecordingStatus::Recording)),
+      ..input(FeatureAccess::Enabled, 95)
+    });
+    assert!(!opened.initialize);
   }
 }

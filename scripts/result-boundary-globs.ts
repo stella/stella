@@ -254,6 +254,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/auth-model/src/**/*.ts",
   "packages/brand/src/**/*.ts",
   "packages/calculations/src/**/*.ts",
+  "packages/case-law-parsers/src/**/*.ts",
   "packages/catalogue/src/**/*.ts",
   "packages/chat-limits/src/**/*.ts",
   "packages/clipboard/src/**/*.ts",

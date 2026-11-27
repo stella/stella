@@ -11,6 +11,9 @@ export const STOP_REASON_KEYS = {
   blockedByPolicy: "stopReason.blockedByPolicy",
   signedOut: "stopReason.signedOut",
   notConfirmed: "stopReason.notConfirmed",
+  storeKeyUnavailable: "stopReason.storeKeyUnavailable",
+  keychainNotAnswering: "stopReason.keychainNotAnswering",
+  storeUnreadable: "stopReason.storeUnreadable",
 } as const satisfies Record<ActivityStopReason, string>;
 
 export type OutageRange = {

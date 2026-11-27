@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { afterEach, expect, setSystemTime, test } from "bun:test";
 
+import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

@@ -62,6 +62,9 @@
     "packages/brand": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/case-law-parsers": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
     },

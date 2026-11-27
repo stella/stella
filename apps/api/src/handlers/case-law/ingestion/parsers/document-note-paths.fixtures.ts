@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
 
+import { readRtfString } from "@stll/case-law-parsers/rtf-reader";
 import type {
   BlockContent,
   Document,
@@ -11,8 +12,6 @@ import type {
 } from "@stll/docx-core/model";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
-
-import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 
 export const NOTE_PATHS = [
   "body-paragraph",

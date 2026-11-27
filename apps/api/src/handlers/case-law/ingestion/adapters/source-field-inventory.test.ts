@@ -26,6 +26,7 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { entityResiduesInStoredText } from "@stll/case-law-parsers/entity-residue";
 import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -59,7 +60,6 @@ import {
   approveMetadataUrls,
   metadataUrlAddresses,
 } from "@/api/lib/legal-search/metadata-urls";
-import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   publisherFieldRetentionAudit,
