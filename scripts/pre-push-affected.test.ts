@@ -87,7 +87,7 @@ describe("pre-push affected checks", () => {
       "apps/api/package.json",
       "package.json",
       "knip.json",
-      "scripts/knip-exports-baseline.json",
+      "scripts/knip-exports-ratchet.ts",
     ]) {
       expect(knipBudgetAffected([file])).toBe(true);
     }
