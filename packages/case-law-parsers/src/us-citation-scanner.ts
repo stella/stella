@@ -286,7 +286,8 @@ export type ShortToken = Span & {
 
 type BarrierToken = Span & { kind: "barrier"; barrier: BarrierKind };
 
-export type Token = FullToken | VolumeShortToken | ShortToken | BarrierToken;
+export type UsCitationToken =
+  FullToken | VolumeShortToken | ShortToken | BarrierToken;
 
 // Supported spellings come from the identity parser's reporter table. The
 // separate broad grammar only detects unsupported short-form barriers.
@@ -330,14 +331,14 @@ const TRAILING_PARENTHETICAL_RE = new RegExp(
 );
 const TREATISE_RE = new RegExp(YEAR_PARENTHETICAL, "gu");
 
-type Produce = (match: RegExpExecArray) => Token | null;
+type Produce = (match: RegExpExecArray) => UsCitationToken | null;
 
 /** One run's scan: its text, the budget it charges and what it has found. */
 type ScanContext = {
   readonly text: string;
   readonly budget: CitationWorkBudget;
   readonly identityKey: ReporterIdentityKey;
-  readonly candidates: Token[];
+  readonly candidates: UsCitationToken[];
 };
 
 /**
@@ -381,7 +382,7 @@ const barrierAt = (
 const reporterToken = (
   { budget, identityKey, text }: ScanContext,
   match: RegExpExecArray,
-): Token | null => {
+): UsCitationToken | null => {
   const start = match.index;
   const matchEnd = start + match[0].length;
   const head = match.groups?.["head"] ?? "";
@@ -447,14 +448,16 @@ const shortToken =
  * wins over a barrier and the longer over the shorter; an overlap drops the
  * later token unless a recognised form displaces a barrier.
  */
-const selectTokens = (candidates: readonly Token[]): Token[] => {
+const selectTokens = (
+  candidates: readonly UsCitationToken[],
+): UsCitationToken[] => {
   const ordered = candidates.toSorted(
     (left, right) =>
       left.start - right.start ||
-      Number(left.kind === "barrier") - Number(right.kind === "barrier") ||
+      (left.kind === "barrier" ? 1 : 0) - (right.kind === "barrier" ? 1 : 0) ||
       right.end - left.end,
   );
-  const kept: Token[] = [];
+  const kept: UsCitationToken[] = [];
   for (const token of ordered) {
     const previous = kept.at(-1);
     if (previous === undefined || token.start >= previous.end) {
@@ -589,7 +592,7 @@ const scanTextOf = (inlines: readonly Inline[]): string => {
 };
 
 type RunEvent =
-  | { kind: "token"; at: number; token: Token }
+  | { kind: "token"; at: number; token: UsCitationToken }
   | { kind: "sentence-end"; at: number };
 
 export type ScannedRun = { text: string; events: RunEvent[] };
@@ -608,7 +611,7 @@ export const scanRun = (
   { budget, identityKey }: ScanRunOptions,
 ): Result<ScannedRun, UsCitationWorkBudgetError> => {
   const text = scanTextOf(inlines);
-  const candidates: Token[] = [];
+  const candidates: UsCitationToken[] = [];
   const context: ScanContext = { text, budget, identityKey, candidates };
   const complete =
     produce(

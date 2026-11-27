@@ -24,11 +24,11 @@ import {
   type BodyVocabulary,
   cdataAsText,
   conservesText,
+  courtListenerNodeText,
   createUnitBuilder,
   graphicsIn,
   type PageAnchor,
   sourceTextOf,
-  textOf,
   walkBody,
 } from "./blocks";
 import { unitClass } from "./opinion-class";
@@ -87,7 +87,7 @@ const pageAnchor = (element: Element): PageAnchor | undefined => {
     type: "page-anchor",
     label:
       attribute(element, labelAttribute) ??
-      textOf(element).replace(/\s+/gu, ""),
+      courtListenerNodeText(element).replace(/\s+/gu, ""),
   };
 };
 
@@ -153,7 +153,7 @@ const HARVARD_VOCABULARY: BodyVocabulary = {
         attribute(element, "label") ??
         (backlink === undefined
           ? ""
-          : textOf(backlink).replace(/\s+/gu, " ").trim()),
+          : courtListenerNodeText(backlink).replace(/\s+/gu, " ").trim()),
     };
   },
   backlink: isNoteBacklink,

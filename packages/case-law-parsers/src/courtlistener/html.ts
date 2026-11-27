@@ -33,12 +33,12 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import {
   type BodyVocabulary,
   conservesText,
+  courtListenerNodeText,
   createUnitBuilder,
   type DraftRole,
   graphicsIn,
   type PageAnchor,
   sourceTextOf,
-  textOf,
   walkBody,
 } from "./blocks";
 import type { FormatInput } from "./harvard-xml";
@@ -215,7 +215,7 @@ const pageAnchor = (element: Element): PageAnchor | undefined => {
     label:
       attribute(element, "label") ??
       attribute(element, "data-label") ??
-      textOf(element).replace(/\s+/gu, "").replace(/^\*/u, ""),
+      courtListenerNodeText(element).replace(/\s+/gu, "").replace(/^\*/u, ""),
   };
 };
 
@@ -262,7 +262,7 @@ const prepareNotes = ($: cheerio.CheerioAPI, notes: readonly Element[]) => {
     const target =
       element.attribs["anchoridref"] ??
       (href.startsWith("#") ? href.slice(1) : "");
-    const label = textOf(element).replace(/\s+/gu, " ").trim();
+    const label = courtListenerNodeText(element).replace(/\s+/gu, " ").trim();
     if (target === "" || label === "" || insideNote(element)) {
       return;
     }
@@ -306,7 +306,7 @@ const prepareNotes = ($: cheerio.CheerioAPI, notes: readonly Element[]) => {
     }
     for (const anchor of $(note).find("a[href]").toArray()) {
       const href = anchor.attribs["href"] ?? "";
-      const printed = textOf(anchor).trim();
+      const printed = courtListenerNodeText(anchor).trim();
       // The return-arrow glyph is navigation too, but still needs reciprocity.
       if (
         !href.startsWith("#") ||
@@ -395,7 +395,7 @@ const captionElements = (root: ParentNode): WeakSet<Element> => {
         name === "center" ||
         name === "h1" ||
         (name === "p" && classesOf(child).some((value) => classes.has(value)));
-      if (caption && !/^ORDER\.?$/u.test(textOf(child).trim())) {
+      if (caption && !/^ORDER\.?$/u.test(courtListenerNodeText(child).trim())) {
         mark(child);
         continue;
       }

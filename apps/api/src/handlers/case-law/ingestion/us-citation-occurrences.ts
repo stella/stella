@@ -24,7 +24,7 @@ import type {
   ReporterIdentityKey,
   ScannedPin,
   ScannedRun,
-  Token,
+  UsCitationToken,
   UsCitationWorkBudgetError,
 } from "@stll/case-law-parsers/us-citation-scanner";
 import type {
@@ -70,7 +70,7 @@ class UsCitationOccurrenceOverflowError extends TaggedError(
   limit: number;
 }> {}
 
-type UsCitationForm = Exclude<Token["kind"], "barrier">;
+type UsCitationForm = Exclude<UsCitationToken["kind"], "barrier">;
 
 export type UsCitationOccurrence = {
   /** The search section carrying this block; null when none carries it. */

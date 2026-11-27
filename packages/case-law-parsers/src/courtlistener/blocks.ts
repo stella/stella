@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
@@ -12,8 +13,7 @@
  * opinion containers. A format declares its vocabulary; the walk is one.
  */
 
-import { panic } from "better-result";
-
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   appendTextInline,
   isExcludedHtmlTag,
@@ -506,11 +506,13 @@ const GRAPHICS = new Set([
 ]);
 
 /** A node's text with no markup, CDATA included. */
-export const textOf = (node: AnyNode): string => {
+export const courtListenerNodeText = (node: AnyNode): string => {
   if (isText(node)) {
     return node.data;
   }
-  return hasChildren(node) ? node.children.map(textOf).join("") : "";
+  return hasChildren(node)
+    ? node.children.map(courtListenerNodeText).join("")
+    : "";
 };
 
 /**
@@ -526,7 +528,7 @@ export const cdataAsText = (root: ParentNode): void => {
     }
     for (const [index, child] of parent.children.entries()) {
       if (isCDATA(child)) {
-        const text = createText(textOf(child));
+        const text = createText(courtListenerNodeText(child));
         text.parent = parent;
         text.prev = child.prev;
         text.next = child.next;
@@ -592,7 +594,7 @@ export const sourceTextOf = (
   };
   const visit = (node: AnyNode, inNote: boolean) => {
     if (isText(node) || isCDATA(node)) {
-      current += textOf(node);
+      current += courtListenerNodeText(node);
       return;
     }
     if (
@@ -606,7 +608,7 @@ export const sourceTextOf = (
     if (anchor !== undefined) {
       // Only the printed page (`*123`) leaves the text: anything more a
       // marker holds stays in the source, where the block walk has lost it.
-      const markerText = textOf(node);
+      const markerText = courtListenerNodeText(node);
       const printed = markerText.replace(/\s+/gu, "");
       const label = `*${anchor.label}`;
       const rest = printed.startsWith(label)
@@ -622,7 +624,7 @@ export const sourceTextOf = (
       return;
     }
     if (inNote && vocabulary.backlink(node)) {
-      backlinkCharacters += textOf(node).trim().length;
+      backlinkCharacters += courtListenerNodeText(node).trim().length;
       return;
     }
     const name = nameOf(node);
@@ -757,13 +759,19 @@ const createTableWalker = ({
       return null;
     }
     const inlines = flowInlines(cell);
-    const colSpan = Number(cell.attribs["colspan"] ?? "1");
-    const rowSpan = Number(cell.attribs["rowspan"] ?? "1");
+    const colSpanResult = parseIntegerToken(cell.attribs["colspan"]?.trim(), {
+      sign: "unsigned",
+      min: 2,
+    });
+    const rowSpanResult = parseIntegerToken(cell.attribs["rowspan"]?.trim(), {
+      sign: "unsigned",
+      min: 2,
+    });
     return {
       inlines,
       plainText: projectPlainText(inlines),
-      ...(Number.isInteger(colSpan) && colSpan > 1 ? { colSpan } : {}),
-      ...(Number.isInteger(rowSpan) && rowSpan > 1 ? { rowSpan } : {}),
+      ...(colSpanResult.isOk() ? { colSpan: colSpanResult.value } : {}),
+      ...(rowSpanResult.isOk() ? { rowSpan: rowSpanResult.value } : {}),
       ...(nameOf(cell) === "th" ? { header: true as const } : {}),
     };
   };
@@ -806,7 +814,10 @@ const createTableWalker = ({
         } else if (name === "caption") {
           flushRows();
           builder.paragraph(flowInlines(child), inherited);
-        } else if (!CELLS.has(name) && textOf(child).trim() === "") {
+        } else if (
+          !CELLS.has(name) &&
+          courtListenerNodeText(child).trim() === ""
+        ) {
           // Column declarations and other empty parts carry no text.
         } else {
           flushRows();
