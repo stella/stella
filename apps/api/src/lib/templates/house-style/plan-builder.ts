@@ -2293,7 +2293,7 @@ const fillHeaderFields = (
     });
     filled.push({ field, from: line.word, to: name });
   }
-  const letter = fill ?? {
+  const letter: HeaderFill = fill ?? {
     slots: [],
     fields: null,
     emptied: [],
