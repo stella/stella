@@ -18,6 +18,7 @@ import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   readPublisher,
   unreadPublisherError,
+  type UnreadPublisherOutcome,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -815,6 +816,41 @@ export const createPagePaginatedFetch = <TResponse>(
         const fetchT0 = performance.now();
         const listTimeout = opts.listTimeoutMs ?? ADAPTER_TIMEOUT.LIST;
 
+        const listingReadError = (
+          unread: UnreadPublisherOutcome,
+          message: string,
+        ): AdapterFetchError => {
+          if (unread.type === "unavailable" && unread.cause.kind === "thrown") {
+            const thrown = unread.cause.error;
+            if (thrown instanceof AdapterFetchError) {
+              return thrown.cursor === null && cursor !== null
+                ? new AdapterFetchError({
+                    message: thrown.message,
+                    adapterKey: thrown.adapterKey,
+                    cursor,
+                    stopKind: thrown.stopKind,
+                    ...(thrown.httpStatus === undefined
+                      ? {}
+                      : { httpStatus: thrown.httpStatus }),
+                    ...(thrown.retryAfter === undefined
+                      ? {}
+                      : { retryAfter: thrown.retryAfter }),
+                    ...(thrown.cause === undefined
+                      ? {}
+                      : { cause: thrown.cause }),
+                  })
+                : thrown;
+            }
+            return adapterCatch(opts.adapterKey, cursor)(thrown);
+          }
+          return unreadPublisherError({
+            outcome: unread,
+            message,
+            adapterKey: opts.adapterKey,
+            cursor,
+          });
+        };
+
         // readPublisher handles timeout/5xx/429 with exponential backoff
         // and typed ReadOutcome classification. All page-paginated adapters
         // inherit this.
@@ -822,6 +858,7 @@ export const createPagePaginatedFetch = <TResponse>(
         const outcome = await readPublisher(url, {
           ...init,
           fetchStage: "listing",
+          refusalScope: "source",
           retryPolicy: "publisher-backoff",
           timeoutMs: listTimeout,
           signal,
@@ -829,18 +866,18 @@ export const createPagePaginatedFetch = <TResponse>(
         });
 
         if (outcome.type !== "present") {
-          const thrownError =
-            outcome.type === "unavailable" && outcome.cause.kind === "thrown"
-              ? outcome.cause.error
-              : undefined;
           let failedStatus: number | undefined;
           if (
             outcome.type === "unavailable" &&
             outcome.cause.kind === "status"
           ) {
             failedStatus = outcome.cause.status;
-          } else if (thrownError instanceof AdapterFetchError) {
-            failedStatus = thrownError.httpStatus;
+          } else if (
+            outcome.type === "unavailable" &&
+            outcome.cause.kind === "thrown" &&
+            outcome.cause.error instanceof AdapterFetchError
+          ) {
+            failedStatus = outcome.cause.error.httpStatus;
           }
           // A 5xx the origin itself produced, after all retries: skip this
           // page and advance.
@@ -869,39 +906,7 @@ export const createPagePaginatedFetch = <TResponse>(
             });
           }
 
-          if (thrownError !== undefined) {
-            if (
-              thrownError instanceof AdapterFetchError &&
-              thrownError.cursor === null &&
-              cursor !== null
-            ) {
-              throw new AdapterFetchError({
-                message: thrownError.message,
-                adapterKey: thrownError.adapterKey,
-                cursor,
-                ...(thrownError.httpStatus === undefined
-                  ? {}
-                  : { httpStatus: thrownError.httpStatus }),
-                ...(thrownError.stopKind === undefined
-                  ? {}
-                  : { stopKind: thrownError.stopKind }),
-                ...(thrownError.retryAfter === undefined
-                  ? {}
-                  : { retryAfter: thrownError.retryAfter }),
-                ...(thrownError.cause === undefined
-                  ? {}
-                  : { cause: thrownError.cause }),
-              });
-            }
-            throw thrownError;
-          }
-
-          throw unreadPublisherError({
-            outcome,
-            message: opts.adapterKey,
-            adapterKey: opts.adapterKey,
-            cursor,
-          });
+          return Result.err(listingReadError(outcome, opts.adapterKey));
         }
         const response = outcome.value;
 
@@ -937,25 +942,15 @@ export const createPagePaginatedFetch = <TResponse>(
             const retryOutcome = await readPublisher(url, {
               ...init,
               fetchStage: "listing",
+              refusalScope: "source",
               retryPolicy: "publisher-backoff",
               timeoutMs: listTimeout,
               signal,
               adapterKey: opts.adapterKey,
             });
             if (retryOutcome.type !== "present") {
-              if (
-                retryOutcome.type === "unavailable" &&
-                retryOutcome.cause.kind === "thrown"
-              ) {
-                throw retryOutcome.cause.error;
-              }
               return Result.err(
-                unreadPublisherError({
-                  outcome: retryOutcome,
-                  message: `${opts.adapterKey}: retry`,
-                  adapterKey: opts.adapterKey,
-                  cursor,
-                }),
+                listingReadError(retryOutcome, `${opts.adapterKey}: retry`),
               );
             }
             const retryResponse = retryOutcome.value;
