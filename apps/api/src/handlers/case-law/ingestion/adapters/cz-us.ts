@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: [cz-us] bounded response body reads preserve identical HTML text; only oversized responses are refused.
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
@@ -19,6 +20,7 @@ import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifi
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { reflowPrintedText } from "@stll/legal-ast/hard-wrapped-lines";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
@@ -113,7 +115,6 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/lib/legal-search/ingestion-types";
-import { reflowPrintedText } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";

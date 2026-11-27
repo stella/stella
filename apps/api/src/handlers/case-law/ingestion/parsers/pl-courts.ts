@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: Map and narrow-union lookup refactor preserves identical runtime output
 // parser-output-unchanged: [pl-kio] only adds the common-court reader with its paragraph numbering, which the procurement chamber's reader does not call.
 // parser-output-unchanged: [pl-kis] only adds the common-court reader with its paragraph numbering, which the tax-ruling reader does not call.
@@ -67,6 +68,7 @@ import {
   stripInlinePrefix,
   stripInlineSuffix,
 } from "@stll/legal-ast/inline-line";
+import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 import {
   containsPlOperativeVerb,
   isPlAppealInstruction,
@@ -101,7 +103,6 @@ import {
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 

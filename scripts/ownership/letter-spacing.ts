@@ -6,7 +6,7 @@ export default {
     "Reading letter-spaced display type (`r o z h o d l`, `p o s t a n a w i a`) as words",
   owner: [
     "packages/text-normalize/src/letter-spacing.ts",
-    "apps/api/src/lib/legal-search/parsers/letter-spacing.ts",
+    "packages/legal-ast/src/letter-spacing.ts",
   ],
   summary:
     "Courts across jurisdictions set operative verbs and section titles in " +
@@ -15,7 +15,7 @@ export default {
     "`collapseSpacedLetters` is the same reading folded for search and the " +
     "role vocabularies, and `letterSpacingJoins` names the gaps the reader " +
     "and find-in-page hide. Parsers read inline trees and blocks through " +
-    "`readInlineLetterSpacing` and `withAttestedLetterSpacing` in the API.",
+    "`readInlineLetterSpacing` and `withAttestedLetterSpacing` in `@stll/legal-ast`.",
   enforcement: {
     kind: "custom-rule",
     rule: "no-local-letter-spacing/no-local-letter-spacing",

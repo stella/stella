@@ -13,14 +13,14 @@ static CHILD_PROCESSES: RwLock<()> = RwLock::new(());
 
 /// Held by tests whose assertions depend on a dropped file lock being free.
 pub(crate) fn shared() -> RwLockReadGuard<'static, ()> {
-  CHILD_PROCESSES
-    .read()
-    .unwrap_or_else(PoisonError::into_inner)
+  // kit-allow: shared side of the process-global flock/child-process test lock
+  let guard = CHILD_PROCESSES.read();
+  guard.unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Held by tests that spawn child processes from the test binary.
 pub(crate) fn exclusive() -> RwLockWriteGuard<'static, ()> {
-  CHILD_PROCESSES
-    .write()
-    .unwrap_or_else(PoisonError::into_inner)
+  // kit-allow: exclusive side of the process-global flock/child-process test lock
+  let guard = CHILD_PROCESSES.write();
+  guard.unwrap_or_else(PoisonError::into_inner)
 }

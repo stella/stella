@@ -18,12 +18,8 @@
 // - `result-error-returns-empty`: `if (Result.isError(x))` / `x.isErr()`
 //   inside an async function, whose branch returns an empty value.
 //
-// Existing sites are held to an exact-set baseline that only shrinks
-// (`scripts/failure-as-empty-baseline.ts`).
-
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import baseline from "./no-failure-as-empty-baseline.json" with { type: "json" };
 import {
   type AstNode,
   isAstNode,
@@ -444,8 +440,6 @@ const findingFor = (node: AstNode): Finding | null => {
   }
 };
 
-const entries: Readonly<Record<string, string>> = baseline.entries;
-
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
   rules: {
@@ -456,13 +450,6 @@ export default eslintCompatPlugin({
           failureAsEmpty:
             "A failed read is returned as an empty value, which callers cannot tell apart from a source that holds nothing. Return a ReadOutcome from @/api/lib/errors/read-outcome (case-law adapters: readPublisher), or let the failure propagate. Failure-as-empty site: {{key}}.",
         },
-        schema: [
-          {
-            type: "object",
-            properties: { census: { type: "boolean" } },
-            additionalProperties: false,
-          },
-        ],
       },
       createOnce(context) {
         const findings: Finding[] = [];
@@ -483,11 +470,6 @@ export default eslintCompatPlugin({
           IfStatement: collect,
           CallExpression: collect,
           "Program:exit"() {
-            const options = context.options.at(0);
-            const census =
-              typeof options === "object" &&
-              options !== null &&
-              Reflect.get(options, "census") === true;
             const file = repoRelativeFilename(context);
             const ordinals = new Map<string, number>();
             const ordered = findings.toSorted(
@@ -498,9 +480,6 @@ export default eslintCompatPlugin({
               const ordinal = (ordinals.get(site) ?? 0) + 1;
               ordinals.set(site, ordinal);
               const key = `${site}#${String(ordinal)}`;
-              if (!census && Object.hasOwn(entries, key)) {
-                continue;
-              }
               context.report({
                 node,
                 messageId: "failureAsEmpty",

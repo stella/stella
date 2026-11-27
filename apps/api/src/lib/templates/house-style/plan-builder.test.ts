@@ -32,8 +32,10 @@ import {
 } from "@/api/lib/templates/house-style/role-proposer";
 import { inferTemplateProfile } from "@/api/lib/templates/house-style/template-profile";
 import {
+  ANNEX_LIST,
   contractTemplate,
   OUTLINE_LIST,
+  templateWithAnnexOutline,
 } from "@/api/lib/templates/house-style/template.test-helpers";
 
 const PROFILE = inferTemplateProfile(contractTemplate());
@@ -219,6 +221,141 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
         reason: "annexTyped",
       }),
     );
+  });
+});
+
+describe("buildTemplatePlan, parties headed by a number", () => {
+  const manifest = manifestOf([
+    "KUPNÍ SMLOUVA",
+    "mezi:",
+    numbered("1.", "Alfa s.r.o.", 5),
+    "se sídlem Dlouhá 1, Praha",
+    "a",
+    numbered("2.", "Beta a.s.", 5),
+    "se sídlem Krátká 2, Brno",
+    "Článek I.\nPředmět",
+    numbered("1.", "Prodávající dodá zboží.", 10),
+  ]);
+
+  test("the numbered line takes the template's style for a party's heading and counts in its list", () => {
+    const { plan } = build(manifest);
+    const head = PROFILE.partyHead;
+    expect(head?.styleId).toBe("Party");
+    for (const name of ["Alfa s.r.o.", "Beta a.s."]) {
+      expect(itemOf(plan, manifest, name)).toMatchObject({
+        styleId: "Party",
+        numbering: { numId: head?.numbering?.numId, ilvl: 0 },
+      });
+    }
+    // The details under it are set as a party's details are, and the word
+    // between the parties as text.
+    expect(itemOf(plan, manifest, "se sídlem Dlouhá")).toMatchObject({
+      styleId: PROFILE.roles.party?.styleId,
+    });
+    expect(
+      itemOf(plan, manifest, "se sídlem Dlouhá")?.numbering ?? null,
+    ).toBeNull();
+    expect(itemOf(plan, manifest, "a")?.styleId).toBe(
+      PROFILE.roles.body?.styleId,
+    );
+  });
+
+  test("a template without such a style sets the line as a party's line and keeps its number", () => {
+    const { partyHead: _none, ...plain } = PROFILE;
+    const { plan } = build(manifest, "keepSource", { profile: plain });
+    const item = itemOf(plan, manifest, "Alfa s.r.o.");
+    expect(item?.styleId).toBe(PROFILE.roles.party?.styleId);
+    // By a list level or as text: the number is not lost.
+    expect(
+      (item?.numbering ?? null) !== null || item?.labelAsText === true,
+    ).toBe(true);
+  });
+});
+
+describe("buildTemplatePlan, a template with an outline of its own for annexes", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    numbered("1.", "Předmět smlouvy", 10),
+    numbered("1.1", "Dodavatel dodá zboží.", 10),
+    "Příloha č. 1\nPodmínky",
+    numbered("1.", "Rozsah", 20),
+    numbered("1.1", "Podmínky platí pro každou dodávku.", 20),
+    numbered("2.", "Odpovědnost", 20),
+    numbered("2.1", "Dodavatel odpovídá za vady.", 20),
+  ]);
+
+  test("what stands under an annex heading is set in the annexes' styles and counted in their list", () => {
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const { plan } = build(manifest, "keepSource", { profile });
+    const placed = (start: string) => {
+      const item = itemOf(plan, manifest, start);
+      return [item?.styleId, item?.numbering?.numId, item?.numbering?.ilvl];
+    };
+    // The body keeps the main outline.
+    expect(placed("Předmět smlouvy")).toEqual(["Article", OUTLINE_LIST, 0]);
+    expect(placed("Dodavatel dodá zboží.")).toEqual([
+      "Clause1",
+      OUTLINE_LIST,
+      1,
+    ]);
+    // The annex has its own: heading and clause, in one list.
+    expect(placed("Rozsah")).toEqual(["AnnexArticle", ANNEX_LIST, 0]);
+    expect(placed("Podmínky platí")).toEqual(["AnnexClause", ANNEX_LIST, 1]);
+    expect(placed("Odpovědnost")).toEqual(["AnnexArticle", ANNEX_LIST, 0]);
+    expect(placed("Dodavatel odpovídá")).toEqual([
+      "AnnexClause",
+      ANNEX_LIST,
+      1,
+    ]);
+  });
+
+  test("an outline for annexes that lacks a level the main outline numbers is not used", () => {
+    // Its clauses would count in the main list under a heading of the
+    // annexes' list.
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const { clause1: _dropped, ...partial } = profile.annexRoles ?? {};
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...profile, annexRoles: partial },
+    });
+    expect(itemOf(plan, manifest, "Rozsah")).toMatchObject({
+      styleId: "Article",
+    });
+    expect(itemOf(plan, manifest, "Podmínky platí")).toMatchObject({
+      styleId: "Clause1",
+    });
+  });
+
+  test("a heading's title that stays a paragraph of its own is set as its heading is", () => {
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const split = manifestOf([
+      "SMLOUVA",
+      numbered("1.", "Předmět smlouvy", 10),
+      numbered("1.1", "Dodavatel dodá zboží.", 10),
+      "Příloha č. 1\nPodmínky",
+      "Článek 1",
+      "Rozsah",
+      numbered("1.1", "Podmínky platí pro každou dodávku.", 20),
+    ]);
+    // The title is kept from joining its heading, as after a refusal.
+    const { plan } = build(split, "keepSource", {
+      profile,
+      exclusions: {
+        ...NO_EXCLUSIONS,
+        merges: new Set([blockIdOf(split, "Článek 1")]),
+      },
+    });
+    expect(itemOf(plan, split, "Článek 1")?.styleId).toBe("AnnexArticle");
+    expect(itemOf(plan, split, "Rozsah")?.styleId).toBe("AnnexArticle");
+  });
+
+  test("a template without one sets an annex's provisions as it sets the body's", () => {
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "Rozsah")).toMatchObject({
+      styleId: "Article",
+    });
+    expect(itemOf(plan, manifest, "Podmínky platí")).toMatchObject({
+      styleId: "Clause1",
+    });
   });
 });
 
@@ -3083,5 +3220,95 @@ describe("buildTemplatePlan, an article heading the index does not count", () =>
         ),
       ).toEqual([]);
     }
+  });
+});
+
+describe("buildTemplatePlan, lines the source brings back to the margin", () => {
+  const HANGING = { left: 851, firstLine: -851 };
+  const UNDER = { left: 851, firstLine: 0 };
+  /** A contract whose unnumbered lines stand as `indents` says, by
+   *  position; a line without an entry has no indent. */
+  const contract = (
+    indents: Readonly<Record<number, { left: number; firstLine: number }>>,
+  ): DocxBlockManifest => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPředmět",
+      numbered("1.1", "Dodavatel dodá zboží.", 10),
+      "Zboží je popsáno v nabídce.",
+      numbered("1.2", "Objednatel zaplatí cenu.", 10),
+      "Cena je konečná.",
+      "Tolik k předmětu této smlouvy.",
+      "Dodavatel dále zajistí:",
+      numbered("•", "dopravu,", 2),
+      numbered("•", "pojištění.", 2),
+      "Článek II.\nZávěr",
+      numbered("2.1", "Smlouva nabývá účinnosti podpisem.", 10),
+    ]);
+    return {
+      ...manifest,
+      blocks: manifest.blocks.map((block, position) => {
+        const indent = indents[position];
+        return indent === undefined ? block : { ...block, indent };
+      }),
+    };
+  };
+  const styleOf = (manifest: DocxBlockManifest, start: string) =>
+    itemOf(build(manifest).plan, manifest, start)?.styleId;
+
+  test("a line at the margin behind an indented clause is plain text where the document sets such lines under their clause", () => {
+    const manifest = contract({ 2: HANGING, 3: UNDER, 4: HANGING, 5: UNDER });
+    // Under its clause: the style for text under a clause.
+    expect(styleOf(manifest, "Cena je konečná.")).toBe("Indent");
+    // Back at the margin: no part of the clause above it.
+    expect(styleOf(manifest, "Tolik k předmětu")).toBe("Body");
+    // The line that opens a list of bullets stays where they hang from.
+    expect(styleOf(manifest, "Dodavatel dále zajistí:")).toBe("Indent");
+  });
+
+  test("a list of bullets behind a table is not opened by the line in front of the table", () => {
+    const manifest = contract({
+      2: HANGING,
+      3: UNDER,
+      4: HANGING,
+      5: UNDER,
+      6: UNDER,
+    });
+    // Without a table the line opens the bullets and stays.
+    expect(styleOf(manifest, "Dodavatel dále zajistí:")).toBe("Indent");
+    // A table stands between the line and the bullets.
+    const at = manifest.blocks.findIndex(({ text }) =>
+      text.startsWith("Dodavatel dále zajistí:"),
+    );
+    const [first] = manifest.blocks;
+    if (first === undefined) {
+      throw new Error("no block to copy");
+    }
+    const cell: DocxBlock = { ...first, id: "c1", text: "položka" };
+    const table: DocxBlock = {
+      ...first,
+      id: "t1",
+      kind: "table",
+      text: "",
+      cells: [{ row: 0, col: 0, blockIds: ["c1"] }],
+    };
+    const withTable: DocxBlockManifest = {
+      ...manifest,
+      blocks: [
+        ...manifest.blocks.slice(0, at + 1),
+        table,
+        cell,
+        ...manifest.blocks.slice(at + 1),
+      ],
+    };
+    expect(styleOf(withTable, "Dodavatel dále zajistí:")).toBe("Body");
+  });
+
+  test("a document that sets every such line at the margin keeps them under their clauses", () => {
+    const flat = contract({ 2: HANGING, 4: HANGING });
+    expect(styleOf(flat, "Zboží je popsáno")).toBe("Indent");
+    expect(styleOf(flat, "Tolik k předmětu")).toBe("Indent");
+    // And one that states no indents says nothing about its lines.
+    expect(styleOf(contract({}), "Tolik k předmětu")).toBe("Indent");
   });
 });

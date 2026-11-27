@@ -6,9 +6,11 @@ import {
   validateTemplateProfile,
 } from "@/api/lib/templates/house-style/template-profile";
 import {
+  ANNEX_LIST,
   contractTemplate,
   LETTERHEAD,
   OUTLINE_LIST,
+  templateWithAnnexOutline,
 } from "@/api/lib/templates/house-style/template.test-helpers";
 
 describe("inferTemplateProfile", () => {
@@ -36,6 +38,64 @@ describe("inferTemplateProfile", () => {
     expect(spareLevels.map(({ ilvl }) => ilvl)).toEqual([5, 6, 7, 8]);
   });
 
+  test("an outline of styles named for annexes, in a list of its own, is the annexes' outline", () => {
+    // The plain template has one outline and none for annexes.
+    expect(inferTemplateProfile(contractTemplate()).annexRoles).toBeUndefined();
+
+    const template = templateWithAnnexOutline();
+    const profile = inferTemplateProfile(template);
+    expect(profile.roles.articleHeading?.styleId).toBe("Article");
+    expect(profile.annexRoles?.articleHeading).toMatchObject({
+      styleId: "AnnexArticle",
+      numbering: { numId: ANNEX_LIST, ilvl: 0, lvlText: "%1." },
+    });
+    // Its clause style names another list of the same definition: the
+    // clauses count with their heading, in the heading's list.
+    expect(profile.annexRoles?.clause1).toMatchObject({
+      styleId: "AnnexClause",
+      numbering: { numId: ANNEX_LIST, ilvl: 1 },
+    });
+    expect(validateTemplateProfile(profile, template)).toEqual([]);
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    // A target of the annexes' outline that names what the template lacks
+    // is an error, as a role's is.
+    expect(
+      validateTemplateProfile(
+        {
+          ...profile,
+          annexRoles: {
+            ...profile.annexRoles,
+            ...(profile.annexRoles?.clause1 === undefined
+              ? {}
+              : {
+                  clause1: {
+                    ...profile.annexRoles.clause1,
+                    styleId: "Missing",
+                  },
+                }),
+          },
+        },
+        template,
+      ),
+    ).toContainEqual({
+      severity: "error",
+      code: "unknownStyle",
+      role: "clause1",
+    });
+
+    // A second list whose styles are not named for annexes is no outline
+    // of theirs.
+    const unnamed = templateWithAnnexOutline();
+    for (const style of unnamed.styles) {
+      if (style.styleId === "AnnexArticle") {
+        style.name = "Level one";
+      }
+    }
+    expect(inferTemplateProfile(unnamed).annexRoles).toBeUndefined();
+  });
+
   test("reads unnumbered roles from style names and the sample text", () => {
     const { roles, annex, headings } = inferTemplateProfile(contractTemplate());
     expect(roles.title).toMatchObject({
@@ -47,6 +107,10 @@ describe("inferTemplateProfile", () => {
     // The numbered style heads a party; its details are written in the
     // style of the sample's detail lines.
     expect(roles.party).toMatchObject({ styleId: "Indent", numbering: null });
+    expect(inferTemplateProfile(contractTemplate()).partyHead).toMatchObject({
+      styleId: "Party",
+      numbering: { ilvl: 0, lvlText: "%1." },
+    });
     expect(roles.recital?.numbering).toMatchObject({ numFmt: "upperLetter" });
     expect(roles.signature?.styleId).toBe("Signature");
     expect(roles.annexHeading).toMatchObject({

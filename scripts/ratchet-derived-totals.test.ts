@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import {
   copyFileSync,
   mkdirSync,
@@ -160,53 +160,94 @@ const RATCHET_DEFINITION_CLOSURE = ((): readonly string[] => {
   return [...closure];
 })();
 
+const createSeedRepository = (seed: string, branch?: string) => {
+  mkdirSync(seed);
+  for (const relative of RATCHET_DEFINITION_CLOSURE) {
+    mkdirSync(path.dirname(path.join(seed, relative)), { recursive: true });
+    copyFileSync(path.join(ROOT, relative), path.join(seed, relative));
+  }
+  write({ root: seed, relative: "package.json", contents: "{}\n" });
+  write({ root: seed, relative: "bun.lock", contents: '{"packages":{}}\n' });
+  write({ root: seed, relative: ".gitignore", contents: "node_modules\n" });
+  write({ root: seed, relative: FIRST, contents: casts(2) });
+  write({
+    root: seed,
+    relative: "apps/api/src/middle.ts",
+    contents: casts(2),
+  });
+  write({ root: seed, relative: "apps/api/src/z.ts", contents: casts(2) });
+  symlinkSync(
+    path.join(ROOT, "node_modules"),
+    path.join(seed, "node_modules"),
+    "dir",
+  );
+  git(seed, "init", "-b", "main");
+  git(seed, "config", "user.name", "Ratchet fixture");
+  git(seed, "config", "user.email", "ratchet@example.invalid");
+  commit(seed, "fixture base");
+  if (branch !== undefined) {
+    git(seed, "branch", branch);
+  }
+  // Keep an unreachable object-store entry so the fixture proves cloning uses
+  // Git's transport instead of racing a filesystem copy of the live store.
+  const objectFanout = path.join(seed, ".git/objects/ff");
+  mkdirSync(objectFanout, { recursive: true });
+  symlinkSync(
+    "missing",
+    path.join(objectFanout, "00000000000000000000000000000000000000"),
+  );
+};
+
+let sharedSeedRoot: string | undefined;
+const getSharedSeed = (): string => {
+  if (sharedSeedRoot === undefined) {
+    const dir = mkdtempSync(path.join(tmpdir(), "ratchet-derived-seed-"));
+    const seed = path.join(dir, "seed");
+    createSeedRepository(seed);
+    sharedSeedRoot = dir;
+  }
+  return path.join(sharedSeedRoot, "seed");
+};
+
+afterAll(() => {
+  if (sharedSeedRoot !== undefined) {
+    rmSync(sharedSeedRoot, { recursive: true, force: true });
+    sharedSeedRoot = undefined;
+  }
+});
+
+type CloneOptions = {
+  branch?: string | undefined;
+  mutableOrigin?: boolean | undefined;
+};
+
 // Copy the real guard and its import closure; the clone's scans and Git
 // history stay small while both branches execute production CLI behavior.
-const withClone = (exercise: (root: string) => void, branch?: string) => {
+// Read-only fixtures clone from one shared immutable seed; tests that mutate
+// `origin` or need a custom remote branch get their own disposable seed.
+const withClone = (
+  exercise: (root: string) => void,
+  options?: string | CloneOptions,
+) => {
+  const branch = typeof options === "string" ? options : options?.branch;
+  const mutableOrigin =
+    typeof options === "object" && options.mutableOrigin === true;
   const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-derived-totals-"));
-  const seed = path.join(temporary, "seed");
   const clone = path.join(temporary, "clone");
   try {
-    mkdirSync(seed);
-    for (const relative of RATCHET_DEFINITION_CLOSURE) {
-      mkdirSync(path.dirname(path.join(seed, relative)), { recursive: true });
-      copyFileSync(path.join(ROOT, relative), path.join(seed, relative));
-    }
-    write({ root: seed, relative: "package.json", contents: "{}\n" });
-    write({ root: seed, relative: "bun.lock", contents: '{"packages":{}}\n' });
-    write({ root: seed, relative: ".gitignore", contents: "node_modules\n" });
-    write({ root: seed, relative: FIRST, contents: casts(2) });
-    write({
-      root: seed,
-      relative: "apps/api/src/middle.ts",
-      contents: casts(2),
-    });
-    write({ root: seed, relative: "apps/api/src/z.ts", contents: casts(2) });
-    symlinkSync(
-      path.join(ROOT, "node_modules"),
-      path.join(seed, "node_modules"),
-      "dir",
-    );
-    git(seed, "init", "-b", "main");
-    git(seed, "config", "user.name", "Ratchet fixture");
-    git(seed, "config", "user.email", "ratchet@example.invalid");
-    commit(seed, "fixture base");
-    if (branch !== undefined) {
-      git(seed, "branch", branch);
-    }
-    // Keep an unreachable object-store entry so the fixture proves cloning uses
-    // Git's transport instead of racing a filesystem copy of the live store.
-    const objectFanout = path.join(seed, ".git/objects/ff");
-    mkdirSync(objectFanout, { recursive: true });
-    symlinkSync(
-      "missing",
-      path.join(objectFanout, "00000000000000000000000000000000000000"),
-    );
+    const seed =
+      branch !== undefined || mutableOrigin
+        ? (() => {
+            const fresh = path.join(temporary, "seed");
+            createSeedRepository(fresh, branch);
+            return fresh;
+          })()
+        : getSharedSeed();
     git(
       temporary,
       "clone",
       "--quiet",
-      // Keep each fixture's object database independent of its disposable seed.
+      // Keep each fixture's object database independent of its seed.
       "--no-local",
       ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
       seed,
@@ -398,48 +439,56 @@ test.each([
 ])(
   "--head refreshes main independently of the checkout ($label)",
   ({ branch }) => {
-    withClone((root) => {
-      if (branch !== undefined) {
-        expect(git(root, "config", "--get", "remote.origin.fetch")).toBe(
-          `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
-        );
-      }
-      const fork = git(root, "rev-parse", "HEAD");
-      const origin = git(root, "remote", "get-url", "origin");
-      write({ root: origin, relative: FIRST, contents: casts(1) });
-      commit(origin, "main improvement");
-      git(root, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main");
-      const main = git(root, "rev-parse", "origin/main");
-      git(root, "checkout", "-b", "selected-head", main);
-      write({ root, relative: FIRST, contents: casts(2) });
-      commit(root, "selected head increase");
-      const head = git(root, "rev-parse", "HEAD");
-      git(root, "checkout", "-b", "other-branch", fork);
-      git(root, "update-ref", "refs/remotes/origin/main", fork);
-
-      expect(check(root).code).toBe(0);
-      expect(git(root, "rev-parse", "origin/main")).toBe(fork);
-      for (const checkoutBranch of ["other-branch", "selected-head"]) {
-        git(root, "checkout", checkoutBranch);
-        if (checkoutBranch === "selected-head") {
-          git(root, "update-ref", "-d", "refs/remotes/origin/main");
+    withClone(
+      (root) => {
+        if (branch !== undefined) {
+          expect(git(root, "config", "--get", "remote.origin.fetch")).toBe(
+            `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+          );
         }
-        const checkout = git(root, "rev-parse", "HEAD");
-        const result = check(root, "--head", head);
-        expect(result.code, result.output).toBe(1);
-        expect(result.output).toContain("as-casts: 5 -> 6");
-        expect(result.output).toContain(`(${main})`);
-        expect(git(root, "rev-parse", "origin/main")).toBe(main);
-        expect(git(root, "rev-parse", "HEAD")).toBe(checkout);
-      }
+        const fork = git(root, "rev-parse", "HEAD");
+        const origin = git(root, "remote", "get-url", "origin");
+        write({ root: origin, relative: FIRST, contents: casts(1) });
+        commit(origin, "main improvement");
+        git(
+          root,
+          "fetch",
+          "origin",
+          "+refs/heads/main:refs/remotes/origin/main",
+        );
+        const main = git(root, "rev-parse", "origin/main");
+        git(root, "checkout", "-b", "selected-head", main);
+        write({ root, relative: FIRST, contents: casts(2) });
+        commit(root, "selected head increase");
+        const head = git(root, "rev-parse", "HEAD");
+        git(root, "checkout", "-b", "other-branch", fork);
+        git(root, "update-ref", "refs/remotes/origin/main", fork);
 
-      git(root, "checkout", "other-branch");
-      write({ root, relative: FIRST, contents: casts(3) });
-      const worktree = check(root);
-      expect(worktree.code, worktree.output).toBe(1);
-      expect(worktree.output).toContain("as-casts: 6 -> 7");
-      expect(worktree.output).toContain(`(${fork})`);
-    }, branch);
+        expect(check(root).code).toBe(0);
+        expect(git(root, "rev-parse", "origin/main")).toBe(fork);
+        for (const checkoutBranch of ["other-branch", "selected-head"]) {
+          git(root, "checkout", checkoutBranch);
+          if (checkoutBranch === "selected-head") {
+            git(root, "update-ref", "-d", "refs/remotes/origin/main");
+          }
+          const checkout = git(root, "rev-parse", "HEAD");
+          const result = check(root, "--head", head);
+          expect(result.code, result.output).toBe(1);
+          expect(result.output).toContain("as-casts: 5 -> 6");
+          expect(result.output).toContain(`(${main})`);
+          expect(git(root, "rev-parse", "origin/main")).toBe(main);
+          expect(git(root, "rev-parse", "HEAD")).toBe(checkout);
+        }
+
+        git(root, "checkout", "other-branch");
+        write({ root, relative: FIRST, contents: casts(3) });
+        const worktree = check(root);
+        expect(worktree.code, worktree.output).toBe(1);
+        expect(worktree.output).toContain("as-casts: 6 -> 7");
+        expect(worktree.output).toContain(`(${fork})`);
+      },
+      { branch, mutableOrigin: true },
+    );
   },
   30_000,
 );

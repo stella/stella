@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 /** One namespace for every block anchor allocated during a document parse. */
 export const createBlockAnchorAllocator = () => {
   const emitted = new Set<string>();

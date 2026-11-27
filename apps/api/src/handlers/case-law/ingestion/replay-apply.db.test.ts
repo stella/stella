@@ -21,6 +21,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
@@ -78,7 +79,6 @@ import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-la
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,

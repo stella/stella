@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 import { Result } from "better-result";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
@@ -14,6 +15,7 @@ import {
   plainTextOf,
   startsDecisionBody,
 } from "@stll/legal-ast/document-ast";
+import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 
 import {
   type AtCourtTextSection,
@@ -27,7 +29,6 @@ import {
   risTextFidelity,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
-import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 export type ParseRisDecisionInput = {
   sourceDocumentId: string;

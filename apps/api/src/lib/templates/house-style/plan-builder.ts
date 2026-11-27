@@ -82,6 +82,7 @@ import type {
 } from "@/api/lib/templates/house-style/role-proposer";
 import { LEVEL_ROLES } from "@/api/lib/templates/house-style/template-profile";
 import type {
+  AnnexRoles,
   ProfileListLevel,
   ProfileRoleTarget,
   TemplateHealthFinding,
@@ -445,6 +446,9 @@ type Context = {
   decisions: ReadonlyMap<string, string>;
   proposalById: ReadonlyMap<string, RoleProposal>;
   outline: OutlineLevels;
+  /** The profile and its outline as they hold under an annex heading,
+   *  when the template has an outline of its own for annexes. */
+  annex: { profile: TemplateProfile; outline: OutlineLevels } | null;
   /** Blocks placed under a role the template has no style for. */
   stylelessRoles: Map<HouseStyleRole, number>;
   items: FormattingNoteItem[];
@@ -507,11 +511,75 @@ const evenedStyle = (
   };
 };
 
+const NO_ANNEX_ROLES: AnnexRoles = {};
+/** The roles an outline fills: a heading and what is counted under it. */
+const OUTLINE_ROLES = [
+  "articleHeading",
+  ...CLAUSE_ROLES,
+  "letter",
+  "roman",
+] as const satisfies readonly HouseStyleRole[];
+
+const outlineOf = ({ roles }: TemplateProfile): OutlineLevels => ({
+  article: roles.articleHeading?.numbering ?? null,
+  clauses: CLAUSE_ROLES.map((role) => roles[role]?.numbering ?? null),
+});
+
+/**
+ * The profile as it holds under an annex heading: the roles of the
+ * template's outline for annexes stand in for the main outline's, level by
+ * level. Null when the template has no such outline.
+ */
+const annexOf = (profile: TemplateProfile): Context["annex"] => {
+  const { annexRoles, roles } = profile;
+  // A clause counts under its heading only in the heading's list: an
+  // outline for annexes that lacks a level the main outline numbers would
+  // leave that level in the main list, under a heading of the other. Such
+  // an outline is not used.
+  if (
+    annexRoles === undefined ||
+    OUTLINE_ROLES.some(
+      (role) =>
+        (roles[role]?.numbering ?? null) !== null &&
+        annexRoles[role] === undefined,
+    )
+  ) {
+    return null;
+  }
+  const under: TemplateProfile = {
+    ...profile,
+    roles: { ...roles, ...annexRoles },
+  };
+  return { profile: under, outline: outlineOf(under) };
+};
+
+/**
+ * The profile and outline a labelled paragraph is set by. What stands
+ * under an annex heading is set as the template sets the provisions of its
+ * annexes, where it has a list of their own for them.
+ */
+const settingOf = (
+  context: Context,
+  block: DocxBlock,
+  entry: LabelEntry | null,
+): { profile: TemplateProfile; outline: OutlineLevels } => {
+  // A line without a label (a heading's title in a paragraph of its own)
+  // is under the annex its place in the document says.
+  const annexBlockId =
+    entry === null
+      ? context.index.contextByBlockId.get(block.id)?.annexBlockId
+      : entry.annexBlockId;
+  return context.annex !== null && (annexBlockId ?? null) !== null
+    ? context.annex
+    : context;
+};
+
 const styleTarget = (
   context: Context,
   role: HouseStyleRole,
+  profile: TemplateProfile = context.profile,
 ): ProfileRoleTarget | null => {
-  const { profile, stylelessRoles } = context;
+  const { stylelessRoles } = context;
   const own = profile.roles[role];
   if (own !== null) {
     return evenedStyle(context, role, own);
@@ -563,23 +631,50 @@ const bulletPatternOf = (
 };
 
 /** One paragraph's style and what it asks of the numbering. */
+/**
+ * The level a paragraph of `role` counts on and the style it is set in, by
+ * `profile`.
+ */
+const targetsOf = (
+  context: Context,
+  profile: TemplateProfile,
+  {
+    block,
+    role,
+    entry,
+  }: { block: DocxBlock; role: HouseStyleRole; entry: LabelEntry | null },
+): { ownLevel: ProfileListLevel | null; target: ProfileRoleTarget | null } => {
+  // A party's line that carries a number is its heading line: the template
+  // may have a numbered style for it beside the one for a party's details.
+  const head =
+    role === "party" && entry !== null ? (profile.partyHead ?? null) : null;
+  const ownLevel = (head ?? profile.roles[role])?.numbering ?? null;
+  // Running text numbered like an article keeps the article's level, and
+  // with it its number, and reads as the clause it is.
+  const styleRole =
+    role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
+  const unnumbered =
+    entry === null && ownLevel !== null && NUMBERED_ONLY.has(role);
+  return {
+    ownLevel,
+    target:
+      head ?? styleTarget(context, unnumbered ? "body" : styleRole, profile),
+  };
+};
+
 const placementOf = (
   context: Context,
   block: DocxBlock,
   role: HouseStyleRole,
 ): Placement => {
-  const { index, profile, exclusions, outline } = context;
+  const { index, exclusions } = context;
   const entry = index.entryByBlockId.get(block.id) ?? null;
-  const own = profile.roles[role];
-  const ownLevel = own?.numbering ?? null;
-  // Running text numbered like an article keeps the article's level, and
-  // with it its number, and reads as the clause it is.
-  const styleRole =
-    role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
-  const target =
-    entry === null && ownLevel !== null && NUMBERED_ONLY.has(role)
-      ? styleTarget(context, "body")
-      : styleTarget(context, styleRole);
+  const { profile, outline } = settingOf(context, block, entry);
+  const { ownLevel, target } = targetsOf(context, profile, {
+    block,
+    role,
+    entry,
+  });
   const mark = (block.label ?? "").trim();
   const bulleted = entry === null && isBulleted(block);
   const placement: Placement = {
@@ -1521,6 +1616,79 @@ const indentContinuations = (context: Context, placed: Placed): void => {
   }
 };
 
+/**
+ * Whether the source brings an unnumbered line back to the margin behind a
+ * provision whose text it indents: the line starts at the margin, the
+ * provision's text does not.
+ */
+const standsAtMargin = (line: Placement, item: Placement): boolean => {
+  // A manifest that reports the provision's indent reports every indent:
+  // a line without one has none.
+  const own = line.block.indent ?? { left: 0, firstLine: 0 };
+  const above = item.block.indent;
+  return (
+    above !== undefined &&
+    above.left > UNDER_ITEM_TOLERANCE &&
+    own.left <= UNDER_ITEM_TOLERANCE &&
+    own.left + own.firstLine <= UNDER_ITEM_TOLERANCE
+  );
+};
+
+/**
+ * Sets at the margin the unnumbered lines the source sets there behind an
+ * indented provision: the sentence that closes a part, a date, a line that
+ * opens what follows. The template's style for unnumbered text is made for
+ * text under a clause and indents it; a line the source brings back to the
+ * margin is no part of the clause above it and takes the style of plain
+ * text.
+ *
+ * Only in a document that sets most of its unnumbered lines under their
+ * provision's text: there the margin is a choice. One that sets them all
+ * at the margin makes none, and its lines stay under their clauses.
+ */
+const setMarginLines = (context: Context, placed: Placed): void => {
+  const plain = context.profile.roles.body?.styleId;
+  const atMargin: Placement[] = [];
+  let under = 0;
+  let item: Placement | null = null;
+  /** Whether the line placed last is one of `atMargin`. */
+  let opensList = false;
+  for (const block of context.topLevel) {
+    const placement =
+      block.kind === "table" ? undefined : placed.placementById.get(block.id);
+    if (placement === undefined) {
+      // A list behind a table is not opened by the line in front of it.
+      opensList &&= block.kind !== "table";
+      continue;
+    }
+    if (showsLabel(placement)) {
+      // A list of bullets hangs from the line that opens it: that line
+      // stays where the bullets expect it.
+      if (placement.pattern?.numFmt === "bullet" && opensList) {
+        atMargin.pop();
+      }
+      item = placement;
+      opensList = false;
+      continue;
+    }
+    opensList = false;
+    if (item !== null && placement.role === "continuation") {
+      if (standsAtMargin(placement, item)) {
+        atMargin.push(placement);
+        opensList = true;
+      } else if (standsUnder(placement, item)) {
+        under += 1;
+      }
+    }
+  }
+  if (plain === undefined || under <= atMargin.length) {
+    return;
+  }
+  for (const placement of atMargin) {
+    placement.styleId = plain;
+  }
+};
+
 /** The longest line that keeps the alignment the source sets it in. */
 const SET_LINE_MAX = 160;
 
@@ -1856,6 +2024,7 @@ const placeParagraphs = (context: Context): Placed => {
   keepClosingTogether(context, placed);
   alignPartyLines(context, placed);
   indentContinuations(context, placed);
+  setMarginLines(context, placed);
   alignFrontLines(context, placed);
   return placed;
 };
@@ -2527,9 +2696,11 @@ const keepsLineBreakSpacing = (
     JUSTIFIED.has(
       (styleId === undefined
         ? profile.defaultAlignment
-        : Object.values(profile.roles).find(
-            (target) => target?.styleId === styleId,
-          )?.alignment) ?? "",
+        : [
+            ...Object.values(profile.roles),
+            ...Object.values(profile.annexRoles ?? NO_ANNEX_ROLES),
+            profile.partyHead,
+          ].find((target) => target?.styleId === styleId)?.alignment) ?? "",
     );
   let blocks = 0;
   let alreadyStretched = 0;
@@ -3189,12 +3360,8 @@ export const buildTemplatePlan = ({
     exclusions,
     decisions,
     proposalById: new Map(roles.map((role) => [role.blockId, role])),
-    outline: {
-      article: profile.roles.articleHeading?.numbering ?? null,
-      clauses: CLAUSE_ROLES.map(
-        (role) => profile.roles[role]?.numbering ?? null,
-      ),
-    },
+    outline: outlineOf(profile),
+    annex: annexOf(profile),
     stylelessRoles: new Map(),
     items: [],
     headerFill: null,

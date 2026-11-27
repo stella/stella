@@ -4,7 +4,7 @@ export default {
   id: "page-furniture",
   capability:
     "Recognising page furniture in court text: running headers, page numbers, soft hyphens, and sentences a page break cut",
-  owner: ["apps/api/src/lib/legal-search/parsers/page-furniture.ts"],
+  owner: ["packages/legal-ast/src/page-furniture.ts"],
   summary:
     "Running headers and page numbers are the page's, not the court's, and " +
     "a sentence a page break cut is one paragraph. Parsers ask the owner " +

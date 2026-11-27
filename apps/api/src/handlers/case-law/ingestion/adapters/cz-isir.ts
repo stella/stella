@@ -1,3 +1,4 @@
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 /**
  * Court decisions published in the Czech insolvency register
  * (insolvenční rejstřík, isir.justice.cz).
@@ -67,6 +68,12 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  CZ_ISIR_INSTANCE,
+  CZ_ISIR_METADATA_KEY,
+  type CzIsirDecisionMetadata,
+} from "@stll/legal-ast/cz-isir-decision";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -118,12 +125,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  CZ_ISIR_INSTANCE,
-  CZ_ISIR_METADATA_KEY,
-  type CzIsirDecisionMetadata,
-} from "@/api/lib/legal-search/cz-isir-decision";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,

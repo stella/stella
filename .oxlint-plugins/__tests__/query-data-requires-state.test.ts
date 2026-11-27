@@ -9,7 +9,7 @@ const lint = async (source: string) =>
 import * as rq from "@tanstack/react-query";
 import { useChromeQuery as chrome } from "@/hooks/use-chrome-query"; import {useMemo, useMemo as memo} from "react"; import * as React from "react";
 ${source}`,
-    { ruleOptions: { census: true }, sourcePath: "apps/web/src/source.tsx" },
+    { sourcePath: "apps/web/src/source.tsx" },
   );
 
 describe.serial("query data state", () => {

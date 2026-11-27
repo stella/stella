@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendRequest as ContractChatSendRequest } from "@stll/api-contract/chat";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -49,7 +50,6 @@ import type {
 import { encodeChatModelSelection } from "@/api/lib/chat-model-selection";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type {
   LegislationPublicReadDb,

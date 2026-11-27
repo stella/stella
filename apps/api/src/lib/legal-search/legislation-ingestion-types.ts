@@ -7,13 +7,10 @@ import type {
 import type { LegislationPublisherEvidence } from "@stll/api-contract/legislation-publisher-evidence";
 import type { LegislationDocumentStatus } from "@stll/api-contract/legislation-status";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 import type {
   SliceCoverage,
   SourceSliceWalk,
