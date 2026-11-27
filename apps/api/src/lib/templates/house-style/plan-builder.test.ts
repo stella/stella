@@ -2335,6 +2335,16 @@ describe("buildTemplatePlan, drawn marks fixed to the source's page", () => {
         4: { inlineObjects: 2, pageShapes: 1 },
       },
     );
+    // A paragraph of dots that also starts a page stays for that, without
+    // its dots.
+    const paged = marked(["SMLOUVA", "", "Článek I.\nPrvní", "1.1\tText."], {
+      1: { inlineObjects: 2, pageShapes: 2, pageBreaks: 1 },
+    });
+    const breaking = build(paged).plan;
+    expect(breaking.omit.map(({ blockId }) => blockId)).not.toContain("p1");
+    expect(
+      sourceItems(breaking).find(({ blockId }) => blockId === "p1"),
+    ).toMatchObject({ dropPageShapes: true });
     const { plan, note } = build(manifest);
     expect(plan.omit).toContainEqual({ blockId: "p1", reason: "pageArtifact" });
     expect(itemOf(plan, manifest, "1.1\t")).toMatchObject({

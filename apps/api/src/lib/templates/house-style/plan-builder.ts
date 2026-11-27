@@ -1809,13 +1809,20 @@ const NO_PAGE_MARKS: ReadonlySet<string> = new Set();
  *  the words of a signature: the one right above and the one right below. */
 const SIGNATURE_REACH = 1;
 
-/** Whether a paragraph holds nothing but drawn marks fixed to the page. */
+/**
+ * Whether a paragraph holds nothing but drawn marks fixed to the page. One
+ * that starts a page or ends a section holds that too: it stays, without
+ * its marks, so the page still starts where the source starts it.
+ */
 const holdsOnlyPageMarks = (block: DocxBlock): boolean =>
   block.kind === "paragraph" &&
   block.text.trim() === "" &&
   printedLabel(block) === null &&
   block.pageShapes !== undefined &&
-  block.inlineObjects === block.pageShapes;
+  block.inlineObjects === block.pageShapes &&
+  (block.pageBreaks ?? 0) === 0 &&
+  block.pageBreakBefore !== true &&
+  block.endsSection !== true;
 
 /**
  * The paragraphs that are written without their drawn marks fixed to the
