@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: [pl-kio] the shared paragraph helpers keep the same default markers and calculations; only the named argument shape changes for this caller.
 /**
@@ -52,20 +53,19 @@ import {
   isText,
 } from "@stll/html/nodes";
 import {
-  HANGING_POINT_MARKER_RE,
-  OUTLINE_POINT_RE,
-  takesANumber,
-} from "@stll/legal-ast/printed-paragraph-labels";
-import { normalizeUnicode } from "@stll/text-normalize";
-
-import {
   continuesSentence,
   INDENT_THRESHOLD_PT,
   opensBlockParagraph,
   opensNumberedPoint,
   type PositionedLine,
   ranOutOfRoom,
-} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
+} from "@stll/legal-ast/hard-wrapped-lines";
+import {
+  HANGING_POINT_MARKER_RE,
+  OUTLINE_POINT_RE,
+  takesANumber,
+} from "@stll/legal-ast/printed-paragraph-labels";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { isExcludedHtmlTag } from "./shared-inlines";
 

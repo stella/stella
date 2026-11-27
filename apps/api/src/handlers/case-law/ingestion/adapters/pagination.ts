@@ -13,8 +13,13 @@ import * as v from "valibot";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
+// parser-output-unchanged: listing reads use readPublisher with identical status, retry, and error classification; parsed decisions are unchanged.
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
@@ -252,7 +257,6 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
  * ```
  */
 /** Max retries for transient 5xx / timeout errors before skipping. */
-const SERVER_ERROR_RETRIES = 2;
 
 /**
  * The gateway got no usable answer from the origin: the upstream refused the
@@ -280,6 +284,8 @@ const SERVER_ERROR_RETRIES = 2;
  * a page that answers this way forever holds its cursor forever.
  */
 const BAD_GATEWAY_STATUS = 502;
+const SERVER_ERROR_RETRIES = 2;
+const SERVER_ERROR_BASE_DELAY_MS = 1000;
 
 /**
  * What divides a walk's name from its offset in a cursor. A cursor is split
@@ -812,27 +818,89 @@ export const createPagePaginatedFetch = <TResponse>(
         const fetchT0 = performance.now();
         const listTimeout = opts.listTimeoutMs ?? ADAPTER_TIMEOUT.LIST;
 
-        // fetchWithRetry handles timeout/5xx/429 with exponential
-        // backoff. All page-paginated adapters inherit this.
-        let response: Response;
-        try {
+        const listingReadError = (
+          unread: UnreadPublisherOutcome,
+          message: string,
+        ): AdapterFetchError => {
+          if (unread.type === "unavailable" && unread.cause.kind === "thrown") {
+            const thrown = unread.cause.error;
+            if (thrown instanceof AdapterFetchError) {
+              return thrown.cursor === null && cursor !== null
+                ? new AdapterFetchError({
+                    message: thrown.message,
+                    adapterKey: thrown.adapterKey,
+                    cursor,
+                    stopKind: thrown.stopKind,
+                    ...(thrown.httpStatus === undefined
+                      ? {}
+                      : { httpStatus: thrown.httpStatus }),
+                    ...(thrown.retryAfter === undefined
+                      ? {}
+                      : { retryAfter: thrown.retryAfter }),
+                    ...(thrown.cause === undefined
+                      ? {}
+                      : { cause: thrown.cause }),
+                  })
+                : thrown;
+            }
+            return adapterCatch(opts.adapterKey, cursor)(thrown);
+          }
+          return unreadPublisherError({
+            outcome: unread,
+            message,
+            adapterKey: opts.adapterKey,
+            cursor,
+          });
+        };
+
+        // readPublisher handles timeout/502/503/504/429 with publisher-backoff
+        // and typed ReadOutcome classification. Other 5xx statuses (such as
+        // HTTP 500) are not retried by publisher-backoff, so retry them twice
+        // here before treating the page as a server error and advancing past it.
+        const readListingAttempt = async () =>
           // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
-          response = await fetchWithRetry(url, init, {
+          await readPublisher(url, {
+            ...init,
             fetchStage: "listing",
-            maxRetries: SERVER_ERROR_RETRIES,
+            refusalScope: "source",
+            retryPolicy: "publisher-backoff",
             timeoutMs: listTimeout,
             signal,
             adapterKey: opts.adapterKey,
           });
-        } catch (error) {
-          // Parent signal aborted: propagate for pipeline handling
-          if (signal?.aborted) {
-            throw error;
+        let outcome = await readListingAttempt();
+        for (let retry = 0; retry < SERVER_ERROR_RETRIES; retry++) {
+          const isTransientServerError =
+            outcome.type === "unavailable" &&
+            outcome.cause.kind === "status" &&
+            outcome.cause.status >= 500 &&
+            outcome.cause.status !== BAD_GATEWAY_STATUS;
+          if (!isTransientServerError || signal?.aborted) {
+            break;
           }
-          throw error;
+          await Bun.sleep(
+            Math.min(SERVER_ERROR_BASE_DELAY_MS * 2 ** retry, 30_000),
+          );
+          if (signal?.aborted) {
+            break;
+          }
+          outcome = await readListingAttempt();
         }
 
-        if (!response.ok) {
+        if (outcome.type !== "present") {
+          let failedStatus: number | undefined;
+          if (
+            outcome.type === "unavailable" &&
+            outcome.cause.kind === "status"
+          ) {
+            failedStatus = outcome.cause.status;
+          } else if (
+            outcome.type === "unavailable" &&
+            outcome.cause.kind === "thrown" &&
+            outcome.cause.error instanceof AdapterFetchError
+          ) {
+            failedStatus = outcome.cause.error.httpStatus;
+          }
           // A 5xx the origin itself produced, after all retries: skip this
           // page and advance.
           // 429 is NOT skipped — it is the publisher's rate-limit refusal,
@@ -841,15 +909,16 @@ export const createPagePaginatedFetch = <TResponse>(
           // (see BAD_GATEWAY_STATUS): nothing was read, so there is nothing
           // to advance past.
           if (
-            response.status >= 500 &&
-            response.status !== BAD_GATEWAY_STATUS
+            failedStatus !== undefined &&
+            failedStatus >= 500 &&
+            failedStatus !== BAD_GATEWAY_STATUS
           ) {
             // Same rule as the timeout skip above: a publisher-side 5xx
             // is operational, logged per page, and aggregated by the
             // coverage ledger rather than captured per attempt.
             logger.warn("case_law.ingestion.page_skipped_server_error", {
               adapterKey: opts.adapterKey,
-              httpStatus: String(response.status),
+              httpStatus: String(failedStatus),
               page: String(page),
             });
             return Result.ok({
@@ -859,13 +928,9 @@ export const createPagePaginatedFetch = <TResponse>(
             });
           }
 
-          throw new AdapterFetchError({
-            message: `${opts.adapterKey}: HTTP ${response.status}`,
-            adapterKey: opts.adapterKey,
-            cursor,
-            httpStatus: response.status,
-          });
+          return Result.err(listingReadError(outcome, opts.adapterKey));
         }
+        const response = outcome.value;
 
         const retryFailed = (detail: string): AdapterFetchError =>
           new AdapterFetchError({
@@ -896,23 +961,21 @@ export const createPagePaginatedFetch = <TResponse>(
               mediaType: contentType,
             });
             // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- retries the page URL from the adapter's own buildRequest over its fixed publisher base
-            const retryResponse = await fetchWithRetry(url, init, {
+            const retryOutcome = await readPublisher(url, {
+              ...init,
               fetchStage: "listing",
-              maxRetries: 1,
+              refusalScope: "source",
+              retryPolicy: "publisher-backoff",
               timeoutMs: listTimeout,
               signal,
               adapterKey: opts.adapterKey,
             });
-            if (!retryResponse.ok) {
+            if (retryOutcome.type !== "present") {
               return Result.err(
-                new AdapterFetchError({
-                  message: `${opts.adapterKey}: retry HTTP ${retryResponse.status}`,
-                  adapterKey: opts.adapterKey,
-                  cursor,
-                  httpStatus: retryResponse.status,
-                }),
+                listingReadError(retryOutcome, `${opts.adapterKey}: retry`),
               );
             }
+            const retryResponse = retryOutcome.value;
             try {
               const retried = await opts.parseResponse(retryResponse);
               return Result.isError(retried)

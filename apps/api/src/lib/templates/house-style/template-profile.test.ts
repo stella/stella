@@ -6,9 +6,11 @@ import {
   validateTemplateProfile,
 } from "@/api/lib/templates/house-style/template-profile";
 import {
+  ANNEX_LIST,
   contractTemplate,
   LETTERHEAD,
   OUTLINE_LIST,
+  templateWithAnnexOutline,
 } from "@/api/lib/templates/house-style/template.test-helpers";
 
 describe("inferTemplateProfile", () => {
@@ -36,6 +38,64 @@ describe("inferTemplateProfile", () => {
     expect(spareLevels.map(({ ilvl }) => ilvl)).toEqual([5, 6, 7, 8]);
   });
 
+  test("an outline of styles named for annexes, in a list of its own, is the annexes' outline", () => {
+    // The plain template has one outline and none for annexes.
+    expect(inferTemplateProfile(contractTemplate()).annexRoles).toBeUndefined();
+
+    const template = templateWithAnnexOutline();
+    const profile = inferTemplateProfile(template);
+    expect(profile.roles.articleHeading?.styleId).toBe("Article");
+    expect(profile.annexRoles?.articleHeading).toMatchObject({
+      styleId: "AnnexArticle",
+      numbering: { numId: ANNEX_LIST, ilvl: 0, lvlText: "%1." },
+    });
+    // Its clause style names another list of the same definition: the
+    // clauses count with their heading, in the heading's list.
+    expect(profile.annexRoles?.clause1).toMatchObject({
+      styleId: "AnnexClause",
+      numbering: { numId: ANNEX_LIST, ilvl: 1 },
+    });
+    expect(validateTemplateProfile(profile, template)).toEqual([]);
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    // A target of the annexes' outline that names what the template lacks
+    // is an error, as a role's is.
+    expect(
+      validateTemplateProfile(
+        {
+          ...profile,
+          annexRoles: {
+            ...profile.annexRoles,
+            ...(profile.annexRoles?.clause1 === undefined
+              ? {}
+              : {
+                  clause1: {
+                    ...profile.annexRoles.clause1,
+                    styleId: "Missing",
+                  },
+                }),
+          },
+        },
+        template,
+      ),
+    ).toContainEqual({
+      severity: "error",
+      code: "unknownStyle",
+      role: "clause1",
+    });
+
+    // A second list whose styles are not named for annexes is no outline
+    // of theirs.
+    const unnamed = templateWithAnnexOutline();
+    for (const style of unnamed.styles) {
+      if (style.styleId === "AnnexArticle") {
+        style.name = "Level one";
+      }
+    }
+    expect(inferTemplateProfile(unnamed).annexRoles).toBeUndefined();
+  });
+
   test("reads unnumbered roles from style names and the sample text", () => {
     const { roles, annex, headings } = inferTemplateProfile(contractTemplate());
     expect(roles.title).toMatchObject({
@@ -47,6 +107,10 @@ describe("inferTemplateProfile", () => {
     // The numbered style heads a party; its details are written in the
     // style of the sample's detail lines.
     expect(roles.party).toMatchObject({ styleId: "Indent", numbering: null });
+    expect(inferTemplateProfile(contractTemplate()).partyHead).toMatchObject({
+      styleId: "Party",
+      numbering: { ilvl: 0, lvlText: "%1." },
+    });
     expect(roles.recital?.numbering).toMatchObject({ numFmt: "upperLetter" });
     expect(roles.signature?.styleId).toBe("Signature");
     expect(roles.annexHeading).toMatchObject({
@@ -74,11 +138,12 @@ describe("inferTemplateProfile", () => {
     ).toBe(true);
   });
 
-  test("a contents field that shows sample entries is not kept", () => {
+  test("a contents field is kept with its caption, with sample entries or without", () => {
+    // The engine writes a kept field without the entries it caches.
     const filled = inferTemplateProfile(contractTemplate());
-    expect(filled.regions.contents).toEqual([]);
+    expect(filled.regions.contents).toEqual(["p4", "p5", "p6", "p7"]);
     expect(filled.regions.keepBefore).toEqual([]);
-    expect(filled.regions.filler).toContain("p5");
+    expect(filled.regions.filler).not.toContain("p5");
 
     const empty = inferTemplateProfile(contractTemplate({ contents: "empty" }));
     // The caption goes with the field, and the field is kept whole.
@@ -97,6 +162,74 @@ describe("inferTemplateProfile", () => {
       "p6",
       "p7",
     ]);
+  });
+
+  test("the styles a kept contents field collects from are read off its code", () => {
+    const withCode = (instruction: string | undefined) => {
+      const template = contractTemplate({ contents: "empty" });
+      for (const field of template.fields) {
+        if (field.kind === "TOC" && instruction !== undefined) {
+          field.instruction = instruction;
+        }
+      }
+      return inferTemplateProfile(template).contentsStyles;
+    };
+    // Styles by name, with the separator of the machine that wrote them.
+    expect(
+      withCode(String.raw` TOC \h \z \t "Heading article;1;Annex heading;2" `),
+    ).toEqual(["Article", "Annex"]);
+    expect(withCode(String.raw`TOC \t "heading ARTICLE,1"`)).toEqual([
+      "Article",
+    ]);
+    // The built-in headings of a range: this template has none.
+    expect(withCode(String.raw`TOC \o "1-3" \h`)).toEqual([]);
+    // A style of the template's own with an outline level in the range
+    // is collected as a built-in heading of that level is.
+    const outlined = contractTemplate({ contents: "empty" });
+    for (const field of outlined.fields) {
+      if (field.kind === "TOC") {
+        field.instruction = String.raw`TOC \o "1-3" \h`;
+      }
+    }
+    for (const style of outlined.styles) {
+      if (style.styleId === "Article") {
+        style.outlineLvl = 0;
+      }
+      if (style.styleId === "Roman") {
+        style.outlineLvl = 4;
+      }
+    }
+    expect(inferTemplateProfile(outlined).contentsStyles).toEqual(["Article"]);
+    // A field whose code is not known says nothing.
+    expect(withCode(undefined)).toBeUndefined();
+
+    // Built-in headings by level, and with \u the styles that state an
+    // outline level.
+    const headed = contractTemplate({ contents: "empty" });
+    for (const field of headed.fields) {
+      if (field.kind === "TOC") {
+        field.instruction = String.raw`TOC \o "1-2" \u`;
+      }
+    }
+    for (const style of headed.styles) {
+      if (style.styleId === "Article") {
+        style.name = "heading 2";
+      }
+      if (style.styleId === "Annex") {
+        style.name = "heading 3";
+      }
+      if (style.styleId === "Clause1") {
+        style.outlineLvl = 1;
+      }
+    }
+    expect(inferTemplateProfile(headed).contentsStyles).toEqual([
+      "Article",
+      "Clause1",
+    ]);
+    // A template that keeps no contents collects nothing.
+    const without = contractTemplate({ contents: "empty" });
+    without.fields = without.fields.filter(({ kind }) => kind !== "TOC");
+    expect(inferTemplateProfile(without).contentsStyles).toBeUndefined();
   });
 
   test("a table in front of the sample is kept; sample parties and signatures are slots", () => {
@@ -147,6 +280,66 @@ describe("inferTemplateProfile", () => {
       roles: { ...profile.roles, body: { ...body, indentLeft: -360 } },
     };
     expect(parseTemplateProfile(outdented).unwrap()).toEqual(outdented);
+  });
+
+  test("reads the cells of a kept letterhead: the addressee's sample lines, the date, the file number", () => {
+    const template = contractTemplate({
+      front: [
+        { id: "t90", cells: ["p91", "p95"] },
+        { id: "p91", text: "Company", styleId: "Normal" },
+        { id: "p92", text: "Street 1", styleId: "Normal" },
+        { id: "p93", text: "City", styleId: "Normal" },
+        { id: "p94", text: "File number:", styleId: "Normal" },
+        { id: "p95", text: "4 September 2026", styleId: "Normal" },
+      ],
+    });
+    // The first cell holds the address and the file number, the second
+    // the date.
+    const blocks = template.blocks.map((block) =>
+      block.id === "t90"
+        ? {
+            ...block,
+            cells: [
+              { row: 0, col: 0, blockIds: ["p91", "p92", "p93", "p94"] },
+              { row: 0, col: 1, blockIds: ["p95"] },
+            ],
+          }
+        : block,
+    );
+    const profile = inferTemplateProfile({ ...template, blocks });
+    expect(profile.regions.keepBefore).toContain("t90");
+    expect(profile.header).toEqual({
+      addressee: ["p91", "p92", "p93"],
+      date: "p95",
+      reference: "p94",
+    });
+    // A date right under the address, in the same cell and with no label
+    // in between, is the date and no line of the address.
+    const stacked = contractTemplate({
+      front: [
+        { id: "t90", cells: ["p91"] },
+        { id: "p91", text: "Company", styleId: "Normal" },
+        { id: "p92", text: "Street 1", styleId: "Normal" },
+        { id: "p93", text: "City", styleId: "Normal" },
+        { id: "p94", text: "4 September 2026", styleId: "Normal" },
+      ],
+    });
+    const oneCell = stacked.blocks.map((block) =>
+      block.id === "t90"
+        ? {
+            ...block,
+            cells: [{ row: 0, col: 0, blockIds: ["p91", "p92", "p93", "p94"] }],
+          }
+        : block,
+    );
+    expect(
+      inferTemplateProfile({ ...stacked, blocks: oneCell }).header,
+    ).toMatchObject({ addressee: ["p91", "p92", "p93"], date: "p94" });
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    // A template that keeps no table in front has no such cells.
+    expect(inferTemplateProfile(contractTemplate()).header).toBeUndefined();
   });
 
   test("reads the style of a heading without a number: named for the preamble, in no list", () => {

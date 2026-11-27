@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments } from "@/api/db/schema";
@@ -13,10 +14,6 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import { recordFirstLegislationCorpusWriteTx } from "@/api/lib/legal-search/corpus-projectability-write";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 
 /**
  * The legislation half of the corpus storage backfill: store the inline

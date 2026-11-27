@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 /**
  * Printed-page structure that survived into a decision's blocks.
  *
@@ -31,14 +32,13 @@ import {
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
 import {
+  continuesAcrossPageBreak,
+  isPageNumberLine,
+} from "@stll/legal-ast/page-furniture";
+import {
   PRINTED_LABEL_KIND,
   readPrintedLabel,
 } from "@stll/legal-ast/printed-paragraph-labels";
-
-import {
-  continuesAcrossPageBreak,
-  isPageNumberLine,
-} from "@/api/lib/legal-search/parsers/page-furniture";
 
 export const STRUCTURE_FIDELITY_RULES = {
   /** A paragraph that is only a page number: the page's, not the court's. */

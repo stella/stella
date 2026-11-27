@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
@@ -10,7 +11,6 @@ import {
 import type { SizedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import type { StoredAstReportContext } from "@/api/lib/legal-search/stored-ast-outcome";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 

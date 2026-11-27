@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import { readDecisionDocketReference } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 import { caseLawDecisionReviews, caseLawDecisions } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
@@ -15,7 +16,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayRawWrite } from "@/api/lib/case-law/replay-write";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 

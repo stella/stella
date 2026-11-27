@@ -16,7 +16,7 @@ import { describe, expect, test } from "bun:test";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { readGzipJson } from "@/api/lib/gzip-json";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 type FixtureDecision = {
   case_number: string;

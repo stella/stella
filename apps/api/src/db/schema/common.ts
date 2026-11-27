@@ -18,6 +18,7 @@ import type { ConditionNode } from "@stll/conditions";
 import type { CountryCode } from "@stll/country-codes";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { bytea, jsonb, timestamptz } from "@/api/db/columns";
@@ -122,10 +123,6 @@ import type {
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import type { AgendaAttendeeType } from "@/api/lib/entity-constants";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 import type { CentsAmount } from "@/api/lib/money";
 import { unsafeCents } from "@/api/lib/money";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";

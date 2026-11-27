@@ -10,8 +10,8 @@ import type {
   Table,
 } from "@stll/docx-core/model";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 
 export const NOTE_PATHS = [

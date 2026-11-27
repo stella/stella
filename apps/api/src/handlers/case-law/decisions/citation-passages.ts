@@ -33,6 +33,7 @@ import {
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
 import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 import {
   caseLawCitations,
@@ -81,7 +82,6 @@ import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";

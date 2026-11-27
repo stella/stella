@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
 import { databaseRelations } from "@/api/db/database-relations";
@@ -33,7 +34,6 @@ import {
   APP_READER_TEXT,
   type AppReaderText,
 } from "@/api/lib/legal-search/adapter-manifest";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   PARTIAL_OBSERVATION_FIELD,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: declares how the new opening-formula role wraps (never reflowed); no paragraph carried that role before, so every reader that does not emit it keeps its output.
 // parser-output-unchanged: the wrapped-date rule and the point openings moved unchanged into the printed-label grammar, which this planner reads them from.
 /**
@@ -12,7 +13,7 @@
  * whether a text is fixed-width wrapped and at which column, and
  * `lineJoinOf` reads one line boundary of such a text: whether the line
  * continues the one before it. Parsers call them (see
- * `apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts` and the
+ * `packages/legal-ast/src/hard-wrapped-lines.ts` and the
  * Slovak general courts' PDF parser) rather than detecting wrapping
  * themselves.
  *

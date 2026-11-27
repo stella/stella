@@ -2,13 +2,13 @@
 import { Result } from "better-result";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";

@@ -18,6 +18,7 @@ import {
   DECISION_IDENTIFIER_TYPES,
   DECISION_PRIMARY_REFERENCE_TYPES,
 } from "@stll/legal-ast/decision-identifier";
+import { DECISION_SECTION_TYPES } from "@stll/legal-ast/document-types";
 
 import type { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
@@ -27,7 +28,6 @@ import {
   readerTextFields,
 } from "@/api/lib/case-law/reader-text-fields";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { DECISION_SECTION_TYPES } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { responseByteBound } from "@/api/lib/search/response-byte-bound";
 import {

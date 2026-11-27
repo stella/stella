@@ -5,6 +5,7 @@
 
 import { panic } from "better-result";
 
+import { letterOrdinal } from "@/api/lib/templates/house-style/designators";
 import type {
   DocxBlock,
   DocxBlockManifest,
@@ -93,7 +94,7 @@ const PARTY_MARKER = new RegExp(
   "iu",
 );
 const PREAMBLE_MARKER =
-  /uzavřel[yi]|uzavírají|se dohodl[yi]|preambule|whereas|have agreed|agree as follows|präambel|vereinbaren/iu;
+  /uzavřel[yi]|uzavírají|se dohodl[yi]|preambule|whereas|have agreed|have concluded|agree as follows|präambel|vereinbaren/iu;
 const SIGNATURE_MARKER = new RegExp(
   String.raw`^\s*(?:ve?[ \u00A0].{0,40}[ \u00A0]dne${NOT_LETTER}|(?:in|at)[ \u00A0].{0,40}[ ,]on${NOT_LETTER}|(?:ort|datum|date|place|místo)[^\n]{0,20}[:.…_]{2,}|(?:za|for and on behalf of|on behalf of|für|im namen)[ \u00A0])|_{4,}|\.{6,}|…{3,}|podpis|signature|unterschrift|signed by|name:|title:|jméno:|funkce:`,
   "iu",
@@ -154,6 +155,12 @@ const isAmbiguousNumeral = ({ shape }: LabelEntry): boolean =>
 const readEntry = (entry: LabelEntry, zones: Zones): Reading => {
   const labelled =
     entry.origin === "auto" ? CONFIDENCE.autoLabel : CONFIDENCE.typedLabel;
+  if (zones.partyHeads.has(entry.position)) {
+    return reading("party", CONFIDENCE.partyMarked, {
+      role: "clause1",
+      confidence: CONFIDENCE.weakAlternative,
+    });
+  }
   switch (entry.level) {
     case "article":
       return reading(
@@ -256,6 +263,9 @@ const continuesCaption = (block: DocxBlock, title: DocxBlock): boolean => {
 /** The document's zones by block position; `Infinity` for a zone the
  *  document does not have. */
 type Zones = {
+  /** The positions of numbered lines that head the parties: they stand in
+   *  front of the provisions and are none. */
+  partyHeads: ReadonlySet<number>;
   firstProvision: number;
   title: number;
   firstParty: number;
@@ -321,6 +331,80 @@ const preambleStart = (
   return headed ? aboveAt : marked;
 };
 
+/** How many paragraphs a party's lines run to under its number, at most. */
+const PARTY_SPAN_MAX = 14;
+/** A line that ends in the word between two parties (`of the one part
+ *  and`), or is that word. */
+const ENDS_IN_JOINER = /(?:^|[ \u00A0])(?:a|and|und|&)[ \u00A0,]*$/iu;
+
+/** The count a line of an enumeration shows: 1 for `1.` and for `a)`.
+ *  Null for a number of several parts and for anything that heads more. */
+const enumerated = ({
+  level,
+  ordinal,
+  core,
+  clausePath,
+}: LabelEntry): number | null => {
+  if (level === "clause") {
+    return clausePath.length <= 1 ? ordinal : null;
+  }
+  return level === "letter" ? letterOrdinal(core) : null;
+};
+
+/**
+ * The numbered lines that head the parties (`1. Company …`, `2. Company
+ * …`, or `a)`, `b)`): the document's first enumerated lines, counted from
+ * one, where the first has a party's details in or under it and each
+ * further one has them too or follows the word that joins two parties. At
+ * least two, as a contract has, and none where a party is named or the
+ * preamble opens in front of them. `provisions` are the labelled lines of the
+ * body, in order.
+ */
+const partyHeadsOf = (
+  blocks: readonly DocxBlock[],
+  provisions: readonly LabelEntry[],
+): Set<number> => {
+  const heads: LabelEntry[] = [];
+  // Parties stand in front of the operative part. Where a party is named
+  // or the preamble opens in front of the first numbered line, the
+  // numbered lines are provisions, whatever they speak of.
+  const opened = blocks
+    .slice(0, provisions.at(0)?.position ?? 0)
+    .some(
+      ({ text }) => PARTY_IDENTITY.test(text) || PREAMBLE_MARKER.test(text),
+    );
+  if (opened) {
+    return new Set();
+  }
+  for (const [at, entry] of provisions.entries()) {
+    const first = heads.at(0);
+    if (
+      enumerated(entry) !== heads.length + 1 ||
+      (first !== undefined && first.level !== entry.level)
+    ) {
+      break;
+    }
+    const until = Math.min(
+      provisions[at + 1]?.position ?? blocks.length,
+      entry.position + PARTY_SPAN_MAX,
+    );
+    const lines = blocks.slice(entry.position, until);
+    const identified = lines.some(({ text }) => PARTY_IDENTITY.test(text));
+    const above = blocks
+      .slice(first?.position ?? entry.position, entry.position)
+      .findLast(({ text }) => text.trim() !== "");
+    const joined =
+      first !== undefined &&
+      above !== undefined &&
+      ENDS_IN_JOINER.test(above.text.trim());
+    if (!identified && !joined) {
+      break;
+    }
+    heads.push(entry);
+  }
+  return new Set(heads.length < 2 ? [] : heads.map(({ position }) => position));
+};
+
 const findZones = (
   all: readonly DocxBlock[],
   { entries }: LabelIndex,
@@ -333,7 +417,10 @@ const findZones = (
   const blocks = all.map((block): DocxBlock =>
     nested.has(block.id) ? { ...block, kind: "table", text: "" } : block,
   );
-  const provisions = entries.filter(isProvision);
+  const partyHeads = partyHeadsOf(all, entries.filter(isProvision));
+  const provisions = entries.filter(
+    (entry) => isProvision(entry) && !partyHeads.has(entry.position),
+  );
   const firstProvision = provisions.at(0)?.position ?? Number.POSITIVE_INFINITY;
   const lastProvision = provisions.at(-1)?.position ?? -1;
   const firstAnnexHeading =
@@ -373,7 +460,7 @@ const findZones = (
   );
   // A party's name often stands alone on the line above its details.
   const named = blocks[identified - 1];
-  const firstParty =
+  const byDetails =
     named !== undefined &&
     identified - 1 > title &&
     named.kind === "paragraph" &&
@@ -383,6 +470,9 @@ const findZones = (
     !PARTY_INTRO.test(named.text.trim())
       ? identified - 1
       : identified;
+  // Parties headed by a number begin at the first such line.
+  const firstParty =
+    partyHeads.size === 0 ? byDetails : Math.min(...partyHeads);
   const marked = firstPosition(
     all,
     (Number.isFinite(firstParty) ? firstParty : title) + 1,
@@ -395,6 +485,7 @@ const findZones = (
     Number.isFinite(firstParty) ? firstParty : title,
   );
   return {
+    partyHeads,
     firstProvision,
     title,
     firstParty,
@@ -667,10 +758,12 @@ export const proposeBlockRoles = ({
     if (nested.has(block.id)) {
       // A cell paragraph is placed with its table. It is read on its own
       // where it is a provision in its own right: numbered by a list, or a
-      // paragraph of a text that runs in parallel columns.
+      // paragraph of a text that runs in parallel columns. A number with
+      // no words behind it counts the table's rows and is no provision.
       const entry = index.entryByBlockId.get(block.id);
       if (
         entry !== undefined &&
+        block.text.trim() !== "" &&
         (entry.origin === "auto" || index.columnByBlockId.has(block.id))
       ) {
         proposals.push({
