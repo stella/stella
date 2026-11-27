@@ -38,6 +38,19 @@
 import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  isHtmlBlock,
+  renderHtmlWhiteSpace,
+} from "@stll/case-law-parsers/html-whitespace";
+import { inlineStyleValue } from "@stll/case-law-parsers/inline-style";
+import {
+  appendTextInline,
+  inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
+  walkInlines as walkInlinesShared,
+} from "@stll/case-law-parsers/shared-inlines";
+import { stripHtml } from "@stll/case-law-parsers/strip-html";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import {
@@ -96,24 +109,11 @@ import {
 import { SUBHEADING_OUTLINE_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
-import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
-import {
-  isHtmlBlock,
-  renderHtmlWhiteSpace,
-} from "@/api/lib/legal-search/document-builders/html-whitespace";
-import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 import { readCommonCourtInlines } from "./pl-common-court-inlines";
-import {
-  appendTextInline,
-  inlinesToPlainText,
-  isExcludedHtmlTag,
-  ownTableRows,
-  walkInlines as walkInlinesShared,
-} from "./shared-inlines";
 
 type ParsePlDecisionInput = {
   caseNumber: string;

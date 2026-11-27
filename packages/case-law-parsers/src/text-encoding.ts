@@ -25,7 +25,7 @@ import {
   type EncodingFinding,
 } from "@stll/mojibake/detect";
 
-import { MARKUP_RESIDUE_EXCERPT_CHARS } from "@/api/lib/legal-search/parsers/markup-residue";
+import { MARKUP_RESIDUE_EXCERPT_CHARS } from "./markup-residue";
 
 /**
  * Log event emitted when a decision's text reads as decoded with the wrong

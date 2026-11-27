@@ -3,6 +3,11 @@ import { decodeHTMLStrict } from "entities";
 import fc from "fast-check";
 import path from "node:path";
 
+import {
+  markupResidueIn,
+  markupResidueSweepRules,
+} from "@stll/case-law-parsers/markup-residue";
+import type { MarkupResidueRuleId } from "@stll/case-law-parsers/markup-residue";
 import { assertProperty } from "@stll/property-testing";
 
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
@@ -14,11 +19,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import {
-  markupResidueIn,
-  markupResidueSweepRules,
-} from "@/api/lib/legal-search/parsers/markup-residue";
-import type { MarkupResidueRuleId } from "@/api/lib/legal-search/parsers/markup-residue";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);

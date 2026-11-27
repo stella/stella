@@ -13,17 +13,12 @@ import fc from "fast-check";
 import type { BlockContent, Paragraph, Run } from "@stll/docx-core/model";
 import { assertProperty } from "@stll/property-testing";
 
-import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
+import { markupResidueIn } from "./markup-residue";
 import {
   embeddedTextFixtures,
   embeddedTextRtf,
-} from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
-import {
-  isRtf,
-  readRtf,
-  readRtfString,
-} from "@/api/lib/legal-search/parsers/rtf-reader";
-
+} from "./rtf-destinations.fixtures";
+import { isRtf, readRtf, readRtfString } from "./rtf-reader";
 import { runContentVisibleText } from "./run-content-text";
 
 /**

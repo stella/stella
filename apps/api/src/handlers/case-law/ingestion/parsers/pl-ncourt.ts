@@ -20,6 +20,7 @@
  * sentence.
  */
 
+import { ANONYMIZED_CLASS } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import {
   type AnyNode,
@@ -30,7 +31,6 @@ import {
 } from "@stll/html/nodes";
 
 import { judgeLexLink, type LexLinkRejection } from "./pl-ncourt-lexlink";
-import { ANONYMIZED_CLASS } from "./shared-inlines";
 
 /** The statute a `xLexLink` names, as the link states it. */
 type PlNcourtLegalReference = {

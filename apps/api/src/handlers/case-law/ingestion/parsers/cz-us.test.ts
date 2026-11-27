@@ -1,6 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
+import {
+  embeddedTextFixtures,
+  embeddedTextRtf,
+} from "@stll/case-law-parsers/rtf-destinations.fixtures";
+import { readRtfString } from "@stll/case-law-parsers/rtf-reader";
+import {
+  VISIBLE_FIELD_DOCUMENT,
+  VISIBLE_RUN_CASES,
+  visibleRunDocument,
+} from "@stll/case-law-parsers/run-content-text.fixtures";
+import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -10,17 +22,6 @@ import { assertProperty } from "@stll/property-testing";
 import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
-import {
-  embeddedTextFixtures,
-  embeddedTextRtf,
-} from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
-import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
-import {
-  VISIBLE_FIELD_DOCUMENT,
-  VISIBLE_RUN_CASES,
-  visibleRunDocument,
-} from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
@@ -34,7 +35,6 @@ import {
   noteTableRtf,
 } from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
-import { inlinesToPlainText } from "./shared-inlines";
 
 const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 

@@ -4,6 +4,7 @@
 import { panic, Result } from "better-result";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *
@@ -105,7 +106,6 @@ import type {
   PlUokikRulingHeader,
   PlUokikRulingUnread,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,

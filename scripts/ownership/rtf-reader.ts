@@ -4,8 +4,8 @@ export default {
   id: "rtf-reader",
   capability: "Decoding RTF control words and bytes",
   owner: [
-    "apps/api/src/lib/legal-search/parsers/rtf-reader.ts",
-    "apps/api/src/lib/legal-search/parsers/rtf-control-vocabulary.ts",
+    "packages/case-law-parsers/src/rtf-reader.ts",
+    "packages/case-law-parsers/src/rtf-control-vocabulary.ts",
   ],
   summary:
     "All source parsers consume the shared RTF document reader. The document code-page control stays confined to that reader; fixtures may state it as input.",
@@ -18,11 +18,11 @@ export default {
         reason: "Declares the confined control word.",
       },
       {
-        path: "apps/api/src/lib/legal-search/parsers/rtf-reader.test.ts",
+        path: "packages/case-law-parsers/src/rtf-reader.test.ts",
         reason: "Exercises source byte decoding.",
       },
       {
-        path: "apps/api/src/lib/legal-search/parsers/rtf-reader-owner.test.ts",
+        path: "packages/case-law-parsers/src/rtf-reader-owner.test.ts",
         reason: "Enumerates reader implementations.",
       },
       {

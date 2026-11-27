@@ -28,12 +28,11 @@
 
 import { panic } from "better-result";
 
+import { appendTextInline } from "@stll/case-law-parsers/shared-inlines";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 import { startsWithPlOperativeVerb } from "@stll/legal-ast/polish-document-roles";
-
-import { appendTextInline } from "./shared-inlines";
 
 // Built from code points: the characters are invisible in a regex literal.
 const NO_BREAK_SPACE = String.fromCodePoint(0xa0);

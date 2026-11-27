@@ -93,6 +93,7 @@
         "@stll/brand": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/calculations": "workspace:*",
+        "@stll/case-law-parsers": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/chat": "workspace:*",
         "@stll/chat-limits": "workspace:*",
@@ -965,6 +966,27 @@
         "fast-check": "catalog:",
         "tsdown": "catalog:",
         "tsrs": "catalog:",
+      },
+    },
+    "packages/case-law-parsers": {
+      "name": "@stll/case-law-parsers",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/agent-input": "workspace:*",
+        "@stll/api-contract": "workspace:*",
+        "@stll/docx-core": "catalog:",
+        "@stll/html": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
+        "@stll/mojibake": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
+        "entities": "^9.0.0",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/catalogue": {
@@ -3551,6 +3573,8 @@
     "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
 
     "@stll/calculations": ["@stll/calculations@workspace:packages/calculations"],
+
+    "@stll/case-law-parsers": ["@stll/case-law-parsers@workspace:packages/case-law-parsers"],
 
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -8,7 +9,6 @@ import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/pa
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
-import { inlinesToPlainText } from "./shared-inlines";
 
 const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 

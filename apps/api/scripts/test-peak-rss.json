@@ -5088,14 +5088,6 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/at-decision-regions.property.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/at-decision-regions.test.ts": {
       "peakMb": 214,
       "baselineMb": 214,
@@ -5610,30 +5602,6 @@
     },
     "src/handlers/case-law/ingestion/parsers/printed-paragraph-labels.test.ts": {
       "peakMb": 245,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/shared-html.property.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/shared-inlines.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/shared-inlines.test.ts": {
-      "peakMb": 193,
       "baselineMb": 193,
       "source": {
         "runId": "44976310794",
@@ -21968,22 +21936,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/document-builders/html-whitespace.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/legal-search/document-builders/inline-style.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
     "src/lib/legal-search/document-builders/legislation-citations.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
@@ -22280,22 +22232,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/parsers/document-footnotes.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/legal-search/parsers/entity-residue.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/lib/legal-search/parsers/libpdf-utils.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
@@ -22304,52 +22240,12 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/parsers/markup-residue-warnings.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/lib/legal-search/parsers/markup-residue.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/lib/legal-search/parsers/rtf-control-vocabulary.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/legal-search/parsers/rtf-reader-owner.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/legal-search/parsers/rtf-reader.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/lib/legal-search/parsers/run-content-text.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
       }
     },
     "src/lib/legal-search/parsers/sk-courts.test.ts": {
@@ -22366,14 +22262,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-1"
-      }
-    },
-    "src/lib/legal-search/parsers/text-encoding.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/lib/legal-search/parsers/validate-ast-defaults.test.ts": {

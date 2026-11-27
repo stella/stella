@@ -25,6 +25,7 @@
 import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -38,7 +39,6 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 
-import { isExcludedHtmlTag } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 const SOURCE_SYSTEM = "jurisdf.tjdft.jus.br";
@@ -731,7 +731,10 @@ const readRecord = (
     pushRunsBlock(
       state,
       [{ type: "text", text: collapseSpaces(ementa), marks: NO_MARKS }],
-      { quote: false, heading: false },
+      {
+        quote: false,
+        heading: false,
+      },
     );
   }
   if (decisao === undefined) {
@@ -741,7 +744,10 @@ const readRecord = (
   pushRunsBlock(
     state,
     [{ type: "text", text: collapseSpaces(decisao), marks: NO_MARKS }],
-    { quote: false, heading: false },
+    {
+      quote: false,
+      heading: false,
+    },
   );
   const holding = state.blocks.at(before);
   if (holding?.type === "paragraph") {

@@ -5,7 +5,7 @@ import { checkTextEncoding } from "@stll/mojibake/detect";
 import {
   ENCODING_SAMPLES_MAX_CHARS,
   textEncodingReport,
-} from "@/api/lib/legal-search/parsers/text-encoding";
+} from "./text-encoding";
 
 const textMisdecodedFields = (text: string, language: string) => {
   const report = textEncodingReport(text, language);

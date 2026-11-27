@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
 
-const OWNER = "apps/api/src/lib/legal-search/parsers/rtf-reader.ts";
-const SOURCE_ROOT = path.resolve(import.meta.dir, "../../../../../..");
+const OWNER = "packages/case-law-parsers/src/rtf-reader.ts";
+const SOURCE_ROOT = path.resolve(import.meta.dir, "../../..");
 
 const readerMarkers = [
   "ansicpg",
@@ -24,15 +24,20 @@ test("RTF decoding remains confined to its owner", async () => {
   expect(looksLikeRtfReader(syntheticSecondReader)).toBe(true);
 
   const readers: string[] = [];
-  const glob = new Bun.Glob("apps/api/src/**/*.ts");
-  for await (const file of glob.scan({ cwd: SOURCE_ROOT })) {
-    if (file.endsWith(".test.ts")) {
-      continue;
-    }
-    if (
-      looksLikeRtfReader(await Bun.file(path.join(SOURCE_ROOT, file)).text())
-    ) {
-      readers.push(file);
+  for (const pattern of [
+    "apps/api/src/**/*.ts",
+    "packages/case-law-parsers/src/**/*.ts",
+  ]) {
+    const glob = new Bun.Glob(pattern);
+    for await (const file of glob.scan({ cwd: SOURCE_ROOT })) {
+      if (file.endsWith(".test.ts")) {
+        continue;
+      }
+      if (
+        looksLikeRtfReader(await Bun.file(path.join(SOURCE_ROOT, file)).text())
+      ) {
+        readers.push(file);
+      }
     }
   }
 

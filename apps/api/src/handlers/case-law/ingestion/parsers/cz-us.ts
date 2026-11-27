@@ -2,6 +2,17 @@
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 import { panic } from "better-result";
 
+import {
+  type BodyDocumentLine,
+  createParagraphLineReader,
+  type DocumentLine,
+} from "@stll/case-law-parsers/document-footnotes";
+import { readRtfString } from "@stll/case-law-parsers/rtf-reader";
+import { runContentVisibleText } from "@stll/case-law-parsers/run-content-text";
+import {
+  stripFurniturePrefix,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/shared-inlines";
 import type {
   BlockContent as FolioBlockContent,
   Paragraph as FolioParagraph,
@@ -114,17 +125,8 @@ import {
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import {
-  type BodyDocumentLine,
-  createParagraphLineReader,
-  type DocumentLine,
-} from "@/api/lib/legal-search/parsers/document-footnotes";
-import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
-import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
-
-import { stripFurniturePrefix, visibleHtmlText } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 

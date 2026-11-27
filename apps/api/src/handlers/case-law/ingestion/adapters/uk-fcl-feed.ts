@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 import * as slimdom from "slimdom";
 
+import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import { parseUkFclDecision } from "@/api/handlers/case-law/ingestion/parsers/uk-fcl";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {

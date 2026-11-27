@@ -15,6 +15,10 @@
  * paragraph is scoped alone.
  */
 
+import {
+  isExcludedHtmlTag,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -22,7 +26,6 @@ import type { Inline } from "@stll/legal-ast/document-ast";
 
 import { validationParagraphs } from "@/api/lib/legal-search/parsers/validate-ast";
 
-import { isExcludedHtmlTag, visibleHtmlText } from "../shared-inlines";
 import { conservesText, createUnitBuilder, graphicsIn } from "./blocks";
 import type { FormatInput } from "./harvard-xml";
 import { unitClass } from "./opinion-class";

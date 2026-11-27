@@ -22,6 +22,8 @@
 import { Result } from "better-result";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { inlineStyleValue } from "@stll/case-law-parsers/inline-style";
+import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -44,8 +46,6 @@ import {
   PL_DECISION_LAYOUT,
   PL_DECISION_MARKUP,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_KIS_SOURCE_SYSTEM = "eureka.mf.gov.pl";

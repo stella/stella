@@ -17,7 +17,7 @@ import {
 } from "@stll/legal-ast/inline-line";
 import { assertProperty, propertySeed } from "@stll/property-testing";
 
-import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { inlinesToPlainText } from "./shared-inlines";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See

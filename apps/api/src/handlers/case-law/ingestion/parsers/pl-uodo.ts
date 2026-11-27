@@ -19,6 +19,12 @@
 import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
+import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
+import {
+  appendTextInline,
+  inlinesToPlainText,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import {
@@ -41,14 +47,10 @@ import type {
 import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 import { isPlRecitalLine } from "@stll/legal-ast/polish-document-roles";
 
-// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
-import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
-
-import { appendTextInline, inlinesToPlainText } from "./shared-inlines";
 
 /** Publisher recorded on the AST. */
 const PL_UODO_SOURCE_SYSTEM = "orzeczenia.uodo.gov.pl";

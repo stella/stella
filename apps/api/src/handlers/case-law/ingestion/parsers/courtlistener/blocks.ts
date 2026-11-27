@@ -12,6 +12,11 @@
 
 import { panic } from "better-result";
 
+import {
+  appendTextInline,
+  isExcludedHtmlTag,
+  walkInlines,
+} from "@stll/case-law-parsers/shared-inlines";
 import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
@@ -33,12 +38,6 @@ import {
   projectPlainText,
   type TableCell,
 } from "@stll/legal-ast/document-ast";
-
-import {
-  appendTextInline,
-  isExcludedHtmlTag,
-  walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 import type { UnitPosition } from "./opinion-class";
 import type { TextUnit } from "./outcome";

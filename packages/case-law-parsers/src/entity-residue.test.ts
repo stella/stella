@@ -4,7 +4,7 @@ import {
   entityResidueIn,
   entityResidueMatchesIn,
   entityResiduesInStoredText,
-} from "@/api/lib/legal-search/parsers/entity-residue";
+} from "./entity-residue";
 
 describe("entity residue in stored decision text", () => {
   test("finds named references across the HTML5 name space", () => {

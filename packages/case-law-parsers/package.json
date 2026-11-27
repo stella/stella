@@ -1,0 +1,111 @@
+{
+  "name": "@stll/case-law-parsers",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Case-law document parsers, HTML/RTF readers, and residue detectors",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./at-decision-regions": {
+      "types": "./src/at-decision-regions.ts",
+      "import": "./src/at-decision-regions.ts"
+    },
+    "./br-tst": {
+      "types": "./src/br-tst.ts",
+      "import": "./src/br-tst.ts"
+    },
+    "./document-footnotes": {
+      "types": "./src/document-footnotes.ts",
+      "import": "./src/document-footnotes.ts"
+    },
+    "./entity-residue": {
+      "types": "./src/entity-residue.ts",
+      "import": "./src/entity-residue.ts"
+    },
+    "./html-whitespace": {
+      "types": "./src/html-whitespace.ts",
+      "import": "./src/html-whitespace.ts"
+    },
+    "./inline-style": {
+      "types": "./src/inline-style.ts",
+      "import": "./src/inline-style.ts"
+    },
+    "./markup-residue": {
+      "types": "./src/markup-residue.ts",
+      "import": "./src/markup-residue.ts"
+    },
+    "./parse-xml-error": {
+      "types": "./src/parse-xml-error.ts",
+      "import": "./src/parse-xml-error.ts"
+    },
+    "./rtf-control-vocabulary": {
+      "types": "./src/rtf-control-vocabulary.ts",
+      "import": "./src/rtf-control-vocabulary.ts"
+    },
+    "./rtf-destinations": {
+      "types": "./src/rtf-destinations.ts",
+      "import": "./src/rtf-destinations.ts"
+    },
+    "./rtf-destinations.fixtures": {
+      "types": "./src/rtf-destinations.fixtures.ts",
+      "import": "./src/rtf-destinations.fixtures.ts"
+    },
+    "./rtf-reader": {
+      "types": "./src/rtf-reader.ts",
+      "import": "./src/rtf-reader.ts"
+    },
+    "./run-content-text": {
+      "types": "./src/run-content-text.ts",
+      "import": "./src/run-content-text.ts"
+    },
+    "./run-content-text.fixtures": {
+      "types": "./src/run-content-text.fixtures.ts",
+      "import": "./src/run-content-text.fixtures.ts"
+    },
+    "./shared-inlines": {
+      "types": "./src/shared-inlines.ts",
+      "import": "./src/shared-inlines.ts"
+    },
+    "./strip-html": {
+      "types": "./src/strip-html.ts",
+      "import": "./src/strip-html.ts"
+    },
+    "./text-encoding": {
+      "types": "./src/text-encoding.ts",
+      "import": "./src/text-encoding.ts"
+    },
+    "./visible-html-text": {
+      "types": "./src/visible-html-text.ts",
+      "import": "./src/visible-html-text.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/case-law-parsers",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/case-law-parsers"
+  },
+  "dependencies": {
+    "@stll/agent-input": "workspace:*",
+    "@stll/api-contract": "workspace:*",
+    "@stll/docx-core": "catalog:",
+    "@stll/html": "workspace:*",
+    "@stll/legal-ast": "workspace:*",
+    "@stll/mojibake": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
+    "better-result": "catalog:",
+    "entities": "^9.0.0"
+  },
+  "devDependencies": {
+    "@stll/property-testing": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
+  }
+}

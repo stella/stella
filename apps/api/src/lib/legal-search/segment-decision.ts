@@ -1,10 +1,9 @@
-import type { Block } from "@stll/legal-ast/document-ast";
-import type { DecisionSection } from "@stll/legal-ast/document-types";
-
 import type {
   BodyDocumentLine,
   DocumentLine,
-} from "@/api/lib/legal-search/parsers/document-footnotes";
+} from "@stll/case-law-parsers/document-footnotes";
+import type { Block } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 /**
  * Patterns for detecting structural section boundaries in

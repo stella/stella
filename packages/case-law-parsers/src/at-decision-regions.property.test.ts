@@ -19,7 +19,7 @@ import {
   type AtCourtTextSection,
   type AtPrintedLine,
   readAtDecisionRoles,
-} from "@/api/handlers/case-law/ingestion/parsers/at-decision-regions";
+} from "./at-decision-regions";
 
 const config = (numRuns: number) =>
   propertyConfig({ numRuns, seed: propertySeed() });

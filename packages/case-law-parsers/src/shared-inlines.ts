@@ -62,13 +62,13 @@ import {
   inlineStyleIsBold,
   inlineStyleIsInlineBlock,
   inlineStyleIsItalic,
-} from "@/api/lib/legal-search/document-builders/inline-style";
+} from "./inline-style";
 // parser-output-unchanged: the visible-text helpers moved unchanged to visible-html-text.ts so AST validation can reuse them without importing the parser module.
 import {
   EXCLUDED_HTML_SELECTOR,
   isExcludedHtmlTag,
   visibleHtmlText,
-} from "@/api/lib/legal-search/parsers/visible-html-text";
+} from "./visible-html-text";
 
 export { EXCLUDED_HTML_SELECTOR, isExcludedHtmlTag, visibleHtmlText };
 

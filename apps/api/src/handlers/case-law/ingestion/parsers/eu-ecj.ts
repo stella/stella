@@ -47,6 +47,15 @@
 import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  ANONYMIZED_CLASS,
+  appendTextInline,
+  inlinesToPlainText,
+  ownTableRows,
+  visibleHtmlText,
+  walkInlines,
+  type WalkInlinesOptions,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -67,16 +76,6 @@ import {
 
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
-
-import {
-  ANONYMIZED_CLASS,
-  appendTextInline,
-  inlinesToPlainText,
-  ownTableRows,
-  visibleHtmlText,
-  walkInlines,
-  type WalkInlinesOptions,
-} from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 

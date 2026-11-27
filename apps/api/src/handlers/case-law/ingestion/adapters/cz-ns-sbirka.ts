@@ -53,6 +53,7 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -82,7 +83,6 @@ import {
   parseCzNsSbirkaText,
   readCzNsSbirkaPage,
 } from "@/api/handlers/case-law/ingestion/parsers/cz-ns-sbirka";
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {

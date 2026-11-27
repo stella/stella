@@ -43,6 +43,7 @@ import {
   parseDecimalToken,
   parseIntegerToken,
 } from "@stll/agent-input/numeric-token";
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/shared-inlines";
 import type { CheerioAPI } from "@stll/html";
 import {
   type AnyNode,
@@ -66,8 +67,6 @@ import {
   takesANumber,
 } from "@stll/legal-ast/printed-paragraph-labels";
 import { normalizeUnicode } from "@stll/text-normalize";
-
-import { isExcludedHtmlTag } from "./shared-inlines";
 
 const BIDI_MARK = /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
 const STARTS_WITH_BIDI_MARK = /^[\u200E\u200F\u202A-\u202E\u2066-\u2069]/u;

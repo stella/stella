@@ -21,6 +21,10 @@
 
 import { panic } from "better-result";
 
+import { inlineStyleDeclaresProperty } from "@stll/case-law-parsers/inline-style";
+import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
+import type { MarkupResidue } from "@stll/case-law-parsers/markup-residue";
+import { visibleHtmlText } from "@stll/case-law-parsers/visible-html-text";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag } from "@stll/html/nodes";
@@ -29,12 +33,7 @@ import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { flattenInlineText } from "@stll/legal-ast/inline";
 import { BRACKET_PARAGRAPH_MARKER_WORD_RE } from "@stll/legal-ast/printed-paragraph-labels";
 
-import { inlineStyleDeclaresProperty } from "@/api/lib/legal-search/document-builders/inline-style";
-import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
-import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
 import { logger } from "@/api/lib/observability/logger";
-
-import { visibleHtmlText } from "./visible-html-text";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -790,9 +789,7 @@ export const validateAst = (
       code: MARKUP_RESIDUE,
       message:
         `${markupResidue.length} block(s) carry source markup ` +
-        `(${firstResidue.reason} at ${firstResidue.anchorId}): ${
-          firstResidue.excerpt
-        }`,
+        `(${firstResidue.reason} at ${firstResidue.anchorId}): ${firstResidue.excerpt}`,
       severity: "error",
     });
   }

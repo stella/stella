@@ -48,10 +48,7 @@ import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 
-import {
-  isExcludedHtmlTag,
-  walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { isExcludedHtmlTag, walkInlines } from "./shared-inlines";
 
 const SOURCE_SYSTEM = "jurisprudencia.tst.jus.br";
 

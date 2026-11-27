@@ -30,6 +30,12 @@
 import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  ANONYMIZED_CLASS,
+  inlinesToPlainText,
+  isExcludedHtmlTag,
+  walkInlines,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
@@ -80,12 +86,6 @@ import {
   normalizeUnicode,
 } from "@stll/text-normalize";
 
-import {
-  ANONYMIZED_CLASS,
-  inlinesToPlainText,
-  isExcludedHtmlTag,
-  walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 /**

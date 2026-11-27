@@ -12,6 +12,14 @@
  *      ruling items, tables)
  */
 
+import { collapseHtmlWhitespace } from "@stll/case-law-parsers/html-whitespace";
+import {
+  inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
+  visibleHtmlText,
+  walkInlines as walkInlinesShared,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import {
@@ -49,17 +57,8 @@ import {
   withoutSoftHyphens,
 } from "@stll/legal-ast/page-furniture";
 
-import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
-
-import {
-  inlinesToPlainText,
-  isExcludedHtmlTag,
-  ownTableRows,
-  visibleHtmlText,
-  walkInlines as walkInlinesShared,
-} from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 

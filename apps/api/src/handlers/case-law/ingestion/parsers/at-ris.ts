@@ -2,6 +2,13 @@
 import { Result } from "better-result";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
+import {
+  type AtCourtTextSection,
+  type AtPrintedLine,
+  isAtBenchRecital,
+  readAtDecisionRoles,
+} from "@stll/case-law-parsers/at-decision-regions";
+import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /** Parse the publisher-structured XML served by Austria's RIS. */
 import { load } from "@stll/html";
@@ -18,17 +25,10 @@ import {
 import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 
 import {
-  type AtCourtTextSection,
-  type AtPrintedLine,
-  isAtBenchRecital,
-  readAtDecisionRoles,
-} from "@/api/handlers/case-law/ingestion/parsers/at-decision-regions";
-import {
   readRisContent,
   type RisItem,
   risTextFidelity,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
-import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 
 export type ParseRisDecisionInput = {
   sourceDocumentId: string;

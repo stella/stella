@@ -1,10 +1,10 @@
-import { load } from "@stll/html";
-import type { AnyNode } from "@stll/html/nodes";
-
 import {
   ownTableRows,
   visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "@stll/case-law-parsers/shared-inlines";
+import { load } from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
+
 import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
 
 const NSS_DETAIL_ORIGIN = "https://vyhledavac.nssoud.cz";

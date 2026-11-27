@@ -15,6 +15,7 @@
 
 import { panic } from "better-result";
 
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import {
@@ -28,7 +29,6 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import { validationParagraphs } from "@/api/lib/legal-search/parsers/validate-ast";
 
-import { isExcludedHtmlTag } from "../shared-inlines";
 import {
   type BodyVocabulary,
   conservesText,

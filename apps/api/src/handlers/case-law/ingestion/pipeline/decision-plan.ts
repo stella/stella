@@ -4,6 +4,15 @@ import { eq } from "drizzle-orm";
 
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import {
+  markupResidueIn,
+  markupResidueWarnings,
+} from "@stll/case-law-parsers/markup-residue";
+import {
+  TEXT_ENCODING_INCOMPLETE,
+  TEXT_MISDECODED,
+  textEncodingReport,
+} from "@stll/case-law-parsers/text-encoding";
 import { replacedBlockAnchorsOf } from "@stll/legal-ast/anchor-redirects";
 import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -72,15 +81,6 @@ import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombst
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  markupResidueIn,
-  markupResidueWarnings,
-} from "@/api/lib/legal-search/parsers/markup-residue";
-import {
-  TEXT_ENCODING_INCOMPLETE,
-  TEXT_MISDECODED,
-  textEncodingReport,
-} from "@/api/lib/legal-search/parsers/text-encoding";
 import {
   AST_MARKUP_RESIDUE,
   storedDecisionSignal,

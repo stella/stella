@@ -13,9 +13,8 @@ import {
 } from "@stll/html/nodes";
 import type { Inline } from "@stll/legal-ast/document-ast";
 
-import { isExcludedHtmlTag } from "@/api/lib/legal-search/parsers/visible-html-text";
-
 import { inlineStyleValue } from "./inline-style";
+import { isExcludedHtmlTag } from "./visible-html-text";
 
 /** The whitespace HTML collapses. A no-break space is text and stays. */
 const HTML_WHITESPACE = /[ \t\n\r\f]+/gu;

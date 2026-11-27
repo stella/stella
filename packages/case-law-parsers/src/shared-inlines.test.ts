@@ -10,7 +10,7 @@ import {
   inlinesToPlainText,
   walkInlines,
   type WalkInlinesOptions,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "./shared-inlines";
 
 const walk = (html: string, options?: WalkInlinesOptions): Inline[] => {
   const $ = load(html);
@@ -193,7 +193,7 @@ describe("walkInlines", () => {
   test("keeps the page boundary space in a recorded opinion heading", () => {
     const html = readFileSync(
       new URL(
-        "courtlistener/__fixtures__/html/heading-4696496-discussion-ii.html",
+        "../../../apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/__fixtures__/html/heading-4696496-discussion-ii.html",
         import.meta.url,
       ),
       "utf-8",

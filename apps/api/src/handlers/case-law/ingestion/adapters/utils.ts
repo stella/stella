@@ -37,7 +37,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 export { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
-export { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
+export { stripHtml } from "@stll/case-law-parsers/strip-html";
 
 const CE_DATE_PATTERN =
   /^(?<day>\d{1,2})\.\s*(?<month>\d{1,2})\.\s*(?<year>\d{4})$/;
