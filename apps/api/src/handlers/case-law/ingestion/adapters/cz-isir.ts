@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 /**
  * Court decisions published in the Czech insolvency register
