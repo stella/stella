@@ -133,17 +133,19 @@ const isHeavyCheckStep = (step: VerifyWorkflowStep): boolean =>
 const CI_ONLY_ARM =
   /^([ \t]*)if \[\[ "\$\{STELLA_VERIFY_LOCAL:-false\}" == true \]\]; then\n([\s\S]*?)^\1else\n[\s\S]*?^\1fi$/gmu;
 const effectiveLocalPrepareKey = (step: VerifyWorkflowStep): string => {
-  const localRun = step.run
-    .replaceAll(CI_ONLY_ARM, "$2")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(
-      (line) =>
-        line.length > 0 &&
-        !line.startsWith("#") &&
-        line !== "unset CI_GENERATED_SOURCES_MANIFEST",
-    )
-    .join("\n");
+  const expanded = step.run.replaceAll(CI_ONLY_ARM, "$2");
+  const localRun = expanded.includes("<<")
+    ? expanded.trim()
+    : expanded
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(
+          (line) =>
+            line.length > 0 &&
+            !line.startsWith("#") &&
+            line !== "unset CI_GENERATED_SOURCES_MANIFEST",
+        )
+        .join("\n");
   const sortedEnv = Object.keys(step.env)
     .toSorted()
     .map((key) => [key, step.env[key]]);

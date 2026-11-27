@@ -8,6 +8,7 @@ import {
   routeSmokeAffected,
   routeSmokeImportClosure,
 } from "./detect-route-smoke-changes";
+import { GENERATORS } from "./generated-files";
 
 const routeSmokePlanned = (file: string, root: string) =>
   computeChangedFileScope(
@@ -138,6 +139,28 @@ describe("route traffic changes require the route smoke", () => {
     "packages/ui/README.md",
   ])("does not plan a smoke for %s", (file) => {
     expect(routeSmokeAffected([file])).toBe(false);
+  });
+
+  test("covers every script input of setup-e2e-stack subprocess generators", () => {
+    const closure = routeSmokeImportClosure();
+    for (const id of [
+      "mcp-app-contracts",
+      "mcp-app-bundles",
+      "capability-runtime",
+    ]) {
+      const generator = GENERATORS.find((entry) => entry.id === id);
+      expect(generator, id).toBeDefined();
+      for (const input of generator?.inputs ?? []) {
+        if (
+          !input.includes("*") &&
+          (input.startsWith("apps/api/scripts/") ||
+            input.startsWith("scripts/"))
+        ) {
+          expect(closure.has(input), `${id}: ${input}`).toBe(true);
+          expect(routeSmokeAffected([input]), `${id}: ${input}`).toBe(true);
+        }
+      }
+    }
   });
 
   test("empty changes do not plan a smoke", () => {

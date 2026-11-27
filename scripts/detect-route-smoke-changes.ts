@@ -4,7 +4,6 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { cachedForRepository } from "./ci-repository-cache";
-import { MCP_APP_CONTRACT_SCRIPT_INPUTS } from "./mcp-app-generator-inputs";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 export const ROUTE_SMOKE_SPEC_PATH = "apps/web/e2e/specs/route-smoke.spec.ts";
@@ -25,9 +24,11 @@ const ENTRY_POINTS = [
   "apps/api/scripts/seed-e2e-feature-access.ts",
   "apps/api/scripts/seed-dev.ts",
   "apps/api/scripts/seed-firm-knowledge.ts",
-  // Shared with scripts/generated-files.ts for the mcp-app-contracts
-  // subprocess generator invoked by prepare-mcp-apps.
-  ...MCP_APP_CONTRACT_SCRIPT_INPUTS,
+  // Subprocess generator entry points invoked by prepare-mcp-apps; kept in
+  // sync with GENERATORS in scripts/generated-files.ts by a contract test.
+  "apps/api/scripts/generate-mcp-app-contracts.ts",
+  "apps/api/scripts/lib/mcp-app-inputs.ts",
+  "scripts/generated-artifacts.ts",
 ] as const;
 // Each extension parses with its own grammar: TSX would reject valid `.ts`
 // syntax such as generic arrows (`<T = unknown>(value: T) => value`).

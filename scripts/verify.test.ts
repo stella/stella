@@ -539,6 +539,35 @@ test("runVerifyStepsConcurrent deduplicates identical local prepare commands", a
     "Produce generated sources",
     "Load merge base measurement",
   ]);
+
+  const heredocExecuted: string[] = [];
+  const heredocStatus = await runVerifyStepsConcurrent(
+    [
+      {
+        job: "generated-sources",
+        name: "Heredoc A",
+        run: "cat <<'EOF'\n  indented\nEOF",
+        cwd: ".",
+        env: {},
+        phase: "prepare",
+      },
+      {
+        job: "generated-sources",
+        name: "Heredoc B",
+        run: "cat <<'EOF'\nindented\nEOF",
+        cwd: ".",
+        env: {},
+        phase: "prepare",
+      },
+    ],
+    async (current) => {
+      heredocExecuted.push(current.name);
+      return 0;
+    },
+    1,
+  );
+  expect(heredocStatus).toBe(0);
+  expect(heredocExecuted).toEqual(["Heredoc A", "Heredoc B"]);
 });
 
 test("runVerifyStepsConcurrent stops scheduling on admission refusal", async () => {
