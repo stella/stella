@@ -50,6 +50,9 @@ export type DocxBlock = {
   /** Offsets in `text` at which the paragraph holds a field that numbers
    *  itself: the number it prints is in no text. Absent without one. */
   selfNumbers?: number[];
+  /** The paragraph's cross-reference fields, in the order they stand.
+   *  Absent without one, and from an engine that does not report them. */
+  crossReferences?: DocxBlockCrossReference[];
   /** The paragraph starts on a new page by its own formatting or its
    *  style's. */
   pageBreakBefore?: true;
@@ -65,6 +68,22 @@ export type DocxBlock = {
    *  from a manifest read before it was reported. */
   indent?: { left: number; firstLine: number };
   cells?: { row: number; col: number; blockIds: string[] }[];
+};
+
+/** A `REF` field of a paragraph: without a number switch it shows the
+ *  content of the bookmark it names. */
+type DocxBlockCrossReference = {
+  /** The span of the paragraph's `text` the field's result takes. */
+  start: number;
+  end: number;
+  /** The field's code as the document states it. */
+  instruction: string;
+  bookmark: string;
+  /** The paragraph the bookmark starts and ends in; null when no bookmark
+   *  of that name does both in one paragraph. */
+  targetBlockId: string | null;
+  /** Whether the bookmark holds all of that paragraph's content. */
+  targetWhole: boolean;
 };
 
 /** One section of a document: how it begins after the one before it, and
@@ -566,6 +585,18 @@ const blockSchema = v.strictObject({
   pageBreaks: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   selfNumbers: v.exactOptional(
     v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  ),
+  crossReferences: v.exactOptional(
+    v.array(
+      v.strictObject({
+        start: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        end: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        instruction: v.string(),
+        bookmark: v.string(),
+        targetBlockId: v.nullable(v.string()),
+        targetWhole: v.boolean(),
+      }),
+    ),
   ),
   pageBreakBefore: v.exactOptional(v.literal(true)),
   endsSection: v.exactOptional(v.literal(true)),

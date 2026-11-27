@@ -2419,6 +2419,8 @@ type MarkOptions = {
 
 type Designator = DetectedReference["designators"][number];
 
+type CrossReference = NonNullable<DocxBlock["crossReferences"]>[number];
+
 type Field = Pick<TemplatePlanReference, "instruction" | "expectedText"> & {
   /** Where the field starts when it covers more than the designator. */
   start?: number;
@@ -2463,6 +2465,54 @@ const labelFieldOf = (
   return reason === "designator-mismatch"
     ? "designatorMismatch"
     : "punctuatedLevelWords";
+};
+
+/** A format switch that keeps a field's look when it updates: the field
+ *  is written with its result's look, so the switch can go. */
+const KEPT_LOOK_SWITCH = /\\\*\s*(?:mergeformat|charformat)\b/giu;
+
+/**
+ * The switches a source's `REF` field is carried with: `\h` or none. A
+ * number switch shows a number the plan may change and a position switch
+ * shows words, so a field with either stays its text.
+ */
+const carriedSwitchesOf = (instruction: string): string | null => {
+  const head = /^\s*REF\s+\S+/iu.exec(instruction);
+  if (head === null) {
+    return null;
+  }
+  const rest = instruction
+    .slice(head[0].length)
+    .replaceAll(KEPT_LOOK_SWITCH, "")
+    .trim();
+  if (rest === "") {
+    return "";
+  }
+  return /^\\h$/iu.test(rest) ? String.raw`\h` : null;
+};
+
+/** A number a field counts: digits, or a roman or letter count. */
+const COUNTED_NUMBER = /^(?:\d+|\p{L}+)/u;
+
+/**
+ * Whether a field's result is `block`'s text as it reads: where the block
+ * holds a number a field counts, the result shows a number in its place.
+ */
+const showsTextOf = (result: string, block: DocxBlock): boolean => {
+  let rest = result;
+  let from = 0;
+  for (const at of block.selfNumbers ?? []) {
+    const piece = block.text.slice(from, at);
+    const number = rest.startsWith(piece)
+      ? COUNTED_NUMBER.exec(rest.slice(piece.length))?.[0]
+      : undefined;
+    if (number === undefined) {
+      return false;
+    }
+    rest = rest.slice(piece.length + number.length);
+    from = at;
+  }
+  return rest === block.text.slice(from);
 };
 
 /** Whether a reference's target is an annex that keeps its typed number. */
@@ -2542,6 +2592,79 @@ const targetOf = (
       return panic("Unhandled resolution");
     }
   }
+};
+
+type CarryOptions = {
+  context: Context;
+  placed: Placed;
+  /** Takes a span for a mark; false where it cannot carry one. */
+  claim: (blockId: string, start: number, end: number) => boolean;
+  /** How much of a placed paragraph's text its stripped label takes. */
+  strippedLength: (blockId: string) => number;
+};
+
+/**
+ * The fields of the source that show a placed paragraph's text, kept as
+ * fields where the plan writes that paragraph as it reads: the plan's own
+ * bookmark on the paragraph holds what the source's did, and the field
+ * follows the number a field of the paragraph counts (an annex heading's)
+ * as it did. With the spans they take, by block.
+ */
+const carryCrossReferences = ({
+  context: { blocks, exclusions },
+  placed: { placementById, mergedInto, titleOf },
+  claim,
+  strippedLength,
+}: CarryOptions): {
+  references: TemplatePlanReference[];
+  spans: Map<string, { start: number; end: number }[]>;
+} => {
+  const paragraphOf = (blockId: string): string =>
+    mergedInto.get(blockId) ?? blockId;
+  const references: TemplatePlanReference[] = [];
+  const spans = new Map<string, { start: number; end: number }[]>();
+  const carry = (
+    block: DocxBlock,
+    { start, end, instruction, targetBlockId, targetWhole }: CrossReference,
+  ): void => {
+    const target =
+      targetBlockId === null ? undefined : placementById.get(targetBlockId);
+    const switches = carriedSwitchesOf(instruction);
+    const expectedText = block.text.slice(start, end);
+    if (
+      targetBlockId === null ||
+      target === undefined ||
+      switches === null ||
+      !targetWhole ||
+      exclusions.targets.has(targetBlockId) ||
+      paragraphOf(block.id) === paragraphOf(targetBlockId) ||
+      // The paragraph reads as in the source: no label of its own goes or
+      // is written as text, and no other paragraph joins it.
+      strippedLength(targetBlockId) > 0 ||
+      (shownLabelOf(target.block) !== null && !target.numbered) ||
+      mergedInto.has(targetBlockId) ||
+      titleOf.has(targetBlockId) ||
+      !showsTextOf(expectedText, target.block) ||
+      !claim(block.id, start, end)
+    ) {
+      return;
+    }
+    spans.set(block.id, [...(spans.get(block.id) ?? []), { start, end }]);
+    references.push({
+      blockId: block.id,
+      start,
+      end,
+      targetBlockId,
+      instruction: switches,
+      expectedText,
+    });
+  };
+  for (const block of blocks) {
+    for (const crossReference of block.crossReferences ?? []) {
+      carry(block, crossReference);
+    }
+  }
+  return { references, spans };
 };
 
 /** References as fields where a field shows what the source prints, and
@@ -2641,6 +2764,20 @@ const markReferences = ({
       ...(targetRenumbered ? { targetRenumbered } : {}),
     });
   };
+  const paragraphOf = (blockId: string): string =>
+    mergedInto.get(blockId) ?? blockId;
+  const carried = carryCrossReferences({
+    context,
+    placed,
+    claim,
+    strippedLength,
+  });
+  marks.references.push(...carried.references);
+  /** Whether a designator lies in a field the plan carries. */
+  const inCarried = (blockId: string, { start, end }: Designator): boolean =>
+    carried.spans
+      .get(blockId)
+      ?.some((span) => start < span.end && end > span.start) === true;
   /** Why the designator cannot be a field to `targetBlockId`, or the field. */
   const link = (
     reference: DetectedReference,
@@ -2656,8 +2793,6 @@ const markReferences = ({
     ) {
       return typedAnnex(target) ? "annexTyped" : "targetNotNumbered";
     }
-    const paragraphOf = (blockId: string): string =>
-      mergedInto.get(blockId) ?? blockId;
     if (paragraphOf(reference.blockId) === paragraphOf(targetBlockId)) {
       return "sameParagraph";
     }
@@ -2691,6 +2826,9 @@ const markReferences = ({
       continue;
     }
     for (const [position, designator] of reference.designators.entries()) {
+      if (inCarried(reference.blockId, designator)) {
+        continue;
+      }
       if (scope === "unknown") {
         unlinked(reference, designator, "undecidedScope");
         continue;

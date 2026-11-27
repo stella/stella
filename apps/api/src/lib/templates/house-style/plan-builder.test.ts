@@ -464,6 +464,74 @@ describe("buildTemplatePlan, annexes a field numbers", () => {
       }),
     );
   });
+
+  // The heading reads `Příloha č. 1 Ceník` with its number counted.
+  const withField = (
+    result: string,
+    instruction: string,
+    targetWhole = true,
+  ) => {
+    const citing = `1.1\tCeny jsou uvedeny v ${result}.`;
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      citing,
+      "Příloha č.  Ceník",
+      "Položky ceníku.",
+    ]);
+    const heading = manifest.blocks.find(({ text }) =>
+      text.startsWith("Příloha"),
+    );
+    const block = manifest.blocks.find(({ text }) => text === citing);
+    if (heading === undefined || block === undefined) {
+      throw new Error("fixture");
+    }
+    heading.selfNumbers = [11];
+    const start = citing.indexOf(result);
+    block.crossReferences = [
+      {
+        start,
+        end: start + result.length,
+        instruction,
+        bookmark: "annex1",
+        targetBlockId: heading.id,
+        targetWhole,
+      },
+    ];
+    return { manifest, built: build(manifest), block, heading, start };
+  };
+
+  test("a field of the source to the heading stays a field, which follows the heading's number", () => {
+    const { built, block, heading, start } = withField(
+      "Příloha č. 1 Ceník",
+      String.raw` REF annex1 \h  \* MERGEFORMAT `,
+    );
+    expect(built.plan.references).toEqual([
+      {
+        blockId: block.id,
+        start,
+        end: start + "Příloha č. 1 Ceník".length,
+        targetBlockId: heading.id,
+        instruction: String.raw`\h`,
+        expectedText: "Příloha č. 1 Ceník",
+      },
+    ]);
+    // The citation in the field's result is the field's, not a note's.
+    expect(
+      built.note.items.filter((noted) => noted.kind === "referenceUnlinked"),
+    ).toEqual([]);
+  });
+
+  test("a field that shows a number, part of the heading or another text stays text", () => {
+    for (const [result, instruction, whole] of [
+      ["Příloha č. 1 Ceník", String.raw` REF annex1 \r \h `, true],
+      ["Příloha č. 1 Ceník", String.raw` REF annex1 \h `, false],
+      ["Příloha č. 1 Ceny", String.raw` REF annex1 \h `, true],
+    ] as const) {
+      const { built } = withField(result, instruction, whole);
+      expect(built.plan.references ?? []).toEqual([]);
+    }
+  });
 });
 
 describe("buildTemplatePlan, annexes a field can cite", () => {
