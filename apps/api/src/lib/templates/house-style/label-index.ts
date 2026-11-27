@@ -80,6 +80,11 @@ export type LabelIndex = {
   /** The column of each block of a document that runs in parallel columns;
    *  empty for any other document. */
   columnByBlockId: ReadonlyMap<string, number>;
+  /** How long the typed label is that a heading opens with when it has no
+   *  entry here because it counts the articles of a part of its own
+   *  (`Article 4` of a model contract behind an agreement): the label is
+   *  the heading's own name, no citation of another provision. */
+  ownLabelLengths: ReadonlyMap<string, number>;
 };
 
 const HEADING_TITLE_MAX = 160;
@@ -639,7 +644,7 @@ const isArticleMention = (
 const articleMentionPositions = (
   numberedArticles: ReadonlySet<number>,
   labelled: readonly LabelledRow[],
-): Set<number> => {
+): { mentions: Set<number>; countedOn: Set<number> } => {
   const mentions = new Set<number>();
   /** The headings that are here only because they count on, by ordinal. */
   const countedOn = new Map<number, number>();
@@ -693,7 +698,12 @@ const articleMentionPositions = (
       mentions.delete(position);
     }
   }
-  return mentions;
+  return {
+    mentions,
+    countedOn: new Set(
+      [...countedOn.keys()].filter((position) => mentions.has(position)),
+    ),
+  };
 };
 
 /**
@@ -1190,10 +1200,15 @@ export const buildLabelIndex = ({
   const labelled = rows.filter(isLabelled);
   const numberedArticles = numberedArticleOrdinals(labelled);
   const listedHeadings = listedHeadingPositions(labelled);
-  const articleMentions = articleMentionPositions(numberedArticles, labelled);
-  // Mentions say nothing about how the document numbers itself.
+  const { mentions: articleMentions, countedOn } = articleMentionPositions(
+    numberedArticles,
+    labelled,
+  );
+  // Mentions say nothing about how the document numbers itself. A heading
+  // that only counts on from one still says how its part is numbered: it
+  // stays among the rows the schemes are read from.
   const structural = labelled.filter(
-    ({ position }) => !articleMentions.has(position),
+    (row) => !isArticleMention(numberedArticles, row),
   );
   const listedAnnexes = listedAnnexPositions(rows, structural);
   const firstAnnex =
@@ -1294,5 +1309,14 @@ export const buildLabelIndex = ({
     ),
     contentsBlockIds,
     columnByBlockId,
+    ownLabelLengths: new Map(
+      labelled
+        .filter(
+          ({ position, block }) =>
+            countedOn.has(position) &&
+            !entries.some(({ blockId }) => blockId === block.id),
+        )
+        .map(({ block, raw }) => [block.id, raw.manualLength]),
+    ),
   };
 };

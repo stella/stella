@@ -2800,5 +2800,17 @@ describe("buildTemplatePlan, an article heading the index does not count", () =>
       });
       expect(typed).not.toHaveProperty("stripLabel");
     }
+    // The label of a heading that counts on is the heading's own name: it
+    // is read as no citation.
+    const { note } = build(manifest);
+    for (const start of ["Article 3 Communication", "Article 4 Guarantee"]) {
+      expect(
+        note.items.filter(
+          (item) =>
+            item.kind === "referenceUnlinked" &&
+            item.blockId === blockIdOf(manifest, start),
+        ),
+      ).toEqual([]);
+    }
   });
 });
