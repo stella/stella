@@ -1826,3 +1826,35 @@ test("the pool run admits checks by the peaks in its budgets file", async () => 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("priority schedules heavier checks first while preserving tie order and registry reporting", async () => {
+  const weights: Record<string, number> = {
+    FastFirst: 5,
+    MediumA: 40,
+    MediumB: 40,
+    SlowLast: 180,
+  };
+  const planned: PlannedCheck[] = Object.keys(weights).map((name) => ({
+    check: check(name),
+    status: "selected",
+    env: {},
+    continueOnError: false,
+  }));
+  const started: string[] = [];
+  const reported: string[] = [];
+  const results = await runChecks({
+    planned,
+    concurrency: 1,
+    priority: (pooled) => weights[pooled.name] ?? 0,
+    launch: async (_index, pooled): Promise<Launched> => {
+      started.push(pooled.name);
+      return { exitCode: 0, stopped: undefined, maxRssBytes: undefined };
+    },
+    report: (_index, result) => {
+      reported.push(result.name);
+    },
+  });
+  expect(started).toEqual(["SlowLast", "MediumA", "MediumB", "FastFirst"]);
+  expect(reported).toEqual(["FastFirst", "MediumA", "MediumB", "SlowLast"]);
+  expect(results.map(({ name }) => name)).toEqual(reported);
+});
