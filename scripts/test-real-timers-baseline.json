@@ -154,11 +154,6 @@
     "owner": "agent-engine",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/cli/src/auth/loopback-listener.test.ts": {
-    "count": 1,
-    "owner": "cli",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/cli/src/auth/refresh-lock.test.ts": {
     "count": 1,
     "owner": "cli",
@@ -182,11 +177,6 @@
   "packages/property-testing/src/fake-timers.test.ts": {
     "count": 9,
     "owner": "property-testing",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/scripts/src/process-spawn.test.ts": {
-    "count": 1,
-    "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/gh-retry-processes.test.ts": {
