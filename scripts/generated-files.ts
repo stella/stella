@@ -306,7 +306,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/source-kind.ts",
     "apps/api/src/lib/lists/source-locator.ts",
     "apps/api/src/lib/lists/verification/*",
-    "packages/case-law-parsers/src/html-whitespace.ts",
+    "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts",
     "packages/case-law-parsers/src/inline-style.ts",
     "apps/api/src/lib/load/request-latency-budget.ts",
     "apps/api/src/lib/load/work-admission.ts",

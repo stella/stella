@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: failure stop kinds and fingerprint fields classify rejected pages only; accepted page validation and parsed records are unchanged.
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
@@ -6,10 +7,6 @@
 import { panic, Result } from "better-result";
 import { parseXmlDocument } from "slimdom";
 
-import {
-  isExcludedHtmlTag,
-  visibleHtmlText,
-} from "@stll/case-law-parsers/shared-inlines";
 import { declareFingerprintFields } from "@stll/errors";
 import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
@@ -18,6 +15,10 @@ import {
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
+import {
+  isExcludedHtmlTag,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 type PublisherPageReason =

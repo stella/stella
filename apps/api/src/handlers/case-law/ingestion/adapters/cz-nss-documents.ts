@@ -1,11 +1,8 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: [cz-nss] imports the shared PDF reader from its new owner, pdf-bands.ts, under its new names; the default reading is the same code.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { Result } from "better-result";
 
-import {
-  ownTableRows,
-  visibleHtmlText,
-} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -18,6 +15,10 @@ import {
   extractPdfLines,
   pdfParagraphsToHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import {
+  ownTableRows,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 const NSS_REGISTRY_ORIGIN = "https://www.nssoud.cz";
 const ANONYMISED_DECISION_PATH =

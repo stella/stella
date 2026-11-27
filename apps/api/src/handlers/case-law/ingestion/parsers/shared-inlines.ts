@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: span styles are read only under the opt-in `parseSpanStyle` option, which only cz-nss passes and cz-nss bumps its own version; every other walk is unchanged.
 // parser-output-unchanged: [cz-uohs] its reader supplies text directly and retains the same footnote inlines; replay fixture fields are unchanged.
@@ -48,6 +49,18 @@
  * keeps a thin local alias over one core.
  */
 
+import {
+  inlineStyleIsAsposeSpacer,
+  inlineStyleIsBold,
+  inlineStyleIsInlineBlock,
+  inlineStyleIsItalic,
+} from "@stll/case-law-parsers/inline-style";
+// parser-output-unchanged: the visible-text helpers moved unchanged to visible-html-text.ts so AST validation can reuse them without importing the parser module.
+import {
+  EXCLUDED_HTML_SELECTOR,
+  isExcludedHtmlTag,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/visible-html-text";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -56,19 +69,6 @@ import { plainTextOf } from "@stll/legal-ast/document-ast";
 import { flattenInlineText } from "@stll/legal-ast/inline";
 // parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
-
-import {
-  inlineStyleIsAsposeSpacer,
-  inlineStyleIsBold,
-  inlineStyleIsInlineBlock,
-  inlineStyleIsItalic,
-} from "./inline-style";
-// parser-output-unchanged: the visible-text helpers moved unchanged to visible-html-text.ts so AST validation can reuse them without importing the parser module.
-import {
-  EXCLUDED_HTML_SELECTOR,
-  isExcludedHtmlTag,
-  visibleHtmlText,
-} from "./visible-html-text";
 
 export { EXCLUDED_HTML_SELECTOR, isExcludedHtmlTag, visibleHtmlText };
 

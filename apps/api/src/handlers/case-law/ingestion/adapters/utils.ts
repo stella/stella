@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: [cz-ns] shared utilities moved to parser owners with byte-identical output.
 // parser-output-unchanged: [cz-nss] shared utilities moved to parser owners with byte-identical output.
 // parser-output-unchanged: [cz-us] shared utilities moved to parser owners with byte-identical output.

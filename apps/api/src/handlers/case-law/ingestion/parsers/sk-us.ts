@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored XHTML; the parse itself is unchanged.
@@ -30,12 +31,6 @@
 import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import {
-  ANONYMIZED_CLASS,
-  inlinesToPlainText,
-  isExcludedHtmlTag,
-  walkInlines,
-} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
@@ -86,6 +81,12 @@ import {
   normalizeUnicode,
 } from "@stll/text-normalize";
 
+import {
+  ANONYMIZED_CLASS,
+  inlinesToPlainText,
+  isExcludedHtmlTag,
+  walkInlines,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 /**

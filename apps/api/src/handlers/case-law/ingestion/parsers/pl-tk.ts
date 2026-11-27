@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The case DOM is shared for one assembly and cleanup happens on one owned clone; stored fields, HTML and AST output are unchanged.
@@ -19,15 +20,7 @@
 
 import { panic } from "better-result";
 
-import { collapseHtmlWhitespace } from "@stll/case-law-parsers/html-whitespace";
 import { inlineStyleValue } from "@stll/case-law-parsers/inline-style";
-import {
-  EXCLUDED_HTML_SELECTOR,
-  inlinesToPlainText,
-  ownTableRows,
-  visibleHtmlText,
-  walkInlines,
-} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -42,6 +35,14 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 
+import {
+  EXCLUDED_HTML_SELECTOR,
+  inlinesToPlainText,
+  ownTableRows,
+  visibleHtmlText,
+  walkInlines,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import {
   type MetadataUrlDefect,
   type SafeHref,

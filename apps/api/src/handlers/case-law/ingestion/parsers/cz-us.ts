@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 import { panic } from "better-result";
@@ -9,10 +10,6 @@ import {
 } from "@stll/case-law-parsers/document-footnotes";
 import { readRtfString } from "@stll/case-law-parsers/rtf-reader";
 import { runContentVisibleText } from "@stll/case-law-parsers/run-content-text";
-import {
-  stripFurniturePrefix,
-  visibleHtmlText,
-} from "@stll/case-law-parsers/shared-inlines";
 import type {
   BlockContent as FolioBlockContent,
   Paragraph as FolioParagraph,
@@ -123,6 +120,10 @@ import {
   separateOpinionHeadingNamesAuthor,
 } from "@stll/legal-ast/separate-opinion-heading";
 
+import {
+  stripFurniturePrefix,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";

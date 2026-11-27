@@ -12,7 +12,6 @@ import {
   VISIBLE_RUN_CASES,
   visibleRunDocument,
 } from "@stll/case-law-parsers/run-content-text.fixtures";
-import { inlinesToPlainText } from "@stll/case-law-parsers/shared-inlines";
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -21,6 +20,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";

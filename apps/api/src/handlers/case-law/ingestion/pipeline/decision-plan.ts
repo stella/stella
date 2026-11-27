@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result } from "better-result";
 import type { InferOk } from "better-result";
 import { eq } from "drizzle-orm";

@@ -1,10 +1,10 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { panic, Result } from "better-result";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
-import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *
@@ -106,6 +106,7 @@ import type {
   PlUokikRulingHeader,
   PlUokikRulingUnread,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,

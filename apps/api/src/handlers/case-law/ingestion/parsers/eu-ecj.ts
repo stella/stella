@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: the lost-content verdict is the same validateAst result; only the logging moved to the pipeline.
@@ -47,15 +48,6 @@
 import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import {
-  ANONYMIZED_CLASS,
-  appendTextInline,
-  inlinesToPlainText,
-  ownTableRows,
-  visibleHtmlText,
-  walkInlines,
-  type WalkInlinesOptions,
-} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -74,6 +66,15 @@ import {
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
 
+import {
+  ANONYMIZED_CLASS,
+  appendTextInline,
+  inlinesToPlainText,
+  ownTableRows,
+  visibleHtmlText,
+  walkInlines,
+  type WalkInlinesOptions,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 

@@ -598,7 +598,7 @@
     "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts": 1,
-    "packages/case-law-parsers/src/shared-inlines.ts": 1,
+    "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts": 1,
     "apps/api/src/handlers/chat/send-message.ts": 2,
     "apps/api/src/handlers/chat/stream-chat.ts": 1,
     "apps/api/src/handlers/chat/tools/chat-tools.ts": 1,

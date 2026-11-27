@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 /**
@@ -31,12 +32,6 @@
 import { Result, TaggedError } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import {
-  isExcludedHtmlTag,
-  ownTableRows,
-  visibleHtmlText,
-  walkInlines,
-} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
@@ -53,6 +48,12 @@ import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 
+import {
+  isExcludedHtmlTag,
+  ownTableRows,
+  visibleHtmlText,
+  walkInlines,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import type { CzNsReportEdition } from "@/api/lib/legal-search/cz-ns-collection-entry";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 

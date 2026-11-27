@@ -1,10 +1,11 @@
-import {
-  ownTableRows,
-  visibleHtmlText,
-} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
 
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
+import {
+  ownTableRows,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
 
 const NSS_DETAIL_ORIGIN = "https://vyhledavac.nssoud.cz";

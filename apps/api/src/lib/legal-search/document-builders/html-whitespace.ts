@@ -1,8 +1,11 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: node types and predicates now come from @stll/html/nodes; the whitespace walk and rendering are unchanged.
 // parser-output-unchanged: adds `renderHtmlWhiteSpace` and `isHtmlBlock`, which read a parsed document; `collapseHtmlWhitespace` is unchanged, and only the Polish courts reader calls the new functions.
 import { panic } from "better-result";
 
+import { inlineStyleValue } from "@stll/case-law-parsers/inline-style";
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/visible-html-text";
 import {
   type AnyNode,
   type Element,
@@ -12,9 +15,6 @@ import {
   type Text,
 } from "@stll/html/nodes";
 import type { Inline } from "@stll/legal-ast/document-ast";
-
-import { inlineStyleValue } from "./inline-style";
-import { isExcludedHtmlTag } from "./visible-html-text";
 
 /** The whitespace HTML collapses. A no-break space is text and stays. */
 const HTML_WHITESPACE = /[ \t\n\r\f]+/gu;

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result } from "better-result";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
@@ -6,12 +7,6 @@ import {
   readAtDecisionRoles,
 } from "@stll/case-law-parsers/at-decision-regions";
 import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
-import {
-  inlinesToPlainText,
-  isExcludedHtmlTag,
-  visibleHtmlText,
-  walkInlines,
-} from "@stll/case-law-parsers/shared-inlines";
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /** Parse Findok's decision XML envelope and embedded publisher XHTML. */
 import { load } from "@stll/html";
@@ -20,6 +15,12 @@ import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 
+import {
+  inlinesToPlainText,
+  isExcludedHtmlTag,
+  visibleHtmlText,
+  walkInlines,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 

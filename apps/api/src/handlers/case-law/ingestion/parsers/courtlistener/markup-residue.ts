@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { entityResidueMatchesIn } from "@stll/case-law-parsers/entity-residue";
 import type { MarkupResidueRuleId } from "@stll/case-law-parsers/markup-residue";
 import { rtfControlResidueMatchesIn } from "@stll/case-law-parsers/rtf-reader";
