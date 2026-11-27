@@ -2211,6 +2211,47 @@ const setTightOf = ({
   return Object.keys(tight).length === 0 ? undefined : tight;
 };
 
+/**
+ * The sides a cell paragraph sets tight through its style or the document's
+ * defaults. Such a paragraph, placed with its table in no style of the
+ * template, would otherwise take the space of the template's body text.
+ */
+const tightInEffectOf = ({
+  spacingInEffect,
+}: DocxBlock): TemplatePlanSpacing | undefined => {
+  const tight: TemplatePlanSpacing = {
+    ...(spacingInEffect?.before === 0 ? { before: 0 } : {}),
+    ...(spacingInEffect?.after === 0 ? { after: 0 } : {}),
+  };
+  return Object.keys(tight).length === 0 ? undefined : tight;
+};
+
+/**
+ * A cell paragraph the source sets at the left, placed in the template's
+ * body text where that justifies every line: it stays at the left, as a
+ * table's text is set. Undefined where the template does not justify, or
+ * the source does.
+ */
+const leftOf = (
+  { profile }: Context,
+  { alignment }: DocxBlock,
+): TemplatePlanAlignment | undefined =>
+  JUSTIFIED.has(profile.defaultAlignment ?? "") &&
+  !JUSTIFIED.has(alignment ?? "")
+    ? "left"
+    : undefined;
+
+/** The indent a cell paragraph sets its text in by, where it sets one. */
+const cellIndentOf = ({ indent }: DocxBlock): TemplatePlanIndent | undefined =>
+  indent === undefined || (indent.left <= 0 && indent.firstLine === 0)
+    ? undefined
+    : {
+        left: indent.left,
+        ...(indent.firstLine < 0
+          ? { hanging: -indent.firstLine }
+          : { firstLine: indent.firstLine }),
+      };
+
 /** The roles of cell paragraphs that are lines of text laid out by their
  *  table: where the source centres one or sets it at the right, it stays. */
 const CELL_TEXT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
@@ -2219,6 +2260,56 @@ const CELL_TEXT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
   "continuation",
   "signature",
 ]);
+
+/**
+ * A cell paragraph placed with its table, not read as any role: it takes the
+ * style the template writes its tables in. It joins no list of the
+ * template; a number it shows goes with it as text. Undefined when it needs
+ * nothing of its own.
+ */
+const looseCellOf = (
+  context: Context,
+  inner: DocxBlock,
+): TemplatePlanNestedParagraph | undefined => {
+  const styleId = context.profile.tableText?.styleId;
+  const labelled = shownLabelOf(inner) !== null;
+  // Where its text stands in the cell is the table's own layout: a centred
+  // row that heads a group, an amount at the right.
+  const alignment =
+    inner.text.trim() === ""
+      ? undefined
+      : (setApartOf(inner) ??
+        (styleId === undefined ? leftOf(context, inner) : undefined));
+  // Without a table style of the template the paragraph takes the
+  // template's body text, whose indent knows nothing of the cell: where the
+  // source moves the text in (an item whose mark was drawn by hand), it
+  // stays.
+  const indent =
+    styleId === undefined && !labelled ? cellIndentOf(inner) : undefined;
+  // So is how close its rows stand: a row set tight by hand (a swatch of a
+  // legend, a line of a dense table) would grow by the spacing of the
+  // template's text style.
+  const spacing =
+    setTightOf(inner) ??
+    (styleId === undefined ? tightInEffectOf(inner) : undefined);
+  if (
+    styleId === undefined &&
+    !labelled &&
+    alignment === undefined &&
+    spacing === undefined &&
+    indent === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    blockId: inner.id,
+    ...(styleId === undefined ? {} : { styleId }),
+    ...(labelled ? { numbering: null, labelAsText: true } : {}),
+    ...(alignment === undefined ? {} : { alignment }),
+    ...(indent === undefined ? {} : { indent }),
+    ...(spacing === undefined ? {} : { spacing }),
+  };
+};
 
 const tableItem = (
   context: Context,
@@ -2251,32 +2342,9 @@ const tableItem = (
         ...(spacing === undefined ? {} : { spacing }),
       });
     } else if (inner.kind === "paragraph") {
-      // A cell paragraph placed with its table takes the style the
-      // template writes its tables in. It joins no list of the template;
-      // a number it shows goes with it as text.
-      // Where its text stands in the cell is the table's own layout: a
-      // centred row that heads a group, an amount at the right.
-      const styleId = context.profile.tableText?.styleId;
-      const labelled = shownLabelOf(inner) !== null;
-      const alignment =
-        inner.text.trim() === "" ? undefined : setApartOf(inner);
-      // So is how close its rows stand: a row set tight by hand (a swatch
-      // of a legend, a line of a dense table) would grow by the spacing of
-      // the template's text style.
-      const spacing = setTightOf(inner);
-      if (
-        styleId !== undefined ||
-        labelled ||
-        alignment !== undefined ||
-        spacing !== undefined
-      ) {
-        nested.push({
-          blockId: inner.id,
-          ...(styleId === undefined ? {} : { styleId }),
-          ...(labelled ? { numbering: null, labelAsText: true } : {}),
-          ...(alignment === undefined ? {} : { alignment }),
-          ...(spacing === undefined ? {} : { spacing }),
-        });
+      const loose = looseCellOf(context, inner);
+      if (loose !== undefined) {
+        nested.push(loose);
       }
     }
   }

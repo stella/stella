@@ -3072,6 +3072,67 @@ describe("buildTemplatePlan, the lines of the parties", () => {
     expect(note.items).toContainEqual({ kind: "cellSpacingKept", blocks: 2 });
   });
 
+  test("a cell paragraph in no style of the template keeps its source's tight space, left edge and indent", () => {
+    const table = inColumns(2, [
+      "Na základě:",
+      "Gemäß der:",
+      "Nařízení",
+      "Verordnung",
+    ]);
+    const cells = table.blocks.filter(({ kind }) => kind === "paragraph");
+    const looks: readonly (Partial<DocxBlock> | undefined)[] = [
+      // Tight by its style on both sides, at the left, moved in.
+      {
+        spacingInEffect: { before: 0, after: 0 },
+        indent: { left: 727, firstLine: 0 },
+      },
+      // Tight in front only; a hanging first line.
+      {
+        spacingInEffect: { before: 0, after: 240 },
+        indent: { left: 727, firstLine: -360 },
+      },
+      // Justified by the source itself, at the margin.
+      { spacingInEffect: { before: 120, after: 120 }, alignment: "both" },
+      undefined,
+    ];
+    for (const [position, look] of looks.entries()) {
+      const cell = cells[position];
+      if (cell !== undefined && look !== undefined) {
+        Object.assign(cell, look);
+      }
+    }
+    const justifying = { ...PROFILE, defaultAlignment: "both" };
+    const nestedOf = (profile: typeof PROFILE) =>
+      sourceItems(build(table, "keepSource", { profile }).plan).flatMap(
+        (item) => item.nested ?? [],
+      );
+    const lookOf = (nested: ReturnType<typeof nestedOf>, position: number) =>
+      nested.find(({ blockId }) => blockId === cells[position]?.id);
+    const placed = nestedOf(justifying);
+    expect(lookOf(placed, 0)).toMatchObject({
+      alignment: "left",
+      spacing: { before: 0, after: 0 },
+      indent: { left: 727, firstLine: 0 },
+    });
+    expect(lookOf(placed, 1)).toMatchObject({
+      spacing: { before: 0 },
+      indent: { left: 727, hanging: 360 },
+    });
+    expect(lookOf(placed, 2)).toBeUndefined();
+    expect(lookOf(placed, 3)?.indent).toBeUndefined();
+    // A template that does not justify its text leaves the edge alone.
+    expect(lookOf(nestedOf(PROFILE), 0)?.alignment).toBeUndefined();
+    // With a table style of the template, that style decides.
+    const styled = nestedOf({
+      ...justifying,
+      tableText: { styleId: "TableText" },
+    });
+    expect(lookOf(styled, 0)).toEqual({
+      blockId: cells[0]?.id,
+      styleId: "TableText",
+    });
+  });
+
   test("a template whose style indent is not known leaves the lines as they are", () => {
     const { plan, note } = build(manifest);
     expect(

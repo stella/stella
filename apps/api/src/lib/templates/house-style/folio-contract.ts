@@ -70,6 +70,11 @@ export type DocxBlock = {
    *  Absent when it states neither, and from an engine that does not
    *  report it. What its style gives is not here. */
   spacing?: TemplatePlanSpacing;
+  /** The space in effect in front of the paragraph and behind it, in
+   *  twentieths of a point: each side its own, else its style's, else the
+   *  document defaults', else none. A side set to auto spacing or counted
+   *  in lines is left out. Absent from an engine that does not report it. */
+  spacingInEffect?: { before?: number; after?: number };
   /** The indent in effect, in twentieths of a point: where the
    *  paragraph's lines start, and what its first line adds to that
    *  (negative for a hanging indent). Absent when nothing states one, and
@@ -658,6 +663,12 @@ const blockSchema = v.strictObject({
   endsSection: v.exactOptional(v.literal(true)),
   alignment: v.exactOptional(v.string()),
   spacing: v.exactOptional(
+    v.strictObject({
+      before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    }),
+  ),
+  spacingInEffect: v.exactOptional(
     v.strictObject({
       before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
       after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
