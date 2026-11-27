@@ -130,6 +130,13 @@ describe("inferTemplateProfile", () => {
     expect(
       parseTemplateProfile({ ...profile, roles: { body: null } }).isErr(),
     ).toBe(true);
+    // A profile stored before headings without a number were read has no
+    // such role; it reads back with none.
+    const { heading: _heading, ...before } = profile.roles;
+    expect(
+      parseTemplateProfile({ ...profile, roles: before }).unwrap().roles
+        .heading,
+    ).toBeNull();
     // A style may reach into the margin: its indent is read back as it is.
     const { body } = profile.roles;
     if (body === null) {
@@ -140,6 +147,29 @@ describe("inferTemplateProfile", () => {
       roles: { ...profile.roles, body: { ...body, indentLeft: -360 } },
     };
     expect(parseTemplateProfile(outdented).unwrap()).toEqual(outdented);
+  });
+
+  test("reads the style of a heading without a number: named for the preamble, in no list", () => {
+    const template = contractTemplate();
+    // The fixture's only style of that name numbers its recitals.
+    expect(inferTemplateProfile(template).roles.heading).toBeNull();
+    const body = template.styles.find(({ isDefault }) => isDefault);
+    if (body === undefined) {
+      throw new Error("fixture");
+    }
+    const withHeading = {
+      ...template,
+      styles: [
+        ...template.styles,
+        { ...body, styleId: "Preamble", name: "Preamble", isDefault: false },
+      ],
+    };
+    const { roles } = inferTemplateProfile(withHeading);
+    expect(roles.heading).toMatchObject({
+      styleId: "Preamble",
+      numbering: null,
+    });
+    expect(roles.recital?.styleId).toBe("Recital");
   });
 });
 

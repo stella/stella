@@ -345,6 +345,9 @@ const STYLE_FALLBACK = {
   signature: ["body"],
   annexList: ["body"],
   annexHeading: ["title", "body"],
+  // A template without a style for headings that carry no number sets them
+  // as text, kept with what they head.
+  heading: ["continuation", "body"],
   body: [],
 } as const satisfies Record<HouseStyleRole, readonly HouseStyleRole[]>;
 
@@ -1486,6 +1489,9 @@ const alignFrontLines = (context: Context, placed: Placed): void => {
       !block.text.includes("\t")
     ) {
       placed.alignments.set(block.id, alignment);
+      // Set between the margins, not inside the indent of a text style.
+      placement.styleId =
+        context.profile.roles.body?.styleId ?? placement.styleId;
     }
   }
 };
@@ -1521,6 +1527,11 @@ const headsNext = (
       ? headsText(placed, line)
       : role === "annexHeading" || role === "title";
   const text = block.text.slice(entry?.manualLength ?? 0).trim();
+  // A paragraph read as a heading without a number heads what follows it
+  // whatever its length or first letter: the reading already judged those.
+  if (role === "heading" && text !== "") {
+    return true;
+  }
   if (
     heading ||
     text === "" ||
@@ -1530,7 +1541,12 @@ const headsNext = (
   ) {
     return false;
   }
-  if (block.outlineLevel !== null && !/[.:]$/u.test(text)) {
+  // A heading without a number may be set in a text style, where the
+  // template has none for it.
+  if (
+    role === "heading" ||
+    (block.outlineLevel !== null && !/[.:]$/u.test(text))
+  ) {
     return true;
   }
   const own = PROVISION_DEPTH[role];
@@ -1994,9 +2010,12 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       blockIds: keepBefore,
     });
   }
+  // A heading without a number heads what follows it: the preamble's
+  // heading opens the body with its recitals.
   const opensBody = (role: HouseStyleRole): boolean =>
     role === "articleHeading" ||
     role === "recital" ||
+    role === "heading" ||
     CLAUSE_ROLES.some((clause) => clause === role);
   // The table of contents stands where the template has it: after the
   // front matter, in front of the first recital or article.

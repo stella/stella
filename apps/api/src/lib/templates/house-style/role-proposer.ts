@@ -33,6 +33,7 @@ export const HOUSE_STYLE_ROLES = [
   "signature",
   "annexList",
   "annexHeading",
+  "heading",
   "body",
 ] as const;
 
@@ -68,6 +69,7 @@ const CONFIDENCE = {
   signatureByPosition: 0.6,
   continuation: 0.7,
   underHeading: 0.5,
+  sectionHeading: 0.65,
   bullet: 0.35,
   annexBody: 0.4,
   plain: 0.5,
@@ -291,6 +293,34 @@ const isProvision = ({ level, annexBlockId }: LabelEntry): boolean =>
     level === "letter" ||
     level === "roman");
 
+/**
+ * Where the preamble begins. A heading right above the sentence that opens
+ * it heads it (`Purpose` over `The parties have agreed as follows.`): the
+ * preamble begins there. Not a party's line, nor the word between two
+ * parties, and nothing at or in front of `floor`, the last line that
+ * cannot be part of it.
+ */
+const preambleStart = (
+  blocks: readonly DocxBlock[],
+  marked: number,
+  floor: number,
+): number => {
+  let aboveAt = Number.isFinite(marked) ? marked - 1 : -1;
+  while (aboveAt > floor && blocks[aboveAt]?.text.trim() === "") {
+    aboveAt -= 1;
+  }
+  const above = blocks[aboveAt];
+  const headed =
+    above !== undefined &&
+    aboveAt > floor &&
+    above.kind === "paragraph" &&
+    isSectionHeading(above) &&
+    !PARTY_JOINER.test(above.text.trim()) &&
+    !PARTY_MARKER.test(above.text) &&
+    !PARTY_IDENTITY.test(above.text);
+  return headed ? aboveAt : marked;
+};
+
 const findZones = (
   all: readonly DocxBlock[],
   { entries }: LabelIndex,
@@ -348,14 +378,21 @@ const findZones = (
     identified - 1 > title &&
     named.kind === "paragraph" &&
     isText(named) &&
-    named.text.trim().length <= TITLE_MAX
+    named.text.trim().length <= TITLE_MAX &&
+    // A line that announces the parties (`uzavřená mezi:`) names none.
+    !PARTY_INTRO.test(named.text.trim())
       ? identified - 1
       : identified;
-  const preamble = firstPosition(
+  const marked = firstPosition(
     all,
     (Number.isFinite(firstParty) ? firstParty : title) + 1,
     firstProvision,
     (block) => PREAMBLE_MARKER.test(block.text),
+  );
+  const preamble = preambleStart(
+    blocks,
+    marked,
+    Number.isFinite(firstParty) ? firstParty : title,
   );
   return {
     firstProvision,
@@ -375,6 +412,11 @@ const findZones = (
     firstAnnexHeading,
   };
 };
+
+/** The line that announces the parties: `mezi:`, `by and between`. */
+const PARTY_INTRO = /(?:^|[ \u00A0])(?:mezi|between|zwischen)[ \u00A0]*:?$/iu;
+/** The word that stands alone between two parties. */
+const PARTY_JOINER = /^(?:a|and|und|&)$/iu;
 
 const readFrontMatter = (
   block: DocxBlock,
@@ -403,18 +445,37 @@ const readFrontMatter = (
     );
   }
   if (position >= zones.preamble) {
+    // The line that heads the preamble is a heading, not a recital.
+    if (isSectionHeading(block)) {
+      return sectionHeading();
+    }
     return reading("recital", CONFIDENCE.preamble, {
       role: "body",
       confidence: CONFIDENCE.alternative,
     });
   }
   if (position >= zones.firstParty) {
+    // The word between two parties is text of the page, not a party's line.
+    if (PARTY_JOINER.test(block.text.trim())) {
+      return reading("body", CONFIDENCE.plain, {
+        role: "party",
+        confidence: CONFIDENCE.alternative,
+      });
+    }
     return PARTY_MARKER.test(block.text)
       ? reading("party", CONFIDENCE.partyMarked)
       : reading("party", CONFIDENCE.partyByPosition, {
           role: "body",
           confidence: CONFIDENCE.alternative,
         });
+  }
+  // The line that announces the parties is text of the page however it is
+  // set: centred or in capitals, it is still no line of the title.
+  if (PARTY_INTRO.test(block.text.trim())) {
+    return reading("body", CONFIDENCE.plain, {
+      role: "title",
+      confidence: CONFIDENCE.weakAlternative,
+    });
   }
   // Between the title and the parties a line belongs to the title when it
   // is set like one: centred, or in capitals. Anything else there is text
@@ -456,6 +517,42 @@ const isTypedArticleHeading = (block: DocxBlock): boolean => {
   );
 };
 
+/** The longest line read as a heading without a number. */
+const SECTION_HEADING_MAX = 100;
+/** What no heading is: a label and its value, a link, a blank to fill in. */
+const NOT_A_HEADING = /:[ \u00A0]*\S|https?:\/\/|www\.|^\[|^\(.*\)$/su;
+
+/**
+ * Whether a paragraph without a number heads a part of the document: a
+ * short line that is no sentence and that the source centres or sets as a
+ * heading of its first level (`Preambule`, `Definice`, `Závěrečná
+ * ustanovení` over unnumbered text). A heading further down the source's
+ * outline stays text: a template has one look for such a heading, not a
+ * scale of them. A line in brackets names something for the text that
+ * follows.
+ */
+const isSectionHeading = (block: DocxBlock): boolean => {
+  const line = block.text.trim();
+  return (
+    printedLabel(block) === null &&
+    // A heading further down the source's outline stays text, centred or
+    // not; a centred line the outline does not name may head a part.
+    (block.outlineLevel === 0 ||
+      (block.outlineLevel === null && block.alignment === "center")) &&
+    line.length <= SECTION_HEADING_MAX &&
+    /\p{L}{2}/u.test(line) &&
+    !/[.;:,]$/u.test(line) &&
+    !NOT_A_HEADING.test(line) &&
+    !SIGNATURE_MARKER.test(line)
+  );
+};
+
+const sectionHeading = (): Reading =>
+  reading("heading", CONFIDENCE.sectionHeading, {
+    role: "continuation",
+    confidence: CONFIDENCE.alternative,
+  });
+
 const readUnlabelled = (
   block: DocxBlock,
   position: number,
@@ -469,7 +566,9 @@ const readUnlabelled = (
     });
   }
   if (position >= zones.firstAnnexHeading) {
-    return reading("body", CONFIDENCE.annexBody);
+    return isSectionHeading(block)
+      ? sectionHeading()
+      : reading("body", CONFIDENCE.annexBody);
   }
   if (position >= zones.signature) {
     return SIGNATURE_MARKER.test(block.text)
@@ -492,6 +591,9 @@ const readUnlabelled = (
           role: "letter",
           confidence: CONFIDENCE.alternative,
         });
+  }
+  if (isSectionHeading(block)) {
+    return sectionHeading();
   }
   const context = index.contextByBlockId.get(block.id);
   const inProvision =

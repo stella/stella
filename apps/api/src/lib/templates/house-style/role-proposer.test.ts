@@ -36,7 +36,8 @@ describe("proposeBlockRoles", () => {
       "SMLOUVA O DODÁVCE": "title",
       "Dodavatel: Horák Stavby s.r.": "party",
       "(dále jen „dodavatel“)": "party",
-      a: "party",
+      // The word between two parties is text of the page.
+      a: "body",
       "uzavírají tuto smlouvu:": "recital",
       "Článek I.": "articleHeading",
       "Úvodní ustanovení": "articleHeading",
@@ -114,6 +115,110 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a short line without a number that the source centres or sets as a heading heads a part", () => {
+    const manifest = manifestOf([
+      "SMLOUVA O DÍLO",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Beta a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+      "Preambule a účel smlouvy",
+      "Strany uzavírají tuto smlouvu.",
+      "Článek I.\nPředmět",
+      "1.1\tZhotovitel provede dílo.",
+      "Zvláštní ujednání",
+      "Strany se dohodly na dalších podmínkách.",
+      "(dále jen „Podmínky“)",
+      "Dílo bude předáno do konce roku.",
+      "Bez čísla a bez zarovnání",
+    ]);
+    const centred = new Set([
+      "Preambule a účel smlouvy",
+      "Zvláštní ujednání",
+      "(dále jen „Podmínky“)",
+      "Dílo bude předáno do konce roku.",
+    ]);
+    for (const block of manifest.blocks) {
+      if (centred.has(block.text)) {
+        block.alignment = "center";
+      }
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["Preambule a účel smlouvy"]).toBe("heading");
+    expect(roles["Zvláštní ujednání"]).toBe("heading");
+    // A line in brackets, a sentence, a line the source does not set apart.
+    expect(roles["(dále jen „Podmínky“)"]).toBe("continuation");
+    expect(roles["Dílo bude předáno do konce r"]).toBe("continuation");
+    expect(roles["Bez čísla a bez zarovnání"]).toBe("continuation");
+  });
+
+  test("a heading right above the sentence that opens the preamble heads it; a centred heading further down the outline stays text", () => {
+    const manifest = manifestOf([
+      "PURCHASE AGREEMENT",
+      "Alfa Ltd, with its registered office at 1 Long Street, London, company number 00000001",
+      "and",
+      "Beta Ltd, with its registered office at 2 Short Street, Leeds, company number 00000002",
+      "Purpose",
+      "",
+      "The parties have agreed as follows.",
+      "Article 1\nSubject",
+      "1.1\tThe seller delivers the goods.",
+      "Delivery terms",
+      "The goods are delivered to the buyer's seat.",
+    ]);
+    for (const block of manifest.blocks) {
+      if (block.text === "Purpose" || block.text === "Delivery terms") {
+        block.alignment = "center";
+      }
+      if (block.text === "Delivery terms") {
+        block.outlineLevel = 1;
+      }
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["Purpose"]).toBe("heading");
+    expect(roles["and"]).toBe("body");
+    expect(roles["Beta Ltd, with its registere"]).toBe("party");
+    expect(roles["Delivery terms"]).not.toBe("heading");
+  });
+
+  test("the line that announces the parties and the word between them are no party's lines", () => {
+    const roles = rolesOf(
+      manifestOf([
+        "KUPNÍ SMLOUVA",
+        "uzavřená mezi:",
+        "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+        "a",
+        "Beta a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+        "Článek I.\nPředmět",
+        "1.1\tProdávající dodá zboží.",
+      ]),
+    );
+    expect(roles["uzavřená mezi:"]).toBe("body");
+    expect(roles["a"]).toBe("body");
+    expect(roles["Alfa s.r.o., se sídlem Dlouh"]).toBe("party");
+    expect(roles["Beta a.s., se sídlem Krátká "]).toBe("party");
+  });
+
+  test("the line that announces the parties is no line of the title, centred or in capitals", () => {
+    const lines = (intro: string) => [
+      "PURCHASE AGREEMENT",
+      intro,
+      "Alfa Ltd, with its registered office at 1 Long Street, London, company number 00000001",
+      "and",
+      "Beta Ltd, with its registered office at 2 Short Street, Leeds, company number 00000002",
+      "Article 1\nSubject",
+      "1.1\tThe seller delivers the goods.",
+    ];
+    const centred = manifestOf(lines("between:"));
+    for (const block of centred.blocks) {
+      if (block.text === "between:") {
+        block.alignment = "center";
+      }
+    }
+    expect(rolesOf(centred)["between:"]).toBe("body");
+    expect(rolesOf(manifestOf(lines("BY AND BETWEEN")))["BY AND BETWEEN"]).toBe(
+      "body",
+    );
+  });
+
   test("a bullet whose mark is a letter is a bullet", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -162,7 +267,7 @@ describe("proposeBlockRoles", () => {
         ?.confidence;
     expect(confidenceOf("SMLOUVA O DODÁVCE")).toBe(0.85);
     expect(confidenceOf("Dodavatel:")).toBe(0.85);
-    expect(confidenceOf("a")).toBe(0.6);
+    expect(confidenceOf("a")).toBe(0.5);
     expect(confidenceOf("Článek II.")).toBe(0.95);
     expect(confidenceOf("První ujednání, oddíl II.")).toBe(0.9);
     expect(confidenceOf("V Praze dne")).toBe(0.85);

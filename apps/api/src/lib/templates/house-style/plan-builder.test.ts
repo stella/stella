@@ -246,6 +246,48 @@ describe("buildTemplatePlan, a number typed with a blank between its parts", () 
   });
 });
 
+describe("buildTemplatePlan, headings without a number", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Článek I.\nPrvní",
+    "1.1\tText ustanovení.",
+    "Zvláštní ujednání",
+    "Strany se dohodly na dalších podmínkách plnění.",
+  ]);
+  const heading = manifest.blocks.find(({ text }) =>
+    text.startsWith("Zvláštní"),
+  );
+  if (heading !== undefined) {
+    heading.alignment = "center";
+  }
+
+  test("take the template's style for them", () => {
+    const body = PROFILE.roles.body;
+    if (body === null) {
+      throw new Error("fixture");
+    }
+    const { plan } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, heading: { ...body, styleId: "Preamble" } },
+      },
+    });
+    expect(itemOf(plan, manifest, "Zvláštní")).toMatchObject({
+      styleId: "Preamble",
+      numbering: null,
+      keepNext: true,
+    });
+  });
+
+  test("are text kept with what they head where the template has no such style", () => {
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "Zvláštní")).toMatchObject({
+      styleId: "Indent",
+      keepNext: true,
+    });
+  });
+});
+
 describe("buildTemplatePlan, annexes a field numbers", () => {
   test("the heading keeps its text and its field, in the annex style and in no list", () => {
     const fielded = manifestOf([
@@ -1922,6 +1964,34 @@ describe("buildTemplatePlan, tables and omissions", () => {
       blockIds: ["p4", "p5", "p6", "p7"],
     });
   });
+
+  test("the template's contents stand in front of the heading that opens the preamble, not under it", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = manifestOf([
+      "SMLOUVA O DODÁVCE",
+      "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "a",
+      "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+      { text: "Preambule", styleName: "heading 1", outlineLevel: 0 },
+      "Strany uzavírají tuto smlouvu s ohledem na svou dlouhodobou spolupráci.",
+      "Článek I.\nPředmět",
+      numbered("1.", "Dodavatel dodá zboží.", 10),
+    ]);
+    const { plan } = build(manifest, "keepSource", { profile });
+    const preamble = plan.body.findIndex(
+      (item) =>
+        item.kind === "source" &&
+        item.blockId === blockIdOf(manifest, "Preambule"),
+    );
+    expect(plan.body[preamble - 1]).toEqual({
+      kind: "template",
+      templateBlockIds: ["p4", "p5", "p6", "p7"],
+    });
+    // Once: the recital under the heading does not bring them again.
+    expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
+  });
 });
 
 describe("buildTemplatePlan invariants", () => {
@@ -2011,6 +2081,23 @@ describe("buildTemplatePlan, what a paragraph states for itself", () => {
     // Not the heading, whose style keeps it; not a sentence of its own.
     expect(kept).toEqual([blockIdOf(manifest, "1.\tPlán")]);
     expect(note.items).toContainEqual({ kind: "linesKeptWithNext", blocks: 1 });
+  });
+
+  test("a long heading without a number stays with what it heads, whatever its first letter", () => {
+    const long =
+      "podmínky, za kterých se smluvní strany dohodly na dalším postupu při plnění celého díla";
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "1.1\tZhotovitel provede dílo.",
+      { text: long, styleName: "heading 1", outlineLevel: 0 },
+      "Strany postupují podle harmonogramu.",
+    ]);
+    expect(long.length).toBeGreaterThan(80);
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "podmínky, za kterých")).toMatchObject({
+      keepNext: true,
+    });
   });
 
   test("a heading of the source placed as text stays with what it heads", () => {

@@ -190,6 +190,7 @@ const NAME = {
   annexList: /seznam příloh|annex list|list of annexes|anlagenverzeichnis/iu,
   contents: /^(?:toc|obsah|verzeichnis|inhaltsverzeichnis)\b/iu,
   tableText: /tabul|\btable\b|tabelle/iu,
+  preamble: /preamb|präambel/iu,
 } as const;
 
 const ANNEX_SAMPLE =
@@ -626,6 +627,13 @@ const inferRoles = (
     );
   const annexSample = bySample(outside, ANNEX_SAMPLE);
   const annexListNamed = byName(outside, NAME.annexList);
+  // The style of a heading without a number (`Preambule`): named for the
+  // preamble and in no list; the numbered one of that name is the recital's.
+  const headingNamed = byName(
+    outside,
+    NAME.preamble,
+    (fact) => isUnnumbered(fact) && fact.style.type === "paragraph",
+  );
 
   return {
     title,
@@ -654,6 +662,10 @@ const inferRoles = (
       annexSample === undefined
         ? null
         : unnumbered(target(annexSample, CONFIDENCE.sample, "sample")),
+    heading:
+      headingNamed === undefined
+        ? null
+        : target(headingNamed, CONFIDENCE.name, "styleName"),
     body,
   };
 };
@@ -1503,8 +1515,10 @@ const profileSchema = v.strictObject({
     signature: roleTargetSchema,
     annexList: roleTargetSchema,
     annexHeading: roleTargetSchema,
+    // A profile stored before the role was read has none.
+    heading: v.optional(roleTargetSchema, null),
     body: roleTargetSchema,
-  } satisfies Record<HouseStyleRole, typeof roleTargetSchema>),
+  } satisfies Record<HouseStyleRole, unknown>),
   spareLevels: v.pipe(v.array(listLevelSchema), v.maxLength(LEVELS_MAX)),
   markLevels: v.exactOptional(
     v.pipe(v.array(listLevelSchema), v.maxLength(LEVELS_MAX)),
