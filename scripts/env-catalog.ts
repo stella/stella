@@ -1825,6 +1825,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_OUTPUT_DIR",
   // Nightly route-scale workflow: also walk the small and large matters.
   "E2E_ROUTE_SCALE",
+  // Route smoke group count override for sharded network-baseline CI runs.
+  "E2E_ROUTE_SMOKE_GROUPS",
   // Playwright coordinator token persists isolated route worlds across worker replacement.
   "E2E_ROUTE_SMOKE_RUN_ID",
   "E2E_SOAK_REPLAY",
