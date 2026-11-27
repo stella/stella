@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result, TaggedError } from "better-result";
 /**
  * Tribunal Superior do Trabalho (Brazil's superior labour court).

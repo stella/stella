@@ -890,7 +890,7 @@ test("RTF code-page decoding stays in the document reader", async () => {
   expect(
     await lintSingleRule("confine-owner", source, {
       ruleOptions: { entries: [entry] },
-      sourcePath: "apps/api/src/lib/legal-search/parsers/rtf-reader.ts",
+      sourcePath: "packages/case-law-parsers/src/rtf-reader.ts",
     }),
   ).toEqual([]);
 });

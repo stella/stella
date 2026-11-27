@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { encodeHTML } from "entities";
 import fc from "fast-check";
 
+import { entityResidueIn } from "@stll/case-law-parsers/entity-residue";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -14,7 +15,6 @@ import {
   decodeSourceRawEnvelope,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
-import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
 import {
   capturedSkDocumentReplayInput,
   replayCapturedSkDocument as replay,

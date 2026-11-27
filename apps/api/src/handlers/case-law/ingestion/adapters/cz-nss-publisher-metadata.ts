@@ -1,6 +1,7 @@
 import { load } from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
 
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import {
   ownTableRows,
   visibleHtmlText,

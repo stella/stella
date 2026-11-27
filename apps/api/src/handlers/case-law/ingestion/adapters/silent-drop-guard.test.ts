@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/visible-html-text";
 import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
 
@@ -10,7 +11,6 @@ import {
   encodeSourceRawEnvelope,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
-import { isExcludedHtmlTag } from "@/api/lib/legal-search/parsers/visible-html-text";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   brTjdftFixture,

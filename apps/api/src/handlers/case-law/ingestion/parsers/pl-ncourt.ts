@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; the source paragraphs it alone read are gone, and the rendered HTML, metadata and AST are unchanged.
 /**
@@ -29,8 +30,9 @@ import {
   isText,
 } from "@stll/html/nodes";
 
+import { ANONYMIZED_CLASS } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+
 import { judgeLexLink, type LexLinkRejection } from "./pl-ncourt-lexlink";
-import { ANONYMIZED_CLASS } from "./shared-inlines";
 
 /** The statute a `xLexLink` names, as the link states it. */
 type PlNcourtLegalReference = {

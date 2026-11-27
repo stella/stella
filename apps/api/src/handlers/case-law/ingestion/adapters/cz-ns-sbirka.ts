@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: dot-notation property access on LANGUAGE_STOPWORDS preserves identical runtime output
 /**
  * The Supreme Court's official collection, the Sbírka soudních rozhodnutí a

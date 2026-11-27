@@ -2,13 +2,13 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
 
+import { createParagraphLineReader } from "@stll/case-law-parsers/document-footnotes";
+import { readRtfString } from "@stll/case-law-parsers/rtf-reader";
 import type { BlockContent, Document } from "@stll/docx-core/model";
 import { load } from "@stll/html";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { createParagraphLineReader } from "@/api/lib/legal-search/parsers/document-footnotes";
-import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 
 import recordedLines from "./rtf-line-parity.expected.json";

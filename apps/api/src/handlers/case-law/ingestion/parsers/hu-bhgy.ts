@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored document; the parse itself is unchanged.
@@ -25,6 +26,12 @@ import { panic } from "better-result";
  * order, and only a line it does recognise gains a heading or a role.
  */
 
+import {
+  type BodyDocumentLine,
+  createParagraphLineReader,
+  type DocumentLine,
+} from "@stll/case-law-parsers/document-footnotes";
+import { runContentVisibleText } from "@stll/case-law-parsers/run-content-text";
 import type {
   BlockContent,
   Document as FolioDocument,
@@ -66,12 +73,6 @@ import { parsePlainDate } from "@stll/time";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
-import {
-  type BodyDocumentLine,
-  createParagraphLineReader,
-  type DocumentLine,
-} from "@/api/lib/legal-search/parsers/document-footnotes";
-import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const HU_BHGY_SOURCE_SYSTEM = "eakta.birosag.hu";

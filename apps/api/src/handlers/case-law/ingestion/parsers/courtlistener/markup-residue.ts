@@ -1,6 +1,7 @@
-import { entityResidueMatchesIn } from "@/api/lib/legal-search/parsers/entity-residue";
-import type { MarkupResidueRuleId } from "@/api/lib/legal-search/parsers/markup-residue";
-import { rtfControlResidueMatchesIn } from "@/api/lib/legal-search/parsers/rtf-reader";
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
+import { entityResidueMatchesIn } from "@stll/case-law-parsers/entity-residue";
+import type { MarkupResidueRuleId } from "@stll/case-law-parsers/markup-residue";
+import { rtfControlResidueMatchesIn } from "@stll/case-law-parsers/rtf-reader";
 
 /** CourtListener's publisher grammar, used only by its explicit validation policy. */
 
