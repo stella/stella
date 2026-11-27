@@ -82,6 +82,8 @@ const SOURCE_TREE_PREFIXES = [
 // runtime source trees never ship into the production web or API runtime.
 const NON_RUNTIME_SOURCE_FILE =
   /\.(?:test|spec|stories)\.[cm]?[jt]sx?$|(?:^|\/)(?:__tests__|__fixtures__|__mocks__|__snapshots__)\//u;
+const NON_RUNTIME_DOC_FILE =
+  /(?:^|\/)(?:README|AGENTS|CLAUDE|GEMINI|TERMINOLOGY|CHANGELOG)\.md$|\.research\.md$|(?:^|\/)docs\/.*\.mdx?$/u;
 const NON_RUNTIME_API_PREFIXES = [
   "apps/api/src/tests/",
   "apps/api/evals/",
@@ -98,9 +100,12 @@ const isNonRuntimeSourceFile = (file: string): boolean => {
   if (NON_RUNTIME_API_PREFIXES.some((prefix) => file.startsWith(prefix))) {
     return true;
   }
-  // Markdown docs inside source trees are non-runtime, except template-pack
-  // READMEs referenced by packages/template-packs/src/packs.gen.ts.
-  return /\.mdx?$/u.test(file) && !file.startsWith("packages/template-packs/");
+  // Only exclude known documentation Markdown files (not bundled runtime
+  // prompts/assets such as report prompt templates or template-pack READMEs).
+  if (file.startsWith("packages/template-packs/")) {
+    return false;
+  }
+  return NON_RUNTIME_DOC_FILE.test(file);
 };
 
 const runtimePath = (file: string): boolean => {

@@ -76,6 +76,7 @@ describe("route traffic changes require the route smoke", () => {
     "apps/web/e2e/fixtures/simple.docx",
     "apps/api/src/lib/search/__fixtures__/mixed-3pages.pdf",
     "packages/template-packs/src/content/packs/default/templates/advisor-agreement/README.md",
+    "apps/api/src/handlers/reports/builtin/table-report/prompts/exec-summary.md",
   ])("plans a smoke for %s", (file) => {
     expect(routeSmokeAffected([file])).toBe(true);
   });
