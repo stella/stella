@@ -16,6 +16,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { DocxEditorRef } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
@@ -28,7 +29,6 @@ import {
 import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
 import { withBlockTextHashes } from "@/components/ai-suggestions/snapshot-blocks";
 import { parsePersistedDocxOperation } from "@/components/docx/operation-payload";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { queryView } from "@/lib/query-view.logic";

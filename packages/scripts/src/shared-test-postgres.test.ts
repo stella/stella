@@ -137,19 +137,19 @@ test("concurrent cold provisioning callers create exactly one container", async 
   );
   let runs = 0;
   let published = false;
-  let publish: ReturnType<typeof setTimeout> | undefined;
   const docker = (args: readonly string[]) => {
     if (args.at(0) === "ps") {
       return Result.ok(published ? "stella-shared-test-postgres" : "");
     }
     return Result.ok(args.at(0) === "inspect" ? "true" : "");
   };
+  let publishHandle: ReturnType<typeof setImmediate> | undefined;
   const startContainer = () => {
     runs++;
     if (runs === 1) {
-      publish = setTimeout(() => {
+      publishHandle = setImmediate(() => {
         published = true;
-      }, 20);
+      });
     }
     return Result.ok("started");
   };
@@ -176,7 +176,7 @@ test("concurrent cold provisioning callers create exactly one container", async 
     expect(runs).toBe(1);
     expect(readdirSync(state)).toEqual(["container.lock"]);
   } finally {
-    clearTimeout(publish);
+    clearImmediate(publishHandle);
     rmSync(state, { recursive: true, force: true });
   }
 });

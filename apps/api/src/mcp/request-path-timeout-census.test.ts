@@ -429,6 +429,14 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Renders the filled document before it is saved.",
   },
   {
+    site: "apps/api/src/mcp/reformat-into-template-tool.ts#REFORMAT_INTO_TEMPLATE_TIMEOUT_MS",
+    path: "request",
+    tools: ["reformat_into_template"],
+    bound: "own",
+    onExpiry: "fails-fast",
+    why: "Applies the template to the document, retries included, before the output is saved.",
+  },
+  {
     site: "apps/api/src/mcp/template-tools.ts#HOST_FILE_DOWNLOAD_TIMEOUT_MS",
     path: "request",
     tools: ["create_template"],
@@ -461,6 +469,11 @@ const CENSUS: readonly CensusEntry[] = [
   },
   {
     site: "apps/api/src/mcp/static-cli-metadata.ts#330_000",
+    path: "off-request",
+    why: "The generated CLI's client transport deadline; the server does not wait on it.",
+  },
+  {
+    site: "apps/api/src/mcp/static-cli-metadata.ts#120_000",
     path: "off-request",
     why: "The generated CLI's client transport deadline; the server does not wait on it.",
   },

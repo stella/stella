@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 
 import { createEmptyDocument, DocxEditor } from "@stll/folio-react";
 import type {
@@ -7,6 +7,7 @@ import type {
   EditorMode,
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { EyeIcon, MinusIcon, PenLineIcon, PlusIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 
@@ -111,7 +112,7 @@ export const App = () => {
   //
   // Non-fixture initial state is derived during render by readInitialFixture,
   // so no synchronous setState is needed here.
-  useEffect(() => {
+  useMountEffect(() => {
     const fixtureFile = new URLSearchParams(window.location.search).get("file");
     if (!fixtureFile) {
       return;
@@ -135,7 +136,7 @@ export const App = () => {
         setStatus("Error loading fixture");
       }
     })();
-  }, []);
+  });
 
   const handleNewDocument = useCallback(() => {
     setCurrentDocument(createEmptyDocument());
@@ -233,14 +234,14 @@ export const App = () => {
 
   const trackChangesOn = editorMode === "suggesting";
 
-  useEffect(() => {
+  useMountEffect(() => {
     globalThis.__folioPlayground = {
       getEditorRef: () => editorRef.current,
     };
     return () => {
       globalThis.__folioPlayground = undefined;
     };
-  }, []);
+  });
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">

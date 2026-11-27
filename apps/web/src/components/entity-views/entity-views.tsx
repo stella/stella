@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 
 import { VIEW_SORTS_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { PencilIcon, PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
@@ -30,8 +31,6 @@ import {
   KanbanGroupingSettings,
 } from "@/components/workspaces/view-grouping-controls";
 import { FilterChips } from "@/components/workspaces/view-toolbar-filters";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";

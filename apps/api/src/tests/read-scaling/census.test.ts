@@ -50,6 +50,7 @@ import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redire
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopCalendarEventsScalingScenario } from "./desktop-calendar-events";
+import { desktopDayEntriesScalingScenario } from "./desktop-day-entries";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
   desktopDictationCleanupModelsScalingScenario,
@@ -88,6 +89,7 @@ import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
 import { outboundActionScalingScenarios } from "./outbound-actions";
 import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
+import { recordingTranscriptionsScalingScenarios } from "./recording-transcriptions";
 import { savedSearchReadScalingScenario } from "./saved-searches";
 import {
   type HandlerOwner,
@@ -187,6 +189,7 @@ const measuredApiScenarios = [
   memberRoleScalingScenario,
   outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  ...recordingTranscriptionsScalingScenarios,
   ...similarDocumentsScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
@@ -207,6 +210,7 @@ const measuredApiScenarios = [
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
   ...sharepointBrowseScalingScenarios,
+  desktopDayEntriesScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

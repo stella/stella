@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -61,7 +62,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
     await queued;
   }, []);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     const refreshUnlessDisposed = async () => {
       const result = await Result.tryPromise(async () =>

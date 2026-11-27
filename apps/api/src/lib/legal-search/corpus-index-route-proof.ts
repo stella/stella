@@ -24,17 +24,28 @@
  * (`pass_too_old_to_prove`, logged as `corpus_index.route_proof_pass_restarted`),
  * since its end could only write an expired proof.
  *
- * What a pass costs on the largest route is not measured yet; every page logs
- * `corpus_index.route_proof_page` (pages, revisions, elapsed on the database
- * clock, estimated remaining, restarts since the last clean pass), so the
- * first production pass measures it.
+ * Page size. A page names its revisions in one engine aggregation, bounded by
+ * the aggregation timeout (`CORPUS_INDEX_AGGREGATION_TIMEOUT_MS`), not by the
+ * delete batch. Production pages of 128 revisions took 0.9 to 2.7 s at the
+ * median and up to 9.8 s at the worst on one route, so the size is the
+ * caller's to adapt (`nextCorpusIndexRouteCensusPageSize`): it starts at the
+ * measured 128, halves on a census that timed out or took over half the
+ * timeout, and doubles, up to `CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX`, after a
+ * run of full pages that each took under a quarter of it. A page's size is
+ * not part of its pass: the cursor alone says where the pass resumes, so a
+ * pass begun at one size continues at any other.
+ *
+ * Every page logs `corpus_index.route_proof_page` (pages, revisions, elapsed
+ * on the database clock, estimated remaining, restarts since the last clean
+ * pass, the census time), so production measures what a pass costs.
  */
 import { panic, Result } from "better-result";
 
 import type { Transaction } from "@/api/db/types";
-import type {
-  CorpusIndexClient,
-  CorpusIndexError,
+import {
+  CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
+  type CorpusIndexClient,
+  type CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   censusAppliedCorpusProjections,
@@ -42,7 +53,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-census";
 import { repairAppliedCorpusProjectionDriftTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import { reopenCorpusProjectionCleanupTx } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
-import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_CENSUS_MAX_REVISIONS,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
 import type { CorpusIndexRouteCensusExpectation } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   type CorpusIndexRoute,
@@ -58,6 +72,84 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
+
+/** The page size a route's first page uses: the size production measured. */
+const CORPUS_INDEX_ROUTE_CENSUS_PAGE_INITIAL = 128;
+/** The largest page: four measured pages in one aggregation. */
+export const CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX = Math.min(
+  512,
+  CORPUS_PROJECTION_CENSUS_MAX_REVISIONS,
+);
+/** The smallest page the size halves to; below it a timeout is a failure. */
+export const CORPUS_INDEX_ROUTE_CENSUS_PAGE_MIN = 32;
+/** A census slower than this halves the page before it times out. */
+const CENSUS_SLOW_MS = CORPUS_INDEX_AGGREGATION_TIMEOUT_MS / 2;
+/** A full page faster than this counts toward doubling the page. */
+const CENSUS_FAST_MS = CORPUS_INDEX_AGGREGATION_TIMEOUT_MS / 4;
+/** Fast full pages in a row before the page doubles. */
+const CENSUS_FAST_STREAK = 4;
+
+/** A route's census page size, and the fast full pages since it last changed. */
+export type CorpusIndexRouteCensusPageSize = { limit: number; fast: number };
+
+export const initialCorpusIndexRouteCensusPageSize =
+  (): CorpusIndexRouteCensusPageSize => ({
+    limit: CORPUS_INDEX_ROUTE_CENSUS_PAGE_INITIAL,
+    fast: 0,
+  });
+
+/**
+ * What one page's census says of the size the next one may take:
+ *
+ * - `timed_out`: the engine gave up inside the aggregation timeout; halve;
+ * - `read`: it answered in `censusMs` for `revisions` of `limit` asked;
+ *   slower than half the timeout halves, a full page faster than a quarter
+ *   of it counts toward doubling, anything else keeps the size.
+ */
+type CorpusIndexRouteCensusOutcome =
+  { type: "timed_out" } | { type: "read"; censusMs: number; revisions: number };
+
+export const nextCorpusIndexRouteCensusPageSize = (
+  size: CorpusIndexRouteCensusPageSize,
+  outcome: CorpusIndexRouteCensusOutcome,
+): CorpusIndexRouteCensusPageSize => {
+  const halved = {
+    limit: Math.max(
+      Math.floor(size.limit / 2),
+      CORPUS_INDEX_ROUTE_CENSUS_PAGE_MIN,
+    ),
+    fast: 0,
+  };
+  if (outcome.type === "timed_out" || outcome.censusMs > CENSUS_SLOW_MS) {
+    return halved;
+  }
+  if (outcome.revisions < size.limit || outcome.censusMs >= CENSUS_FAST_MS) {
+    return { limit: size.limit, fast: 0 };
+  }
+  const fast = size.fast + 1;
+  return fast < CENSUS_FAST_STREAK
+    ? { limit: size.limit, fast }
+    : {
+        limit: Math.min(size.limit * 2, CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX),
+        fast: 0,
+      };
+};
+
+/**
+ * Whether an engine read failed by running out of time: its own timeout, or
+ * a wait in the search queue that its timeout ended. A smaller page asks the
+ * engine for less, and waits behind less.
+ */
+export const isCorpusIndexReadTimeout = (error: CorpusIndexError): boolean => {
+  if (error.reach === "budget_expired") {
+    return true;
+  }
+  return (
+    error.reach !== "caller_aborted" &&
+    error.cause instanceof Error &&
+    error.cause.name === "TimeoutError"
+  );
+};
 
 /** One unit of database and engine work the caller's load governor admits. */
 export type CorpusIndexRouteProofWorkUnit = {
@@ -98,6 +190,13 @@ export type CorpusIndexRouteProofAdvance =
    * route stays unproven until the index matches.
    */
   | { type: "unknown_documents"; documents: number };
+
+/** What one page did, with how long its census read took. */
+export type CorpusIndexRouteProofPage = {
+  advance: CorpusIndexRouteProofAdvance;
+  /** How long the page's census took; null when it read none. */
+  censusMs: number | null;
+};
 
 const CENSUS_PAGES = {
   present: censusAppliedCorpusProjections,
@@ -174,12 +273,14 @@ const logCensusPage = ({
   pass,
   limit,
   pageMs,
+  censusMs,
   walked,
 }: {
   route: CorpusIndexRoute;
   pass: CorpusIndexRouteCensusPass;
   limit: number;
   pageMs: number;
+  censusMs: number | null;
   walked: Result<CensusPage, CorpusIndexError>;
 }): void => {
   const outcome = (() => {
@@ -213,6 +314,7 @@ const logCensusPage = ({
     pageLimit: limit,
     pageRows,
     pageMs,
+    ...(censusMs === null ? {} : { censusMs }),
     // Full pages' worth walked; a phase's last page may be short.
     passPages: Math.ceil(passRows / limit),
     passRows,
@@ -261,9 +363,18 @@ const walkPage = async (
     limit,
   }: Omit<AdvanceOptions, "admit" | "limit"> & { limit: number },
   pass: CorpusIndexRouteCensusPass,
-): Promise<Result<CensusPage, CorpusIndexError>> => {
-  const done = (advance: CorpusIndexRouteProofAdvance) =>
-    Result.ok({ type: "done", advance } as const);
+): Promise<{
+  walked: Result<CensusPage, CorpusIndexError>;
+  censusMs: number | null;
+}> => {
+  const done = (
+    advance: CorpusIndexRouteProofAdvance,
+    censusMs: number | null,
+  ) => ({ walked: Result.ok({ type: "done", advance } as const), censusMs });
+  const failed = (error: CorpusIndexError, censusMs: number | null) => ({
+    walked: Result.err(error),
+    censusMs,
+  });
   const incarnation =
     pass.incarnation ?? panic("A started route census pass has no incarnation");
   // A phase that began with nothing to walk still reads the engine: an empty
@@ -279,15 +390,16 @@ const walkPage = async (
       maxHits: 0,
     });
     if (counted.isErr()) {
-      return Result.err(counted.error);
+      return failed(counted.error, null);
     }
     if (counted.value.numHits !== 0) {
-      return done({
-        type: "unknown_documents",
-        documents: counted.value.numHits,
-      });
+      return done(
+        { type: "unknown_documents", documents: counted.value.numHits },
+        null,
+      );
     }
   }
+  const censusStartedAt = performance.now();
   const page =
     pass.through === null
       ? Result.ok({
@@ -306,16 +418,23 @@ const walkPage = async (
           through: pass.through,
           limit,
         });
+  const censusMs =
+    pass.through === null
+      ? null
+      : Math.round(performance.now() - censusStartedAt);
   if (page.isErr()) {
-    return Result.err(page.error);
+    return failed(page.error, censusMs);
   }
   const { driftRevisions, inspected, nextCursor } = page.value;
   if (driftRevisions.length > 0) {
-    return Result.ok({
-      type: "drift",
-      expectation: pass.expectation,
-      revisions: driftRevisions,
-    });
+    return {
+      walked: Result.ok({
+        type: "drift",
+        expectation: pass.expectation,
+        revisions: driftRevisions,
+      }),
+      censusMs,
+    };
   }
   // A page ending on the phase's last key ends the phase without one more
   // empty page.
@@ -328,12 +447,12 @@ const walkPage = async (
     ? await client.readIndexIncarnation(route.indexId, "unobserved")
     : Result.ok({ type: "present", incarnation } as const);
   if (endObserved.isErr()) {
-    return Result.err(endObserved.error);
+    return failed(endObserved.error, censusMs);
   }
   const endIncarnation =
     endObserved.value.type === "missing" ? null : endObserved.value.incarnation;
   if (endIncarnation === null) {
-    return done({ type: "index_missing" });
+    return done({ type: "index_missing" }, censusMs);
   }
   const step = await runInTransaction(
     async (tx) =>
@@ -350,6 +469,7 @@ const walkPage = async (
     step.type === "refused"
       ? step
       : { ...step, expectation: pass.expectation, inspected },
+    censusMs,
   );
 };
 
@@ -358,17 +478,20 @@ const censusPage = async ({
   client,
   route,
   limit,
-}: Omit<AdvanceOptions, "admit" | "limit"> & { limit: number }): Promise<
-  Result<CensusPage, CorpusIndexError>
-> => {
-  const done = (advance: CorpusIndexRouteProofAdvance) =>
-    Result.ok({ type: "done", advance } as const);
+}: Omit<AdvanceOptions, "admit" | "limit"> & { limit: number }): Promise<{
+  walked: Result<CensusPage, CorpusIndexError>;
+  censusMs: number | null;
+}> => {
+  const done = (advance: CorpusIndexRouteProofAdvance) => ({
+    walked: Result.ok({ type: "done", advance } as const),
+    censusMs: null,
+  });
   const observed = await client.readIndexIncarnation(
     route.indexId,
     "unobserved",
   );
   if (observed.isErr()) {
-    return Result.err(observed.error);
+    return { walked: Result.err(observed.error), censusMs: null };
   }
   const started = await runInTransaction(
     async (tx) =>
@@ -382,7 +505,7 @@ const censusPage = async ({
     logPassRestart({ route, pass, restarted });
   }
   const pageStartedAt = performance.now();
-  const walked = await walkPage(
+  const { walked, censusMs } = await walkPage(
     { runInTransaction, client, route, limit },
     pass,
   );
@@ -391,31 +514,50 @@ const censusPage = async ({
     pass,
     limit,
     pageMs: Math.round(performance.now() - pageStartedAt),
+    censusMs,
     walked,
   });
-  return walked;
+  return { walked, censusMs };
 };
 
+/**
+ * Walk one census page of the route's pass, `limit` revisions, and repair
+ * what drift it found.
+ */
 export const advanceCorpusIndexRouteProof = async ({
   runInTransaction,
   client,
   admit,
   route,
-  limit = CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  limit = CORPUS_INDEX_ROUTE_CENSUS_PAGE_INITIAL,
 }: AdvanceOptions): Promise<
-  Result<CorpusIndexRouteProofAdvance, CorpusIndexError>
+  Result<CorpusIndexRouteProofPage, CorpusIndexError>
 > => {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > CORPUS_PROJECTION_CENSUS_MAX_REVISIONS
+  ) {
+    return panic(`Route census page size out of bounds: ${limit}`);
+  }
   const page = await admit(
     { step: "census", revisions: limit },
     async () => await censusPage({ runInTransaction, client, route, limit }),
   );
-  if (page.isErr()) {
-    return Result.err(page.error);
+  if (page.walked.isErr()) {
+    return Result.err(page.walked.error);
   }
-  if (page.value.type === "done") {
-    return Result.ok(page.value.advance);
+  const { censusMs } = page;
+  if (page.walked.value.type === "done") {
+    return Result.ok({ advance: page.walked.value.advance, censusMs });
   }
-  const { expectation, revisions } = page.value;
+  const { expectation } = page.walked.value;
+  // One repair batch per page: the repair revokes the proof and the pass
+  // starts over, so drift past the batch is found again by the new pass.
+  const revisions = page.walked.value.revisions.slice(
+    0,
+    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  );
   const repaired = await admit(
     { step: "repair", revisions: revisions.length },
     async () =>
@@ -423,5 +565,8 @@ export const advanceCorpusIndexRouteProof = async ({
         async (tx) => await repairDriftTx(tx, route, expectation, revisions),
       ),
   );
-  return Result.ok({ type: "drift_repaired", expectation, repaired });
+  return Result.ok({
+    advance: { type: "drift_repaired", expectation, repaired },
+    censusMs,
+  });
 };

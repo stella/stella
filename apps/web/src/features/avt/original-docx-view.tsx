@@ -14,6 +14,11 @@ import * as React from "react";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { textMarkHighlightRule } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
 
@@ -37,8 +42,6 @@ import type {
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";

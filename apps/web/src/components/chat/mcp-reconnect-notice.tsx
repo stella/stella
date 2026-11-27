@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { XIcon } from "@stll/ui/icons";
 
 import {
@@ -22,7 +23,6 @@ import {
   type McpReconnectCandidate,
   mcpReconnectDismissKey,
 } from "@/features/chat/lib/mcp-reconnect.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useUserStorageState } from "@/lib/account/use-user-storage-state";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {

@@ -1,6 +1,3 @@
-import { useState } from "react";
-import type { RefObject } from "react";
-
 import { useTranslations } from "use-intl";
 
 import {
@@ -8,13 +5,13 @@ import {
   scrollReaderToBlock,
 } from "@stll/decision-reader/reader-landing";
 import { Button } from "@stll/ui/button";
+import { useObservedValue } from "@stll/ui/effects-dom";
 import { ChevronUpIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { FlatAnalysisHeading } from "@/features/case-law/components/case-viewer/analysis/types";
 import { getCategoryVar } from "@/features/case-law/components/case-viewer/analysis/types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
 /** How far a heading may sit below the bar's line and still be "current". */
@@ -24,7 +21,8 @@ type CurrentSectionProps = {
   /** Where each heading is shown in the text (its first annotation). */
   anchorById: ReadonlyMap<string, string>;
   headings: readonly FlatAnalysisHeading[];
-  scrollContainerRef: RefObject<HTMLElement | null>;
+  /** The reader's scroll container, once it has mounted. */
+  scrollContainer: HTMLElement | null;
 };
 
 /**
@@ -37,56 +35,60 @@ type CurrentSectionProps = {
 export const CurrentSection = ({
   anchorById,
   headings,
-  scrollContainerRef,
+  scrollContainer,
 }: CurrentSectionProps) => {
   const t = useTranslations();
-  const [currentId, setCurrentId] = useState<string | null>(null);
-
-  useExternalSyncEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || headings.length === 0) {
-      return undefined;
-    }
-    let frame = 0;
-    const measure = () => {
-      frame = 0;
-      // The line a jump lands a block on, so a heading the reader jumped to
-      // is the one they are on.
-      const top =
-        container.getBoundingClientRect().top +
-        READER_BREADCRUMB_CLEARANCE +
-        TOP_TOLERANCE_PX;
-      let current: string | null = null;
-      for (const heading of headings) {
-        const anchorId = anchorById.get(heading.id);
-        if (anchorId === undefined) {
-          continue;
-        }
-        const element = container.querySelector(`#${CSS.escape(anchorId)}`);
-        if (element === null) {
-          continue;
-        }
-        if (element.getBoundingClientRect().top > top) {
-          // Headings are in reading order: the first one still below the
-          // top ends the search.
-          break;
-        }
-        current = heading.id;
+  // The heading under the bar, measured before the first paint and again on
+  // the frame after each scroll.
+  const currentId = useObservedValue<HTMLElement, string | null>(
+    scrollContainer,
+    (container, emit) => {
+      if (headings.length === 0) {
+        return () => undefined;
       }
-      setCurrentId(current);
-    };
-    const onScroll = () => {
-      if (frame === 0) {
-        frame = requestAnimationFrame(measure);
-      }
-    };
-    measure();
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      cancelAnimationFrame(frame);
-      container.removeEventListener("scroll", onScroll);
-    };
-  }, [anchorById, headings, scrollContainerRef]);
+      let frame = 0;
+      const measure = () => {
+        frame = 0;
+        // The line a jump lands a block on, so a heading the reader jumped to
+        // is the one they are on.
+        const top =
+          container.getBoundingClientRect().top +
+          READER_BREADCRUMB_CLEARANCE +
+          TOP_TOLERANCE_PX;
+        let current: string | null = null;
+        for (const heading of headings) {
+          const anchorId = anchorById.get(heading.id);
+          if (anchorId === undefined) {
+            continue;
+          }
+          const element = container.querySelector(`#${CSS.escape(anchorId)}`);
+          if (element === null) {
+            continue;
+          }
+          if (element.getBoundingClientRect().top > top) {
+            // Headings are in reading order: the first one still below the
+            // top ends the search.
+            break;
+          }
+          current = heading.id;
+        }
+        emit(current);
+      };
+      const onScroll = () => {
+        if (frame === 0) {
+          frame = requestAnimationFrame(measure);
+        }
+      };
+      measure();
+      container.addEventListener("scroll", onScroll, { passive: true });
+      return () => {
+        cancelAnimationFrame(frame);
+        container.removeEventListener("scroll", onScroll);
+      };
+    },
+    [anchorById, headings],
+    null,
+  );
 
   const index = headings.findIndex((heading) => heading.id === currentId);
   const current = index === -1 ? null : (headings.at(index) ?? null);
@@ -98,7 +100,7 @@ export const CurrentSection = ({
           .findLast((heading) => heading.depth === current.depth - 1);
 
   const jumpBack = () => {
-    const container = scrollContainerRef.current;
+    const container = scrollContainer;
     const anchorId = current === null ? undefined : anchorById.get(current.id);
     if (!container || anchorId === undefined) {
       return;

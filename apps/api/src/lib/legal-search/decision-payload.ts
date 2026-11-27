@@ -1,9 +1,10 @@
 import { Result } from "better-result";
 
+import type { DecisionSection } from "@stll/legal-ast/document-types";
+
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 // parser-output-unchanged: the existing canonical corpus payload moves unchanged into a pure owner.
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";

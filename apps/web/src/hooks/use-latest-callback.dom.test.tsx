@@ -1,7 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 declare global {
@@ -15,8 +14,8 @@ GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
 const React = await import("react");
 const { render } = await import("@testing-library/react");
-const { useMountEffect } = await import("@/hooks/use-effect");
-const { useLatestCallback } = await import("@/hooks/use-latest-callback");
+const { useMountEffect } = await import("@stll/ui/effects");
+const { useLatestCallback } = await import("@stll/ui/effects");
 
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -80,7 +79,9 @@ describe("useLatestCallback", () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = false;
     try {
       store.set(1);
-      await sleep(0);
+      for (let i = 0; i < 4; i += 1) {
+        await Promise.resolve();
+      }
     } finally {
       globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     }

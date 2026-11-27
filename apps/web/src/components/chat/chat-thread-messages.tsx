@@ -3,7 +3,6 @@ import {
   Fragment,
   memo,
   use,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -54,6 +53,12 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  useExternalSyncEffect,
+  useKeyedState,
+  useLatestCallback,
+  useLayoutSyncEffect,
+} from "@stll/ui/effects";
 import {
   type EntityAction,
   EntityActions,
@@ -195,16 +200,13 @@ import {
   toolFailureLabelKey,
 } from "@/components/chat/tool-call-card";
 import {
-  advanceToolCallTiming,
-  createToolCallTiming,
-} from "@/components/chat/tool-call-timing.logic";
-import {
   getToolCallTitle,
   type ToolCallTitle,
   toolCallTitleText,
 } from "@/components/chat/tool-call-title.logic";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
+import { useToolCallTiming } from "@/components/chat/use-tool-call-timing";
 import {
   EditableUserMessage,
   useUserMessageEdit,
@@ -234,8 +236,6 @@ import { SuggestedFollowups } from "@/features/chat/components/suggested-followu
 import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -346,7 +346,7 @@ const useOlderMessagePaging = ({
   // and streaming keep the first id, so they skip this and stick-to-
   // bottom handles them; a thread switch changes the id too but has no
   // captured anchor, so it is also skipped.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const previousFirstId = prevFirstMessageIdRef.current;
     prevFirstMessageIdRef.current = firstMessageId;
     const previousScrollHeight = anchorScrollHeightRef.current;
@@ -907,7 +907,7 @@ const StickyUserTurn = ({
   // stable while the inner pinned chrome becomes compact. The box pins only
   // once all of it but the shelf's slice has scrolled away, so the shelf
   // sits flush on the answer instead of over an empty band.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const turn = turnRef.current;
     const header = stickyHeaderRef.current;
     if (!turn || !header) {
@@ -3125,23 +3125,10 @@ const AssistantProcessGroup = ({
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const format = useFormatter();
   const turnLiveStatus = use(LiveTurnStatusContext);
-  const [timing, setTiming] = useState(() =>
-    createToolCallTiming({
-      durationMs: undefined,
-      isRunning: isLive,
-      now: performance.now(),
-    }),
-  );
-  useExternalSyncEffect(() => {
-    setTiming((current) =>
-      advanceToolCallTiming({
-        current,
-        durationMs: undefined,
-        isRunning: isLive,
-        now: performance.now(),
-      }),
-    );
-  }, [isLive]);
+  const timing = useToolCallTiming({
+    durationMs: undefined,
+    isRunning: isLive,
+  });
   const reading =
     turnStatus === "finished" &&
     timing.status === "finished" &&
@@ -3486,10 +3473,11 @@ const AssistantThinkingPart = ({
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => {
-  const [isOpen, setIsOpen] = useState(displayState === "expanded");
-  useExternalSyncEffect(() => {
-    setIsOpen(displayState === "expanded");
-  }, [displayState]);
+  // The reader's toggle holds until the trace's display state changes.
+  const [isOpen, setIsOpen] = useKeyedState(
+    displayState,
+    () => displayState === "expanded",
+  );
 
   if (!text.trim()) {
     return null;

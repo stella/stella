@@ -231,6 +231,12 @@ by the RC run.
    those from this release's tarballs, and they publish before the CLI, in
    dependency order. Dependencies npm already serves come from the registry,
    so a rerun after a partial publish resumes with what is left.
+   Stable CLI publication accepts the release commit only once the release
+   pull request has merged into `main` from its release branch, with a head
+   that is that commit or descends from it. When the pull request lands after
+   the final run, `release-npm-catch-up.yml` dispatches the CLI publication
+   for the final tag if npm does not serve the tag's CLI version yet; the next
+   cut's npm-publish-lag gate catches anything still missing.
    Package versions remain Changesets-owned. Desktop reruns
    resume the build or carry-forward path and its publication steps. GitHub
    Latest advances only after the desktop assets are ready.
@@ -238,14 +244,19 @@ by the RC run.
     checks pass. Its release-branch commit is not an ancestor of `main`; the
     squash merge does not retag, rebuild or refresh the release branch. Autofix
     leaves `release/v*` heads untouched, and their branch rules prohibit force
-    pushes and deletion.
+    pushes and deletion. `main` does not require a branch to be up to date, so
+    never update the release branch only to catch up with `main`: the merge
+    moves the source the recording attestations hash, which leaves them stale,
+    and it drops auto-merge.
 
 Final-run retries also accept the same release pull request after its squash
 merge, provided its recorded head still equals the RC SHA. New RC tags require
 an open release pull request. Changelog corrections can be pushed as later
 commits to produce the next RC; executable fixes land on main first and reach
-the release branch by merging main into it. Every candidate verifies the full
-range from that merge base.
+the release branch by merging main into it. After such a merge, run
+`bun run marketing:provenance`; if it reports changed recordings, refresh their
+attestations with `scripts/verify-marketing-recordings.ts` and commit the
+manifest. Every candidate verifies the full range from that merge base.
 
 A pull request that changes `VERSION` or migrations also runs
 `migration-upgrade-rehearsal`: it starts with the schema of the release

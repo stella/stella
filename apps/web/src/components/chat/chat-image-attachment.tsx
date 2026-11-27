@@ -11,11 +11,11 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useObjectUrl } from "@stll/ui/effects-dom";
 import { XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type ImagePreviewTriggerProps = {
   alt: string;
@@ -186,18 +186,7 @@ export const ChatDraftImageAttachment = ({
   onRemove,
 }: ChatDraftImageAttachmentProps) => {
   const t = useTranslations();
-  const [preview, setPreview] = useState<{
-    file: File;
-    src: string;
-  } | null>(null);
-
-  useExternalSyncEffect(() => {
-    const src = URL.createObjectURL(file);
-    setPreview({ file, src });
-    return () => URL.revokeObjectURL(src);
-  }, [file]);
-
-  const previewSrc = preview?.file === file ? preview.src : undefined;
+  const previewSrc = useObjectUrl(file);
 
   return (
     <ChatImageThumbnailCard

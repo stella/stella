@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import { startTransition, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
@@ -17,6 +17,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { BanIcon } from "@stll/ui/icons";
 import { ListItemStatus } from "@stll/ui/list";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -75,7 +76,7 @@ import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { SettingsPageHeader } from "./settings-layout";
-import { SETTINGS_PAGES, settingsView } from "./settings-pages";
+import { settingsView, SIDEBAR_PAGES } from "./settings-pages";
 import type { SettingsPage } from "./settings-pages";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { ShortcutSetting } from "./ShortcutSetting";
@@ -265,7 +266,7 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
   });
   const [error, setError] = useState<"read" | "save" | null>(null);
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const loadPreference = async () => {
       const result = await Result.tryPromise(async () =>
@@ -286,7 +287,7 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
     return () => {
       disposed = true;
     };
-  }, []);
+  });
 
   const savePreference = async (enabled: boolean) => {
     if (preference.status !== "ready") {
@@ -788,7 +789,7 @@ const useActivityAvailability = () => {
   const [availability, setAvailability] =
     useState<ActivityAvailability>("loading");
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     let request = 0;
     const read = () => {
@@ -823,7 +824,7 @@ const useActivityAvailability = () => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   return availability;
 };
@@ -893,10 +894,10 @@ const App = () => {
         return panic("Unknown settings page");
     }
   };
-  const pages = SETTINGS_PAGES.filter(offers);
+  const pages = SIDEBAR_PAGES.filter(offers);
   const shownPage = pages.includes(activePage) ? activePage : "general";
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const url = new URL(window.location.href);
     url.hash = activePage;
     window.history.replaceState(
@@ -908,28 +909,26 @@ const App = () => {
 
   // The native side opens a page (tray, deep links, setup); a link to the
   // coding agents also names where on their page to scroll.
-  useEffect(
-    () =>
-      subscribeDesktopEvent<{ tab: string; focus?: unknown }>({
-        event: "activate-tab",
-        handler: (event) => {
-          const view = settingsView(event.payload);
-          if (view === null) {
-            return;
-          }
-          setActivePage(view.page);
-          // A focus belongs to the link that sent it; any other opening
-          // drops one still waiting for its card.
-          setAgentSettingsFocus(view.agentFocus);
-          setDictationFocus(view.dictationFocus);
-        },
-        onError: reportSubscriptionFailure,
-      }),
-    [],
+  useMountEffect(() =>
+    subscribeDesktopEvent<{ tab: string; focus?: unknown }>({
+      event: "activate-tab",
+      handler: (event) => {
+        const view = settingsView(event.payload);
+        if (view === null) {
+          return;
+        }
+        setActivePage(view.page);
+        // A focus belongs to the link that sent it; any other opening
+        // drops one still waiting for its card.
+        setAgentSettingsFocus(view.agentFocus);
+        setDictationFocus(view.dictationFocus);
+      },
+      onError: reportSubscriptionFailure,
+    }),
   );
 
   // Listen for state changes from Rust backend + initial fetch
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
 
     const stopListening = subscribeDesktopEvent<AppSnapshot>({
@@ -1003,16 +1002,10 @@ const App = () => {
     };
   }, [t]);
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
-    const refresh = () => {
+    const loadAccount = () => {
       const request = ++accountGeneration.current;
-      snapshotGeneration.current += 1;
-      snapshotRevision.current += 1;
-      latestEdit.current += 1;
-      confirmedSnapshot.current = null;
-      setState(null);
-      snapshotRefresh.current();
       void invoke<
         Exclude<DesktopAccountState, { status: "loading" | "unavailable" }>
       >("account_get_state")
@@ -1028,13 +1021,26 @@ const App = () => {
           }
         });
     };
+    // Another account's snapshot must not stay on screen: drop it and fetch
+    // the snapshot and the account again.
+    const refresh = () => {
+      snapshotGeneration.current += 1;
+      snapshotRevision.current += 1;
+      latestEdit.current += 1;
+      confirmedSnapshot.current = null;
+      setState(null);
+      snapshotRefresh.current();
+      loadAccount();
+    };
     const stopListening = subscribeDesktopEvent({
       event: "desktop-account-changed",
       handler: refresh,
       onError: reportSubscriptionFailure,
     });
     accountRefresh.current = refresh;
-    refresh();
+    // On mount there is no snapshot to drop yet, and the state effect above
+    // is already fetching the first one.
+    loadAccount();
     window.addEventListener("focus", refresh);
     return () => {
       disposed = true;
@@ -1042,11 +1048,11 @@ const App = () => {
       window.removeEventListener("focus", refresh);
       stopListening();
     };
-  }, []);
+  });
 
   const accountExpiresAt =
     accountState.status === "connected" ? accountState.expiresAt : null;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!accountExpiresAt) {
       return () => undefined;
     }

@@ -3,13 +3,12 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Temporal } from "@stll/time";
 import { ClockIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
-import { useMountEffect } from "@/hooks/use-effect";
+import { readClientClockMs } from "@/hooks/client-clock";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -52,14 +51,10 @@ export const ChatThreadRecap = ({
   // Stamp "now" and the message the thread opened on once per mount,
   // so the staleness check stays pure and is evaluated at thread-open
   // time. The component is keyed by threadId at the call site, so both
-  // re-capture per thread.
-  const [openedAt, setOpenedAt] = useState<number | null>(null);
-  useMountEffect(() => {
-    setOpenedAt(Temporal.Now.instant().epochMilliseconds);
-  });
+  // re-capture per thread. Chat routes render on the client only.
+  const [openedAt] = useState(readClientClockMs);
   const [openedOnMessageId] = useState(() => lastMessageId);
   const isStale =
-    openedAt !== null &&
     lastActivityAt !== null &&
     openedAt - new Date(lastActivityAt).getTime() >
       RECAP_STALENESS_THRESHOLD_MS;

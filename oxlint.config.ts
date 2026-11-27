@@ -668,6 +668,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
     "no-constructed-fetch-object/no-constructed-fetch-object",
   ]),
+  fixtureRuleOverride("no-constructed-context-value.fixture.tsx", [
+    "no-constructed-context-value/no-constructed-context-value",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -970,6 +973,18 @@ const productUiFiles = [
 const productUiComponentFiles = productUiFiles.map((glob) =>
   glob.replace("*.{ts,tsx}", "*.tsx"),
 );
+
+// The functions the React Compiler bails out of, by file: the keys of
+// scripts/react-compiler-bailouts.json read `<file>::<function>`.
+const reactCompilerBailoutFunctions = new Map<string, string[]>();
+for (const key of Object.keys(reactCompilerBailouts)) {
+  const separator = key.indexOf("::");
+  const file = key.slice(0, separator);
+  reactCompilerBailoutFunctions.set(file, [
+    ...(reactCompilerBailoutFunctions.get(file) ?? []),
+    key.slice(separator + 2),
+  ]);
+}
 
 const browserSurfaceFiles = [
   "apps/web/src/**/*.{ts,tsx}",
@@ -1767,7 +1782,7 @@ const config = defineConfig({
     // useMountEffect is deliberately dependency-less and stays unregistered.
     "react/exhaustive-deps": [
       "error",
-      { additionalHooks: "(useExternalSyncEffect)" },
+      { additionalHooks: "(useExternalSyncEffect|useLayoutSyncEffect)" },
     ],
     // Ultracite configures only named components as arrows, leaving Oxlint's
     // function-expression default for memo callbacks in conflict with
@@ -2100,8 +2115,10 @@ const config = defineConfig({
     // Arrow components take their name from the binding.
     "react/display-name": "off",
 
-    // React Compiler memoizes context values in apps/web; the remaining
-    // hits are genuinely reactive values with no static part to hoist.
+    // The React Compiler memoizes context values where it compiles, and this
+    // built-in misses the React 19 `<XContext value>` form for an imported
+    // context. no-constructed-context-value covers the code the compiler does
+    // not reach.
     "react/jsx-no-constructed-context-values": "off",
   },
   ignorePatterns: [
@@ -2225,6 +2242,7 @@ const config = defineConfig({
     "./.oxlint-plugins/one-statement-time-per-row-write.ts",
     "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
+    "./.oxlint-plugins/no-constructed-context-value.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-unowned-icon.ts",
@@ -2253,6 +2271,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/no-raw-use-layout-effect.ts",
     "./.oxlint-plugins/mobile-window-overlay-owner.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
     "./.oxlint-plugins/copy-feedback-owner.ts",
@@ -2270,6 +2289,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/no-render-phase-update.ts",
     "./.oxlint-plugins/no-effect-state-write.ts",
+    "./.oxlint-plugins/no-ref-callback-state-write.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -2549,8 +2569,26 @@ const config = defineConfig({
           (directory) => `${directory}/**/*.{ts,tsx}`,
         ),
       ],
+      // Tests drive React on purpose, including the nested update a test of
+      // the render-storm canary must cause; the DOM-test storm check holds
+      // them instead.
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "no-effect-state-write/no-effect-state-write": "error",
+      },
+    },
+    {
+      // A ref callback created during render re-attaches whenever its
+      // identity changes; one that writes state re-renders into a new
+      // identity. Every React surface; tests render once and are out of scope.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-ref-callback-state-write.fixture.tsx",
+        ...PRODUCT_FRONTEND_FILES,
+        ...REACT_SURFACE_FILES_BEYOND_PRODUCT,
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "no-ref-callback-state-write/no-ref-callback-state-write": "error",
       },
     },
     {
@@ -3199,6 +3237,17 @@ const config = defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      // Exercise no-raw-use-layout-effect against its regression fixture; the
+      // rule is otherwise scoped to the React surfaces, which the fixtures dir
+      // is not.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-raw-use-layout-effect.fixture.tsx",
+      ],
+      rules: {
+        "no-raw-use-layout-effect/no-raw-use-layout-effect": "error",
+      },
     },
     {
       // Every Bun SQL client and bun-sql drizzle database comes from the
@@ -5177,12 +5226,15 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/web/src/hooks/use-effect.ts"],
+      files: ["packages/ui/src/effects/**"],
       rules: {
         // These generic wrappers intentionally accept opaque callbacks and
         // dependency arrays. Their call sites own dependency correctness, so
         // the compiler cannot analyze them as ordinary component hooks.
         ...reactCompilerRulesOff,
+        // They forward the caller's dependency array verbatim; exhaustive-deps
+        // checks every call site instead (`additionalHooks`).
+        "react/exhaustive-deps": "off",
       },
     },
     {
@@ -5192,7 +5244,6 @@ const config = defineConfig({
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/desktop/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
-        "apps/web/src/hooks/use-effect.ts",
         ...new Set(
           Object.keys(reactCompilerBailouts).map((key) =>
             key.slice(0, key.indexOf("::")),
@@ -5200,6 +5251,36 @@ const config = defineConfig({
         ),
       ],
       rules: { "no-manual-memo/no-manual-memo": "error" },
+    },
+    // A function the compiler bails out of memoizes nothing, so a context
+    // value built in it is new on every render. Each file with a bailout gets
+    // the check inside the functions the baseline lists.
+    ...[...reactCompilerBailoutFunctions].map(
+      ([file, functions]): OxlintOverride => ({
+        files: [file],
+        rules: {
+          "no-constructed-context-value/no-constructed-context-value": [
+            "error",
+            { functions },
+          ],
+        },
+      }),
+    ),
+    {
+      // Sources that render uncompiled somewhere they ship: the landing,
+      // Outlook and playground apps, and the shared packages, which also
+      // render there and in their own tests. Their context values must keep
+      // their identity by hand.
+      files: [
+        "packages/*/src/**/*.tsx",
+        "apps/landing/src/**/*.tsx",
+        "apps/outlook/src/**/*.tsx",
+        "apps/playground/src/**/*.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-constructed-context-value/no-constructed-context-value": "error",
+      },
     },
     {
       files: [...PRODUCT_FRONTEND_FILES],
@@ -5291,6 +5372,21 @@ const config = defineConfig({
       },
     },
     {
+      // Raw useEffect, banned in the product frontend, is banned on every
+      // other React surface too: effects go through the sanctioned wrappers in
+      // @stll/ui/effects. Tests drive React directly and stay outside it.
+      files: [...REACT_SURFACE_FILES_BEYOND_PRODUCT],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/fixtures/**",
+        "**/*.fixture.{ts,tsx}",
+      ],
+      rules: {
+        "no-raw-use-effect/no-raw-use-effect": "error",
+      },
+    },
+    {
       // The render-loop rules the product frontend holds, on every other React
       // surface: a fresh Zustand selector result, an unstable external-store
       // snapshot and a ref mirrored during render loop the same way there.
@@ -5299,6 +5395,20 @@ const config = defineConfig({
         "no-ref-mirror/no-ref-mirror": "error",
         "require-use-shallow/require-use-shallow": "error",
         "require-stable-snapshot/require-stable-snapshot": "error",
+      },
+    },
+    {
+      // Layout and insertion effects go through the wrappers in
+      // packages/ui/src/effects (the owner row in restricted-import.ts) on
+      // every React surface. Tests drive React directly and stay out.
+      files: [...PRODUCT_FRONTEND_FILES, ...REACT_SURFACE_FILES_BEYOND_PRODUCT],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/fixtures/**",
+      ],
+      rules: {
+        "no-raw-use-layout-effect/no-raw-use-layout-effect": "error",
       },
     },
     {
@@ -5340,7 +5450,7 @@ const config = defineConfig({
         "**/*.{test,spec}.{ts,tsx}",
         "**/__tests__/**",
         // The compiler's own exclusion (REACT_COMPILER_EXCLUDE).
-        "**/src/hooks/use-effect.ts",
+        "packages/ui/src/effects/**",
       ],
       rules: {
         "no-hookless-use-function/no-hookless-use-function": "error",
@@ -5591,8 +5701,7 @@ const config = defineConfig({
       rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
     },
     {
-      // A failed read must not come back as an empty value; existing sites
-      // are held to the shrink-only baseline the rule reads.
+      // A failed read must not come back as an empty value.
       files: ["apps/api/src/**/*.ts", "packages/*/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "**/*.{test,spec}.{ts,tsx}",

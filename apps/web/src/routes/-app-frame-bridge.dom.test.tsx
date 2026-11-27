@@ -1,7 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -28,9 +27,6 @@ const { BROWSER_CONTROL_PROTOCOL_VERSION, BROWSER_EXTENSION_MESSAGE_SOURCE } =
 afterAll(async () => {
   Reflect.deleteProperty(navigator, "userAgentData");
   testing.cleanup();
-  await testing.act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 

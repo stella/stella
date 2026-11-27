@@ -19,6 +19,7 @@ import { useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import {
@@ -37,7 +38,6 @@ import {
   useOAuthAccountSwitch,
 } from "@/components/oauth-consent/oauth-account";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";

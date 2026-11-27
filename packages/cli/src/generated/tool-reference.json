@@ -336,6 +336,13 @@
     "title": "Preview template conditions"
   },
   {
+    "access": "write",
+    "command": ["template", "reformat"],
+    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \"house-style\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
+    "name": "reformat_into_template",
+    "title": "Reformat into template"
+  },
+  {
     "access": "read",
     "command": ["task", "list"],
     "description": "List tasks, or read one task in detail. Pass task_id for one task's fields, assignees, and linked entities. Otherwise pass matter_id to list one matter's tasks, or omit it to list tasks across every matter you can read; filter by status, due date (date_from/date_to, ISO YYYY-MM-DD), or assignee. Soonest due first, undated last. Each task names its matter (id, name, reference).",
@@ -2887,6 +2894,20 @@
     "description": "Rename a rate table, change its currency, or make it the matter's default, which clears the flag on the previous default. Unsetting the flag on the only default table is refused, so a matter that has a default keeps one; a matter whose tables were all created without the flag has none, and rate resolution handles that. Rates already recorded on time entries are not rewritten.",
     "name": "capability:rates.update",
     "title": "rates.update"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "recording-transcriptions", "runs-create"],
+    "description": "Start a background transcription of a recording in the matter and save the transcript as a new document beside it.",
+    "name": "capability:recording-transcriptions.runs.create",
+    "title": "recording-transcriptions.runs.create"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "recording-transcriptions", "runs-get"],
+    "description": "Read a recording transcription run and its progress.",
+    "name": "capability:recording-transcriptions.runs.get",
+    "title": "recording-transcriptions.runs.get"
   },
   {
     "access": "write",

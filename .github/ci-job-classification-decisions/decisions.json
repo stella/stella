@@ -763,6 +763,10 @@
     "kind": "priority",
     "qualifier": "Publication to TestFlight from main, dispatched by hand or, for preview, by the release plan after a merge."
   },
+  "candidate:.github/workflows/release-npm-catch-up.yml/publish-cli": {
+    "kind": "priority",
+    "qualifier": "Dispatches the stable CLI publication for a final release tag once its release pull request lands, when npm does not serve that version yet."
+  },
   "candidate:.github/workflows/release-pr.yml/version": {
     "kind": "priority",
     "qualifier": "Publishes the version packages pull request."

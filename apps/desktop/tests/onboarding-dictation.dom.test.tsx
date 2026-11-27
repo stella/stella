@@ -90,7 +90,7 @@ test("the first screen names the macOS shortcut and asks for the microphone, the
   expect(text.indexOf(onboarding.dictationMicrophone)).toBeLessThan(
     text.indexOf(onboarding.dictationAccessibility),
   );
-  // The steps above it, in order, with the first one current.
+  // The screens in the footer's dots, in order, with the first one current.
   const steps = [...container.querySelectorAll("[data-slot=step]")];
   expect(steps.map((step) => step.textContent)).toEqual([
     setup.screens.microphone,

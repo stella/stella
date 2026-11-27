@@ -89,6 +89,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/dictation/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
+  "apps/api/src/handlers/recording-transcriptions/**/*.ts",
   "apps/api/src/handlers/document-types/**/*.ts",
   "apps/api/src/handlers/documents/**/*.ts",
   "apps/api/src/handlers/docx-suggestions/**/*.ts",
@@ -141,6 +142,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/dictation/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
+  "apps/api/src/lib/recording-transcription/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
   "apps/api/src/lib/queue/**/*.ts",
   "apps/api/src/lib/imports/**/*.ts",
@@ -359,6 +361,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/document-processing-queue.ts",
   "apps/api/src/lib/document-review/run-queue.ts",
   "apps/api/src/lib/document-translation/run-queue.ts",
+  "apps/api/src/lib/recording-transcription/run-queue.ts",
   "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
   "apps/api/src/lib/file-derivative-queue.ts",
   // BullMQ retries an attempt only when its processor rejects.

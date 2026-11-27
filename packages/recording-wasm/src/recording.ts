@@ -1,4 +1,5 @@
 import { Result, TaggedError } from "better-result";
+import { existsSync } from "node:fs";
 
 import {
   initSync,
@@ -67,11 +68,24 @@ export const initRecordingReader = (module: WebAssembly.Module): void => {
   initialized = true;
 };
 
+/** File name of the WebAssembly module, which a bundle ships beside itself. */
+export const RECORDING_WASM_FILE = "recording_bg.wasm";
+
 /** Where the compiled reader lives, next to this file's generated glue. */
 export const RECORDING_WASM_URL = new URL(
-  "../generated/recording_bg.wasm",
+  `../generated/${RECORDING_WASM_FILE}`,
   import.meta.url,
 );
+
+/**
+ * Where the module is: beside the running file when this code is bundled
+ * (the host copies it there, as it does other WebAssembly sidecars), else in
+ * this package's `generated/` directory.
+ */
+export const recordingWasmUrl = (): URL => {
+  const sidecar = new URL(RECORDING_WASM_FILE, import.meta.url);
+  return existsSync(sidecar) ? sidecar : RECORDING_WASM_URL;
+};
 
 /**
  * Opens a recording of `size` bytes whose content is `chunks` (concatenated

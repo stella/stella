@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { panic } from "better-result";
 import { Animated, Easing, Text } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { useCSSVariable } from "uniwind";
 
+import { useExternalSyncEffect } from "../effects/effects";
 import {
   RUN_MARK_SIZES,
   RUN_MARK_TONES,
@@ -73,7 +74,7 @@ const RunningRing = ({
   const resolved = useCSSVariable(colorVariable);
   const color = typeof resolved === "string" ? resolved : "currentColor";
   const [turn] = useState(() => new Animated.Value(0));
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const spin = Animated.loop(
       Animated.timing(turn, {
         duration: STATUS_MARK_SPIN_MS,

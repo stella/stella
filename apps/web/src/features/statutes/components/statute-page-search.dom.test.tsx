@@ -1,7 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
@@ -14,7 +13,7 @@ import type { PublicLawData } from "@/lib/public-law-api";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const originalFetch = globalThis.fetch;
-const { act, cleanup, fireEvent, render, waitFor } =
+const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -36,9 +35,6 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await act(async () => {
-    await sleep(0);
-  });
   await unregisterDomEnvironment();
 });
 

@@ -159,6 +159,7 @@ requires (request it at `stella auth login --scopes`).
 | template | `stella template fill` | templates |  |
 | template | `stella template list` | templates | paginated |
 | template | `stella template preview-conditions` | templates |  |
+| template | `stella template reformat` | documents_write + templates + read |  |
 | template | `stella template save-filled new-document` | documents_write + templates | destructive (needs `--yes` off a TTY) |
 | template | `stella template save-filled new-version` | documents_write + templates | destructive (needs `--yes` off a TTY) |
 | time-entry | `stella time-entry delete` | billing_write | destructive (needs `--yes` off a TTY) |
@@ -388,6 +389,9 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella template preview-conditions`
   - `--template-id` — Template whose AI-decided conditions to ask about, as returned by list_templates (string)
   - via `--input` only: values
+- `stella template reformat`
+  - `--entity-id` — Document entity ID to reformat (string)
+  - optional: --version-id, --template-id, --numbering (keep_source|house_scheme), --accept-suggested-decisions
 - `stella template save-filled new-document`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)
@@ -457,7 +461,7 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `conflict-checks`, `contacts`, `data-exports`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `organizations`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search`, `search-history`, `seller-profiles`, `sharepoint`, `signals`, `skills`, `soft-law`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `conflict-checks`, `contacts`, `data-exports`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `organizations`, `playbooks`, `properties`, `rates`, `recording-transcriptions`, `reports`, `saved-time-narratives`, `search`, `search-history`, `seller-profiles`, `sharepoint`, `signals`, `skills`, `soft-law`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id>`.

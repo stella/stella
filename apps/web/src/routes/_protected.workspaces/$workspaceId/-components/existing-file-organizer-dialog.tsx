@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQueryClient } from "@tanstack/react-query";
@@ -18,6 +19,11 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  useExternalSyncEffect,
+  useIsMounted,
+  useLatestCallback,
+} from "@stll/ui/effects";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -41,8 +47,6 @@ import {
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
@@ -105,7 +109,7 @@ type ExistingOrganizerRow = FileNameSuggestion & {
   mimeType: string | null;
 };
 
-type SuggestionStatus = "idle" | "generating" | "ready" | "failed";
+type SuggestionStatus = "generating" | "ready" | "failed";
 
 type OrganizerCache = {
   key: string;
@@ -134,6 +138,24 @@ type RowChangeSummary = {
   unchangedCount: number;
 };
 
+const organizerRequestKey = (
+  files: readonly ExistingOrganizerFile[],
+  existingFolders: readonly ExistingImportFolder[],
+) =>
+  JSON.stringify({
+    existingFolders: existingFolders.map((folder) => ({
+      id: folder.entityId,
+      name: folder.name,
+      path: folder.path,
+      parentId: folder.parentId,
+    })),
+    files: files.map((file) => ({
+      id: file.entityId,
+      name: file.originalName,
+      parentId: file.parentId,
+    })),
+  });
+
 export const ExistingFileOrganizerDialog = ({
   workspaceId,
   files,
@@ -142,13 +164,88 @@ export const ExistingFileOrganizerDialog = ({
   onOpenChange,
   suggestMatter = false,
 }: ExistingFileOrganizerDialogProps) => {
+  // An apply keeps running after it closes the dialog, so its guard lives
+  // here: reopening the dialog cannot start a second one alongside it.
+  const applyOnce = useSingleFlight();
+  // AI results outlive one opening: reopening the dialog on the same files
+  // shows them again without another call.
+  const [cachedSuggestions, setCachedSuggestions] =
+    useState<OrganizerCache | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [showDeleteSection, setShowDeleteSection] = useState(true);
+  const requestKey = organizerRequestKey(files, existingFolders);
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogPopup className="max-w-3xl">
+        {/* The popup mounts its content only while open, so the editable rows
+            start over on each opening (from the cached AI result for these
+            files, or the local suggestions), and again when the files change. */}
+        <ExistingFileOrganizerBody
+          applyOnce={applyOnce}
+          cachedSuggestions={cachedSuggestions}
+          existingFolders={existingFolders}
+          files={files}
+          key={requestKey}
+          onCachedSuggestionsChange={setCachedSuggestions}
+          onOpenChange={onOpenChange}
+          onShowDeleteSectionChange={setShowDeleteSection}
+          onShowInstructionsChange={setShowInstructions}
+          open={open}
+          requestKey={requestKey}
+          showDeleteSection={showDeleteSection}
+          showInstructions={showInstructions}
+          suggestMatter={suggestMatter}
+          workspaceId={workspaceId}
+        />
+      </DialogPopup>
+    </Dialog>
+  );
+};
+
+type ExistingFileOrganizerBodyProps = {
+  applyOnce: ReturnType<typeof useSingleFlight>;
+  workspaceId: string;
+  files: ExistingOrganizerFile[];
+  existingFolders: ExistingImportFolder[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  suggestMatter: boolean;
+  requestKey: string;
+  cachedSuggestions: OrganizerCache | null;
+  onCachedSuggestionsChange: Dispatch<SetStateAction<OrganizerCache | null>>;
+  showInstructions: boolean;
+  onShowInstructionsChange: Dispatch<SetStateAction<boolean>>;
+  showDeleteSection: boolean;
+  onShowDeleteSectionChange: Dispatch<SetStateAction<boolean>>;
+};
+
+const ExistingFileOrganizerBody = ({
+  applyOnce,
+  workspaceId,
+  files,
+  existingFolders,
+  open,
+  onOpenChange,
+  suggestMatter,
+  requestKey,
+  cachedSuggestions,
+  onCachedSuggestionsChange: setCachedSuggestions,
+  showInstructions,
+  onShowInstructionsChange: setShowInstructions,
+  showDeleteSection,
+  onShowDeleteSectionChange: setShowDeleteSection,
+}: ExistingFileOrganizerBodyProps) => {
   const submit = useIdempotentSubmit();
   const { activeOrganizationId } = useAuthenticatedUser();
   const createContact = useCreateContact();
   const updateWorkspace = useUpdateWorkspace();
-  const applyOnce = useSingleFlight();
+  const isMounted = useIsMounted();
+  // The AI result for these files when one is cached, else the local ones.
+  const cachedForFiles =
+    cachedSuggestions?.key === requestKey ? cachedSuggestions : null;
   const [matterDraft, setMatterDraft] = useState<OrganizerMatterDraft | null>(
-    null,
+    () => (suggestMatter && cachedForFiles ? cachedForFiles.matter : null),
   );
   const t = useTranslations();
   // organize-suggestions caps locale at 16 chars; send the base language.
@@ -162,29 +259,16 @@ export const ExistingFileOrganizerDialog = ({
       decode: decodeInstructions,
       encode: encodeInstructions,
     });
-  const [showInstructions, setShowInstructions] = useState(false);
   const getSuggestionRequestContext = useLatestCallback(() => ({
     locale,
     userInstructions: userInstructions.trim(),
   }));
-  const [rows, setRows] = useState<ExistingOrganizerRow[]>([]);
   const [suggestionStatus, setSuggestionStatus] =
-    useState<SuggestionStatus>("idle");
+    useState<SuggestionStatus>("ready");
   const [deleteFolders, setDeleteFolders] = useState<
     FolderDeletionSuggestion[]
-  >([]);
-  const [cachedSuggestions, setCachedSuggestions] =
-    useState<OrganizerCache | null>(null);
-  const [showDeleteSection, setShowDeleteSection] = useState(true);
+  >(() => (cachedForFiles === null ? [] : cachedForFiles.deleteFolders));
   const suggestionRequestTokenRef = useRef(0);
-
-  const isGeneratingSuggestions = suggestionStatus === "generating";
-  const selectedDeleteFolders = deleteFolders.filter(
-    (folder) => folder.selected,
-  );
-  const canApply =
-    suggestionStatus !== "generating" &&
-    (rows.length > 0 || selectedDeleteFolders.length > 0);
 
   // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const folderByEntityId = useMemo(
@@ -223,19 +307,20 @@ export const ExistingFileOrganizerDialog = ({
       }),
     [files, fileByEntityId, folderByEntityId],
   );
-  const requestKey = JSON.stringify({
-    existingFolders: existingFolders.map((folder) => ({
-      id: folder.entityId,
-      name: folder.name,
-      path: folder.path,
-      parentId: folder.parentId,
-    })),
-    files: files.map((file) => ({
-      id: file.entityId,
-      name: file.originalName,
-      parentId: file.parentId,
-    })),
-  });
+  // The local suggestions show at once and stay actionable; the expensive AI
+  // call runs only from the Generate/Regenerate handler below.
+  const [rows, setRows] = useState<ExistingOrganizerRow[]>(
+    () => cachedForFiles?.rows ?? initialRows,
+  );
+
+  const isGeneratingSuggestions = suggestionStatus === "generating";
+  const selectedDeleteFolders = deleteFolders.filter(
+    (folder) => folder.selected,
+  );
+  const canApply =
+    suggestionStatus !== "generating" &&
+    (rows.length > 0 || selectedDeleteFolders.length > 0);
+
   const getSuggestionRequestState = useLatestCallback(() => ({
     open,
     requestKey,
@@ -249,43 +334,6 @@ export const ExistingFileOrganizerDialog = ({
     entityId: toSafeId<"entity">(file.entityId),
     originalName: file.originalName,
   }));
-
-  // The toolbar keeps this dialog mounted and only toggles `open`, so reset the
-  // editable rows on each open. Cached AI results for the same files are reshown
-  // without another call.
-  useExternalSyncEffect(() => {
-    if (!open || files.length === 0) {
-      return;
-    }
-
-    if (cachedSuggestions?.key === requestKey) {
-      setRows(cachedSuggestions.rows);
-      setDeleteFolders(cachedSuggestions.deleteFolders);
-      setMatterDraft(suggestMatter ? cachedSuggestions.matter : null);
-      setSuggestionStatus("ready");
-      return;
-    }
-
-    if (suggestionStatus === "generating") {
-      return;
-    }
-
-    // Show the cheap, deterministic local suggestions immediately and
-    // stay actionable. The expensive AI call only runs from the explicit
-    // Generate/Regenerate button handler below.
-    setRows(initialRows);
-    setDeleteFolders([]);
-    setMatterDraft(null);
-    setSuggestionStatus("ready");
-  }, [
-    cachedSuggestions,
-    files,
-    initialRows,
-    open,
-    requestKey,
-    suggestMatter,
-    suggestionStatus,
-  ]);
 
   const updateRow = (
     id: string,
@@ -686,6 +734,7 @@ export const ExistingFileOrganizerDialog = ({
         : null;
       const latestRequestState = getSuggestionRequestState();
       if (
+        !isMounted() ||
         suggestionRequestTokenRef.current !== requestToken ||
         !latestRequestState.open ||
         latestRequestState.requestKey !== requestKey
@@ -706,6 +755,7 @@ export const ExistingFileOrganizerDialog = ({
     } catch (error) {
       const latestRequestState = getSuggestionRequestState();
       if (
+        !isMounted() ||
         suggestionRequestTokenRef.current !== requestToken ||
         !latestRequestState.open ||
         latestRequestState.requestKey !== requestKey
@@ -727,140 +777,135 @@ export const ExistingFileOrganizerDialog = ({
   const interactionsDisabled = isGeneratingSuggestions;
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogPopup className="max-w-3xl">
-        <DialogFormState
-          dirty={
-            (rows.length > 0 &&
-              JSON.stringify(rows) !== JSON.stringify(initialRows)) ||
-            selectedDeleteFolders.length > 0
-          }
-          onDiscard={() => {
-            setRows(initialRows);
-            setDeleteFolders([]);
+    <>
+      <DialogFormState
+        dirty={
+          (rows.length > 0 &&
+            JSON.stringify(rows) !== JSON.stringify(initialRows)) ||
+          selectedDeleteFolders.length > 0
+        }
+        onDiscard={() => {
+          setRows(initialRows);
+          setDeleteFolders([]);
+        }}
+      />
+      <DialogHeader>
+        <DialogTitle>{t("workspaces.importOrganizer.title")}</DialogTitle>
+        <DialogDescription>
+          {t("workspaces.importOrganizer.description", {
+            count: rows.length,
+          })}
+        </DialogDescription>
+      </DialogHeader>
+      <DialogPanel className="pt-0">
+        <SummaryBar isGenerating={isGeneratingSuggestions} summary={summary} />
+        <UserInstructionsSection
+          disabled={false}
+          expanded={showInstructions}
+          onChange={setUserInstructions}
+          onRegenerate={() => {
+            detached(
+              requestAiSuggestions(),
+              "existing-file-organizer-dialog.request-ai-suggestions",
+            );
           }}
+          onToggle={() => setShowInstructions((current) => !current)}
+          value={userInstructions}
         />
-        <DialogHeader>
-          <DialogTitle>{t("workspaces.importOrganizer.title")}</DialogTitle>
-          <DialogDescription>
-            {t("workspaces.importOrganizer.description", {
-              count: rows.length,
-            })}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogPanel className="pt-0">
-          <SummaryBar
-            isGenerating={isGeneratingSuggestions}
-            summary={summary}
-          />
-          <UserInstructionsSection
+        {suggestionStatus === "failed" && (
+          <FailureBanner
             disabled={false}
-            expanded={showInstructions}
-            onChange={setUserInstructions}
-            onRegenerate={() => {
+            onRetry={() => {
               detached(
                 requestAiSuggestions(),
                 "existing-file-organizer-dialog.request-ai-suggestions",
               );
             }}
-            onToggle={() => setShowInstructions((current) => !current)}
-            value={userInstructions}
           />
-          {suggestionStatus === "failed" && (
-            <FailureBanner
-              disabled={false}
-              onRetry={() => {
-                detached(
-                  requestAiSuggestions(),
-                  "existing-file-organizer-dialog.request-ai-suggestions",
-                );
-              }}
-            />
-          )}
-          {matterDraft && !isGeneratingSuggestions && (
-            <OrganizerMatterFields
-              disabled={interactionsDisabled}
-              onChange={setMatterDraft}
-              value={matterDraft}
-            />
-          )}
-          {isGeneratingSuggestions ? (
-            <OrganizerSkeleton />
-          ) : (
-            <OrganizerTreePreview
-              disabled={interactionsDisabled}
-              onMoveFile={moveFileToFolder}
-              onMoveFolder={moveFolder}
-              onRenameFolder={renameFolder}
-              onUpdateRow={updateRow}
-              rows={rows}
-            />
-          )}
-          {deleteFolders.length > 0 && (
-            <DeleteFoldersSection
-              disabled={interactionsDisabled}
-              expanded={showDeleteSection}
-              folders={deleteFolders}
-              onToggle={() => setShowDeleteSection((current) => !current)}
-              onUpdate={updateFolderDeletion}
-            />
-          )}
-        </DialogPanel>
-        <DialogFooter>
+        )}
+        {matterDraft && !isGeneratingSuggestions && (
+          <OrganizerMatterFields
+            disabled={interactionsDisabled}
+            onChange={setMatterDraft}
+            value={matterDraft}
+          />
+        )}
+        {isGeneratingSuggestions ? (
+          <OrganizerSkeleton />
+        ) : (
+          <OrganizerTreePreview
+            disabled={interactionsDisabled}
+            onMoveFile={moveFileToFolder}
+            onMoveFolder={moveFolder}
+            onRenameFolder={renameFolder}
+            onUpdateRow={updateRow}
+            rows={rows}
+          />
+        )}
+        {deleteFolders.length > 0 && (
+          <DeleteFoldersSection
+            disabled={interactionsDisabled}
+            expanded={showDeleteSection}
+            folders={deleteFolders}
+            onToggle={() => setShowDeleteSection((current) => !current)}
+            onUpdate={updateFolderDeletion}
+          />
+        )}
+      </DialogPanel>
+      <DialogFooter>
+        <Button
+          onClick={() => onOpenChange(false)}
+          type="button"
+          variant="outline"
+        >
+          {t("common.cancel")}
+        </Button>
+        {!hasAiSuggestions && (
           <Button
-            onClick={() => onOpenChange(false)}
-            type="button"
-            variant="outline"
-          >
-            {t("common.cancel")}
-          </Button>
-          {!hasAiSuggestions && (
-            <Button
-              className="me-auto"
-              disabled={isGeneratingSuggestions || rows.length === 0}
-              disabledReason={
-                isGeneratingSuggestions
-                  ? t("common.loading")
-                  : t("workspaces.importOrganizer.noFilesToOrganize")
-              }
-              onClick={() => {
-                detached(
-                  requestAiSuggestions(),
-                  "existing-file-organizer-dialog.request-ai-suggestions",
-                );
-              }}
-              type="button"
-              variant="outline"
-            >
-              {isGeneratingSuggestions ? (
-                <Loader label={t("common.loading")} size="sm" />
-              ) : (
-                <SparklesIcon />
-              )}
-              {t("workspaces.importOrganizer.generateAi")}
-            </Button>
-          )}
-          <Button
-            disabled={isGeneratingSuggestions || !canApply}
+            className="me-auto"
+            disabled={isGeneratingSuggestions || rows.length === 0}
             disabledReason={
               isGeneratingSuggestions
                 ? t("common.loading")
-                : t("workspaces.importOrganizer.noChangesToApply")
+                : t("workspaces.importOrganizer.noFilesToOrganize")
             }
-            onClick={() =>
+            onClick={() => {
               detached(
-                applyOnce.run(handleApply),
-                "existing-file-organizer-dialog.apply",
-              )
-            }
+                requestAiSuggestions(),
+                "existing-file-organizer-dialog.request-ai-suggestions",
+              );
+            }}
             type="button"
+            variant="outline"
           >
-            <Rows3Icon />
-            {t("workspaces.importOrganizer.apply")}
+            {isGeneratingSuggestions ? (
+              <Loader label={t("common.loading")} size="sm" />
+            ) : (
+              <SparklesIcon />
+            )}
+            {t("workspaces.importOrganizer.generateAi")}
           </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        )}
+        <Button
+          disabled={isGeneratingSuggestions || !canApply}
+          disabledReason={
+            isGeneratingSuggestions
+              ? t("common.loading")
+              : t("workspaces.importOrganizer.noChangesToApply")
+          }
+          onClick={() =>
+            detached(
+              applyOnce.run(handleApply),
+              "existing-file-organizer-dialog.apply",
+            )
+          }
+          type="button"
+        >
+          <Rows3Icon />
+          {t("workspaces.importOrganizer.apply")}
+        </Button>
+      </DialogFooter>
+    </>
   );
 };
 

@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored XHTML; the parse itself is unchanged.
 // parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
@@ -32,6 +33,7 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
+import { createBlockAnchorAllocator } from "@stll/legal-ast/block-anchors";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   hasInlineChildren,
@@ -51,6 +53,7 @@ import {
   stripInlinePrefix,
   stripInlineSuffix,
 } from "@stll/legal-ast/inline-line";
+import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 import {
   COURT_PARAGRAPH_OPENING_RE,
   NUMBERED_LINE_RE,
@@ -83,9 +86,7 @@ import {
   isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 /**
  * What a dropped anonymized run reads as.

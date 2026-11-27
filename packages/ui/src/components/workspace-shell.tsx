@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 import type { ReactElement, ReactNode } from "react";
 
+import { useExternalSyncEffect } from "../effects/effects";
 import { useIsMobile } from "../hooks/use-mobile";
 import { NewChatIcon } from "../icons";
 import {
@@ -95,7 +96,7 @@ export const WorkspaceShell = ({
   const compactNavigationOpen = compactNavigation?.open ?? false;
   const onCompactNavigationOpenChange = compactNavigation?.onOpenChange;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isCompact && compactNavigationOpen) {
       onCompactNavigationOpenChange?.(false);
     }

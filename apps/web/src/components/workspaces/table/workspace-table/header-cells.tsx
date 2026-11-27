@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { GripVerticalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -35,7 +36,6 @@ import type {
   ColumnDragData,
   EndFillerInput,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   draggable,
   dropTargetForElements,

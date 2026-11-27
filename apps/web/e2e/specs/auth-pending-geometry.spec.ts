@@ -4,6 +4,7 @@ import { getStorageKey } from "../../src/consts";
 import { SIGN_IN_PROVIDERS } from "../fixtures/sign-in-providers";
 import { apiJson, respond } from "../helpers/route-mock";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
+import { newWatchedPage } from "../helpers/storm-watch-fixture";
 import { expect, test } from "../helpers/test";
 
 const viewport = { width: 1440, height: 900 };
@@ -143,7 +144,7 @@ for (const locale of ["en", "cs"]) {
       if (baseURL === undefined) {
         throw new TypeError("Auth geometry needs the web base URL");
       }
-      const cold = await browser.newPage({
+      const cold = await newWatchedPage(browser, {
         baseURL,
         javaScriptEnabled: false,
         locale,

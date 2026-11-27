@@ -1495,7 +1495,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts": {
-    "count": 4,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2311,11 +2311,6 @@
   },
   "packages/agent-engine/scripts/mcp-canary-server.test.ts": {
     "count": 1,
-    "owner": "agent-engine",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/agent-engine/src/sidecar/sidecar.test.ts": {
-    "count": 2,
     "owner": "agent-engine",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

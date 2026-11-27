@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
@@ -58,7 +59,6 @@ import {
   isPinnedBoundaryColumn,
   selectColId,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { toSafeId } from "@/lib/safe-id";

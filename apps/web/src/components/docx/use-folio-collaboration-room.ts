@@ -26,10 +26,13 @@ import {
   openCanonicalYjsRoom,
 } from "@stll/folio-core/controller/canonicalYjsRoom";
 import { Temporal } from "@stll/time";
+import {
+  useExternalSyncEffect,
+  useKeyedState,
+  useLatestCallback,
+} from "@stll/ui/effects";
 
 import { env } from "@/env";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
@@ -73,6 +76,16 @@ export type FolioCollaborationRoomState =
   | ConnectedRoomState
   | { status: "connecting"; room: null }
   | { status: "unavailable"; room: null; message: string | null };
+
+const ROOM_CONNECTING: FolioCollaborationRoomState = {
+  status: "connecting",
+  room: null,
+};
+const ROOM_UNAVAILABLE: FolioCollaborationRoomState = {
+  status: "unavailable",
+  room: null,
+  message: null,
+};
 
 type UseFolioCollaborationRoomOptions = {
   enabled: boolean;
@@ -354,12 +367,6 @@ export const useFolioCollaborationRoom = ({
     propertyId,
     user?.id,
   ]);
-  const [state, setState] = useState<FolioCollaborationRoomState>({
-    status: "unavailable",
-    room: null,
-    message: null,
-  });
-
   const collabUrl = env.VITE_COLLAB_URL;
   const userId = user?.id ?? null;
   const userImage = user?.image ?? null;
@@ -377,10 +384,21 @@ export const useFolioCollaborationRoom = ({
   });
   const canConnect =
     enabled && collabUrl !== undefined && userId !== null && userName !== null;
+  // One connection per target, URL and attempt: its state starts over as
+  // connecting whenever the effect below opens a new one, and a room that
+  // cannot connect is unavailable without holding any state.
+  const connectionKey = JSON.stringify([
+    targetKey,
+    collabUrl,
+    connectionAttempt,
+    canConnect,
+  ]);
+  const [connectionState, setState] =
+    useKeyedState<FolioCollaborationRoomState>(connectionKey, ROOM_CONNECTING);
+  const state = canConnect ? connectionState : ROOM_UNAVAILABLE;
 
   useExternalSyncEffect(() => {
     if (!canConnect) {
-      setState({ status: "unavailable", room: null, message: null });
       return undefined;
     }
 
@@ -426,7 +444,6 @@ export const useFolioCollaborationRoom = ({
         ),
       );
     };
-    setState({ status: "connecting", room: null });
 
     detached(
       (async () => {
@@ -1047,6 +1064,7 @@ export const useFolioCollaborationRoom = ({
     getEditPermissionDeniedMessage,
     getSnapshotRecoveryMessage,
     propertyId,
+    setState,
     workspaceId,
   ]);
 

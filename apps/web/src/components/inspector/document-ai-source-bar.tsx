@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
@@ -20,7 +21,6 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";
@@ -310,7 +310,7 @@ export const DocumentAiSourceBar = ({
   // Only set for the ACTIVE tab — inactive tabs stay mounted but
   // hidden, and their effects must not overwrite the active tab's
   // justification.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (justificationId && isActiveTab && hasBoundingBoxCitations) {
       setActiveJustification({ id: justificationId, pageNumber: 1 });
     }
@@ -512,6 +512,8 @@ export const DocumentAiSourceBar = ({
   );
 };
 
+const noLayoutSubscription = () => undefined;
+
 /**
  * Resolve the page for a folio block via the editor registered for
  * `(entityId, fieldId)` — the same registry the Suggestions facet uses
@@ -534,23 +536,18 @@ const useFolioBlockPage = (
   const editorRef = useActiveDocxStore(
     (s) => s.byKey[activeDocxKey(entityId, fieldId)]?.registration.editorRef,
   );
-  const [page, setPage] = useState<number | null>(null);
-  useExternalSyncEffect(() => {
+  // The editor's layout is the store: a layout pass notifies, and the page
+  // number (a primitive, so unrelated passes during typing re-render
+  // nothing) is read from the editor itself.
+  const subscribe = (onLayoutChange: () => void) => {
     const editor = editorRef?.current ?? null;
-    if (editor === null) {
-      setPage(null);
-      return undefined;
-    }
-    const read = () => {
-      const next = editor.getBlockRect(blockId)?.page ?? null;
-      // Only set when changed so we don't churn React state on every
-      // unrelated layout pass the editor emits during typing.
-      setPage((prev) => (prev === next ? prev : next));
-    };
-    read();
-    return editor.onLayoutChange(read);
-  }, [blockId, editorRef]);
-  return page;
+    return editor === null
+      ? noLayoutSubscription
+      : editor.onLayoutChange(onLayoutChange);
+  };
+  const readPage = () =>
+    editorRef?.current?.getBlockRect(blockId)?.page ?? null;
+  return useSyncExternalStore(subscribe, readPage, readPage);
 };
 
 // The chip's surface is the outline button's; its tiny type and inset sit on

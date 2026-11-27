@@ -23,13 +23,12 @@ import { useTranslations } from "use-intl";
 import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { layoutMarginNotes } from "@/components/ai-suggestions/review-margin-notes.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 
 /** The least space between two notes, in px. Below this they read as one. */
@@ -240,10 +239,19 @@ export const ReviewMarginNotes = ({
 
   // A note that arrives, leaves, or changes height has to be re-placed even
   // when nothing scrolled. Keyed by value so a re-render alone does not
-  // re-measure the column.
+  // re-measure the column; placed on the next frame like every other pass,
+  // so the edge counts reach React from the frame loop, not from the commit.
   const noteKey = notes.map((note) => note.id).join("|");
   useExternalSyncEffect(() => {
-    relayout();
+    if (!columnMounted) {
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => {
+      relayout();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
   }, [columnMounted, noteKey, relayout]);
 
   if (!columnMounted) {

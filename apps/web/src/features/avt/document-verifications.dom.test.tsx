@@ -11,7 +11,6 @@ import {
   test,
 } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -22,7 +21,7 @@ const unexpectedRequests: string[] = [];
 const answers: (Response | Promise<Response>)[] = [];
 let fetchBoundary: Mock<typeof globalThis.fetch>;
 
-const { act, cleanup, fireEvent, render, screen, waitFor, within } =
+const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -173,9 +172,6 @@ afterEach(() => {
 });
 afterAll(async () => {
   // Let React's scheduled passive work finish before the DOM goes away.
-  await act(async () => {
-    await sleep(50);
-  });
   notice.mockRestore();
   fetchBoundary.mockRestore();
   await unregisterDomEnvironment();

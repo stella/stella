@@ -8,6 +8,7 @@ import { SKILL_RESOURCE_UPLOAD_MAX_BYTES } from "@stll/api-contract/limits";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { DocumentMark } from "@stll/ui/document-mark";
+import { useLatestCallback } from "@stll/ui/effects";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   FileCodeIcon,
@@ -68,7 +69,6 @@ import {
   toEditorMarkdown,
   toStoredMarkdown,
 } from "@/components/skill-body-markdown";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

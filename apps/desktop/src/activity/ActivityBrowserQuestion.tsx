@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { CheckIcon, XIcon } from "@stll/ui/icons";
 
 import type {
@@ -195,9 +196,9 @@ const BrowserOutcomeLine = ({
   const t = useTranslations("activity");
   const tDialog = useTranslations("dialog");
   const line = useRef<HTMLParagraphElement>(null);
-  useEffect(() => {
+  useMountEffect(() => {
     line.current?.focus();
-  }, []);
+  });
   return (
     <div className="text-muted-foreground flex items-center gap-2 text-xs">
       <CheckIcon aria-hidden="true" className="size-3.5 shrink-0" />

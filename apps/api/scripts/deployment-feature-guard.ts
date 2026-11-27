@@ -75,6 +75,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated confirmation of a user's prepared outbound actions is available on every deployment",
   ],
   [
+    "/v1/workspaces/:workspaceId/recording-transcriptions",
+    "Transcribing a recording in a matter enforces the dictation kill switch, matter access, document create permission, provider availability and usage admission on every deployment, as authenticated dictation does",
+  ],
+  [
     "/v1/saved-searches",
     "The caller's private saved searches support search on every deployment",
   ],
@@ -217,6 +221,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/calendar-events",
     "The desktop Activity day review enforces the caller's activity feature decision on every deployment and answers turned off unless the deployment's Microsoft 365 flag and the organization's calendar policy allow the read; nothing is stored",
+  ],
+  [
+    "/v1/desktop/day-entries",
+    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
     "/v1/desktop/matters",

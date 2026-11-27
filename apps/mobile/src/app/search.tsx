@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { useRouter } from "expo-router";
@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { Separator } from "@stll/ui/separator";
@@ -104,12 +105,9 @@ const SearchStella = ({
   const tickets = useRef(0);
   const pause = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  useEffect(
-    () => () => {
-      clearTimeout(pause.current);
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    clearTimeout(pause.current);
+  });
 
   // Every search takes the next ticket; only the latest one's answer shows.
   const run = (text: string, narrowed: SearchQualifiers) => {

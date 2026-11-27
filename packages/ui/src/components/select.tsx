@@ -6,7 +6,7 @@ import * as React from "react";
 
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 
-import { useLatest } from "../hooks/use-latest";
+import { useLatest } from "../effects/effects";
 import { ChevronDownIcon, ChevronsUpDownIcon, ChevronUpIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";

@@ -3,9 +3,9 @@ import type { PropsWithChildren } from "react";
 import { IntlProvider, useTranslations } from "use-intl";
 
 import { DialogProvider } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { PendingTextIntlScope } from "@/components/pending-text";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,

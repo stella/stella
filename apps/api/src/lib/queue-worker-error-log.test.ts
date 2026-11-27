@@ -3,6 +3,7 @@ import {
   beforeEach,
   describe,
   expect,
+  jest,
   setSystemTime,
   test,
 } from "bun:test";
@@ -110,76 +111,94 @@ describe("createQueueWorkerErrorLogger", () => {
     },
   );
 
-  test("flushes the tally at warning when the disruption stops inside the interval", async () => {
-    const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
+  test("flushes the tally at warning when the disruption stops inside the interval", () => {
+    jest.useFakeTimers();
+    try {
+      at(0);
+      const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
-    log(withCode(TRANSIENT));
-    expect(logs.records).toHaveLength(1);
-    expect(logs.records.at(0)?.attributes?.["occurrencesSinceLastLog"]).toBe(
-      "1",
-    );
-
-    // Land the burst just short of the boundary so the trailing flush is
-    // scheduled a few ms out and a real timer can run it inside the test.
-    at(59_990);
-    for (let i = 0; i < 50_000; i += 1) {
       log(withCode(TRANSIENT));
+      expect(logs.records).toHaveLength(1);
+      expect(logs.records.at(0)?.attributes?.["occurrencesSinceLastLog"]).toBe(
+        "1",
+      );
+
+      // Land the burst just short of the boundary so the trailing flush is
+      // scheduled a few ms out and a real timer can run it inside the test.
+      at(59_990);
+      for (let i = 0; i < 50_000; i += 1) {
+        log(withCode(TRANSIENT));
+      }
+
+      // Nothing more arrives: without the trailing flush these 50,000 would be
+      // stranded and the episode would read as a single occurrence.
+      expect(logs.records).toHaveLength(1);
+
+      jest.advanceTimersByTime(50);
+
+      expect(logs.records).toHaveLength(2);
+      expect(logs.records.at(1)?.attributes?.["occurrencesSinceLastLog"]).toBe(
+        "50000",
+      );
+      // The episode healed inside the grace, so both the leading line and the
+      // flush that closes it are warnings, even though the flush itself runs a
+      // whole interval after the last occurrence.
+      expect(logs.records.map((record) => record.severityText)).toEqual([
+        "WARN",
+        "WARN",
+      ]);
+      expect(logs.at("ERROR")).toHaveLength(0);
+    } finally {
+      jest.useRealTimers();
     }
-
-    // Nothing more arrives: without the trailing flush these 50,000 would be
-    // stranded and the episode would read as a single occurrence.
-    expect(logs.records).toHaveLength(1);
-
-    await Bun.sleep(50);
-
-    expect(logs.records).toHaveLength(2);
-    expect(logs.records.at(1)?.attributes?.["occurrencesSinceLastLog"]).toBe(
-      "50000",
-    );
-    // The episode healed inside the grace, so both the leading line and the
-    // flush that closes it are warnings, even though the flush itself runs a
-    // whole interval after the last occurrence.
-    expect(logs.records.map((record) => record.severityText)).toEqual([
-      "WARN",
-      "WARN",
-    ]);
-    expect(logs.at("ERROR")).toHaveLength(0);
   });
 
-  test("grades a trailing flush by the episode it summarizes, not by when it runs", async () => {
-    const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
+  test("grades a trailing flush by the episode it summarizes, not by when it runs", () => {
+    jest.useFakeTimers();
+    try {
+      at(0);
+      const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
-    streamTransients(log, { fromMs: 0, toMs: 120_000, everyMs: 60_000 });
-    // Last failure just inside the grace, with the flush scheduled a few ms
-    // out; the clock then moves past the grace while nothing is reported.
-    at(179_990);
-    log(withCode(TRANSIENT));
-    at(190_000);
+      streamTransients(log, { fromMs: 0, toMs: 120_000, everyMs: 60_000 });
+      // Last failure just inside the grace, with the flush scheduled a few ms
+      // out; the clock then moves past the grace while nothing is reported.
+      at(179_990);
+      log(withCode(TRANSIENT));
+      at(190_000);
 
-    await Bun.sleep(50);
+      jest.advanceTimersByTime(50);
 
-    expect(logs.records.map((record) => record.severityText)).toEqual([
-      "WARN",
-      "WARN",
-      "WARN",
-      "WARN",
-    ]);
-    expect(logs.records.at(3)?.attributes?.["episodeAgeMs"]).toBe("179990");
+      expect(logs.records.map((record) => record.severityText)).toEqual([
+        "WARN",
+        "WARN",
+        "WARN",
+        "WARN",
+      ]);
+      expect(logs.records.at(3)?.attributes?.["episodeAgeMs"]).toBe("179990");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
-  test("does not flush an interval that recorded nothing", async () => {
-    const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
+  test("does not flush an interval that recorded nothing", () => {
+    jest.useFakeTimers();
+    try {
+      at(0);
+      const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
-    log(withCode(TRANSIENT));
-    at(59_990);
-    log(withCode(TRANSIENT));
+      log(withCode(TRANSIENT));
+      at(59_990);
+      log(withCode(TRANSIENT));
 
-    await Bun.sleep(50);
-    expect(logs.records).toHaveLength(2);
+      jest.advanceTimersByTime(50);
+      expect(logs.records).toHaveLength(2);
 
-    // The flush already drained the count, so no further line is owed.
-    await Bun.sleep(50);
-    expect(logs.records).toHaveLength(2);
+      // The flush already drained the count, so no further line is owed.
+      jest.advanceTimersByTime(50);
+      expect(logs.records).toHaveLength(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("escalates to an error once the episode outlasts the grace", () => {

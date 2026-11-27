@@ -46,6 +46,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   BrowserControlIcon,
   CheckIcon,
@@ -118,7 +119,6 @@ import {
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
 import { DesktopFeatureUpdateNotice } from "@/features/chat/desktop-feature-update";
-import { useMountEffect } from "@/hooks/use-effect";
 import { revealTranscriptElement } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";

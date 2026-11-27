@@ -2,6 +2,10 @@ import { panic, Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
+  CITATION_ARRIVAL_DRAIN_OWNER,
+  drainCitationArrivalsAfterWrite,
+} from "@/api/handlers/case-law/citation-arrivals";
+import {
   absorbComposedSupplementRows,
   SUPPLEMENT_ABSORB_FAILED,
 } from "@/api/handlers/case-law/ingestion/pipeline/composed-supplements";
@@ -35,6 +39,10 @@ import {
   IngestionFailureEvidenceError,
   parkIngestionFailureTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
+import {
+  type GraphTurn,
+  takeGraphTurnAlone,
+} from "@/api/handlers/case-law/ingestion/pipeline/graph-turns";
 import {
   attachToHeldDecision,
   stageOwnCollectionPart,
@@ -165,6 +173,21 @@ const storedInputMatchesDecision = (
       return panic("Unhandled decision input provenance");
   }
 };
+
+/**
+ * The row write, once the decision's graph turn comes. A turn can come long
+ * after it was asked for: a stop raised while waiting ends the attempt
+ * before it takes the graph lock.
+ */
+const writeRowInTurn = async (
+  graphTurn: GraphTurn,
+  scopedDb: ScopedDb,
+  write: DecisionRowWrite,
+) =>
+  await graphTurn(async () => {
+    write.signal?.throwIfAborted();
+    return await writeDecisionRowWithSlug(scopedDb, write);
+  });
 
 const provenanceDecisionId = (
   input: ProcessDecisionAttemptOptions["inputProvenance"],
@@ -382,6 +405,7 @@ const runDecisionAttempt = async (
     corpus,
     corpusBatch,
     polarityRules,
+    graphTurn = takeGraphTurnAlone,
     signal,
     s3Policy,
   }: ProcessDecisionAttemptOptions,
@@ -536,7 +560,7 @@ const runDecisionAttempt = async (
         rawWrites,
         judges,
       };
-      const rowWrite = await writeDecisionRowWithSlug(scopedDb, write);
+      const rowWrite = await writeRowInTurn(graphTurn, scopedDb, write);
       if (Result.isError(rowWrite)) {
         return Result.err(rowWrite.error);
       }
@@ -649,6 +673,7 @@ const processDecisionFromInput = async (
     judges = CASE_LAW_JUDGE_DEPENDENCIES,
     sourceFingerprintFromStoredRaw:
       readStoredFingerprint = readSourceFingerprintFromStoredRaw,
+    citationArrivals = CITATION_ARRIVAL_DRAIN_OWNER.DECISION,
     ...options
   }: ProcessDecisionOptions & {
     inputProvenance: ProcessDecisionAttemptOptions["inputProvenance"];
@@ -677,6 +702,15 @@ const processDecisionFromInput = async (
     corpus,
     judges,
   });
+  if (citationArrivals === CITATION_ARRIVAL_DRAIN_OWNER.DECISION) {
+    // Whatever the outcome: a write that committed enqueued its arrivals,
+    // and the queue is empty otherwise, which the drain reads without the
+    // graph lock.
+    await drainCitationArrivalsAfterWrite(options.scopedDb, {
+      step: "pipeline.processDecision.citation_arrivals",
+      attributes: { sourceId: options.sourceId },
+    });
+  }
   if (
     Result.isError(attempted) &&
     attempted.error instanceof IngestionFailureEvidenceError &&

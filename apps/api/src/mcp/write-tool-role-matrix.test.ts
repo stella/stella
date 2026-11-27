@@ -170,6 +170,17 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
         "Saving a fill as a new version is a fill followed by a version upload.",
     },
   ],
+  reformat_into_template: [
+    {
+      endpoints: [
+        capability("entities.versions.get"),
+        capability("templates.fill"),
+        capability("entities.upload"),
+      ],
+      reason:
+        "Applying a template to a document reads the version, uses the template and saves the output as a new document.",
+    },
+  ],
   save_site_notes: [
     {
       endpoints: [

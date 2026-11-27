@@ -6,8 +6,8 @@ import { useDebouncedCallback } from "use-debounce";
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
 import type { FindMatch } from "@stll/folio-core/utils/findReplace";
 import type { DocxEditorRef } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { findDocumentSearchResult } from "@/lib/document-search";
 import { useFindSurface } from "@/lib/find-owner";
 import {

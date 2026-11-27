@@ -141,6 +141,8 @@ export const FREE_WITHOUT_OWN_KEY = {
   "document-reviews.background": "counts",
   "document-translation.start": "counts",
   "document-translation.background": "counts",
+  "recording-transcription.start": "counts",
+  "recording-transcription.background": "counts",
   "bilingual.prepare": "counts",
   "bilingual.start": "counts",
   "bilingual.background": "counts",

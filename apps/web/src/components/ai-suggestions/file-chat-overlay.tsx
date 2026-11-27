@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -60,6 +53,12 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
+import {
+  useExternalSyncEffect,
+  useKeyedState,
+  useLatestCallback,
+  useLayoutSyncEffect,
+} from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -173,8 +172,6 @@ import {
   useMakeSkillFromChat,
   useSaveDraftedSkill,
 } from "@/features/chat/use-make-skill-from-chat";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
@@ -719,11 +716,20 @@ const executeTypedFolioToolCall = <TName extends FolioAgentToolName>(
     FILE_OVERLAY_TOOL_OPTIONS,
   );
 
-// Stable empty context returned by `getContextMatterIds` before the picker
-// has seeded (its state is `string[] | null`). A named constant, not a `?? []`
-// literal: an unseeded thread has no selected matters, which is a real state,
-// not a structural invariant to panic on.
-const UNSEEDED_CONTEXT_MATTER_IDS: string[] = [];
+// Stable empty context for a thread with no persisted matters and no
+// workspace. A named constant, not a `?? []` literal: no selected matters is
+// a real state, not a structural invariant to panic on.
+const NO_CONTEXT_MATTER_IDS: string[] = [];
+
+const defaultFileChatContextMatterIds = (
+  persisted: string[],
+  workspaceId: string | undefined,
+): string[] => {
+  if (persisted.length > 0) {
+    return persisted;
+  }
+  return workspaceId === undefined ? NO_CONTEXT_MATTER_IDS : [workspaceId];
+};
 const EMPTY_DOCX_COMMENTS: DocxComments = [];
 const EMPTY_SNAPSHOT_BLOCKS: FolioAIEditSnapshot["blocks"] = [];
 
@@ -1204,25 +1210,26 @@ const FileChatOverlayInner = ({
   const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   // Context matters this file chat draws on. Same plumbing as the main
-  // chat and inspector: local state is seeded from the server's persisted
-  // set (or, for a fresh thread, the file's own matter), the picker mutates
-  // it directly, and the transport pulls the latest value via
-  // `getContextMatterIds` on every send — so the displayed selection and
-  // the sent context are provably one source. Null until seeded below.
-  const [contextMatterIds, setContextMatterIds] = useState<string[] | null>(
-    null,
-  );
-  const [seededContextForThreadId, setSeededContextForThreadId] = useState<
-    string | null
-  >(null);
+  // chat and inspector: the picker's choice is held per thread (it starts
+  // over when the thread changes), and until the user picks, the selection
+  // is the server's persisted set (or, for a fresh thread, the file's own
+  // matter; see `contextMatterIds` below). The transport pulls the latest
+  // value via `getContextMatterIds` on every send, so the displayed
+  // selection and the sent context are provably one source.
+  const [pickedContextMatterIds, setContextMatterIds] = useKeyedState<
+    string[] | null
+  >(chatThreadId, null);
+  // The selection as of the last commit, for the transport (the selection
+  // itself needs the thread's data, read below).
+  const latestContextMatterIdsRef = useRef<string[]>(NO_CONTEXT_MATTER_IDS);
   const getContextMatterIds = useLatestCallback(
-    () => contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
+    () => latestContextMatterIdsRef.current,
   );
   // Seeded with the shared empty constant instead of normalizing during
   // render (the initializer would rebuild and discard the value every
   // render); the layout effect below fills it before anything reads it.
   const latestDocxCommentsRef = useRef<DocxComments>(EMPTY_DOCX_COMMENTS);
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     latestDocxCommentsRef.current = normalizeDocxComments(docxComments);
   }, [docxComments]);
   const hasDocxEditSurface =
@@ -1430,10 +1437,6 @@ const FileChatOverlayInner = ({
       };
     },
   );
-  // Active-file mode currently adds no approval blocks. Leave the context
-  // value absent until a real blocked tool exists.
-  const blockedApprovalTools = undefined;
-
   const getEditApplyMode =
     activeDocxEditModeState.type === "unavailable"
       ? undefined
@@ -1506,26 +1509,19 @@ const FileChatOverlayInner = ({
     data,
     key: threadRef,
   });
-  // Seed the picker once per thread. Prefer the server's persisted set;
-  // for a brand-new file thread (empty set) fall back to the file's own
-  // matter so "the matter this file lives in" is the default context. A
-  // global file preview (no workspace) seeds empty and lets the user add
-  // context matters explicitly.
-  useExternalSyncEffect(() => {
-    if (seededContextForThreadId === chatThreadId) {
-      return;
-    }
-    setSeededContextForThreadId(chatThreadId);
-    const ownMatter = workspaceId !== undefined ? [workspaceId] : [];
-    setContextMatterIds(
-      data.contextMatterIds.length > 0 ? data.contextMatterIds : ownMatter,
-    );
-  }, [
-    chatThreadId,
-    data.contextMatterIds,
-    seededContextForThreadId,
-    workspaceId,
-  ]);
+  // Until the user picks, the selection is the server's persisted set; for
+  // a brand-new file thread (empty set) it is the file's own matter, so "the
+  // matter this file lives in" is the default context. A global file preview
+  // (no workspace) starts empty and lets the user add context matters
+  // explicitly.
+  const defaultContextMatterIds = useMemo(
+    () => defaultFileChatContextMatterIds(data.contextMatterIds, workspaceId),
+    [data.contextMatterIds, workspaceId],
+  );
+  const contextMatterIds = pickedContextMatterIds ?? defaultContextMatterIds;
+  useLayoutSyncEffect(() => {
+    latestContextMatterIdsRef.current = contextMatterIds;
+  }, [contextMatterIds]);
 
   const {
     activitySession,
@@ -1896,48 +1892,46 @@ const FileChatOverlayInner = ({
     await runFolioAgentCommentMutationTool(part);
   };
 
-  const handleApproveWithDocxUnlock = async (
-    approvalId: string,
-    toolName: ApprovalToolName,
-  ) => {
-    // folio-agents comment mutations are client-executed behind approval: once
-    // the user approves, run the operation against the live editor bridge and
-    // answer the tool call with its result. The auto-run tools (reads and
-    // `suggest_changes`) never reach here.
-    if (isFolioAgentCommentMutationToolName(toolName)) {
+  const handleApproveWithDocxUnlock = useLatestCallback(
+    async (approvalId: string, toolName: ApprovalToolName) => {
+      // folio-agents comment mutations are client-executed behind approval: once
+      // the user approves, run the operation against the live editor bridge and
+      // answer the tool call with its result. The auto-run tools (reads and
+      // `suggest_changes`) never reach here.
+      if (isFolioAgentCommentMutationToolName(toolName)) {
+        await approveAndRunFolioAgentCommentMutation({
+          approvalId,
+          approve: async () => await handleApprove(approvalId, toolName),
+          toolName,
+        });
+        return;
+      }
+
+      await handleApprove(approvalId, toolName);
+    },
+  );
+
+  const handleAllowInConversationWithFolioAgentCommentExecution =
+    useLatestCallback(
+      async (approvalId: string, toolName: ApprovalToolName) => {
+        await approveAndRunFolioAgentCommentMutation({
+          approvalId,
+          approve: async () =>
+            await handleAllowInConversation(approvalId, toolName),
+          toolName,
+        });
+      },
+    );
+
+  const handleAlwaysAllowWithFolioAgentCommentExecution = useLatestCallback(
+    async (approvalId: string, toolName: ApprovalToolName) => {
       await approveAndRunFolioAgentCommentMutation({
         approvalId,
-        approve: async () => await handleApprove(approvalId, toolName),
+        approve: async () => await handleAlwaysAllow(approvalId, toolName),
         toolName,
       });
-      return;
-    }
-
-    await handleApprove(approvalId, toolName);
-  };
-
-  const handleAllowInConversationWithFolioAgentCommentExecution = async (
-    approvalId: string,
-    toolName: ApprovalToolName,
-  ) => {
-    await approveAndRunFolioAgentCommentMutation({
-      approvalId,
-      approve: async () =>
-        await handleAllowInConversation(approvalId, toolName),
-      toolName,
-    });
-  };
-
-  const handleAlwaysAllowWithFolioAgentCommentExecution = async (
-    approvalId: string,
-    toolName: ApprovalToolName,
-  ) => {
-    await approveAndRunFolioAgentCommentMutation({
-      approvalId,
-      approve: async () => await handleAlwaysAllow(approvalId, toolName),
-      toolName,
-    });
-  };
+    },
+  );
 
   // Auto-run watcher for the client-executed, no-approval folio-agents tools:
   // the reads and the queue-only `suggest_changes`. Nothing else in the
@@ -2081,6 +2075,36 @@ const FileChatOverlayInner = ({
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
   const hasThreadContent = hasMessages || error !== undefined;
+  // A draft handed over from another surface (a review finding's "Ask in
+  // chat", a passage selected in the document): it lands in this file's
+  // composer, opens the thread, and is acknowledged so a later mount does not
+  // replay it. It replaces whatever was unsent there, as every handoff into a
+  // document's chat does.
+  const pendingFileChatDraft = useInspectorCommandStore(
+    (state) => state.pendingFileChatDraft,
+  );
+  const activeFileFieldId = activeFile?.fileFieldId;
+  const fileChatDraft =
+    pendingFileChatDraft !== null &&
+    activeFileFieldId !== undefined &&
+    pendingFileChatDraft.fileFieldId === activeFileFieldId
+      ? pendingFileChatDraft
+      : null;
+  // A prose draft delivered as a draft opens the thread when it arrives (the
+  // send delivery opens it through the send). Adjusted during render on the
+  // handoff's arrival, like the first-message auto-open below; seeded null so
+  // a draft already waiting at mount opens the thread too.
+  const [openedForFileChatDraft, setOpenedForFileChatDraft] =
+    useState<typeof fileChatDraft>(null);
+  if (fileChatDraft !== openedForFileChatDraft) {
+    setOpenedForFileChatDraft(fileChatDraft);
+    if (
+      fileChatDraft?.handoff.type === "prose" &&
+      fileChatDraft.handoff.delivery === FILE_CHAT_DRAFT_DELIVERY.draft
+    ) {
+      setPanelOpen(true);
+    }
+  }
   // Auto-open the thread panel as soon as the first message lands so users see
   // streaming without having to click the chevron. Adjust-state-during-render on
   // the hasThreadContent transition (not every render) so the user can still
@@ -2112,21 +2136,10 @@ const FileChatOverlayInner = ({
       window.removeEventListener("keydown", handler);
     };
   }, [panelOpen]);
-  // A draft handed over from another surface (a review finding's "Ask in
-  // chat", a passage selected in the document): it lands in this file's
-  // composer, opens the thread, and is acknowledged so a later mount does not
-  // replay it. It replaces whatever was unsent there, as every handoff into a
-  // document's chat does.
-  const pendingFileChatDraft = useInspectorCommandStore(
-    (state) => state.pendingFileChatDraft,
-  );
-  const activeFileFieldId = activeFile?.fileFieldId;
+  // The handoff's editor writes wait for the composer's editor and then
+  // acknowledge the draft.
   useExternalSyncEffect(() => {
-    if (
-      pendingFileChatDraft === null ||
-      activeFileFieldId === undefined ||
-      pendingFileChatDraft.fileFieldId !== activeFileFieldId
-    ) {
+    if (fileChatDraft === null) {
       return undefined;
     }
     // The composer of a chunk that just loaded has no editor yet, and writing
@@ -2134,7 +2147,7 @@ const FileChatOverlayInner = ({
     if (getLiveEditor(editorController.editor) === null) {
       return undefined;
     }
-    const { handoff } = pendingFileChatDraft;
+    const { handoff } = fileChatDraft;
     switch (handoff.type) {
       case "passage": {
         // A selected passage joins what the reader already typed, as a chip,
@@ -2148,7 +2161,6 @@ const FileChatOverlayInner = ({
         switch (handoff.delivery) {
           case FILE_CHAT_DRAFT_DELIVERY.draft: {
             editorController.focus();
-            setPanelOpen(true);
             break;
           }
           case FILE_CHAT_DRAFT_DELIVERY.send: {
@@ -2175,14 +2187,13 @@ const FileChatOverlayInner = ({
     }
     useInspectorCommandStore
       .getState()
-      .clearFileChatDraft(pendingFileChatDraft.sequence);
+      .clearFileChatDraft(fileChatDraft.sequence);
     return undefined;
   }, [
-    activeFileFieldId,
     editorController,
+    fileChatDraft,
     handlePromptSubmit,
     insertPastedTextIntoThread,
-    pendingFileChatDraft,
     threadRef,
   ]);
   const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
@@ -2551,7 +2562,7 @@ const FileChatOverlayInner = ({
   // transcript to the bottom and jumps there, regardless of where the user had
   // scrolled.
   const stickToBottomRef = useRef(true);
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const el = threadScrollRef.current;
     if (!el) {
       return;
@@ -2571,7 +2582,7 @@ const FileChatOverlayInner = ({
   // smoothly instead of doing nothing mid-stream and then jumping at the end
   // (which left the late-loading chips stranded below the fold). Scrolling up
   // unpins; returning near the bottom re-pins, so history reading isn't yanked.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const el = threadScrollRef.current;
     if (!el || !panelOpen) {
       return undefined;
@@ -2620,32 +2631,61 @@ const FileChatOverlayInner = ({
           );
         }
       : null;
+  // Bailed out of the React Compiler (scripts/react-compiler-bailouts.json),
+  // so the provider values are memoized by hand: a new object per render
+  // would re-render every consumer whenever this component renders.
+  const chatMatters = useMemo(
+    () => ({ createDocumentMattersView }),
+    [createDocumentMattersView],
+  );
+  const chatApproval = useMemo(
+    () => ({
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversation:
+        handleAllowInConversationWithFolioAgentCommentExecution,
+      handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
+      handleApprove: handleApproveWithDocxUnlock,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+      handleRetryAfterAuthorNameSet: resendLatestMessage,
+      // Active-file mode adds no approval blocks, so `blockedApprovalTools`
+      // stays absent until a real blocked tool exists.
+    }),
+    [
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversationWithFolioAgentCommentExecution,
+      handleAlwaysAllowWithFolioAgentCommentExecution,
+      handleApproveWithDocxUnlock,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+      resendLatestMessage,
+    ],
+  );
   return (
-    <ChatMattersContext value={{ createDocumentMattersView }}>
-      <ChatApprovalContext
-        value={{
-          activeOrganizationId,
-          approvalIdsAwaitedAtOpen,
-          browserGate,
-          alwaysApprovedTools,
-          conversationApprovedTools,
-          confirmStoredApprovalGrant,
-          handleAllowInConversation:
-            handleAllowInConversationWithFolioAgentCommentExecution,
-          handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
-          handleApprove: handleApproveWithDocxUnlock,
-          handleDeny,
-          handleApproveForRun,
-          handleRequestSecret,
-          continueRequestSecret,
-          handleConnectConnector,
-          continueConnectConnector,
-          resolveSecretTarget,
-          secretAvailabilityKey,
-          handleRetryAfterAuthorNameSet: resendLatestMessage,
-          blockedApprovalTools,
-        }}
-      >
+    <ChatMattersContext value={chatMatters}>
+      <ChatApprovalContext value={chatApproval}>
         {panelOpen && hasThreadContent && (
           <ChatThreadCard
             onCollapse={() => setPanelOpen(false)}
@@ -2757,7 +2797,7 @@ const FileChatOverlayInner = ({
           onNewThread={newThreadAction}
           reservedCommands={{ hasPersistedThread: hasMessages }}
           skillChat={{
-            contextMatterIds: contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
+            contextMatterIds,
             ...fileOverlaySkillDocument({
               activeFile,
               editMode: activeDocxEditModeState,
@@ -2834,15 +2874,13 @@ const FileChatOverlayInner = ({
               leadingContext={
                 // The matter control is a real picker on every surface, so
                 // the user can widen or narrow the file chat's context just
-                // like the main chat and inspector. Seeded (below) with the
-                // file's own matter by default. The opaque composer pill keeps
+                // like the main chat and inspector. It shows the file's own
+                // matter by default. The opaque composer pill keeps
                 // the input legible without adding chrome behind this row.
-                contextMatterIds !== null ? (
-                  <ChatMatterPicker
-                    matterIds={contextMatterIds}
-                    onChange={setContextMatterIds}
-                  />
-                ) : undefined
+                <ChatMatterPicker
+                  matterIds={contextMatterIds}
+                  onChange={setContextMatterIds}
+                />
               }
               endExtras={
                 <DocxEditSafetyChip safety={docxEditSafety ?? "safe"} />

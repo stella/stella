@@ -324,7 +324,8 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Preserve GitHub API tooling across source checkouts
+      - &preserve_gh_api_tooling
+        name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
@@ -1134,7 +1135,8 @@ jobs:
           echo "::error::Planner dependencies did not install; heavy and thin-queue job derivation needs them."
           exit 1
 
-      - name: Upload failed Bun install logs
+      - &upload_failed_bun_install_logs
+        name: Upload failed Bun install logs
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1800,14 +1802,16 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: ${{ needs.ci-plan.outputs.docs_checks_required == 'true' }}
 
-      - name: Setup Bun
+      - &setup_bun_package_json
+        name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
       # Parser versions must advance whenever an adapter's parser inputs
       # change. The guard needs no dependency installation.
-      - name: Configure flaky-test quarantine
+      - &configure_flaky_quarantine
+        name: Configure flaky-test quarantine
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
@@ -2036,13 +2040,10 @@ jobs:
         id: image
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
-        run: >-
-          bun .workflow-tooling/scripts/ci-service-images.ts --build packages/agent-engine/docker/sandbox.Dockerfile --
-          --file packages/agent-engine/docker/sandbox.Dockerfile
-          --tag "$AGENT_ENGINE_DOCKER_IMAGE"
-          packages/agent-engine/docker
+        run: bash scripts/ci/build-sandbox-image.sh
 
-      - name: Log out of GitHub Container Registry
+      - &logout_ghcr
+        name: Log out of GitHub Container Registry
         if: always()
         run: docker logout ghcr.io
 
@@ -2089,22 +2090,12 @@ jobs:
       - name: Assert provider left no sandbox containers
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: assert-cleanup
-        run: |
-          mapfile -t container_ids < <(
-            docker ps --all --no-trunc --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
-          )
-          if [[ "${#container_ids[@]}" -ne 1 || "${container_ids[0]}" != "$(docker inspect --format '{{.Id}}' "$NETWORK_CANARY_CONTAINER")" ]]; then
-            echo "::error title=Sandbox cleanup failed::Unexpected sandbox image container survived the integration suite."
-            docker ps --all --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
-            exit 1
-          fi
+        run: bash scripts/ci/assert-no-sandbox-containers.sh
 
       - name: Cleanup Docker resources
         id: cleanup
         if: always() && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
-        run: |
-          docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
-          docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
+        run: bash scripts/ci/cleanup-docker-resources.sh
 
       - name: Check image dependency trees and production runner
         id: api-deps
@@ -2169,14 +2160,7 @@ jobs:
           )
           echo ::endgroup::
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_failed_bun_install_logs
 
       - *merge_group_cancel
 
@@ -2504,7 +2488,8 @@ jobs:
       CI_CANCELLATION_CONTEXT: Queue failure cancellation depends on workflow outcomes.
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - name: Checkout
+      - &checks_checkout
+        name: Checkout
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2559,7 +2544,8 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Prepare environment
+      - &checks_prepare_env
+        name: Prepare environment
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2576,7 +2562,8 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Download generated sources
+      - &checks_download_generated_sources
+        name: Download generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -2587,7 +2574,8 @@ jobs:
           bash scripts/download-run-artifact.sh
           --name "$ARTIFACT_NAME"
           --path "$RUNNER_TEMP/generated-sources"
-      - name: Restore generated sources
+      - &checks_restore_generated_sources
+        name: Restore generated sources
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2695,17 +2683,7 @@ jobs:
       CI_CANCELLATION_CONTEXT: Queue failure cancellation depends on workflow outcomes.
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - name: Checkout
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          submodules: true
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checks_checkout
 
       - *checks_setup_bun
 
@@ -2913,23 +2891,8 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Download generated sources
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-          GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-        run: >-
-          bash scripts/download-run-artifact.sh
-          --name "$ARTIFACT_NAME"
-          --path "$RUNNER_TEMP/generated-sources"
-      - name: Restore generated sources
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+      - *checks_download_generated_sources
+      - *checks_restore_generated_sources
 
       - name: Check script test declarations
         env:
@@ -2973,22 +2936,7 @@ jobs:
           git checkout -- apps/web/e2e/network-baseline.json
           rm -f apps/web/e2e/.network-baseline-*
 
-      - name: Prepare environment
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # `cp`, not `mv`: renaming the tracked .env.example dirties the
-        # working tree in apps/api and apps/web, and `turbo --affected`
-        # counts working-tree changes — so every PR (even web-only ones)
-        # ran the api AND web test suites concurrently and could OOM the
-        # runner (exit 137). The copy leaves the tree clean; .env is
-        # gitignored and invisible to affected-detection.
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-          cd ../web
-          cp .env.example .env
+      - *checks_prepare_env
 
       - name: Run repository checks
         id: check_pool
@@ -3150,9 +3098,7 @@ jobs:
             echo "TURBO_SCM_BASE=$COMPARISON_BASE" >> "$GITHUB_ENV"
           fi
 
-      - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: ./.github/actions/flaky-test-quarantine
+      - *configure_flaky_quarantine
 
       - name: Test .claude/mcp
         # Outside the workspace, so no shard filter selects it: one shard owns
@@ -3229,9 +3175,7 @@ jobs:
         timeout-minutes: 5
         env:
           STELLA_BROWSER_E2E_EXECUTABLE: /opt/google/chrome/chrome
-        run: |
-          command -v dbus-run-session
-          dbus-run-session -- xvfb-run -a bun test packages/agent-engine/src/sidecar/browser/hosts.e2e.test.ts
+        run: bash scripts/ci/test-browser-host.sh
 
       - name: Upload failed API or rest test output
         if: failure() && steps.test-api-or-rest.outcome == 'failure'
@@ -3591,9 +3535,7 @@ jobs:
           browsers: chromium webkit
           dependency-mode: preinstalled
 
-      - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: ./.github/actions/flaky-test-quarantine
+      - *configure_flaky_quarantine
 
       - name: Test UI browser interactions
         # On a pull request the UI leg runs only the changed component specs.
@@ -3711,10 +3653,7 @@ jobs:
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - &code_quality_turbo_cache
         name: Turbo remote cache
@@ -3737,7 +3676,8 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Download generated sources
+      - &download_generated_sources_plain
+        name: Download generated sources
         env:
           GH_TOKEN: ${{ github.token }}
           ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
@@ -3895,6 +3835,10 @@ jobs:
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
     permissions:
       contents: read
       actions: write
@@ -3909,10 +3853,7 @@ jobs:
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - *code_quality_turbo_cache
 
@@ -3925,14 +3866,7 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Download generated sources
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-        run: >-
-          bash scripts/download-run-artifact.sh
-          --name "$ARTIFACT_NAME"
-          --path "$RUNNER_TEMP/generated-sources"
+      - *download_generated_sources_plain
       - name: Restore generated sources
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
@@ -3971,6 +3905,7 @@ jobs:
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
           CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
+          CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
         run: |
           needs_file=$(mktemp)
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
@@ -4106,15 +4041,7 @@ jobs:
       - name: Verify planned Postgres test durations
         env:
           EXPECTED_HASH: ${{ needs.ci-plan.outputs.postgres_test_durations_hash }}
-        run: |
-          file="$RUNNER_TEMP/postgres-test-durations.json"
-          if [[ "$EXPECTED_HASH" == missing ]]; then
-            [[ ! -f "$file" ]] || { echo "Postgres test duration plan unexpectedly exists" >&2; exit 1; }
-          else
-            [[ -f "$file" ]] || { echo "Postgres test duration plan is missing" >&2; exit 1; }
-            actual_hash=$(sha256sum "$file" | cut -d ' ' -f 1)
-            [[ "$actual_hash" == "$EXPECTED_HASH" ]] || { echo "Postgres test duration plan hash mismatch" >&2; exit 1; }
-          fi
+        run: bash scripts/ci/verify-postgres-test-durations.sh
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -4130,7 +4057,8 @@ jobs:
           STELLA_CI_INSTALL_RESTORE: uncached
           STELLA_CI_INSTALL_KEY: filtered-install
 
-      - name: Configure test Postgres parity
+      - &configure_test_postgres_parity
+        name: Configure test Postgres parity
         run: |
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
@@ -4138,7 +4066,8 @@ jobs:
         if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
         run: bash scripts/configure-test-postgres.sh "${{ job.services.dev_seed_postgres.id }}" stella_owner
 
-      - name: Upload failed Bun install logs
+      - &upload_failed_bun_install_logs_matrix
+        name: Upload failed Bun install logs
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -4162,11 +4091,7 @@ jobs:
           RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
         # The restricted owner and the bucket a local stack has, then the
         # committed migrations; `db:push` would skip the policies they create.
-        run: |
-          curl --fail --silent --show-error --aws-sigv4 "aws:amz:us-east-1:s3" \
-            --user "$RUSTFS_ACCESS_KEY:$RUSTFS_SECRET_KEY" \
-            --request PUT http://127.0.0.1:9000/stella
-          (cd apps/api && bun run src/db/migrate.ts)
+        run: bash scripts/ci/prepare-dev-seed-db.sh
 
       - name: Apply the local dev seed
         if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
@@ -4199,9 +4124,7 @@ jobs:
         # Keep cluster defaults for the fresh-database maintenance assertions.
         run: bun scripts/postgres-test-maintenance.ts
 
-      - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: ./.github/actions/flaky-test-quarantine
+      - *configure_flaky_quarantine
 
       - name: Verify shared worker Postgres history and cleanup
         if: ${{ success() && steps.checkout.outcome == 'success' && matrix.shard == 1 }}
@@ -4318,10 +4241,7 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -4331,9 +4251,7 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+      - *configure_test_postgres_parity
 
       - name: Apply migrations to service Postgres
         if: needs.ci-plan.outputs.corpus_suites_required == 'true'
@@ -4362,9 +4280,7 @@ jobs:
 
       # The statute recall floor is raise-only against the target branch; the
       # shallow checkout holds only HEAD, so fetch exactly the base commit.
-      - name: Log out of GitHub Container Registry
-        if: always()
-        run: docker logout ghcr.io
+      - *logout_ghcr
 
       - name: Select statute recall base from the target branch
         timeout-minutes: 5
@@ -4402,9 +4318,7 @@ jobs:
 
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
-      - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: ./.github/actions/flaky-test-quarantine
+      - *configure_flaky_quarantine
 
       - name: Run Valkey-gated API suites
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}
@@ -4463,9 +4377,7 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: ./.github/actions/flaky-test-quarantine
+      - *configure_flaky_quarantine
 
       - name: Test migration safety rules and historical findings
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
@@ -4567,26 +4479,12 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # `push --explain` exits with "[i] No changes detected" when the
         # migrated schema already matches schema.ts. Any pending diff fails CI.
-        run: |
-          OUT=$(bun --bun drizzle-kit push --explain 2>&1)
-          echo "$OUT"
-          grep -q "No changes detected" <<<"$OUT" || {
-            echo "::error::Migrated schema does not match schema.ts. Either commit a generated migration that closes the gap, or fix the migration files."
-            exit 1
-          }
+        run: bash ../../scripts/ci/verify-schema-parity.sh
 
       - name: Verify __drizzle_migrations recorded all migrations
         env:
           PGPASSWORD: stella
-        run: |
-          set -euo pipefail
-          EXPECTED=$(find apps/api/drizzle -mindepth 1 -maxdepth 1 -type d -name '20*' | wc -l | tr -d ' ')
-          APPLIED=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations")
-          echo "Expected $EXPECTED migrations, drizzle.__drizzle_migrations has $APPLIED"
-          [ "$EXPECTED" = "$APPLIED" ] || {
-            echo "::error::Migration count mismatch: $APPLIED applied, $EXPECTED on disk."
-            exit 1
-          }
+        run: bash scripts/ci/verify-drizzle-migrations-recorded.sh
 
       - name: Rehearse interrupted Better Auth constraints migration
         env:
@@ -4715,10 +4613,7 @@ jobs:
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -4732,9 +4627,7 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+      - *configure_test_postgres_parity
 
       # The base image is pulled here, in workflow-owned steps, and the
       # registry credential is discarded before any checked-out script runs:
@@ -4818,12 +4711,10 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
-      - name: Install dependencies
+      - &ci_install_frozen_no_scripts
+        name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
@@ -4883,24 +4774,13 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Preserve GitHub API tooling across source checkouts
-        run: |
-          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
-          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - *preserve_gh_api_tooling
 
       - *full_checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *ci_install_frozen_no_scripts
 
       - name: Prepare environment
         run: cp apps/api/.env.example apps/api/.env
@@ -4960,10 +4840,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -5000,9 +4877,7 @@ jobs:
 
       - name: Startup bundle gates
         # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
-        run: |
-          bun scripts/bundle-baseline.ts --self-test
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+        run: bash scripts/ci/web-startup-bundle-gates.sh
 
       - name: Bundle duplicate content guard
         # Blocking: a chunk that repeats a large block of identical content
@@ -5020,41 +4895,9 @@ jobs:
         # runner image's stricter boundary.
         env:
           NPM_TOKEN: ""
-        run: |
-          set -euo pipefail
-          # Reproduce apps/web/Dockerfile's deps-prod stage exactly. Wipe
-          # node_modules first (a plain --production reinstall only skips ADDING
-          # devDeps; it does not prune ones the build install already placed),
-          # and scope to @stll/web — an unfiltered install pulls other apps' deps
-          # and could mask a package the web runtime reaches but @stll/web never
-          # declared. dist/ and .env are untouched.
-          rm -rf node_modules
-          bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/web-production.log" --filter @stll/web --production --frozen-lockfile --ignore-scripts
-          cd apps/web
-          PORT=3199 HOST=127.0.0.1 bun dist/runtime.js &
-          server_pid=$!
-          ready=
-          for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          kill "$server_pid" 2>/dev/null || true
-          if [[ "$ready" != "1" ]]; then
-            echo "web SSR runtime failed to boot under --production deps" >&2
-            exit 1
-          fi
+        run: bash scripts/ci/web-prod-deps-boot-smoke.sh
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_failed_bun_install_logs
 
       - *merge_group_cancel
 
@@ -5129,28 +4972,10 @@ jobs:
           --tag stella-web-runner:ci
           .
 
-      - name: Log out of GitHub Container Registry
-        if: always()
-        run: docker logout ghcr.io
+      - *logout_ghcr
 
       - name: Boot runner container
-        run: |
-          set -euo pipefail
-          docker run --detach --name web-runner \
-            --publish 127.0.0.1:3199:3002 stella-web-runner:ci
-          ready=
-          for _ in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          docker logs web-runner
-          if [[ "$ready" != "1" ]]; then
-            echo "web runner image failed to serve /health" >&2
-            exit 1
-          fi
+        run: bash scripts/ci/boot-web-runner-container.sh
 
       - name: Cleanup runner container
         if: always()
@@ -5184,17 +5009,9 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *ci_install_frozen_no_scripts
 
       - name: Validate Expo dependency graph
         run: bun --filter @stll/mobile doctor
@@ -5230,10 +5047,7 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -5276,17 +5090,9 @@ jobs:
       contents: read
     steps:
       - *checkout_input_sha
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *ci_install_frozen_no_scripts
       - name: Prepare environment
         run: cp apps/web/.env.example apps/web/.env
       - name: Build web
@@ -5337,17 +5143,9 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *ci_install_frozen_no_scripts
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
@@ -5385,7 +5183,7 @@ jobs:
       - name: Check route network baseline
         if: ${{ matrix.mode == 'network-baseline' && !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 8
+        timeout-minutes: 14
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -5396,8 +5194,7 @@ jobs:
 
       - name: Explain network baseline failure
         if: matrix.mode == 'network-baseline' && failure() && steps.network-baseline.outcome == 'failure'
-        run: |
-          echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
+        run: bash scripts/ci/explain-network-baseline-failure.sh
 
       - name: Configure flaky-test quarantine for phone layouts
         if: matrix.mode == 'phone-layouts' && !cancelled() && steps.e2e-stack.outcome == 'success'
@@ -5562,7 +5359,7 @@ jobs:
 
       - name: Check route network baseline
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 8
+        timeout-minutes: 14
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success' && matrix.shard == 'network-baseline') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -5704,17 +5501,9 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *ci_install_frozen_no_scripts
 
       - *ghcr_browser_image_login
 
@@ -5724,9 +5513,7 @@ jobs:
         with:
           browsers: firefox webkit
 
-      - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: ./.github/actions/flaky-test-quarantine
+      - *configure_flaky_quarantine
 
       - name: Test browser stack redaction
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
@@ -5770,17 +5557,9 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *ci_install_frozen_no_scripts
 
       - name: Prepare environment
         run: |
@@ -5828,31 +5607,11 @@ jobs:
 
       - name: Wait for web dev server
         if: steps.e2e-stack.outcome == 'success'
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
-              echo "Web up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Web never came up"
-          tail -200 /tmp/web.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-web-dev-server.sh
 
       - name: Wait for collaboration server
         if: steps.e2e-stack.outcome == 'success'
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3002/readyz > /dev/null 2>&1; then
-              echo "Collaboration server up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Collaboration server never came up"
-          tail -200 /tmp/collab.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-collab-server.sh
 
       - *ghcr_browser_image_login
 
@@ -5861,9 +5620,7 @@ jobs:
         if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
-      - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: ./.github/actions/flaky-test-quarantine
+      - *configure_flaky_quarantine
 
       - name: Run Vite dependency canary
         timeout-minutes: 3
@@ -5905,13 +5662,7 @@ jobs:
       # restart would make the apparent canary result nondeterministic.
       - name: Guard against mid-test Vite re-optimize
         if: always() && steps.e2e-stack.outcome == 'success'
-        run: |
-          if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
-            echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
-            grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
-            exit 1
-          fi
-          echo "No mid-session dep re-optimize detected."
+        run: bash scripts/ci/guard-vite-reoptimize.sh
 
       - name: Stop web dev server
         if: always() && steps.e2e-stack.outcome == 'success'
@@ -5993,10 +5744,7 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -6011,23 +5759,10 @@ jobs:
         run: bun --filter @stll/landing build
 
       - name: Start landing preview server
-        run: |
-          cd apps/landing
-          nohup bun --bun astro preview --port 4321 > /tmp/landing.log 2>&1 &
-          echo $! > /tmp/landing.pid
+        run: bash scripts/ci/start-landing-preview.sh
 
       - name: Wait for landing
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:4321 > /dev/null 2>&1; then
-              echo "Landing up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Landing preview never came up"
-          tail -200 /tmp/landing.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-landing.sh
 
       - *ghcr_browser_image_login
 
@@ -6049,11 +5784,7 @@ jobs:
 
       - name: Stop landing preview server
         if: always()
-        run: |
-          if [[ -f /tmp/landing.pid ]]; then
-            kill "$(cat /tmp/landing.pid)" || true
-            rm -f /tmp/landing.pid
-          fi
+        run: bash scripts/ci/stop-landing-preview.sh
 
       - name: Upload failure diagnostics
         if: failure()
@@ -6163,10 +5894,7 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -6259,14 +5987,7 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: bun-install-${{ github.job }}-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_failed_bun_install_logs_matrix
 
       - name: Pull API base images
         env:
@@ -6289,13 +6010,9 @@ jobs:
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
-        run: |
-          bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
-          bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
+        run: bash scripts/ci/pull-api-smoke-images.sh
 
-      - name: Log out of GitHub Container Registry
-        if: always()
-        run: docker logout ghcr.io
+      - *logout_ghcr
 
       - name: Rehearse migrations and boot packaged entrypoints
         timeout-minutes: 2
@@ -6370,9 +6087,7 @@ jobs:
           cache-from: type=gha,scope=legal-atlas-runner
           cache-to: type=gha,mode=max,scope=legal-atlas-runner
 
-      - name: Log out of GitHub Container Registry
-        if: always()
-        run: docker logout ghcr.io
+      - *logout_ghcr
 
       - *merge_group_cancel
 
@@ -6441,29 +6156,7 @@ jobs:
         id: tools
         continue-on-error: true
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $tools = @{}
-          $tools.bun = (& bun --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Bun version unavailable" }
-          $tools.rust = (& rustc -vV) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Rust version unavailable" }
-          $tools.cargo = (& cargo -V) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Cargo version unavailable" }
-          $tools.node = (& node --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Node version unavailable" }
-          $tools.tauri = (& bun run --cwd apps/desktop tauri --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Tauri version unavailable" }
-          $tools.image = $env:ImageVersion
-          $tools.os = $env:ImageOS
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json) | Select-Object -First 1
-          if (-not $vs) { throw "Visual Studio version unavailable" }
-          $tools.visualStudio = $vs.installationVersion
-          $tools.msvc = (Get-ChildItem "$($vs.installationPath)\VC\Tools\MSVC" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
-          $tools.sdk = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Lib\10.*" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
-          if ($tools.Values | Where-Object { [string]::IsNullOrWhiteSpace($_) }) { throw "Incomplete Windows toolchain" }
-          $tools | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-tools.json" -Encoding utf8
+        run: ./scripts/ci/resolve-windows-toolchain.ps1
 
       - name: Look up successful queue dry-run receipt
         id: receipt
@@ -6481,6 +6174,19 @@ jobs:
           VERSION: 0.0.0
           CHANNEL: prod
         run: bun scripts/desktop-release-step.ts stamp
+
+      - name: Cache Rust dependencies and build artifacts
+        if: github.event_name == 'merge_group' || github.event_name == 'pull_request' || steps.receipt.outputs.reused != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
+            apps/desktop/src-tauri/target
+          key: ${{ runner.os }}-desktop-rust-${{ github.job }}-${{ matrix.target }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-desktop-rust-${{ github.job }}-${{ matrix.target }}-
 
       # The build action compiles offline; the locked crates download here,
       # retried as a unit. Both targets: an ARM64 build's scripts run on x64.
@@ -6536,10 +6242,7 @@ jobs:
     steps:
       - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
+      - *setup_bun_package_json
 
       - name: Install scripts workspace dependencies
         uses: $/.github/actions/ci-install
@@ -6553,23 +6256,14 @@ jobs:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_failed_bun_install_logs
 
-      - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: ./.github/actions/flaky-test-quarantine
+      - *configure_flaky_quarantine
 
       - name: Test dev runner and process tree cleanup
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         shell: pwsh
-        run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
+        run: ./scripts/ci/test-windows-scripts.ps1
 
       - *merge_group_cancel
 
@@ -6601,14 +6295,7 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_failed_bun_install_logs
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -6640,11 +6327,7 @@ jobs:
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'
-        run: |
-          if [[ -d "$RUNNER_TEMP/scan-engine-wasm" ]]; then
-            (cd "$RUNNER_TEMP/scan-engine-wasm" && sha256sum ./*) > "$RUNNER_TEMP/scan-engine-wasm.sha256"
-            rustc -vV > "$RUNNER_TEMP/scan-engine-wasm.toolchain"
-          fi
+        run: bash scripts/ci/record-wasm-checksums.sh
 
       - name: Upload fresh WebAssembly on mismatch
         if: failure() && steps.wasm-check.outcome == 'failure'
@@ -6672,10 +6355,10 @@ jobs:
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
+        run: bash scripts/ci/fetch-wasm-license-inputs.sh
 
       - name: License audit
-        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
+        run: bash scripts/ci/wasm-license-audit.sh
 
       - name: Save Rust build cache
         if: success()
@@ -6795,33 +6478,7 @@ jobs:
       - name: Install signing test certificates
         if: matrix.os == 'windows'
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $prefix = $env:STELLA_SIGNING_FIXTURE_PREFIX
-          $store = 'Cert:\CurrentUser\My'
-          $documents = '2.5.29.37={text}1.3.6.1.5.5.7.3.4'
-          $loginOnly = '2.5.29.37={text}1.3.6.1.5.5.7.3.2'
-          $common = @{
-            CertStoreLocation = $store
-            Type = 'Custom'
-            Provider = 'Microsoft Software Key Storage Provider'
-            KeyExportPolicy = 'NonExportable'
-            NotAfter = (Get-Date).AddDays(2)
-          }
-          $rsa = @{ KeyAlgorithm = 'RSA'; KeyLength = 2048 }
-          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-rsa" -KeyUsage DigitalSignature, NonRepudiation -TextExtension @($documents) | Out-Null
-          New-SelfSignedCertificate @common -Subject "CN=$prefix-ec" -KeyAlgorithm ECDSA_nistP256 -CurveExport CurveName -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
-          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-client-auth" -KeyUsage DigitalSignature -TextExtension @($loginOnly) | Out-Null
-          $expired = $common.Clone()
-          $expired.NotBefore = (Get-Date).AddDays(-10)
-          $expired.NotAfter = (Get-Date).AddDays(-1)
-          New-SelfSignedCertificate @expired @rsa -Subject "CN=$prefix-expired" -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
-          # Keep only the public half of this one: a certificate whose key is gone.
-          $keyed = New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-no-key" -KeyUsage DigitalSignature -TextExtension @($documents)
-          $public = Join-Path $env:RUNNER_TEMP "$prefix-no-key.cer"
-          Export-Certificate -Cert $keyed -FilePath $public | Out-Null
-          Remove-Item -Path $keyed.PSPath -DeleteKey
-          Import-Certificate -FilePath $public -CertStoreLocation $store | Out-Null
+        run: ./scripts/ci/install-signing-test-certs.ps1
 
       - name: Test signer against the certificate store
         if: matrix.os == 'windows'
@@ -6831,12 +6488,7 @@ jobs:
       - name: Remove signing test certificates
         if: always() && matrix.os == 'windows'
         shell: pwsh
-        run: |
-          Get-ChildItem Cert:\CurrentUser\My |
-            Where-Object Subject -like "CN=$env:STELLA_SIGNING_FIXTURE_PREFIX-*" |
-            ForEach-Object {
-              if ($_.HasPrivateKey) { Remove-Item -Path $_.PSPath -DeleteKey } else { Remove-Item -Path $_.PSPath }
-            }
+        run: ./scripts/ci/remove-signing-test-certs.ps1
 
       - name: Setup Bun for the desktop transport smoke
         if: matrix.os == 'macos'
@@ -6856,19 +6508,7 @@ jobs:
       - name: Smoke native desktop transport against the local API contract
         if: matrix.os == 'macos'
         shell: bash
-        run: |
-          url_file="$RUNNER_TEMP/desktop-smoke-url"
-          bun apps/api/scripts/desktop-registry-transport-smoke-server.ts "$url_file" &
-          server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
-          for _ in {1..100}; do
-            test -s "$url_file" && break
-            kill -0 "$server_pid" 2>/dev/null || { wait "$server_pid"; exit 1; }
-            sleep 0.1
-          done
-          test -s "$url_file"
-          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --frozen registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
-          wait "$server_pid"
+        run: bash scripts/ci/smoke-desktop-transport.sh "${{ matrix.target }}"
 
       - name: Install cargo-deny
         timeout-minutes: 10
@@ -6889,7 +6529,7 @@ jobs:
 
       - name: License audit
         if: matrix.os == 'macos'
-        run: cargo deny --offline --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph bans licenses sources
+        run: bash scripts/ci/desktop-license-audit.sh
 
       - name: Docs
         shell: pwsh
@@ -7384,10 +7024,7 @@ jobs:
             /package.json
           sparse-checkout-cone-mode: false
 
-      - name: Preserve GitHub API tooling across source checkouts
-        run: |
-          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
-          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - *preserve_gh_api_tooling
 
       # Job results and plan outputs reach the outcome step as files. One
       # environment value above Linux's 128 KiB limit stops a step before it

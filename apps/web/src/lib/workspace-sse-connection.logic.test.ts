@@ -12,6 +12,12 @@ import type {
   WorkspaceStreamHandlers,
 } from "@/lib/workspace-sse-connection.logic";
 
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
+
 type FakeSource = {
   handlers: WorkspaceStreamHandlers;
   /** The browser gave up retrying (readyState CLOSED). */
@@ -87,7 +93,7 @@ const createHarness = (
     const source = current();
     source.givenUp = true;
     source.handlers.onError();
-    await Bun.sleep(0);
+    await flushMicrotasks();
   };
 
   /** Fire the pending reconnect timer, as the clock would. */
@@ -189,7 +195,7 @@ describe("workspace stream reconnects", () => {
     harness.current().handlers.onOpen();
 
     harness.current().handlers.onError();
-    await Bun.sleep(0);
+    await flushMicrotasks();
 
     expect(harness.calls.probes).toBe(0);
     expect(harness.reconnects).toEqual([]);
@@ -230,7 +236,7 @@ describe("workspace stream reconnects", () => {
     source.givenUp = true;
     source.handlers.onError();
     harness.dispose();
-    await Bun.sleep(0);
+    await flushMicrotasks();
 
     expect(harness.calls.accessEnded).toBe(0);
     expect(harness.reconnects).toEqual([]);

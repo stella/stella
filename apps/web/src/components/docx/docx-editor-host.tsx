@@ -15,9 +15,8 @@ import type { ReactNode } from "react";
 
 import { useShallow } from "zustand/shallow";
 
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
-
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 
 import {
   nextDocxEditorSlotSequence,

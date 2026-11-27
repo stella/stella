@@ -1,0 +1,11 @@
+{
+  "id": "storm-watch-coverage",
+  "type": "changed-lines",
+  "expiresAt": "2026-12-03T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--cwd=apps/web",
+    "test",
+    "e2e/unit/storm-watch-coverage.test.ts"
+  ]
+}

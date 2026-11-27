@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import type { DocxCompatibility } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
@@ -12,7 +13,6 @@ import type {
   FileTab,
   InspectorTab,
 } from "@/components/inspector/inspector-tabs-store";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 
@@ -101,11 +101,16 @@ export const useDocxTabEditSession = ({
     if (!compatibility) {
       return;
     }
-    detached(
-      handleStartDocxEdit(target.id),
-      "use-docx-tab-edit-session.start-docx-edit",
-    );
+    // The request is consumed here, once; the edit it asks for starts as
+    // the request's own callback after this commit, like a promise
+    // continuation, so its state write does not run inside the effect.
     clearDocxEditRequest();
+    queueMicrotask(() => {
+      detached(
+        handleStartDocxEdit(target.id),
+        "use-docx-tab-edit-session.start-docx-edit",
+      );
+    });
   }, [
     pendingDocxEditTabId,
     tabs,

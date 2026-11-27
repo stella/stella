@@ -19,7 +19,7 @@ const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DesktopAppearanceProvider } =
   await import("../src/shared/use-desktop-appearance");
 const { default: App } = await import("../src/mainview/App");
-const { SETTINGS_PAGES } = await import("../src/mainview/settings-pages");
+const { SIDEBAR_PAGES } = await import("../src/mainview/settings-pages");
 
 afterEach(async () => {
   await act(async () => {
@@ -166,7 +166,7 @@ test("the sidebar names every page in order and marks only the open one as curre
   );
   // Signing is a macOS setting; this computer reads as another platform.
   expect(names).toEqual(
-    SETTINGS_PAGES.filter((page) => page !== "signing").map(
+    SIDEBAR_PAGES.filter((page) => page !== "signing").map(
       (page) => pages[page],
     ),
   );
@@ -186,6 +186,28 @@ test("the sidebar names every page in order and marks only the open one as curre
     pages.permissions,
   );
   expect(window.location.hash).toBe("#permissions");
+});
+
+test("the account above the pages opens General, where the account is", async () => {
+  const { container, entry, getByRole, nav } = await renderApp({});
+
+  await act(async () => {
+    fireEvent.click(entry(pages.about));
+  });
+  expect(currentEntries(nav)).toEqual([{ current: "page", name: pages.about }]);
+
+  const account = container.querySelector<HTMLButtonElement>(
+    "button[data-sidebar-account]",
+  );
+  expect(account).not.toBeNull();
+  await act(async () => {
+    account?.click();
+  });
+
+  expect(currentEntries(nav)).toEqual([
+    { current: "page", name: pages.general },
+  ]);
+  expect(getByRole("heading", { level: 1 }).textContent).toBe(pages.general);
 });
 
 test("every page is reachable from the keyboard", async () => {

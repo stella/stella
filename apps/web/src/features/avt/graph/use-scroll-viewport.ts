@@ -1,4 +1,6 @@
-import * as React from "react";
+import { useState } from "react";
+
+import { useObservedValue } from "@stll/ui/effects-dom";
 
 /** The visible band of a scrolling element: how far it is scrolled, and its
  *  size. Zero until it is measured, and where sizes cannot be observed. */
@@ -12,37 +14,32 @@ const UNMEASURED: ScrollViewport = { top: 0, width: 0, height: 0 };
  * `viewportRef`).
  */
 export const useScrollViewport = () => {
-  const [viewport, setViewport] = React.useState<ScrollViewport>(UNMEASURED);
-  const ref = (node: HTMLDivElement | null) => {
-    if (node === null) {
-      return undefined;
-    }
-    // An unchanged band keeps the same state, so an observer that fires on
-    // every layout (as the canvas redraws) cannot feed itself.
-    const measure = () => {
-      const next = {
-        top: node.scrollTop,
-        width: node.clientWidth,
-        height: node.clientHeight,
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  // An unchanged band keeps the same value, so an observer that fires on
+  // every layout (as the canvas redraws) cannot feed itself.
+  const viewport = useObservedValue<HTMLDivElement, ScrollViewport>(
+    node,
+    (observed, emit) => {
+      const measure = () => {
+        emit({
+          top: observed.scrollTop,
+          width: observed.clientWidth,
+          height: observed.clientHeight,
+        });
       };
-      setViewport((current) =>
-        current.top === next.top &&
-        current.width === next.width &&
-        current.height === next.height
-          ? current
-          : next,
-      );
-    };
-    node.addEventListener("scroll", measure, { passive: true });
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(measure);
-    observer?.observe(node);
-    return () => {
-      node.removeEventListener("scroll", measure);
-      observer?.disconnect();
-    };
-  };
-  return [ref, viewport] as const;
+      observed.addEventListener("scroll", measure, { passive: true });
+      const observer =
+        typeof ResizeObserver === "undefined"
+          ? null
+          : new ResizeObserver(measure);
+      observer?.observe(observed);
+      return () => {
+        observed.removeEventListener("scroll", measure);
+        observer?.disconnect();
+      };
+    },
+    [],
+    UNMEASURED,
+  );
+  return [setNode, viewport] as const;
 };

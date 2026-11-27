@@ -1,4 +1,4 @@
-import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -58,6 +58,12 @@ import type {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { Loader } from "@stll/ui/loader";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -84,6 +90,7 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
+  projectCanonicalChatUIMessages,
   selectUnresolvedFolioAgentDocToolCallParts,
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/components/chat/chat-ui-tools";
@@ -107,8 +114,6 @@ import {
   chatThreadOptions,
   templateChatThreadOptions,
 } from "@/features/chat/queries";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -335,21 +340,18 @@ const TemplateStudioChatInner = ({
       return undefined;
     }
     ensureView();
+    // Every check runs from a timer, the first one at once: a view that
+    // became ready after the render is picked up on the next task. Once
+    // ready, this effect's cleanup stops the timers.
     const probe = () => {
       if (editorRef.current?.createAIEditSnapshot()) {
         setEditorReady(true);
-        return true;
       }
-      return false;
     };
-    if (probe()) {
-      return undefined;
-    }
+    const first = window.setTimeout(probe, 0);
     const id = window.setInterval(() => {
       ensureView();
-      if (probe()) {
-        window.clearInterval(id);
-      }
+      probe();
     }, 80);
     // Never gate the input forever; `canSubmitNow` re-checks the
     // snapshot at submit time anyway.
@@ -358,6 +360,7 @@ const TemplateStudioChatInner = ({
       setEditorReady(true);
     }, 3000);
     return () => {
+      window.clearTimeout(first);
       window.clearInterval(id);
       window.clearTimeout(fallback);
     };
@@ -397,19 +400,12 @@ const TemplateStudioChatInner = ({
   // The page queues bilingual-mirror proposals through the store; this
   // surface places them because it is the Studio's only suggestion
   // decoration writer (a second writer would clobber the decorations).
-  const pendingMirrorRequests = useTemplateStudioStore(
-    (s) => s.pendingMirrorRequests,
-  );
   const clearMirrorRequests = useTemplateStudioStore(
     (s) => s.clearMirrorRequests,
   );
-  useExternalSyncEffect(() => {
+  const placeMirrorRequests = useLatestCallback((view: EditorView) => {
+    const { pendingMirrorRequests } = useTemplateStudioStore.getState();
     if (pendingMirrorRequests.length === 0) {
-      return;
-    }
-    const view = getView() ?? editorView;
-    if (!view) {
-      // Keep the queue; the effect re-runs once the live view arrives.
       return;
     }
     const specs = pendingMirrorRequests.map(({ spec, onAccepted }) => ({
@@ -429,13 +425,40 @@ const TemplateStudioChatInner = ({
       setSuggestions((prev) => [...prev, ...created]);
     }
     clearMirrorRequests();
-  }, [
-    pendingMirrorRequests,
-    editorView,
-    getView,
-    clearMirrorRequests,
-    mirrorAcceptHandlers,
-  ]);
+  });
+  // A proposal queued while the live view is up lands as it arrives; one
+  // queued before this surface mounted, or before the view existed, keeps
+  // its place in the queue until the view is there.
+  useExternalSyncEffect(() => {
+    let active = true;
+    if (useTemplateStudioStore.getState().pendingMirrorRequests.length > 0) {
+      detached(
+        awaitView().then((view) => {
+          if (active && view) {
+            placeMirrorRequests(view);
+          }
+          return undefined;
+        }),
+        "template-studio-chat.place-queued-mirrors",
+      );
+    }
+    const unsubscribe = useTemplateStudioStore.subscribe((state, previous) => {
+      if (
+        state.pendingMirrorRequests === previous.pendingMirrorRequests ||
+        state.pendingMirrorRequests.length === 0
+      ) {
+        return;
+      }
+      const view = getView() ?? editorView;
+      if (view) {
+        placeMirrorRequests(view);
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [awaitView, editorView, getView, placeMirrorRequests]);
 
   // Push suggestion decorations into the live editor. This surface is
   // the only decoration writer in the Studio, so empty pushes (after
@@ -932,7 +955,11 @@ const TemplateStudioChatInner = ({
    * StrictMode double-invocations are no-ops.
    */
   const placeStreamedOperations = useLatestCallback(
-    (toolCallId: string, operations: readonly DocxEditOperation[]) => {
+    (
+      toolCallId: string,
+      operations: readonly DocxEditOperation[],
+      currentMessages: PersistedChatMessage[],
+    ) => {
       const record = streamingPlacements.get(toolCallId) ?? {
         outcomes: new Map<number, OperationPlacementOutcome>(),
       };
@@ -950,7 +977,7 @@ const TemplateStudioChatInner = ({
       }
       streamingPlacements.set(toolCallId, record);
       const blockTextById = collectOperationBlockTexts();
-      const fieldMetaByPath = collectSuggestedFieldMeta(messages);
+      const fieldMetaByPath = collectSuggestedFieldMeta(currentMessages);
       const occupiedRanges: (typeof suggestions)[number]["range"][] = [];
       for (const suggestion of suggestions) {
         if (suggestion.status === "pending") {
@@ -997,9 +1024,11 @@ const TemplateStudioChatInner = ({
 
   // Watch the latest assistant message for streaming apply-tool input
   // and surface completed ops immediately; placements for calls that
-  // end denied are discarded.
-  useExternalSyncEffect(() => {
-    const message = messages.at(-1);
+  // end denied are discarded. The runtime calls back with each change it
+  // publishes, so the placements go out with the messages that carry them.
+  const placeFromLatestMessage = useLatestCallback(() => {
+    const current = chat.getSnapshot().messages;
+    const [message] = projectCanonicalChatUIMessages(current.slice(-1));
     if (!message || message.role !== "assistant") {
       return;
     }
@@ -1013,7 +1042,7 @@ const TemplateStudioChatInner = ({
       if (part.state === "input-streaming") {
         const operations = extractCompletedStreamingOperations(part.input);
         if (operations.length > 0) {
-          placeStreamedOperations(part.id, operations);
+          placeStreamedOperations(part.id, operations, current);
         }
         continue;
       }
@@ -1021,7 +1050,11 @@ const TemplateStudioChatInner = ({
         discardStreamedPlacements(part.id);
       }
     }
-  }, [messages, placeStreamedOperations, discardStreamedPlacements]);
+  });
+  useExternalSyncEffect(
+    () => chat.subscribe(placeFromLatestMessage),
+    [chat, placeFromLatestMessage],
+  );
 
   /**
    * Client executor for `suggest_changes`: convert the parsed operations
@@ -1173,12 +1206,11 @@ const TemplateStudioChatInner = ({
 
   // `suggest_changes` never reaches the approval flow (it is auto-run and
   // queue-only); every other tool approves through the shared handler.
-  const handleApproveForTemplate = async (
-    approvalId: string,
-    toolName: ApprovalToolName,
-  ) => {
-    await handleApprove(approvalId, toolName);
-  };
+  const handleApproveForTemplate = useLatestCallback(
+    async (approvalId: string, toolName: ApprovalToolName) => {
+      await handleApprove(approvalId, toolName);
+    },
+  );
 
   // Auto-run watcher for the queue-only `suggest_changes` tool. The tool
   // is `needsApproval: false`, so it arrives as an `input-complete` client
@@ -1358,7 +1390,7 @@ const TemplateStudioChatInner = ({
     setPanelOpen(false);
     onNewThread();
   };
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const scrollElement = threadScrollRef.current;
     if (!scrollElement) {
       return;
@@ -1424,29 +1456,56 @@ const TemplateStudioChatInner = ({
     return sent.value;
   }
 
+  // Bailed out of the React Compiler (scripts/react-compiler-bailouts.json),
+  // so the provider values are memoized by hand: a new object per render
+  // would re-render every consumer whenever this component renders.
+  const chatMatters = useMemo(
+    () => ({ createDocumentMattersView }),
+    [createDocumentMattersView],
+  );
+  const chatApproval = useMemo(
+    () => ({
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversation,
+      handleAlwaysAllow,
+      handleApprove: handleApproveForTemplate,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+    }),
+    [
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversation,
+      handleAlwaysAllow,
+      handleApproveForTemplate,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+    ],
+  );
   return (
-    <ChatMattersContext value={{ createDocumentMattersView }}>
-      <ChatApprovalContext
-        value={{
-          activeOrganizationId,
-          approvalIdsAwaitedAtOpen,
-          browserGate,
-          alwaysApprovedTools,
-          conversationApprovedTools,
-          confirmStoredApprovalGrant,
-          handleAllowInConversation,
-          handleAlwaysAllow,
-          handleApprove: handleApproveForTemplate,
-          handleDeny,
-          handleApproveForRun,
-          handleRequestSecret,
-          continueRequestSecret,
-          handleConnectConnector,
-          continueConnectConnector,
-          resolveSecretTarget,
-          secretAvailabilityKey,
-        }}
-      >
+    <ChatMattersContext value={chatMatters}>
+      <ChatApprovalContext value={chatApproval}>
         {threadVisible && (
           <ChatThreadCard
             onCollapse={() => setPanelOpen(false)}

@@ -18,6 +18,7 @@ import type {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useObjectUrl } from "@stll/ui/effects-dom";
 import { formatFileSize } from "@stll/ui/file-size";
 import {
   AlertTriangleIcon,
@@ -49,7 +50,6 @@ import type { FilePartActions } from "@/components/file-parts/use-file-part-acti
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { APIError, isPreviewUnavailableError } from "@/lib/errors/api";
@@ -867,6 +867,21 @@ const FilePartPreview = ({
   );
 };
 
+// One blob per buffer and media type, so a re-render hands `useObjectUrl` the
+// same blob (and the same URL) instead of minting a new one.
+const imageBlobs = new WeakMap<ArrayBuffer, Map<string, Blob>>();
+const imageBlobFor = (buffer: ArrayBuffer, mediaType: string): Blob => {
+  const byType = imageBlobs.get(buffer) ?? new Map<string, Blob>();
+  imageBlobs.set(buffer, byType);
+  const existing = byType.get(mediaType);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created = new Blob([buffer], { type: mediaType });
+  byType.set(mediaType, created);
+  return created;
+};
+
 const ImagePreview = ({
   buffer,
   fileName,
@@ -877,17 +892,9 @@ const ImagePreview = ({
   mediaType: string;
 }) => {
   const t = useTranslations();
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const objectUrl = useObjectUrl(imageBlobFor(buffer, mediaType));
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-
-  useExternalSyncEffect(() => {
-    const url = URL.createObjectURL(new Blob([buffer], { type: mediaType }));
-    setObjectUrl(url);
-    return () => {
-      URL.revokeObjectURL(url);
-    };
-  }, [buffer, mediaType]);
 
   if (failed) {
     return (
@@ -908,7 +915,7 @@ const ImagePreview = ({
       />
     );
   }
-  if (objectUrl === null) {
+  if (objectUrl === undefined) {
     return <Skeleton className="size-full rounded-sm" />;
   }
   return (

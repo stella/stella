@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-sn] migrated proxy request transport to readPublisher; served response parsing is unchanged.
 // parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -72,9 +73,9 @@ import { readBotChallenge } from "@/api/handlers/case-law/ingestion/adapters/pub
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readBodyText,
+  readPublisher,
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
@@ -84,7 +85,6 @@ import {
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { readPresent } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -401,27 +401,33 @@ const requestProxy = async ({
     return panic("sn.pl request escaped the publisher origin");
   }
 
-  const response = await fetchWithRetry(
-    target.toString(),
-    { headers: { Accept: "application/json" }, redirect: "error" },
-    {
-      fetchStage: FETCH_STAGE_BY_PROXY_TASK[task],
+  const fetched = await readPublisher(target.toString(), {
+    headers: { Accept: "application/json" },
+    redirect: "error",
+    fetchStage: FETCH_STAGE_BY_PROXY_TASK[task],
+    refusalScope:
+      FETCH_STAGE_BY_PROXY_TASK[task] === "listing" ? "source" : "document",
+    adapterKey: ADAPTER_KEYS.PL_SN,
+    signal,
+    timeoutMs,
+  });
+  if (fetched.type !== "present") {
+    const error = unreadPublisherError({
+      outcome: fetched,
       adapterKey: ADAPTER_KEYS.PL_SN,
-      signal,
-      timeoutMs,
-    },
-  );
-  if (!response.ok) {
-    return Result.err(
-      proxyError(
-        cursor,
-        `${task} answered ${response.status}`,
-        response.status,
-      ),
-    );
+      cursor,
+      message: `sn.pl: ${task} failed`,
+    });
+    if (fetched.type === "unavailable" && fetched.cause.kind === "thrown") {
+      return await Promise.reject(
+        fetched.cause.error instanceof Error ? fetched.cause.error : error,
+      );
+    }
+    return Result.err(error);
   }
+  const response = fetched.value;
 
-  const body = await readBodyText(readPresent(response), signal);
+  const body = await readBodyText(fetched, signal);
   if (body.type !== "present") {
     const error = unreadPublisherError({
       outcome: body,
@@ -920,7 +926,7 @@ type FetchPlSnDecisionOptions = {
  * publisher was asked and did not answer, so the caller holds its cursor and
  * asks again instead of storing a row that says the document does not exist.
  */
-const buildPlSnDecision = async ({
+export const buildPlSnDecision = async ({
   cursor,
   item,
   listingRaw,

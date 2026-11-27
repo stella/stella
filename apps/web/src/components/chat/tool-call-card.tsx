@@ -17,7 +17,6 @@ import {
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { withoutChatStepLedger } from "@stll/api-contract/chat-step-ledger";
-import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -55,14 +54,11 @@ import {
   stepDigestOf,
 } from "@/components/chat/tool-call-step-digest.logic";
 import {
-  advanceToolCallTiming,
-  createToolCallTiming,
-} from "@/components/chat/tool-call-timing.logic";
-import {
   getToolCallTitle,
   toolCallTitleText,
 } from "@/components/chat/tool-call-title.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
+import { useToolCallTiming } from "@/components/chat/use-tool-call-timing";
 import {
   BUILT_IN_SKILL_ORIGIN,
   INSPECTOR_FOCUS_INTENT,
@@ -72,7 +68,6 @@ import {
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { findInstalledSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -568,23 +563,7 @@ const ToolCallCardComponent = ({
       : localRunSubtitleText(localRunTool.subtitle);
 
   const isLoading = isRunningToolPart(part);
-  const [timing, setTiming] = useState(() =>
-    createToolCallTiming({
-      durationMs,
-      isRunning: isLoading,
-      now: Temporal.Now.instant().epochMilliseconds,
-    }),
-  );
-  useExternalSyncEffect(() => {
-    setTiming((current) =>
-      advanceToolCallTiming({
-        current,
-        durationMs,
-        isRunning: isLoading,
-        now: Temporal.Now.instant().epochMilliseconds,
-      }),
-    );
-  }, [durationMs, isLoading]);
+  const timing = useToolCallTiming({ durationMs, isRunning: isLoading });
   const elapsed =
     turnStatus === "finished" &&
     timing.status === "finished" &&

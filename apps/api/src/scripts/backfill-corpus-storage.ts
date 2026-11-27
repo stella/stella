@@ -37,6 +37,7 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
  *     AND content_hash IN (<EMPTY_CORPUS_CONTENT_HASHES>);
  */
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -63,10 +64,6 @@ import {
   EMPTY_CORPUS_CONTENT_HASHES,
   storedCorpusWrite,
 } from "@/api/lib/legal-search/corpus-storage";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 

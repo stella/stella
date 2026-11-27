@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { panic, Result } from "better-result";
 import { randomUUID } from "expo-crypto";
@@ -18,6 +18,7 @@ import {
   CHAT_TURN_STEERING_EVENT,
   type ChatTurnSteering,
 } from "@stll/api-contract/chat-send-intent";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 
 import { useChanged } from "@/components/changes";
 import { epochMilliseconds } from "@/connection/clock";
@@ -344,25 +345,25 @@ export const useChatTurn = ({
     stopTurn({ signedOut, thread, turn });
   };
 
-  const joinActiveTurn = useEffectEvent(() => {
+  const joinActiveTurn = useLatestCallback(() => {
     if (activeTurnId === null) {
       return;
     }
     void rejoin(turn.join(activeTurnId));
   });
 
-  const returnToApp = useEffectEvent(() => {
+  const returnToApp = useLatestCallback(() => {
     const opened = connection.current;
     if (opened?.dropped === true) {
       void rejoin(opened);
     }
   });
 
-  const leave = useEffectEvent(() => {
+  const leave = useLatestCallback(() => {
     connection.current?.controller.abort();
   });
 
-  useEffect(() => {
+  useMountEffect(() => {
     joinActiveTurn();
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
@@ -373,7 +374,7 @@ export const useChatTurn = ({
       subscription.remove();
       leave();
     };
-  }, []);
+  });
 
   return {
     answer,

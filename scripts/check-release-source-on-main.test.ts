@@ -30,7 +30,13 @@ const isPull = (value: unknown): value is Pull =>
 
 let work = "";
 let repo = "";
-const commits = { onMain: "", releaseHead: "", squash: "", offMain: "" };
+const commits = {
+  onMain: "",
+  releaseHead: "",
+  laterHead: "",
+  squash: "",
+  offMain: "",
+};
 
 const git = (...args: string[]): string => {
   const result = Bun.spawnSync(
@@ -60,8 +66,9 @@ const commit = (file: string, message: string): string => {
   return git("rev-parse", "HEAD");
 };
 
-// main: base -> squash of the release branch. The release branch head and
-// an unrelated commit stay off main, as after a squash merge.
+// main: base -> squash of the release branch. The release branch (its release
+// commit and a later commit on top) and an unrelated commit stay off main, as
+// after a squash merge.
 beforeAll(() => {
   work = mkdtempSync(path.join(tmpdir(), "stella-release-source-"));
   repo = path.join(work, "repo");
@@ -69,6 +76,7 @@ beforeAll(() => {
   commits.onMain = commit("VERSION", "base");
   git("switch", "--quiet", "-c", "release/v0.9.72");
   commits.releaseHead = commit("VERSION", "chore: release v0.9.72");
+  commits.laterHead = commit("MANIFEST", "refresh the release manifest");
   git("switch", "--quiet", "main");
   commits.squash = commit("CHANGELOG", "chore: release v0.9.72 (#7578)");
   git("switch", "--quiet", "-c", "elsewhere", commits.onMain);
@@ -79,6 +87,15 @@ beforeAll(() => {
     `if [ -n "\${API_FAIL:-}" ]; then echo 'HTTP 502' >&2; exit 1; fi
 case "$*" in
   "api repos/${REPOSITORY}/commits/\${EXPECTED_SHA}/pulls") printf '%s' "$PULLS" ;;
+  "api repos/${REPOSITORY}/compare/\${EXPECTED_SHA}..."*" --jq .status")
+    if [ -n "\${COMPARE_FAIL:-}" ]; then echo 'HTTP 502' >&2; exit 1; fi
+    range=\${2#repos/${REPOSITORY}/compare/}
+    base=\${range%%...*}
+    head=\${range#*...}
+    if [ "$base" = "$head" ]; then echo identical
+    elif git merge-base --is-ancestor "$base" "$head"; then echo ahead
+    elif git merge-base --is-ancestor "$head" "$base"; then echo behind
+    else echo diverged; fi ;;
   *) echo "unexpected call: $*" >&2; exit 1 ;;
 esac
 `,
@@ -103,6 +120,7 @@ type CheckOptions = {
   releaseRef?: string;
   pulls?: unknown;
   apiFails?: boolean;
+  compareFails?: boolean;
 };
 
 const check = ({
@@ -110,6 +128,7 @@ const check = ({
   releaseRef = "v0.9.72",
   pulls = recorded(),
   apiFails = false,
+  compareFails = false,
 }: CheckOptions = {}) => {
   const result = Bun.spawnSync(
     ["bash", CHECK, sha, ...(releaseRef === "" ? [] : [releaseRef])],
@@ -122,6 +141,7 @@ const check = ({
         EXPECTED_SHA: sha,
         PULLS: JSON.stringify(pulls),
         ...(apiFails ? { API_FAIL: "1" } : {}),
+        ...(compareFails ? { COMPARE_FAIL: "1" } : {}),
       },
     },
   );
@@ -201,6 +221,37 @@ describe("release source on protected main", () => {
     const result = check({ apiFails: true });
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("Could not list the pull requests");
+  });
+
+  // The release branch moved after the release commit, as when main is merged
+  // into it or its recording manifest is refreshed before it lands.
+  const movedOn = (headSha: string): Pull[] =>
+    withPull((pull) => ({ ...pull, head: { ...pull.head, sha: headSha } }));
+
+  test("accepts a release commit the merged head descends from", () => {
+    expect(check({ pulls: movedOn(commits.laterHead) }).code).toBe(0);
+  });
+
+  test("refuses a merged head that does not descend from the release commit", () => {
+    expect(check({ pulls: movedOn(commits.offMain) }).code).toBe(1);
+    expect(check({ pulls: movedOn(commits.onMain) }).code).toBe(1);
+  });
+
+  test("refuses a moved head whose merge commit is not on main", () => {
+    const pulls = movedOn(commits.laterHead).map((pull) => ({
+      ...pull,
+      merge_commit_sha: commits.offMain,
+    }));
+    expect(check({ pulls }).code).toBe(1);
+  });
+
+  test("refuses when the compare read fails", () => {
+    const result = check({
+      pulls: movedOn(commits.laterHead),
+      compareFails: true,
+    });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Could not compare release source");
   });
 });
 

@@ -18,6 +18,7 @@ import { initFactExtractionRunWorker } from "@/api/lib/lists/generation/run-queu
 import { initListVerificationRunWorker } from "@/api/lib/lists/verification/run-queue";
 import { initPushDeliveryWorker } from "@/api/lib/push/push-delivery-worker";
 import { initTimerActivityWorker } from "@/api/lib/push/timer-activity-worker";
+import { initRecordingTranscriptionRunWorker } from "@/api/lib/recording-transcription/run-queue";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
 import { initDocumentNamingWorker } from "@/api/lib/uploads/document-naming/worker";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
@@ -45,6 +46,7 @@ export const initApiBackgroundWorkers = async (mode: BullMqWorkerHostMode) => {
     initFactExtractionRunWorker,
     initListVerificationRunWorker,
     initPushDeliveryWorker,
+    initRecordingTranscriptionRunWorker,
     initReportExportWorker,
     initStyleSetPackageCleanupWorker,
     initTimerActivityWorker,

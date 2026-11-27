@@ -1,6 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
-import { useLatest } from "../hooks/use-latest";
+import {
+  useExternalSyncEffect,
+  useLatest,
+  useMountEffect,
+} from "../effects/effects";
 import { OutcomeScreenView } from "./outcome-screen-view";
 import type { OutcomeScreenViewProps } from "./outcome-screen-view";
 
@@ -36,7 +40,7 @@ const useCloseTab = (closeTab: OutcomeCloseTab | undefined) => {
   // Read through a ref so a parent re-render cannot close the tab twice.
   const latest = useLatest(closeTab);
   const wantsClose = closeTab !== undefined;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const request = wantsClose ? latest.current : undefined;
     let fallback: ReturnType<typeof setTimeout> | undefined;
     if (request !== undefined) {
@@ -59,9 +63,9 @@ const useCloseTab = (closeTab: OutcomeCloseTab | undefined) => {
  */
 const useFocusedHeading = () => {
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
+  useMountEffect(() => {
     heading.current?.focus({ preventScroll: true });
-  }, []);
+  });
   return heading;
 };
 

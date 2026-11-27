@@ -295,17 +295,8 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-rest#Release marketing provenance warning": diffComplete(
     "Gated on a VERSION change.",
   ),
-  "ci.yml:ci-checks-rest#Query data state baseline": fullTree(
-    "Full census; the base only keeps the ledger from growing.",
-  ),
   "ci.yml:ci-checks-rest#SQL performance baseline": fullTree(
     "Full census; the base only keeps the ledger from growing.",
-  ),
-  "ci.yml:ci-checks-rest#Failure-as-empty baseline": fullTree(
-    "Full census; the base only keeps the ledger from growing.",
-  ),
-  "ci.yml:ci-checks-rest#React state-write baselines": fullTree(
-    "Full census; the base only keeps the ledgers from growing.",
   ),
   "ci.yml:ci-checks-rest#Model task default evidence guard": fullTree(
     "Checks every model default; the base only keeps the exemption ledger from growing.",

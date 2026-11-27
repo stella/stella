@@ -4,12 +4,12 @@ import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PopulationCountsReadFreshness } from "@/api/lib/case-law/population-count-freshness";
 import type { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import type { LegalSearchError } from "@/api/lib/legal-search/search-error";
 import type { FacetBucket } from "@/api/lib/search/types";
 

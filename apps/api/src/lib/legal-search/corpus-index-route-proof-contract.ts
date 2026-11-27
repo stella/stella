@@ -41,7 +41,7 @@ export type CorpusIndexRouteProofRevokeReason =
  * observation is that old, whatever the pass's length. A reader may ask for a
  * shorter bound, never a longer one.
  */
-export const CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS = 48;
+export const CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS = 72;
 
 /**
  * Why a route's open pass was started over from its beginning without

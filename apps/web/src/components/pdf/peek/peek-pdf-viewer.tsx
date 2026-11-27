@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -20,7 +20,13 @@ import { Separator } from "@stll/ui/separator";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
-import { cn, composeRefs } from "@stll/ui/utils";
+import {
+  useExternalSyncEffect,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "@stll/ui/effects";
+import { useComposedRefs } from "@stll/ui/effects-refs";
+import { cn } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {
@@ -54,7 +60,6 @@ import {
 } from "@/components/pdf/peek/peek-pdf-print";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { DefaultPendingComponent } from "@/components/route-components";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -561,7 +566,7 @@ const PeekDocxViewer = ({
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
-  const composedContainerRef = composeRefs(containerRef, fitZoomRef);
+  const composedContainerRef = useComposedRefs(containerRef, fitZoomRef);
   useDocxBlockScroll({ editorRef, fieldId });
   const searchTextKey =
     searchText === undefined ? undefined : searchTextQueryKey(searchText);
@@ -669,7 +674,7 @@ const PeekDocxViewer = ({
   };
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     editorRef.current?.setZoom(targetZoom);
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);

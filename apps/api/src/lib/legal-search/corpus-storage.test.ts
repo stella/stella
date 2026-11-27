@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -50,7 +51,6 @@ import type {
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombstones";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { MissingCorpusObjectError } from "@/api/lib/s3";
 import {

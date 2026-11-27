@@ -3,8 +3,6 @@ import {
   Fragment,
   memo,
   useCallback,
-  useEffect,
-  useEffectEvent,
   useId,
   useRef,
   useState,
@@ -15,6 +13,11 @@ import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import {
   BoldIcon,
   ItalicIcon,
@@ -577,7 +580,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const copyFailed = useClipsCopyFailed();
   const nameFieldId = useId();
   const groupFieldId = useId();
-  const reportIdle = useEffectEvent(onIdle);
+  const reportIdle = useLatestCallback(onIdle);
   const formatter = useFormatter();
   const editorRef = useRef<HTMLDivElement>(null);
   // React applies `autoFocus` to form controls only, so the clip text, a
@@ -619,7 +622,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
     });
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     // A reload must never take away a draft that is already open: saving says
     // so in place if the clip is gone by then.
@@ -709,7 +712,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
       disposed = true;
       stopListening();
     };
-  }, [loadError]);
+  }, [loadError, reportIdle]);
 
   const format = (command: FormatCommand) => {
     const editor = editorRef.current;
@@ -878,7 +881,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
       });
   };
 
-  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
+  const handleKeyDown = useLatestCallback((event: KeyboardEvent) => {
     if (event.isComposing) {
       return;
     }
@@ -909,10 +912,10 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
     }
   });
 
-  useEffect(() => {
+  useMountEffect(() => {
     globalThis.addEventListener("keydown", handleKeyDown);
     return () => globalThis.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  });
 
   if (state.type === "loading") {
     return blankEditor;
@@ -1276,30 +1279,28 @@ const ClipboardEditorWindow = () => {
     type: "open",
   });
 
-  useEffect(
-    () =>
-      subscribeDesktopEvent<unknown>({
-        event: CLIPBOARD_EDITOR_SESSION_EVENT,
-        handler: ({ payload }) => {
-          if (!isClipboardEditorSession(payload)) {
-            reportDesktopError({
-              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
-              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
-              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
-            });
-            return;
-          }
-          setSession(payload);
-        },
-        onError: () => {
+  useMountEffect(() =>
+    subscribeDesktopEvent<unknown>({
+      event: CLIPBOARD_EDITOR_SESSION_EVENT,
+      handler: ({ payload }) => {
+        if (!isClipboardEditorSession(payload)) {
           reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
           });
-        },
-      }),
-    [],
+          return;
+        }
+        setSession(payload);
+      },
+      onError: () => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+        });
+      },
+    }),
   );
 
   switch (session.type) {

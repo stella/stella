@@ -1,10 +1,11 @@
 "use dom";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useState } from "react";
 
 import type { DOMProps } from "expo/dom";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import { useDomAppearance } from "@/components/dom-theme";
 import type { DomAppearance } from "@/components/dom-theme";
@@ -130,16 +131,16 @@ const DocumentView = ({
 }: DocumentViewProps) => {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
 
-  const read = useEffectEvent(
+  const read = useLatestCallback(
     async (offset: number, length: number) => await readChunk(offset, length),
   );
-  const loadFailed = useEffectEvent((error: unknown) => {
+  const loadFailed = useLatestCallback((error: unknown) => {
     onFailed(String(error));
   });
 
   useDomAppearance(appearance);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     allowZoom();
     let cancelled = false;
     if (draftSource !== undefined) {
@@ -166,29 +167,36 @@ const DocumentView = ({
     }
     const target = new Uint8Array(size);
     const chunks = chunksOf(size);
-    // One slice after another, so a single bridge message stays small.
-    const load = async (index: number): Promise<void> => {
+    // One slice after another, so a single bridge message stays small. The
+    // whole file, or null once the effect is cancelled.
+    const load = async (index: number): Promise<Uint8Array | null> => {
       const chunk = chunks[index];
       if (cancelled) {
-        return;
+        return null;
       }
       if (chunk === undefined) {
-        setBytes(target);
-        return;
+        return target;
       }
       const [offset, length] = chunk;
       decodeChunkInto(await read(offset, length), target, offset);
-      await load(index + 1);
+      return await load(index + 1);
     };
-    load(0).catch((error: unknown) => {
-      if (!cancelled) {
-        loadFailed(error);
-      }
-    });
+    load(0)
+      .then((loaded) => {
+        if (loaded !== null && !cancelled) {
+          setBytes(loaded);
+        }
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          loadFailed(error);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [size, draftSource, draftTitle]);
+  }, [size, draftSource, draftTitle, read, loadFailed]);
 
   const ready = () => {
     onReady();

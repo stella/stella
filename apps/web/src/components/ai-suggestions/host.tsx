@@ -35,6 +35,7 @@ import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
 import { ComposerFrame } from "@stll/ui/composer-frame";
 import { DOC_FLOAT_SURFACE_CLASS } from "@stll/ui/composer-tokens";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import {
   AiActionIcon,
   CheckIcon,
@@ -68,8 +69,6 @@ import {
 } from "@/components/chat/docked-chat-stack";
 import { DockedComposer } from "@/components/chat/docked-composer";
 import { PromptEditorContent } from "@/components/prompt-editor";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";

@@ -13,6 +13,7 @@ import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import {
   AtSignIcon,
   CpuIcon,
@@ -104,7 +105,6 @@ import { useBrowserExtensionStoreUrl } from "@/features/chat/browser-control/use
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";

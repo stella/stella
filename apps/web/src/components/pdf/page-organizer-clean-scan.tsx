@@ -14,6 +14,7 @@ import {
   DialogPanel,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { CheckIcon, Undo2Icon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
@@ -27,7 +28,6 @@ import {
 import { Switch } from "@stll/ui/switch";
 import { cn } from "@stll/ui/utils";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { drawCleanScanPage } from "@/lib/pdf/page-editor/clean-scan-canvas";
 import type {

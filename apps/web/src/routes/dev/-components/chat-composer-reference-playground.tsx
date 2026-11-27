@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 
 import { Button } from "@stll/ui/button";
+import { useHasMounted, useMountEffect } from "@stll/ui/effects";
 
 import {
   CHAT_SEND_KEPT,
@@ -12,7 +13,6 @@ import {
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { pastedTextChipContent } from "@/components/chat-pasted-text-extension";
 import { InlinePill } from "@/components/inline-pill";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useChatDraftStore } from "@/lib/chat-draft-store";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -145,7 +145,9 @@ const DraftComposer = ({ state, variant }: DraftComposerProps) => {
 
 /** Reference chips in a composer as narrow as a docked chat panel. */
 export const ChatComposerReferencePlayground = () => {
-  const [ready, setReady] = useState(false);
+  // False until the seeding below has run: the mount effects all finish
+  // before the render this latch causes.
+  const ready = useHasMounted();
   const [activations, setActivations] = useState(0);
   // Seed only the bench's threads before mounting the real editors.
   useMountEffect(() => {
@@ -157,7 +159,6 @@ export const ChatComposerReferencePlayground = () => {
         updatedAt: 0,
       });
     }
-    setReady(true);
     return () => {
       for (const state of Object.keys(DOCS)) {
         store.clearDraft(getChatThreadKey(threadRefFor(state)));

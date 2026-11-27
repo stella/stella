@@ -1,11 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external";
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/contains-files";
@@ -31,6 +24,13 @@ import {
 } from "@stll/ui/dialog";
 import { UploadIcon } from "@stll/ui/icons";
 import "@stll/folio-react/editor.css";
+
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "@stll/ui/effects";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
@@ -64,8 +64,6 @@ import { RouteDocumentTitle } from "@/components/route-document-title";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -403,7 +401,7 @@ function RouteComponentInner({
     );
   }, [entityError, navigate, workspaceId]);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (!justificationId || justificationPage === undefined) {
       setActiveJustification(null);
       return;
@@ -689,7 +687,8 @@ function RouteComponentInner({
       latestFileFieldForProperty.propertyId,
       latestFileFieldForProperty.id,
     );
-    setActiveFieldId(latestFileFieldForProperty.id);
+    // The route owns the field id: the navigation below remounts this page
+    // (keyed on the `field` param) on the newest version.
     useInspectorTabsStore
       .getState()
       .replaceFileFieldId(fieldId, latestFileFieldForProperty.id);

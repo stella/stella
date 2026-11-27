@@ -7,6 +7,7 @@ import { panic } from "better-result";
 
 import {
   countedOrdinal,
+  digitsValue,
   parseLabelShape,
 } from "@/api/lib/templates/house-style/designators";
 import type {
@@ -26,7 +27,10 @@ export type LabelEntry = {
   /** Position in `manifest.blocks`. */
   position: number;
   level: LabelLevel;
-  origin: "auto" | "manual";
+  /** Who prints the label: a list (`auto`), the text itself (`manual`), or
+   *  a field in the text that numbers itself (`field`), whose number no
+   *  text holds. */
+  origin: LabelOrigin;
   shape: LabelShape;
   /** Length of a typed label and the blanks after it at the start of the
    *  block's text; 0 for an automatic label. */
@@ -76,6 +80,11 @@ export type LabelIndex = {
   /** The column of each block of a document that runs in parallel columns;
    *  empty for any other document. */
   columnByBlockId: ReadonlyMap<string, number>;
+  /** How long the typed label is that a heading opens with when it has no
+   *  entry here because it counts the articles of a part of its own
+   *  (`Article 4` of a model contract behind an agreement): the label is
+   *  the heading's own name, no citation of another provision. */
+  ownLabelLengths: ReadonlyMap<string, number>;
 };
 
 const HEADING_TITLE_MAX = 160;
@@ -92,6 +101,10 @@ const DEICTIC_START =
   /^(?:této|tohoto|těchto|smlouvy|of\b|hereof|dieses|dieser|des\b|der\b)/iu;
 const ANNEX_LIST_INTRO =
   /(?:příloh|annex|schedule|appendi|exhibit|anlage|anhang|anhänge)[^.]{0,80}:[ \u00A0]*$/iu;
+
+/** A line that heads a table of contents and says nothing else. */
+const CONTENTS_CAPTION =
+  /^(?:obsah|contents?|table of contents?|inhalt|inhaltsverzeichnis)[ \u00A0]*:?$/iu;
 
 /** Whether the block is a line of the source's table of contents. */
 const isContentsBlock = ({
@@ -113,8 +126,27 @@ const isTitleText = (text: string): boolean => {
   return trimmed.length <= HEADING_TITLE_MAX && !SENTENCE_END.test(trimmed);
 };
 
+const RUNNING_WORDS_MIN = 8;
+
+/**
+ * Whether the text behind a provision's label is text of its own and no
+ * title: it runs past a title's length, or it ends like a sentence and is
+ * long enough to be one (`Notices. Each notice is given in writing and
+ * takes effect when it is received.`).
+ */
+export const isRunningText = (text: string): boolean => {
+  const trimmed = text.replace(/^[\s:–—.-]+/u, "").trim();
+  return (
+    trimmed.length > HEADING_TITLE_MAX ||
+    (SENTENCE_END.test(trimmed) &&
+      trimmed.split(/\s+/u).length >= RUNNING_WORDS_MIN)
+  );
+};
+
+type LabelOrigin = "auto" | "manual" | "field";
+
 type RawLabel = {
-  origin: "auto" | "manual";
+  origin: LabelOrigin;
   shape: LabelShape;
   manualLength: number;
   /** The block's text after the label. */
@@ -144,6 +176,23 @@ const readAutoLabel = (block: DocxBlock, label: string): RawLabel | null => {
   };
 };
 
+/** A month's name behind a number and a period: the day of a date
+ *  (`24. Juni 2021`, `1. Januar`), not a label. Czech writes its months in
+ *  lower case, which no label is followed by anyway. */
+const MONTH_NAME =
+  /^(?:januar|jänner|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember|january|february|march|may|june|july|october|december)(?![\p{L}])/iu;
+
+/** What stands behind the month of a date: a year, a mark, a word in
+ *  lower case, or nothing. A heading that opens with a month's name
+ *  (`May Deliveries`) goes on with a capital. */
+const DATE_REST =
+  /^\p{L}+(?:$|\s*[,.;:)]|[ \u00A0]+(?:\d{2,4}(?!\p{L})|\p{Ll}))/u;
+
+/** Whether the text behind a number and a period is the rest of a date,
+ *  whatever blank parts the two. */
+const isDateRest = (next: string): boolean =>
+  MONTH_NAME.test(next) && DATE_REST.test(next);
+
 /** A typed label is taken only when it is set off the way a label is; a
  *  sentence may open with a number (`10 dnů`, `1. ledna`). */
 const isTypedLabel = (shape: LabelShape, after: string): boolean => {
@@ -168,12 +217,14 @@ const isTypedLabel = (shape: LabelShape, after: string): boolean => {
   if (shape.numeral === "decimal") {
     const dotted = (shape.path?.length ?? 0) > 1;
     const bracketed = shape.close !== "";
-    return (
-      dotted ||
-      bracketed ||
-      blank.includes("\t") ||
-      (shape.period && !/^\p{Ll}/u.test(next))
-    );
+    if (dotted || bracketed) {
+      return true;
+    }
+    // The day of a date is no label, behind a blank or behind a tab.
+    if (shape.period && isDateRest(next)) {
+      return false;
+    }
+    return blank.includes("\t") || (shape.period && !/^\p{Ll}/u.test(next));
   }
   if (shape.numeral === "upperRoman" || shape.numeral === "upperAmbiguous") {
     return shape.period || shape.close !== "";
@@ -206,13 +257,68 @@ const readManualLabel = (block: DocxBlock): RawLabel | null => {
   };
 };
 
-const readLabel = (block: DocxBlock): RawLabel | null => {
-  if (block.kind !== "paragraph" || isContentsBlock(block)) {
+/**
+ * The label a list prints in front of a paragraph. Null for a paragraph in
+ * no list, and for one whose list level prints nothing: a heading style
+ * bound to a list for its outline only reads like any unnumbered paragraph,
+ * typed label and all.
+ */
+export const printedLabel = ({
+  label,
+}: Pick<DocxBlock, "label">): string | null =>
+  label === null || label.trim() === "" ? null : label;
+
+/** What stands in front of the number of an annex a field counts: the
+ *  annex's name, with the word for "number" some write behind it. */
+const FIELD_ANNEX_LEAD =
+  /^[ \u00A0]*(?:příloha|annex|schedule|appendix|exhibit|anlage|anhang)(?:[ \u00A0]+(?:č\.|no\.|nr\.))?[ \u00A0]*$/iu;
+
+/**
+ * The label of an annex heading whose number a field counts (`Příloha č.
+ * <n> Název`): the text holds the name alone, so the number is the one the
+ * heading has among the document's headings of this kind.
+ */
+const readFieldLabel = (block: DocxBlock, ordinal: number): RawLabel | null => {
+  const at = block.selfNumbers?.at(0);
+  // A line of the contents names a heading; it is none.
+  if (
+    block.kind !== "paragraph" ||
+    at === undefined ||
+    isContentsBlock(block)
+  ) {
     return null;
   }
-  return block.label === null
-    ? readManualLabel(block)
-    : readAutoLabel(block, block.label);
+  const lead = block.text.slice(0, at);
+  if (!FIELD_ANNEX_LEAD.test(lead)) {
+    return null;
+  }
+  const shape = parseLabelShape(`${lead.trim()} ${String(ordinal)}`);
+  if (shape?.keyword !== "annex") {
+    return null;
+  }
+  const after = block.text.slice(at);
+  const blank = BLANK.exec(after)?.[0] ?? "";
+  return {
+    origin: "field",
+    shape,
+    manualLength: at + blank.length,
+    remainder: after.slice(blank.length),
+    separated: true,
+  };
+};
+
+const readLabel = (block: DocxBlock): RawLabel | null => {
+  // A bullet's mark is no designator, even when it is a letter (a font's
+  // `o` for the second level of a bulleted list).
+  if (
+    block.kind !== "paragraph" ||
+    isContentsBlock(block) ||
+    block.numbering?.bullet === true
+  ) {
+    return null;
+  }
+  const label = printedLabel(block);
+  return label === null ? readManualLabel(block) : readAutoLabel(block, label);
 };
 
 /** A heading states a title or nothing; a sentence that opens with a
@@ -328,8 +434,9 @@ type Walk = {
   schemes: { body: Scheme; annexes: Scheme };
   /** Positions of annex lines that name an annex without opening it. */
   listedAnnexes: ReadonlySet<number>;
-  /** Ordinals of the articles the document's automatic numbering heads. */
-  numberedArticles: ReadonlySet<number>;
+  /** Positions of typed article headings that head no article of the
+   *  document's own numbering. */
+  articleMentions: ReadonlySet<number>;
   /** Positions of numbered list items that only list the headings. */
   listedHeadings: ReadonlySet<number>;
   article: LabelEntry | null;
@@ -351,7 +458,7 @@ const isUpperCase = ({ shape }: RawLabel): boolean =>
 const isNamedArticle = ({ block, raw, family }: LabelledRow): boolean => {
   const { keyword } = raw.shape;
   if (keyword === "article" || keyword === "sectionSign") {
-    return raw.origin === "auto" || isHeadingRemainder(raw.remainder);
+    return raw.origin !== "manual" || isHeadingRemainder(raw.remainder);
   }
   const counted = family === "roman" && isUpperCase(raw) && keyword === null;
   if (!counted || !raw.shape.period) {
@@ -375,7 +482,7 @@ const nextTitleBlock = (
     next === undefined ||
     next.raw !== null ||
     next.block.kind !== "paragraph" ||
-    next.block.label !== null ||
+    printedLabel(next.block) !== null ||
     next.block.text.trim() === "" ||
     !isTitleText(next.block.text) ||
     isContentsBlock(next.block)
@@ -524,6 +631,79 @@ const isArticleMention = (
     numberedArticles.has(ordinal) &&
     isNamedArticle(row)
   );
+};
+
+/**
+ * The positions of the typed article headings that head no article of the
+ * document's own numbering. A mention is one; so is every heading that
+ * counts on from it (`Article 4` behind a mentioned `Article 3`): a part
+ * that counts its own articles (a model contract in an annex) is one run,
+ * and its later headings are no more the document's articles than its
+ * first ones, whose numbers the document's own articles happen to take.
+ */
+const articleMentionPositions = (
+  numberedArticles: ReadonlySet<number>,
+  labelled: readonly LabelledRow[],
+): { mentions: Set<number>; countedOn: Set<number> } => {
+  const mentions = new Set<number>();
+  /** The headings that are here only because they count on, by ordinal. */
+  const countedOn = new Map<number, number>();
+  const scheme = numberedScheme(labelled);
+  const typed: { position: number; ordinal: number | null }[] = [];
+  /** The ordinal of the typed article heading read last, when it was one
+   *  of these. */
+  let counted: number | null = null;
+  for (const row of labelled) {
+    // An article of the document's own numbering ends such a run: a typed
+    // heading behind it counts on from nothing.
+    if (
+      row.raw.origin === "auto" &&
+      row.block.outlineLevel !== null &&
+      (isNamedArticle(row) || headsArticle(scheme, row))
+    ) {
+      counted = null;
+      continue;
+    }
+    if (row.raw.origin !== "manual" || !isNamedArticle(row)) {
+      continue;
+    }
+    const { core, path } = row.raw.shape;
+    const ordinal = countedOrdinal(core) ?? path?.at(0) ?? null;
+    const heads = path === null || path.length <= 1;
+    if (heads) {
+      typed.push({ position: row.position, ordinal });
+    }
+    const mentioned = isArticleMention(numberedArticles, row);
+    if (mentioned || (heads && counted !== null && ordinal === counted + 1)) {
+      mentions.add(row.position);
+      if (!mentioned && ordinal !== null) {
+        countedOn.set(row.position, ordinal);
+      }
+      // A clause of such an article (`Article 4.2`) counts nothing on.
+      counted = heads ? ordinal : counted;
+    } else {
+      counted = null;
+    }
+  }
+  // Where the document has a typed article of that number of its own, the
+  // heading stays in the index beside it: a citation of the number then
+  // has two places it may mean and is linked to neither, instead of being
+  // linked to the one that happened to be left.
+  for (const [position, ordinal] of countedOn) {
+    if (
+      typed.some(
+        (other) => other.ordinal === ordinal && !mentions.has(other.position),
+      )
+    ) {
+      mentions.delete(position);
+    }
+  }
+  return {
+    mentions,
+    countedOn: new Set(
+      [...countedOn.keys()].filter((position) => mentions.has(position)),
+    ),
+  };
 };
 
 /**
@@ -755,7 +935,7 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
     return isAnnexRow(row) ? openAnnex(walk, row) : null;
   }
   if (isNamedArticle(row)) {
-    if (walk.annex === null && isArticleMention(walk.numberedArticles, row)) {
+    if (walk.annex === null && walk.articleMentions.has(row.position)) {
       return null;
     }
     // A keyword over a dotted number (`Article 5.1 Fees`) heads a clause of
@@ -846,11 +1026,170 @@ const parallelColumns = (
     : new Map<string, number>();
 };
 
+/** The second part of a number typed apart from its first: `1. 1. Text`
+ *  behind the label `1.`. */
+const SPACED_SECOND = /^(?<second>\d{1,3})\.(?<blank>[ \t\u00A0]+)(?=\S)/u;
+/** What a provision's text opens with; a year or a month's name does not. */
+const OPENS_TEXT = /^[\p{Lu}„“"‚'([]/u;
+
+type SpacedNumber = { position: number; second: number; joined: RawLabel };
+
+/** A typed `1.` whose text goes on with a second number and a provision's
+ *  text: read as one number, should its run prove it. */
+const readSpacedNumber = (
+  block: DocxBlock,
+  raw: RawLabel,
+  position: number,
+): SpacedNumber | null => {
+  const { shape } = raw;
+  const first = shape.path?.length === 1 ? shape.path.at(0) : undefined;
+  const match = SPACED_SECOND.exec(raw.remainder);
+  const digits = match?.groups?.["second"] ?? "";
+  const second = digitsValue(digits);
+  if (
+    raw.origin !== "manual" ||
+    shape.keyword !== null ||
+    shape.numeral !== "decimal" ||
+    !shape.period ||
+    shape.open !== "" ||
+    shape.close !== "" ||
+    first === undefined ||
+    match === null ||
+    second === null
+  ) {
+    return null;
+  }
+  const rest = raw.remainder.slice(match[0].length);
+  const lead = BLANK.exec(block.text)?.[0].length ?? 0;
+  const between = raw.manualLength - lead - shape.length;
+  const literal = block.text.slice(
+    lead,
+    // As many digits as are typed: `01` is two.
+    raw.manualLength + digits.length + 1,
+  );
+  const whole = parseLabelShape(`${String(first)}.${String(second)}.`);
+  // Blanks only part the two numbers: a tab sets a label off from text.
+  if (
+    whole === null ||
+    !OPENS_TEXT.test(rest) ||
+    !/^[ \u00A0]+$/u.test(
+      block.text.slice(lead + shape.length, lead + shape.length + between),
+    )
+  ) {
+    return null;
+  }
+  const blank = match.groups?.["blank"] ?? "";
+  return {
+    position,
+    second,
+    joined: {
+      origin: "manual",
+      shape: { ...whole, length: literal.length },
+      manualLength: lead + literal.length + blank.length,
+      remainder: rest,
+      separated: blank.includes("\t"),
+    },
+  };
+};
+
+/** The number of the article a row heads, as far as a row tells before the
+ *  entries are nested: a single number, or an article's name and number. */
+const headedNumber = ({ shape }: RawLabel): number | null => {
+  if (shape.numeral !== "decimal") {
+    return null;
+  }
+  if (shape.keyword === "article" || shape.keyword === "sectionSign") {
+    return countedOrdinal(shape.core);
+  }
+  return shape.keyword === null && shape.path?.length === 1
+    ? (shape.path.at(0) ?? null)
+    : null;
+};
+
+/**
+ * Reads `1. 1.`, `1. 2.` under article 1 as `1.1.`, `1.2.`: a number typed
+ * with a blank between its parts. Only a run proves it: the first number is
+ * the number of the article above, and the second numbers count 1, 2, 3
+ * without a gap over two paragraphs or more. One such paragraph alone, a
+ * day and a month (`1. 1. 2026`), a number in front of a word in lower case
+ * stay what they were read as. Each column of a table counts for itself:
+ * two language versions side by side are two runs, not one that counts
+ * every number twice.
+ */
+const joinSpacedNumbers = (
+  blocks: readonly DocxBlock[],
+  raws: (RawLabel | null)[],
+): void => {
+  const columnOf = new Map<string, number>();
+  for (const { cells } of blocks) {
+    if (cells === undefined) {
+      continue;
+    }
+    for (const { col, blockIds } of cells) {
+      for (const blockId of blockIds) {
+        columnOf.set(blockId, col);
+      }
+    }
+  }
+  type Counting = { article: number | null; run: SpacedNumber[] };
+  /** What is counted outside tables, and in each column of them. */
+  const countings = new Map<number | null, Counting>();
+  const close = (counting: Counting) => {
+    const counted = counting.run.every(({ second }, at) => second === at + 1);
+    if (counting.run.length > 1 && counted) {
+      for (const { position, joined } of counting.run) {
+        raws[position] = joined;
+      }
+    }
+    counting.run = [];
+  };
+  for (const [position, raw] of raws.entries()) {
+    const block = blocks[position];
+    if (raw === null || block === undefined) {
+      continue;
+    }
+    const column = columnOf.get(block.id) ?? null;
+    // A column counts under the heading that spans the columns above it.
+    const counting = countings.get(column) ?? {
+      article: countings.get(null)?.article ?? null,
+      run: [],
+    };
+    countings.set(column, counting);
+    const spaced = readSpacedNumber(block, raw, position);
+    if (spaced !== null && raw.shape.path?.at(0) === counting.article) {
+      counting.run.push(spaced);
+      continue;
+    }
+    const headed = headedNumber(raw);
+    if (headed !== null || raw.shape.keyword !== null) {
+      // A heading outside the columns heads every column from there on.
+      for (const under of column === null ? countings.values() : [counting]) {
+        close(under);
+        under.article = headed;
+      }
+    }
+  }
+  for (const counting of countings.values()) {
+    close(counting);
+  }
+};
+
 /** Reads every paragraph's label and nests the entries. */
 export const buildLabelIndex = ({
   blocks,
 }: Pick<DocxBlockManifest, "blocks">): LabelIndex => {
-  const raws = blocks.map(readLabel);
+  // An annex a field numbers is counted here: its text holds no number.
+  let fieldAnnexes = 0;
+  const raws = blocks.map((block) => {
+    const read = readLabel(block);
+    if (read !== null) {
+      return read;
+    }
+    const counted = readFieldLabel(block, fieldAnnexes + 1);
+    fieldAnnexes += counted === null ? 0 : 1;
+    return counted;
+  });
+  joinSpacedNumbers(blocks, raws);
   const families = resolveFamilies(blocks, raws);
   const rows = blocks.map((block, position): Row => ({
     block,
@@ -861,7 +1200,13 @@ export const buildLabelIndex = ({
   const labelled = rows.filter(isLabelled);
   const numberedArticles = numberedArticleOrdinals(labelled);
   const listedHeadings = listedHeadingPositions(labelled);
-  // Mentions say nothing about how the document numbers itself.
+  const { mentions: articleMentions, countedOn } = articleMentionPositions(
+    numberedArticles,
+    labelled,
+  );
+  // Mentions say nothing about how the document numbers itself. A heading
+  // that only counts on from one still says how its part is numbered: it
+  // stays among the rows the schemes are read from.
   const structural = labelled.filter(
     (row) => !isArticleMention(numberedArticles, row),
   );
@@ -890,7 +1235,7 @@ export const buildLabelIndex = ({
     const opened: Walk = {
       rows,
       listedAnnexes,
-      numberedArticles,
+      articleMentions,
       listedHeadings,
       schemes,
       article: spanning?.article ?? null,
@@ -909,10 +1254,22 @@ export const buildLabelIndex = ({
   const entries: LabelEntry[] = [];
   const contextByBlockId = new Map<string, BlockContext>();
   const contentsBlockIds = new Set<string>();
+  /** The last paragraph with text in front of the row, while it may be the
+   *  caption of the contents that follow. */
+  let caption: DocxBlock | null = null;
   for (const row of rows) {
     const { block } = row;
     if (block.kind === "paragraph" && isContentsBlock(block)) {
       contentsBlockIds.add(block.id);
+      // The caption goes with the lines it heads: alone it heads nothing.
+      if (caption !== null && CONTENTS_CAPTION.test(caption.text.trim())) {
+        contentsBlockIds.add(caption.id);
+      }
+      caption = null;
+    } else if (block.kind !== "paragraph") {
+      caption = null;
+    } else if (block.text.trim() !== "") {
+      caption = block;
     }
     const walk = walkOf(block);
     const entry = isLabelled(row) ? classify(walk, row) : null;
@@ -952,5 +1309,14 @@ export const buildLabelIndex = ({
     ),
     contentsBlockIds,
     columnByBlockId,
+    ownLabelLengths: new Map(
+      labelled
+        .filter(
+          ({ position, block }) =>
+            countedOn.has(position) &&
+            !entries.some(({ blockId }) => blockId === block.id),
+        )
+        .map(({ block, raw }) => [block.id, raw.manualLength]),
+    ),
   };
 };

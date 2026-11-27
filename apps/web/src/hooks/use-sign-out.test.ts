@@ -1,7 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
-
-import { sleep } from "@stll/concurrency/sleep";
+import { setImmediate as nextMacrotask } from "node:timers/promises";
 
 // The browser this test signs out of: its storage and the sign-out endpoint.
 const local = new Map<string, string>();
@@ -62,7 +61,9 @@ describe("signing out", () => {
     });
 
     const result = await signOutAndRelease(areas());
-    await sleep(20);
+    for (let i = 0; i < 4; i += 1) {
+      await nextMacrotask();
+    }
 
     expect(result.error).not.toBeNull();
     expect(storageOwner()).toEqual({ kind: "visitor" });

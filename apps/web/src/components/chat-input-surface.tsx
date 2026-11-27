@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
 import { ComposerFrame } from "@stll/ui/composer-frame";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -32,7 +33,6 @@ import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAISendBlockReason } from "@/components/require-ai-key";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";

@@ -15,6 +15,7 @@ import {
   decodeSourceRawEnvelope,
   PUBLISHER_REQUEST,
 } from "@/api/lib/legal-search/ingestion-types";
+import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 
 import { PublisherPageError } from "./publisher-page";
 
@@ -74,10 +75,10 @@ describe("Austrian Findok adapter", () => {
       request: async (url) => {
         if (!listingRead) {
           listingRead = true;
-          return manifestResponse([poison, MANIFEST_ITEM]);
+          return readOfResponse(manifestResponse([poison, MANIFEST_ITEM]));
         }
-        documentRequests.push(url);
-        return new Response(detailBytes);
+        documentRequests.push(String(url));
+        return readOfResponse(new Response(detailBytes));
       },
       sleep: async () => {},
     });
@@ -137,7 +138,7 @@ describe("Austrian Findok adapter", () => {
     it(`rejects a 200 ${fixture.name} before advancing the listing`, async () => {
       const adapter = createAtFindokAdapter({
         now: () => new Date("2026-08-12T00:00:00Z"),
-        request: async () => new Response(fixture.body),
+        request: async () => readOfResponse(new Response(fixture.body)),
         sleep: async () => {},
       });
       const result = await adapter.fetchPage(null, {});
@@ -166,7 +167,9 @@ describe("Austrian Findok adapter", () => {
       const adapter = createAtFindokAdapter({
         now: () => new Date("2026-08-12T00:00:00Z"),
         request: async () =>
-          responses.shift() ?? new Response(null, { status: 500 }),
+          readOfResponse(
+            responses.shift() ?? new Response(null, { status: 500 }),
+          ),
         sleep: async () => {},
       });
       const page = (await adapter.fetchPage(null, {})).unwrap();
@@ -188,7 +191,7 @@ describe("Austrian Findok adapter", () => {
   it("accepts a small manifest with its required envelope and no active rows", async () => {
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
-      request: async () => manifestResponse([]),
+      request: async () => readOfResponse(manifestResponse([])),
       sleep: async () => {},
     });
     const page = (await adapter.fetchPage(null, {})).unwrap();
@@ -209,7 +212,9 @@ describe("Austrian Findok adapter", () => {
       const adapter = createAtFindokAdapter({
         now: () => new Date("2026-08-12T00:00:00Z"),
         request: async () =>
-          ++requests === 1 ? manifestResponse() : new Response(bytes),
+          readOfResponse(
+            ++requests === 1 ? manifestResponse() : new Response(bytes),
+          ),
         sleep: async () => {},
       });
       const result = await adapter.fetchPage(null, {});
@@ -231,7 +236,9 @@ describe("Austrian Findok adapter", () => {
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
       request: async () =>
-        responses.shift() ?? new Response(null, { status: 500 }),
+        readOfResponse(
+          responses.shift() ?? new Response(null, { status: 500 }),
+        ),
       sleep: async () => {},
     });
     const page = await adapter.fetchPage(null, {});
@@ -251,7 +258,9 @@ describe("Austrian Findok adapter", () => {
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
       request: async () =>
-        responses.shift() ?? new Response(null, { status: 500 }),
+        readOfResponse(
+          responses.shift() ?? new Response(null, { status: 500 }),
+        ),
       sleep: async () => {},
     });
     const page = (await adapter.fetchPage(null, {})).unwrap();
@@ -279,12 +288,12 @@ describe("Austrian Findok adapter", () => {
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
       request: async (url) => {
-        urls.push(url);
+        urls.push(String(url));
         const response = responses.shift();
         if (response === undefined) {
-          throw new Error(`Unexpected Findok request: ${url}`);
+          throw new Error(`Unexpected Findok request: ${String(url)}`);
         }
-        return response;
+        return readOfResponse(response);
       },
       sleep: async () => {},
     });
@@ -318,7 +327,7 @@ describe("Austrian Findok adapter", () => {
       now: () => new Date("2026-08-12T00:00:00Z"),
       request: async () => {
         requests += 1;
-        return manifestResponse([]);
+        return readOfResponse(manifestResponse([]));
       },
       sleep: async () => {},
     });
@@ -335,7 +344,7 @@ describe("Austrian Findok adapter", () => {
   it("reports the two publisher inventories as one source total", async () => {
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
-      request: async () => manifestResponse(),
+      request: async () => readOfResponse(manifestResponse()),
       sleep: async () => {},
     });
     expect(await adapter.getTotalCount(new AbortController().signal)).toEqual({
@@ -348,7 +357,9 @@ describe("Austrian Findok adapter", () => {
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
       request: async () =>
-        new Response(Bun.gzipSync(JSON.stringify({ data: [] }))),
+        readOfResponse(
+          new Response(Bun.gzipSync(JSON.stringify({ data: [] }))),
+        ),
       sleep: async () => {},
     });
     expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
@@ -383,7 +394,9 @@ describe("Austrian Findok adapter", () => {
       const adapter = createAtFindokAdapter({
         now: () => new Date("2026-08-12T00:00:00Z"),
         request: async () =>
-          responses.shift() ?? new Response(null, { status: 500 }),
+          readOfResponse(
+            responses.shift() ?? new Response(null, { status: 500 }),
+          ),
         sleep: async () => {},
       });
       const page = (await adapter.fetchPage(null, {})).unwrap();
@@ -434,7 +447,8 @@ describe("Austrian Findok adapter", () => {
     };
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
-      request: async () => manifestResponse([invalidIdentity, MANIFEST_ITEM]),
+      request: async () =>
+        readOfResponse(manifestResponse([invalidIdentity, MANIFEST_ITEM])),
       sleep: async () => {},
     });
     const reconciliation = reconciliationOf(adapter);
@@ -476,7 +490,7 @@ describe("Austrian Findok adapter", () => {
         if (response === undefined) {
           throw new Error("Unexpected Findok request");
         }
-        return response;
+        return readOfResponse(response);
       },
       sleep: async () => {},
     });

@@ -1144,6 +1144,28 @@
       "DocumentMark",
       "isDocumentMarkKind"
     ],
+    "./effects": [
+      "useExternalSyncEffect",
+      "useHasMounted",
+      "useIsMounted",
+      "useKeyedState",
+      "useLatest",
+      "useLatestCallback",
+      "useLayoutSyncEffect",
+      "useMountEffect",
+      "useMountLayoutEffect",
+      "useNow"
+    ],
+    "./effects-dom": [
+      "createOscillationBreaker",
+      "flatEqual",
+      "useElementSize",
+      "useIntersecting",
+      "useLayoutMeasurement",
+      "useObjectUrl",
+      "useObservedValue"
+    ],
+    "./effects-refs": ["useComposedRefs"],
     "./entity-actions": [
       "ContextMenuSurface",
       "EntityActions",

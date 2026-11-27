@@ -515,6 +515,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained billing records; current membership gates time APIs and timers are closed by offboarding.",
   "organization_data_exports.requested_by":
     "Retained attribution or request history; the export worker re-checks the requester's current permission before every part.",
+  "recording_transcription_runs.requested_by":
+    "Retained attribution or request history; the transcription job re-checks the requester's current matter access before reading the recording.",
   "report_exports.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "saved_searches.user_id":

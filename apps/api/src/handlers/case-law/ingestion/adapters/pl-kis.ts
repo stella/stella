@@ -7,9 +7,8 @@
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
 
-// parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: typed publisher reads classify HTTP and body failures without changing parsed decision output.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish tax interpretations and rulings (EUREKA) adapter.
@@ -60,16 +59,20 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
  * months (`undated|<boundary id>|<page>`) and the ledger holds it as a slice
  * of its own, ahead of the first month.
  */
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
-import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlKisDocumentHtml,
@@ -87,6 +90,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { TextField } from "@/api/lib/case-law/decision-text";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -129,6 +133,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
+import { readCappedPublisherBytes } from "./read-capped-publisher-bytes";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -170,7 +175,6 @@ const MAX_EMPTY_WINDOW_SKIPS = 12;
  * wait is short and the retries many.
  */
 const REQUEST_TIMEOUT_MS = 15_000;
-const REQUEST_RETRIES = 8;
 
 const SORT = {
   ID_ASC: ["ID_INFORMACJI,asc"],
@@ -649,10 +653,7 @@ export const plKisWebUrl = (id: string): string =>
 const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 
 type EurekaResponse = {
-  status: number;
-  ok: boolean;
-  /** The body, or `null` when the request failed or the body overran. */
-  bytes: Uint8Array | null;
+  outcome: ReadOutcome<Uint8Array>;
   url: string;
 };
 
@@ -678,36 +679,31 @@ const fetchEureka = async (
   if (target === null) {
     return panic("EUREKA request escaped the publisher origin");
   }
-  const response = await fetchWithRetry(
-    target.toString(),
-    {
-      method: init.method ?? "GET",
-      headers: init.headers,
-      body: init.body ?? null,
-      redirect: "error",
-    },
-    {
-      fetchStage,
-      adapterKey: ADAPTER_KEYS.PL_KIS,
-      signal,
-      timeoutMs: REQUEST_TIMEOUT_MS,
-      maxRetries: REQUEST_RETRIES,
-    },
-  );
-  if (!response.ok || response.body === null) {
-    await response.body?.cancel();
-    return {
-      status: response.status,
-      ok: false,
-      bytes: null,
-      url: target.toString(),
-    };
+  const url = target.toString();
+  const responseOutcome = await readPublisher(url, {
+    method: init.method ?? "GET",
+    headers: init.headers,
+    ...(init.body === undefined ? {} : { body: init.body }),
+    redirect: "error",
+    fetchStage,
+    refusalScope: fetchStage === "listing" ? "source" : "document",
+    adapterKey: ADAPTER_KEYS.PL_KIS,
+    retryPolicy: "publisher-backoff",
+    signal,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+  if (responseOutcome.type !== "present") {
+    return { outcome: responseOutcome, url };
   }
+  const { body, status } = responseOutcome.value;
   return {
-    status: response.status,
-    ok: true,
-    bytes: await readCappedBytes(response.body, MAX_RESPONSE_BYTES),
-    url: target.toString(),
+    outcome: await readCappedPublisherBytes({
+      body,
+      status,
+      maxBytes: MAX_RESPONSE_BYTES,
+      signal,
+    }),
+    url,
   };
 };
 
@@ -780,16 +776,17 @@ const search = async (
     },
     { fetchStage: "listing", signal },
   );
-  if (!response.ok || response.bytes === null) {
+  if (response.outcome.type !== "present") {
     return Result.err(
-      requestError(
+      unreadPublisherError({
+        outcome: response.outcome,
+        message: "eureka.mf.gov.pl: search failed",
+        adapterKey: ADAPTER_KEYS.PL_KIS,
         cursor,
-        `search answered ${response.status}`,
-        response.status,
-      ),
+      }),
     );
   }
-  const text = new TextDecoder().decode(response.bytes);
+  const text = new TextDecoder().decode(response.outcome.value);
   const read = readPlKisListing(
     Result.try({
       try: (): unknown => JSON.parse(text),
@@ -1735,19 +1732,20 @@ const fetchDetailText = async (
     { headers: { Accept: "application/json" } },
     { fetchStage: "document", signal },
   );
-  if (response.status === 404 || response.status === 410) {
+  if (response.outcome.type === "absent") {
     return Result.ok(undefined);
   }
-  if (!response.ok || response.bytes === null) {
+  if (response.outcome.type !== "present") {
     return Result.err(
-      requestError(
+      unreadPublisherError({
+        outcome: response.outcome,
+        message: "eureka.mf.gov.pl: detail failed",
+        adapterKey: ADAPTER_KEYS.PL_KIS,
         cursor,
-        `detail answered ${response.status}`,
-        response.status,
-      ),
+      }),
     );
   }
-  return Result.ok(new TextDecoder().decode(response.bytes));
+  return Result.ok(new TextDecoder().decode(response.outcome.value));
 };
 
 const fetchPdf = async (
@@ -1760,15 +1758,20 @@ const fetchPdf = async (
     { headers: { Accept: "application/pdf" } },
     { fetchStage: "document", signal },
   );
-  if (response.status === 404 || response.status === 410) {
+  if (response.outcome.type === "absent") {
     return Result.ok(undefined);
   }
-  if (!response.ok || response.bytes === null) {
+  if (response.outcome.type !== "present") {
     return Result.err(
-      requestError(cursor, `PDF answered ${response.status}`, response.status),
+      unreadPublisherError({
+        outcome: response.outcome,
+        message: "eureka.mf.gov.pl: PDF failed",
+        adapterKey: ADAPTER_KEYS.PL_KIS,
+        cursor,
+      }),
     );
   }
-  return Result.ok(response.bytes);
+  return Result.ok(response.outcome.value);
 };
 
 /**
@@ -1776,7 +1779,7 @@ const fetchPdf = async (
  * then assemble it. A refused request is the row's failure, not its absence:
  * the caller holds its cursor and asks again.
  */
-const buildPlKisDecision = async (
+export const buildPlKisDecision = async (
   row: Record<string, unknown>,
   cursor: string | null,
   signal?: AbortSignal,

@@ -1,9 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
 import {
   findPhoneLayoutProblems,
   setPhoneContent,
 } from "../helpers/phone-layout";
+import { test } from "../helpers/storm-watch-fixture";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 

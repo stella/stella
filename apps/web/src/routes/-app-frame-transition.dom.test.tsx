@@ -3,7 +3,6 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -17,7 +16,7 @@ const { QueryClient, QueryClientProvider, hashKey, useQuery, useQueryClient } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { rootKeys, sessionOptions } = await import("@/lib/auth-queries");
-const { useMountEffect } = await import("@/hooks/use-effect");
+const { useMountEffect } = await import("@stll/ui/effects");
 const { memberKnowledgeKeys } = await import("@/lib/knowledge/knowledge-cache");
 const { installSessionCacheGuard, settleAuthTransition } =
   await import("@/lib/session-cache-guard");
@@ -46,9 +45,6 @@ const frameKey = (organizationId: string) =>
 
 afterAll(async () => {
   testing.cleanup();
-  await testing.act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 

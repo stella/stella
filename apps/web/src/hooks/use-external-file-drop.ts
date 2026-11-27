@@ -1,17 +1,20 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external";
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/contains-files";
 import { useTranslations } from "use-intl";
 
 import type { HandlerExceptionScope } from "@stll/errors";
+import {
+  useExternalSyncEffect,
+  useKeyedState,
+  useLatestCallback,
+} from "@stll/ui/effects";
 
 import {
   collectDroppedFileTree,
   type DroppedFileTree,
 } from "@/hooks/external-file-drop.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -62,8 +65,10 @@ export const useExternalFileDrop = ({
   const t = useTranslations();
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = externalRef ?? internalRef;
-  const [isDropTarget, setIsDropTarget] = useState(false);
-  const [isInnerActive, setIsInnerActive] = useState(false);
+  // Both flags belong to one registration: switching the target off or on
+  // starts them over, so a drag cut short by the switch never sticks.
+  const [isDropTarget, setIsDropTarget] = useKeyedState(enabled, false);
+  const [isInnerActive, setIsInnerActive] = useKeyedState(enabled, false);
 
   const handleDroppedTree = useLatestCallback((tree: DroppedFileTree) => {
     if (onDropTree) {
@@ -139,12 +144,8 @@ export const useExternalFileDrop = ({
       },
     });
 
-    return () => {
-      unregister();
-      setIsDropTarget(false);
-      setIsInnerActive(false);
-    };
-  }, [enabled, ref]);
+    return unregister;
+  }, [enabled, ref, setIsDropTarget, setIsInnerActive]);
 
   return { ref, isDropTarget, isInnerActive };
 };

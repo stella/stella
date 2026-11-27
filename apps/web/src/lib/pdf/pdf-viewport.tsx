@@ -8,15 +8,15 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useComposedRefs } from "@stll/ui/effects-refs";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { composeRefs } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { SecretInput } from "@/components/secret-input";
 import { useTheme } from "@/components/theme-provider";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePageVisibility } from "@/lib/pdf/hooks/use-page-visibility";
 import { usePDFControlledScaleOffset } from "@/lib/pdf/hooks/use-pdf-controlled-scale-offset";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
@@ -259,9 +259,10 @@ const PDFViewerContent = ({
     lastReportedPageRef,
   });
 
-  const pdfContentRef = useMemo(
-    () => composeRefs(containerRef, fitToWidthRef, pageVisibilityRef),
-    [fitToWidthRef, pageVisibilityRef],
+  const pdfContentRef = useComposedRefs(
+    containerRef,
+    fitToWidthRef,
+    pageVisibilityRef,
   );
 
   if (searchPageQuery.error && !searchPageQuery.isFetching) {

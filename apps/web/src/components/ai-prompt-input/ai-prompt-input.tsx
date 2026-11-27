@@ -9,6 +9,7 @@ import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 
 import "@/components/workspaces/properties/property-input/tiptap.css";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
@@ -34,8 +35,6 @@ import {
   handlePromptEditorSelectAll,
 } from "@/components/prompt-editor.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { useSkillsPages } from "@/lib/knowledge/built-in-skills";

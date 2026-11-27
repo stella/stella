@@ -15,6 +15,7 @@ import nodePath from "node:path";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { settledWithin } from "@stll/test-kit";
 
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
@@ -984,7 +985,6 @@ if (!runPostgresTests || databaseUrl === undefined) {
           });
           let output = "";
           const decisions: { step: string; retryAfterMs: number }[] = [];
-          const deadline = setTimeout(() => child.kill(), 30_000);
           try {
             const readOutput = async () => {
               const decoder = new TextDecoder();
@@ -1020,11 +1020,17 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 }
               }
             };
-            const [stderr] = await Promise.all([
-              new Response(child.stderr).text(),
-              readOutput(),
-              child.exited,
-            ]);
+            const [stderr] = await settledWithin(
+              Promise.all([
+                new Response(child.stderr).text(),
+                readOutput(),
+                child.exited,
+              ]),
+              {
+                description: "migrate child to emit deferrals and exit",
+                timeoutMs: 30_000,
+              },
+            );
             expect(
               decisions.length,
               `${output}\n${stderr}`,
@@ -1039,7 +1045,6 @@ if (!runPostgresTests || databaseUrl === undefined) {
             expect(stderr).not.toContain("[migrate] failed:");
             expect(stderr).toContain('"indicator":"long_transaction"');
           } finally {
-            clearTimeout(deadline);
             child.kill();
             await child.exited;
           }

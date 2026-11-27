@@ -6,6 +6,7 @@ import { useNow, useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ClockIcon } from "@stll/ui/icons";
 import {
   Popover,
@@ -25,7 +26,6 @@ import {
   runningTimer,
   type TimeTimer,
 } from "@/features/time-timers/timer.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";

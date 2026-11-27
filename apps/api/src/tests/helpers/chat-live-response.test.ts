@@ -52,7 +52,9 @@ describe("a chat response relayed to the page", () => {
 
     const read = readPage(live.body);
     // The page has what the server wrote before the connection closes.
-    await Bun.sleep(0);
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
     live.disconnect(dropped);
 
     expect(await live.ended).toEqual({

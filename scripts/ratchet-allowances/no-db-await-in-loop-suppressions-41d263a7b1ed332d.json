@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/recording-transcription/run-queue.ts",
+  "delta": 4,
+  "reason": "A recording is decoded and transcribed one piece at a time so only one piece's audio is held in memory, with one progress write after each piece; the reconciler's settle sweep is a keyset walk of bounded pages, each settled before the next is read."
+}

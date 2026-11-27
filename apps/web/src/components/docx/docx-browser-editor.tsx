@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 /**
  * DocxBrowserEditor — wrapper that manages the edit session lifecycle
  * and renders the Folio DocxEditor.
@@ -36,6 +36,8 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import "@stll/folio-react/editor.css";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { useDocxWheelZoom } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
 import { DocxEditorAiOverlay } from "@/components/docx/docx-editor-ai-overlay";
@@ -51,7 +53,6 @@ import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { StatusMessage } from "@/components/route-components";
 import { UserIdentityAvatar } from "@/components/user-avatar";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import "@/components/pdf/peek/peek-docx.css";
@@ -387,13 +388,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       />
     ) : undefined;
 
-  const { lastStyleLabel, lastStyleLabelStyle } =
-    useRetainedStylePickerLabel(containerRef);
-
   const blockingError = getDocxEditorBlockingError({
     collaborationState,
     state,
   });
+  const editorShown =
+    blockingError === null &&
+    previewFile !== null &&
+    editorBuffer !== undefined;
+  const retainedStyle = useRetainedStylePickerLabel(containerRef, editorShown);
   if (blockingError !== null) {
     return (
       <DocxEditorBlockingErrorMessage error={blockingError} onClose={onClose} />
@@ -404,8 +407,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     <DocxEditorLoadingFallback
       scaleOffset={scaleOffset}
       showActionBar={showActionBar}
-      stylePickerLabel={lastStyleLabel}
-      stylePickerLabelStyle={lastStyleLabelStyle}
+      stylePickerLabel={retainedStyle.lastStyleLabel}
+      stylePickerLabelStyle={retainedStyle.lastStyleLabelStyle}
       toolbarExtra={toolbarExtra}
       zoom={targetZoom}
     />
@@ -797,22 +800,31 @@ const hasSameCollaborationPresence = (
     );
   });
 
-const CollaborationPresence = ({ awareness }: { awareness: Awareness }) => {
-  const [users, setUsers] = useState(() =>
-    readCollaborationPresence(awareness),
-  );
+// The last presence list read per awareness: a snapshot that keeps its
+// identity until someone joins, leaves or changes their name or picture.
+const presenceSnapshots = new WeakMap<Awareness, CollaborationPresenceUser[]>();
 
-  useExternalSyncEffect(() => {
-    const updatePresence = () => {
-      const next = readCollaborationPresence(awareness);
-      setUsers((previous) =>
-        hasSameCollaborationPresence(previous, next) ? previous : next,
-      );
+const readPresenceSnapshot = (awareness: Awareness) => {
+  const previous = presenceSnapshots.get(awareness);
+  const next = readCollaborationPresence(awareness);
+  if (previous !== undefined && hasSameCollaborationPresence(previous, next)) {
+    return previous;
+  }
+  presenceSnapshots.set(awareness, next);
+  return next;
+};
+
+const CollaborationPresence = ({ awareness }: { awareness: Awareness }) => {
+  // The awareness is the store: its `change` event notifies, and the list is
+  // read from it in the render that shows it.
+  const subscribe = (onChange: () => void) => {
+    awareness.on("change", onChange);
+    return () => {
+      awareness.off("change", onChange);
     };
-    updatePresence();
-    awareness.on("change", updatePresence);
-    return () => awareness.off("change", updatePresence);
-  }, [awareness]);
+  };
+  const readPresence = () => readPresenceSnapshot(awareness);
+  const users = useSyncExternalStore(subscribe, readPresence, readPresence);
 
   return (
     <ul className="flex min-h-11 items-center -space-x-2 px-2">

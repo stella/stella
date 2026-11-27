@@ -446,6 +446,7 @@ export const FAILURE_TAGS = [
   "RedisConfigurationError",
   "RedisRateLimitReplyError",
   "ReferenceFieldError",
+  "ReformatRefusedError",
   "RepeatedQueryFingerprintError",
   "ReplayArgumentsError",
   "ReplayStageError",

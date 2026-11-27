@@ -266,6 +266,16 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming recording-reader-worker.js apps/api/src/lib/recording-transcription/recording-reader-worker.ts",
+    bootCheck: {
+      type: "none",
+      reason:
+        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
+    },
+  },
+  {
+    file: "apps/api/Dockerfile",
+    command:
       "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming extraction-worker.js --external @firecrawl/anydoc-linux-arm64-musl --external @firecrawl/anydoc-linux-x64-musl apps/api/src/lib/search/extraction-worker.ts",
     bootCheck: {
       type: "none",

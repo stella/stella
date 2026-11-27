@@ -1,7 +1,8 @@
-// Local copy of the block-manifest and template-plan contract that the DOCX
-// engine exposes. Replace this file with the `@stll/folio-core/server` import
-// once the release carrying `analyzeDocxBlocks` and `applyTemplatePlan` is
-// pinned; nothing else in this directory restates these shapes.
+// The block-manifest and template-plan contract the steps in this directory
+// read and write: the part of the DOCX engine's shapes they use, with a
+// table's paragraphs listed flat. `folio-engine.ts` implements it over the
+// engine package and is where the compiler holds the two against each
+// other; nothing else in this directory imports the package.
 
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
@@ -22,7 +23,18 @@ export type DocxBlock = {
   /** Rendered automatic list label (`1.`, `a)`, `(ii)`, `Čl. 3`); null when
    *  the paragraph is not auto-numbered. Never part of `text`. */
   label: string | null;
-  numbering: { numId: number; ilvl: number; abstractNumId: number } | null;
+  /** `bullet`: the level prints a bullet, so the label is a mark,
+   *  whatever character stands for it, and no designator. `bulletFont`:
+   *  the text face the mark is a character of; in another face it is
+   *  another shape. Both absent from a manifest read before they were
+   *  reported. */
+  numbering: {
+    numId: number;
+    ilvl: number;
+    abstractNumId: number;
+    bullet?: true;
+    bulletFont?: string;
+  } | null;
   styleId: string | null;
   styleName: string | null;
   outlineLevel: number | null;
@@ -32,17 +44,85 @@ export type DocxBlock = {
   /** Pictures, drawings and embedded objects anchored in the block; a block
    *  that holds one is not empty even without text. */
   inlineObjects?: number;
+  /** Page breaks among the paragraph's runs; a paragraph without text can
+   *  hold one. */
+  pageBreaks?: number;
+  /** Offsets in `text` at which the paragraph holds a field that numbers
+   *  itself: the number it prints is in no text. Absent without one. */
+  selfNumbers?: number[];
+  /** The paragraph starts on a new page by its own formatting or its
+   *  style's. */
+  pageBreakBefore?: true;
+  /** The paragraph is the last of its section: the block after it opens
+   *  `sections[sectionIndex + 1]`. */
+  endsSection?: true;
+  /** The paragraph alignment in effect (`w:jc`): the paragraph's own, else
+   *  its style's. Absent when neither states one. */
+  alignment?: string;
+  /** The indent in effect, in twentieths of a point: where the
+   *  paragraph's lines start, and what its first line adds to that
+   *  (negative for a hanging indent). Absent when nothing states one, and
+   *  from a manifest read before it was reported. */
+  indent?: { left: number; firstLine: number };
   cells?: { row: number; col: number; blockIds: string[] }[];
+};
+
+/** One section of a document: how it begins after the one before it, and
+ *  its page, in twentieths of a point. */
+export type DocxSection = {
+  index: number;
+  start: "nextPage" | "evenPage" | "oddPage" | "nextColumn" | "continuous";
+  orientation: "portrait" | "landscape";
+  size: { width: number | null; height: number | null };
+  margins: {
+    top: number | null;
+    right: number | null;
+    bottom: number | null;
+    left: number | null;
+  };
+  columns: number;
 };
 
 export type DocxBlockManifest = {
   sha256: string;
   blocks: DocxBlock[];
+  /** The sections of the main story; a block names its own by
+   *  `sectionIndex`. Absent from a manifest read before sections were
+   *  reported. */
+  sections?: DocxSection[];
+  /** Compatibility settings of the document. Absent from a manifest read
+   *  before they were reported, as are the blocks' alignments. */
+  compat?: { doNotExpandShiftReturn: boolean };
   footnotes: { id: string; text: string }[];
   endnotes: { id: string; text: string }[];
   comments: number;
   trackedChanges: number;
+  /** What the document tracks, when it tracks anything and was read as it
+   *  stands. */
+  revisions?: TrackedChanges;
+  /** The view the manifest was read in and what was resolved for it:
+   *  every block, label and hash is that view's. */
+  trackedChangesResolved?: TrackedChanges & { view: TrackedChangesView };
   warnings: string[];
+};
+
+/** One of the two texts a document with tracked changes holds: with every
+ *  change accepted, or with every change rejected. */
+export type TrackedChangesView = "accept" | "reject";
+
+/** The tracked changes of a document's main story and notes, by kind. */
+export type TrackedChanges = {
+  insertions: number;
+  deletions: number;
+  moves: number;
+  /** Paragraph marks the view removes, each joining two paragraphs. */
+  paragraphMarks: number;
+  tableRows: number;
+  formattingChanges: number;
+  authors: string[];
+  /** The earliest and the latest date a change states, as written. */
+  first: string | null;
+  last: string | null;
 };
 
 /** One numbering level of a template, as the template inspection reports it. */
@@ -77,6 +157,19 @@ export type TemplateStyle = {
   /** The paragraph alignment the style states (`w:jc`), inheritance
    *  resolved; null when none is stated. */
   alignment: string | null;
+  /** Whether the style sets its text in bold, inheritance and the
+   *  document's defaults resolved. Absent, like `size`, from an inspection
+   *  read before the look was reported. */
+  bold?: boolean;
+  /** The font size the style gives its text, in half-points, inheritance
+   *  and the document's defaults resolved; null when none states one. */
+  size?: number | null;
+  /** Whether the style keeps its paragraph with the next one. */
+  keepNext?: boolean;
+  /** The left indent the style gives its paragraphs, in twentieths of a
+   *  point; null when none states one. Absent from an inspection read
+   *  before it was reported. */
+  indentLeft?: number | null;
   isDefault: boolean;
 };
 
@@ -103,6 +196,30 @@ export type TemplateInspection = {
     nums: { numId: number; abstractNumId: number }[];
   };
   fields: TemplateField[];
+  /** Text effects of the template whose values show nothing, each with
+   *  what its run properties belong to. Absent from an inspection read
+   *  before they were reported. */
+  invisibleEffects?: TemplateInvisibleEffect[];
+};
+
+/** A text effect that shows nothing. It can still change how the text is
+ *  treated: a run with a 3-D scene, even the default one, is drawn as a
+ *  picture. The engine writes its output without such effects. */
+type TemplateInvisibleEffect = {
+  part: string;
+  effect:
+    | "glow"
+    | "shadow"
+    | "reflection"
+    | "textOutline"
+    | "textFill"
+    | "scene3d"
+    | "props3d";
+  owner:
+    | { kind: "level"; abstractNumId: number | null; ilvl: number | null }
+    | { kind: "style"; styleId: string | null }
+    | { kind: "defaults" }
+    | { kind: "text" };
 };
 
 /** The list a placed paragraph joins. A number names a list of the
@@ -118,6 +235,9 @@ export type TemplatePlanNumbering = {
 
 type TemplatePlanMerge = "lineBreak" | "space" | "none";
 
+/** How a paragraph's lines are set between the margins. */
+export type TemplatePlanAlignment = "left" | "center" | "right" | "both";
+
 export type TemplatePlanNestedParagraph = {
   blockId: string;
   styleId?: string;
@@ -125,6 +245,29 @@ export type TemplatePlanNestedParagraph = {
   stripLabel?: string;
   /** As on a source item. */
   labelAsText?: boolean;
+  /** As on a source item. */
+  alignment?: TemplatePlanAlignment;
+};
+
+/** A section of the output with a page other than the template's, in
+ *  twentieths of a point. Everything else of it is the template's last
+ *  section. */
+export type TemplatePlanSection = {
+  page?: {
+    orientation: "portrait" | "landscape";
+    width: number;
+    height: number;
+    margins?: { top: number; right: number; bottom: number; left: number };
+  };
+  /** How it begins after the section before it; `nextPage` when left out. */
+  start?: "nextPage" | "evenPage" | "oddPage";
+};
+
+/** A paragraph indent a plan states; a side left out stays as it is. */
+export type TemplatePlanIndent = {
+  left?: number;
+  hanging?: number;
+  firstLine?: number;
 };
 
 export type TemplatePlanSourceItem = {
@@ -136,6 +279,11 @@ export type TemplatePlanSourceItem = {
   numbering?: TemplatePlanNumbering | null;
   /** Literal manual label at the start of the block's text, removed. */
   stripLabel?: string;
+  /** With `stripLabel`: a line break behind the label goes with it. For a
+   *  heading the source breaks behind its number where the template sets
+   *  number and title on one line. An engine that does not know the option
+   *  leaves the break in the paragraph. */
+  stripLabelBreak?: boolean;
   /** Writes the block's automatic label as text in front of its text, for
    *  a label no list of the template prints. The paragraph it leads joins
    *  no list. The engine writes only a label that reads the same wherever
@@ -144,6 +292,26 @@ export type TemplatePlanSourceItem = {
   labelAsText?: boolean;
   /** Joins the next plan item, a bare source paragraph, into this one. */
   mergeNext?: TemplatePlanMerge;
+  /** Starts the paragraph on a new page. Not for a table, nor for a block
+   *  that joins the paragraph before it. */
+  pageBreakBefore?: boolean;
+  /** The paragraph is the last of the section described. Not for a table,
+   *  nor for a block that joins the paragraph before it. */
+  endsSection?: TemplatePlanSection;
+  /** Keeps the paragraph on the page of the one after it. An engine that
+   *  does not know the option writes the paragraph without it. */
+  keepNext?: boolean;
+  /** The paragraph's own indent, over its style's and its list level's,
+   *  in twentieths of a point. As `keepNext`, it is left out by an engine
+   *  that does not know it. */
+  indent?: TemplatePlanIndent;
+  /** The paragraph's own left tab stops, in twentieths of a point from
+   *  the left margin, ascending. As `keepNext`, left out by an engine that
+   *  does not know them. */
+  tabStops?: number[];
+  /** The paragraph's own alignment, over its style's. As `keepNext`, left
+   *  out by an engine that does not know it. */
+  alignment?: TemplatePlanAlignment;
   /** Table only: the paragraph style of its cells. */
   cellStyleId?: string;
   /** Table only: placement of single paragraphs inside it. */
@@ -182,6 +350,9 @@ export type TemplatePlanNumberingPatch = {
   lvlText?: string;
   /** What follows the label. */
   suff?: "tab" | "space" | "nothing";
+  /** The face the level's label is set in: for a bullet whose mark is a
+   *  character of a text face. */
+  font?: string;
   /** The level's paragraph indent, in twentieths of a point; a value left
    *  out keeps what the level states. */
   indent?: { left?: number; hanging?: number; firstLine?: number };
@@ -197,6 +368,15 @@ export type TemplatePlan = {
   references?: TemplatePlanReference[];
   highlights?: TemplatePlanHighlight[];
   fields?: { freezeKinds?: string[]; updateOnOpen?: boolean };
+  /** Compatibility settings switched on in the output's settings, which
+   *  are otherwise the template's. */
+  compat?: { doNotExpandShiftReturn?: boolean };
+  /** The section the body ends with, when its page is another than the
+   *  template's. */
+  lastSection?: TemplatePlanSection;
+  /** The view of a source with tracked changes the plan is made for. The
+   *  output carries no revision. */
+  trackedChanges?: TrackedChangesView;
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -250,6 +430,10 @@ export type TemplateEngineRefusal =
   | "highlight-span-invalid"
   | "tracked-changes"
   | "unsupported-content"
+  /** The source or the template is no package the engine can open. */
+  | "archive-unreadable"
+  /** The output was written and did not hold up against the plan. */
+  | "verification-failed"
   | "other";
 
 export class TemplateEngineError extends TaggedError("TemplateEngineError")<{
@@ -277,8 +461,12 @@ type TemplateLayoutSignals = { pages: number };
 /** The DOCX engine behind this directory. Injected, so the rules here do
  *  not depend on the package release that carries it. */
 export type TemplatePlanEngine = {
+  /** With `trackedChanges`, the manifest of that view of a document with
+   *  tracked changes. An engine that cannot read a view answers as if none
+   *  was asked for. */
   analyze: (
     docx: Uint8Array,
+    options?: { trackedChanges?: TrackedChangesView },
   ) => Promise<Result<DocxBlockManifest, TemplateEngineError>>;
   inspect: (
     docx: Uint8Array,
@@ -311,11 +499,14 @@ const MANUAL_LABEL_BULLET = /^[-\u2013\u2014\u2022\u00B7\u25AA\u25E6*]$/u;
 const MANUAL_LABEL_ROMAN =
   /^(?=.)M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/iu;
 const MANUAL_LABEL_END = /^[ \t\u00A0\n]$/u;
+/** A number of several parts typed with blanks between them: `1. 1.`. */
+const MANUAL_LABEL_SPACED_NUMBER = /^\d{1,3}\.(?:[ \u00A0]+\d{1,3}\.){1,3}$/u;
 
 /**
  * Whether the engine will strip `label` from the start of `text`: up to
  * three words and one designator (a number, a roman numeral or a letter with
- * its punctuation) or a single bullet, ending where a word would. The engine
+ * its punctuation), a single bullet, or a number whose parts stand apart
+ * (`1. 1.`), ending where a word would. The engine
  * refuses any other strip, so a label that fails here stays in the text.
  */
 export const isStrippableLabel = (label: string, text: string): boolean => {
@@ -330,7 +521,10 @@ export const isStrippableLabel = (label: string, text: string): boolean => {
   ) {
     return false;
   }
-  if (MANUAL_LABEL_BULLET.test(label)) {
+  if (
+    MANUAL_LABEL_BULLET.test(label) ||
+    MANUAL_LABEL_SPACED_NUMBER.test(label)
+  ) {
     return true;
   }
   const tokens = label.split(/[ \u00A0]/u);
@@ -350,6 +544,8 @@ const blockNumberingSchema = v.strictObject({
   numId: v.pipe(v.number(), v.integer()),
   ilvl: v.pipe(v.number(), v.integer(), v.minValue(0)),
   abstractNumId: v.pipe(v.number(), v.integer()),
+  bullet: v.exactOptional(v.literal(true)),
+  bulletFont: v.exactOptional(v.pipe(v.string(), v.minLength(1))),
 });
 
 const blockSchema = v.strictObject({
@@ -367,6 +563,19 @@ const blockSchema = v.strictObject({
   inlineObjects: v.exactOptional(
     v.pipe(v.number(), v.integer(), v.minValue(0)),
   ),
+  pageBreaks: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  selfNumbers: v.exactOptional(
+    v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  ),
+  pageBreakBefore: v.exactOptional(v.literal(true)),
+  endsSection: v.exactOptional(v.literal(true)),
+  alignment: v.exactOptional(v.string()),
+  indent: v.exactOptional(
+    v.strictObject({
+      left: v.pipe(v.number(), v.integer()),
+      firstLine: v.pipe(v.number(), v.integer()),
+    }),
+  ),
   cells: v.exactOptional(
     v.array(
       v.strictObject({
@@ -380,13 +589,60 @@ const blockSchema = v.strictObject({
 
 const noteSchema = v.strictObject({ id: v.string(), text: v.string() });
 
+const twips = v.nullable(v.pipe(v.number(), v.integer()));
+
+const sectionSchema = v.strictObject({
+  index: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  start: v.picklist([
+    "nextPage",
+    "evenPage",
+    "oddPage",
+    "nextColumn",
+    "continuous",
+  ]),
+  orientation: v.picklist(["portrait", "landscape"]),
+  size: v.strictObject({ width: twips, height: twips }),
+  margins: v.strictObject({
+    top: twips,
+    right: twips,
+    bottom: twips,
+    left: twips,
+  }),
+  columns: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
+const count = v.pipe(v.number(), v.integer(), v.minValue(0));
+const REVISION_AUTHORS_MAX = 1000;
+const trackedChangesSchema = v.strictObject({
+  insertions: count,
+  deletions: count,
+  moves: count,
+  paragraphMarks: count,
+  tableRows: count,
+  formattingChanges: count,
+  authors: v.pipe(v.array(v.string()), v.maxLength(REVISION_AUTHORS_MAX)),
+  first: v.nullable(v.string()),
+  last: v.nullable(v.string()),
+});
+
 const manifestSchema = v.strictObject({
   sha256: v.string(),
   blocks: v.array(blockSchema),
+  sections: v.exactOptional(v.array(sectionSchema)),
+  compat: v.exactOptional(
+    v.strictObject({ doNotExpandShiftReturn: v.boolean() }),
+  ),
   footnotes: v.array(noteSchema),
   endnotes: v.array(noteSchema),
   comments: v.pipe(v.number(), v.integer(), v.minValue(0)),
   trackedChanges: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  revisions: v.exactOptional(trackedChangesSchema),
+  trackedChangesResolved: v.exactOptional(
+    v.strictObject({
+      ...trackedChangesSchema.entries,
+      view: v.picklist(["accept", "reject"]),
+    }),
+  ),
   warnings: v.array(v.string()),
 });
 

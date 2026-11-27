@@ -3,8 +3,8 @@ import type { RefObject } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
+
 import { detached } from "@/lib/detached";
 import { isEditableEventTarget } from "@/lib/hotkeys";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";

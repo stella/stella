@@ -22280,14 +22280,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/parsers/block-anchors.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/lib/legal-search/parsers/document-footnotes.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
@@ -22302,22 +22294,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-3"
-      }
-    },
-    "src/lib/legal-search/parsers/hard-wrapped-lines.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/legal-search/parsers/letter-spacing.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/lib/legal-search/parsers/libpdf-utils.test.ts": {
@@ -22342,14 +22318,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/lib/legal-search/parsers/page-furniture.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/lib/legal-search/parsers/rtf-control-vocabulary.test.ts": {
@@ -22382,14 +22350,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-1"
-      }
-    },
-    "src/lib/legal-search/parsers/separate-opinion-heading.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/lib/legal-search/parsers/sk-courts.test.ts": {

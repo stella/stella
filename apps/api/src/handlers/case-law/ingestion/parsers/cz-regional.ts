@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
@@ -37,14 +38,14 @@ import {
   normalizeInlineLine,
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
-
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import { withAttestedLetterSpacing } from "@stll/legal-ast/letter-spacing";
 import {
   continuesAcrossPageBreak,
   isRunningHeaderLine,
   withoutSoftHyphens,
-} from "@/api/lib/legal-search/parsers/page-furniture";
+} from "@stll/legal-ast/page-furniture";
+
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 

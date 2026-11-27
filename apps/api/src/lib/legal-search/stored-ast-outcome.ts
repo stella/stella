@@ -6,9 +6,9 @@ import {
   type PersistedAstDegradation,
   persistedAstDegradations,
 } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 
 import { StoredAstDegradedError } from "@/api/lib/errors/tagged-errors";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import {
   type FailureMeasures,

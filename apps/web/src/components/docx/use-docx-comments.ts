@@ -1,7 +1,8 @@
 import { useState } from "react";
 
+import { useLatestCallback } from "@stll/ui/effects";
+
 import type { DocxComments } from "@/components/docx/app-docx-editor";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 /**
  * Controlled `DocxEditor` comment state, round-tripped back through

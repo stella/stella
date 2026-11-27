@@ -8,9 +8,8 @@ import { useTranslations } from "use-intl";
 
 import { RESOURCE_TYPE, type WorkspaceRealtimeEvent } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
   captureSessionQueryOwner,
   isObservedSessionQueryOwner,

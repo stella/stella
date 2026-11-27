@@ -161,15 +161,25 @@ test("process-tree fixtures release a subprocess's output pipes after their lead
       expect(stopped).toBe(true);
       expect(await owner.exited).toBe(0);
 
-      const pending = Symbol("output pipe still open");
-      // real-time: pipe EOF must arrive within the regression's two-second contract.
-      const timeout = Bun.sleep(2000).then(() => pending);
-      const [stdout, stderr] = await Promise.all([
-        Promise.race([new Response(owner.stdout).text(), timeout]),
-        Promise.race([new Response(owner.stderr).text(), timeout]),
-      ]);
-      expect(stdout).not.toBe(pending);
-      expect(stderr).not.toBe(pending);
+      let stdoutDone = false;
+      let stderrDone = false;
+      const stdoutPromise = new Response(owner.stdout).text().then((text) => {
+        stdoutDone = true;
+        return text;
+      });
+      const stderrPromise = new Response(owner.stderr).text().then((text) => {
+        stderrDone = true;
+        return text;
+      });
+      const pipesClosed = await waitForExternalState({
+        description: `${termMode} output pipes to reach EOF`,
+        intervalMs: 20,
+        timeoutMs: 2000,
+        read: () => stdoutDone && stderrDone,
+        onTimeout: () => false,
+      });
+      expect(pipesClosed).toBe(true);
+      await Promise.all([stdoutPromise, stderrPromise]);
     } finally {
       owner.kill("SIGKILL");
       const session = readDevProcessGroups(root).unwrap(

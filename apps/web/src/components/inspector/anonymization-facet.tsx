@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 /**
  * Inspector facet — workspace-scoped anonymization vocabulary.
  *
@@ -27,6 +27,11 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import {
+  useExternalSyncEffect,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import {
   ChevronDownIcon as ChevronDown,
@@ -56,8 +61,6 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -213,6 +216,149 @@ type AnonymizationFacetProps = {
   onOpenFullView?: () => void;
 };
 
+/**
+ * Which detected groups are open, and the reveal of a document click: on every
+ * doc-sourced selection bump for this document, the selection's group opens
+ * and its row scrolls into view with a brief outline flash.
+ */
+const useDetectedGroupExpansion = (
+  activeFieldId: string | null,
+  detectedGroups: readonly (readonly [string, unknown])[],
+) => {
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleGroup = (label: string) =>
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+
+  // Click in the document → highlight matching row here.
+  // Subscribe to the bridge store and, on every doc-sourced
+  // selection bump *for this document*, find the row by data
+  // attribute, scroll it into view, and run a brief outline
+  // flash. Sidebar-sourced selections (our own emits) are
+  // ignored to avoid loops; selections from other docs (cached
+  // tab panes) are ignored too.
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Select primitives separately rather than returning a fresh
+  // `{ canonical, label, seq }` object from the selector. Zustand
+  // v5 uses referential equality on selector results, so an
+  // object literal would re-render on every store change and risk
+  // an infinite getSnapshot loop. Each primitive selector is
+  // stable across unrelated updates.
+  const docSelectionCanonical = useInspectorAnonymizationStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.canonical
+      : null,
+  );
+  const docSelectionLabel = useInspectorAnonymizationStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.label
+      : null,
+  );
+  const docSelectionSeq = useInspectorAnonymizationStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.seq
+      : 0,
+  );
+  // Detected groups start collapsed; a doc click that lands on a detected
+  // canonical opens its group in the render that sees the click (seeded 0,
+  // the no-selection seq, so a selection waiting at mount counts too), and
+  // the layout effect below scrolls to the row in the same commit.
+  const [expandedForSeq, setExpandedForSeq] = useState(0);
+  if (expandedForSeq !== docSelectionSeq) {
+    setExpandedForSeq(docSelectionSeq);
+    setExpandedGroups((prev) =>
+      withDetectedGroupExpanded(prev, docSelectionLabel, detectedGroups),
+    );
+  }
+  useLayoutSyncEffect(() => {
+    if (!docSelectionCanonical) {
+      return;
+    }
+    const root = containerRef.current;
+    if (!root) {
+      return;
+    }
+    // `seq` is part of the dep array so repeated clicks of the
+    // same canonical re-fire the scroll + flash.
+    const selector = `[data-anonymization-canonical="${CSS.escape(docSelectionCanonical)}"]`;
+    const row = root.querySelector<HTMLElement>(selector);
+    if (!row) {
+      return;
+    }
+    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    row.animate(
+      [
+        { boxShadow: "inset 0 0 0 2px var(--primary)" },
+        { boxShadow: "inset 0 0 0 2px transparent" },
+      ],
+      { duration: 600, easing: "ease-out" },
+    );
+  }, [docSelectionCanonical, docSelectionSeq]);
+  return { containerRef, expandedGroups, toggleGroup };
+};
+
+// The expanded set with the doc selection's group opened, or the same set when
+// there is nothing to open. Only the detected section is collapsible —
+// workspace term rows live above it and are always visible.
+const withDetectedGroupExpanded = (
+  expanded: ReadonlySet<string>,
+  label: string | null,
+  detectedGroups: readonly (readonly [string, unknown])[],
+): ReadonlySet<string> => {
+  if (
+    label === null ||
+    label.length === 0 ||
+    expanded.has(label) ||
+    !detectedGroups.some(([groupLabel]) => groupLabel === label)
+  ) {
+    return expanded;
+  }
+  const next = new Set(expanded);
+  next.add(label);
+  return next;
+};
+
+/**
+ * The term field's draft. Folio selection bridge: picks up PM selections
+ * that live in the off-screen hidden PM and aren't visible to
+ * `window.getSelection()`. The docx editor wrapper wraps `view.dispatch` and
+ * publishes the latest selected text on every selection-bearing transaction;
+ * each published selection is a new object. The draft takes one in the render
+ * that first sees it (on mount, on a field switch, or as it arrives) and keeps
+ * it until the user types or a newer selection lands. A field without a
+ * selection leaves the draft alone.
+ */
+const useTermDraft = (activeFieldId: string | null) => {
+  const [draft, setDraft] = useState("");
+  const folioSelection = useInspectorAnonymizationStore((s) =>
+    activeFieldId === null
+      ? undefined
+      : s.documentTextSelectionByFieldId[activeFieldId],
+  );
+  const [takenSelection, setTakenSelection] =
+    useState<typeof folioSelection>(undefined);
+  const offeredSelection = folioSelection ?? takenSelection;
+  if (offeredSelection !== takenSelection) {
+    setTakenSelection(offeredSelection);
+    if (offeredSelection !== undefined) {
+      setDraft(offeredSelection.text);
+    }
+  }
+  return [draft, setDraft] as const;
+};
+
 export const AnonymizationFacet = ({
   workspaceId,
   activeFieldId,
@@ -293,7 +439,7 @@ export const AnonymizationFacet = ({
     },
   });
 
-  const [pendingValue, setPendingValue] = useState("");
+  const [pendingValue, setPendingValue] = useTermDraft(activeFieldId);
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
 
   // Tell the document editor to paint the in-document highlight
@@ -340,7 +486,7 @@ export const AnonymizationFacet = ({
     // programmatically on an off-screen hidden PM and renders
     // visible selection via a custom overlay. Folio
     // selections come in via the inspector store
-    // (subscribed below); the listener here only
+    // (read by `useTermDraft`); the listener here only
     // handles the PDF case.
     const PREVIEW_SURFACES = ".textLayer";
     const isInsidePreview = (node: Node | null): boolean => {
@@ -372,35 +518,6 @@ export const AnonymizationFacet = ({
     document.addEventListener("selectionchange", handler);
     return () => document.removeEventListener("selectionchange", handler);
   });
-
-  // Folio selection bridge — picks up PM selections that
-  // live in the off-screen hidden PM and aren't visible to
-  // `window.getSelection()`. The docx editor wrapper
-  // wraps `view.dispatch` and publishes the latest
-  // selected text here on every selection-bearing
-  // transaction.
-  const lastConsumedSelectionRef = useRef<unknown>(null);
-  const consumeFolioSelection = useLatestCallback(() => {
-    if (activeFieldId === null) {
-      return;
-    }
-    const selection =
-      useInspectorAnonymizationStore.getState().documentTextSelectionByFieldId[
-        activeFieldId
-      ];
-    if (
-      selection === undefined ||
-      selection === lastConsumedSelectionRef.current
-    ) {
-      return;
-    }
-    lastConsumedSelectionRef.current = selection;
-    setPendingValue(selection.text);
-  });
-  useExternalSyncEffect(() => {
-    consumeFolioSelection();
-    return useInspectorAnonymizationStore.subscribe(consumeFolioSelection);
-  }, [activeFieldId, consumeFolioSelection]);
 
   const addTerm = async (canonical: string, label: LabelOption) => {
     const trimmed = canonical.trim();
@@ -645,101 +762,8 @@ export const AnonymizationFacet = ({
     }
     return [...groups.entries()].toSorted(([a], [b]) => compareText(a, b));
   })();
-  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const toggleGroup = (label: string) =>
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) {
-        next.delete(label);
-      } else {
-        next.add(label);
-      }
-      return next;
-    });
-
-  // Click in the document → highlight matching row here.
-  // Subscribe to the bridge store and, on every doc-sourced
-  // selection bump *for this document*, find the row by data
-  // attribute, scroll it into view, and run a brief outline
-  // flash. Sidebar-sourced selections (our own emits) are
-  // ignored to avoid loops; selections from other docs (cached
-  // tab panes) are ignored too.
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Select primitives separately rather than returning a fresh
-  // `{ canonical, label, seq }` object from the selector. Zustand
-  // v5 uses referential equality on selector results, so an
-  // object literal would re-render on every store change and risk
-  // an infinite getSnapshot loop. Each primitive selector is
-  // stable across unrelated updates.
-  const docSelectionCanonical = useInspectorAnonymizationStore((s) =>
-    s.anonymizationSelection.source === "doc" &&
-    s.anonymizationSelection.fieldId === activeFieldId
-      ? s.anonymizationSelection.canonical
-      : null,
-  );
-  const docSelectionLabel = useInspectorAnonymizationStore((s) =>
-    s.anonymizationSelection.source === "doc" &&
-    s.anonymizationSelection.fieldId === activeFieldId
-      ? s.anonymizationSelection.label
-      : null,
-  );
-  const docSelectionSeq = useInspectorAnonymizationStore((s) =>
-    s.anonymizationSelection.source === "doc" &&
-    s.anonymizationSelection.fieldId === activeFieldId
-      ? s.anonymizationSelection.seq
-      : 0,
-  );
-  useLayoutEffect(() => {
-    if (!docSelectionCanonical) {
-      return;
-    }
-    // Detected groups start collapsed; if the doc click lands on
-    // a detected canonical whose group isn't open yet, expand it
-    // first. The effect re-runs after expandedGroups updates and
-    // proceeds to the scroll/flash branch below.
-    if (
-      docSelectionLabel &&
-      !expandedGroups.has(docSelectionLabel) &&
-      // Only the detected section is collapsible — workspace
-      // term rows live above it and are always visible.
-      detectedGroups.some(([label]) => label === docSelectionLabel)
-    ) {
-      // oxlint-disable-next-line react/set-state-in-effect -- external subscription: two-pass reaction to a doc-selection store bump; this commit expands the target group, the effect re-run then scrolls + flashes via DOM imperatives that depend on the expand having committed
-      setExpandedGroups((prev) => {
-        const next = new Set(prev);
-        next.add(docSelectionLabel);
-        return next;
-      });
-      return;
-    }
-    const root = containerRef.current;
-    if (!root) {
-      return;
-    }
-    // `seq` is part of the dep array so repeated clicks of the
-    // same canonical re-fire the scroll + flash.
-    const selector = `[data-anonymization-canonical="${CSS.escape(docSelectionCanonical)}"]`;
-    const row = root.querySelector<HTMLElement>(selector);
-    if (!row) {
-      return;
-    }
-    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    row.animate(
-      [
-        { boxShadow: "inset 0 0 0 2px var(--primary)" },
-        { boxShadow: "inset 0 0 0 2px transparent" },
-      ],
-      { duration: 600, easing: "ease-out" },
-    );
-  }, [
-    docSelectionCanonical,
-    docSelectionLabel,
-    docSelectionSeq,
-    expandedGroups,
-    detectedGroups,
-  ]);
+  const { containerRef, expandedGroups, toggleGroup } =
+    useDetectedGroupExpansion(activeFieldId, detectedGroups);
 
   const selectFromSidebar = (canonical: string, label: string) => {
     if (activeFieldId === null) {

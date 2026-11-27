@@ -561,14 +561,43 @@ const RESTRICTED_IMPORT_RULES = {
         "state in render, do the work in the event handler, fetch with " +
         "TanStack Query, or reset with `key`. For genuine external-system " +
         "sync use useMountEffect or useExternalSyncEffect from " +
-        "@/hooks/use-effect. See the convention: /conventions-use-effect.",
+        "@stll/ui/effects. See the convention: /conventions-use-effect.",
       modules: [packageWithSubpaths("react")],
       restriction: {
         type: "exports",
         names: new Set(["useEffect"]),
         hit: EXPORT_HIT.call,
       },
-      owners: ["apps/web/src/hooks/use-effect.ts"],
+      owners: ["packages/ui/src/effects/effects.ts"],
+    },
+  ],
+  // A layout effect blocks paint, and one that writes state renders twice
+  // before the user sees anything. The few things that must happen before
+  // paint go through named wrappers, so each is a greppable host write. Hit
+  // at the binding: an alias chosen at runtime
+  // (`cond ? useEffect : useLayoutEffect`) never calls the hook by name.
+  "no-raw-use-layout-effect": [
+    {
+      messageId: "noRawUseLayoutEffect",
+      message:
+        "Direct useLayoutEffect and useInsertionEffect are banned. A host " +
+        "write that must land before paint (scroll, zoom, a class, a " +
+        "registration) uses useLayoutSyncEffect or useMountLayoutEffect, " +
+        "never React state; a ref that follows a value uses useLatest (or " +
+        "useIsMounted for a mounted flag), all from @stll/ui/effects; a " +
+        "value measured from the DOM uses useLayoutMeasurement or " +
+        "useObservedValue from @stll/ui/effects-dom. See the convention: " +
+        "/conventions-use-effect.",
+      modules: [packageWithSubpaths("react")],
+      restriction: {
+        type: "exports",
+        names: new Set(["useLayoutEffect", "useInsertionEffect"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "packages/ui/src/effects/effects.ts",
+        "packages/ui/src/effects/dom.ts",
+      ],
     },
   ],
   // A retention projection reads the publisher's stored raw and nothing a

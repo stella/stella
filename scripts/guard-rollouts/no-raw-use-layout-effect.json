@@ -1,0 +1,19 @@
+{
+  "id": "no-raw-use-layout-effect",
+  "rules": ["no-raw-use-layout-effect/no-raw-use-layout-effect"],
+  "type": "changed-lines",
+  "expiresAt": "2026-12-03T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-use-layout-effect/no-raw-use-layout-effect",
+    "apps",
+    "packages"
+  ]
+}

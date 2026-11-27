@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import {
@@ -24,7 +25,6 @@ import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-rea
 import { TEXT_ABSENCE_REASON } from "@/api/lib/case-law/decision-text";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { GateSurface } from "@/api/lib/case-law/public-subject";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

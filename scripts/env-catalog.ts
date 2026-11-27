@@ -1944,7 +1944,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "RAILWAY_TEMPLATE_PROJECT_ID",
   // CI names the revision the convention ratchet measures as its base.
   "RATCHET_BASE_REF",
-  "READ_FAULT_BASELINE",
   "RECORD_ANTHROPIC_API_KEY",
   "RECORD_BEDROCK_API_KEY",
   "RECORD_GOOGLE_API_KEY",

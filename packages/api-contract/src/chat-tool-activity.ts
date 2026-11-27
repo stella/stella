@@ -105,6 +105,10 @@ const BUILT_IN_CHAT_TOOL_DISPLAY = {
   "load-skill": { category: "research", label: "load-skill" },
   add_matter_member: { category: "mutation", label: "add_matter_member" },
   remove_matter_member: { category: "mutation", label: "remove_matter_member" },
+  reformat_into_template: {
+    category: "mutation",
+    label: "reformat_into_template",
+  },
   update_organization_settings: {
     category: "mutation",
     label: "update_organization_settings",

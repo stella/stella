@@ -905,6 +905,7 @@
   "desktop-windows-dry-run": {
     "displayName": { "prefix": "desktop-windows-dry-run (", "suffix": ")" },
     "declaredStepNames": [
+      "Cache Rust dependencies and build artifacts",
       "Cancel merge group after failure in this job",
       "Checkout",
       "Exercise Windows desktop release build",
@@ -919,8 +920,10 @@
       "Upload successful queue dry-run receipt"
     ],
     "steps": [
+      "Cache Rust dependencies and build artifacts",
       "Checkout",
       "Install dependencies",
+      "Post Cache Rust dependencies and build artifacts",
       "Post Checkout",
       "Post Install dependencies",
       "Post Setup Bun with install cache",

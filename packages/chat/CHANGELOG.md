@@ -1,5 +1,19 @@
 # @stll/chat
 
+## 0.6.17
+
+### Patch Changes
+
+- Updated dependencies [[`3762bf8`](https://github.com/stella/stella/commit/3762bf8c0652749952f215af3e86010237338984), [`2c8afcc`](https://github.com/stella/stella/commit/2c8afccef1e41d1829a69a75575615329137f564), [`8b35843`](https://github.com/stella/stella/commit/8b3584382e97b6a3c4c80436f849d42eb9384740), [`98bdc5c`](https://github.com/stella/stella/commit/98bdc5c5baa038b6f1bcdfca24e38038f4bee0e5), [`7655d51`](https://github.com/stella/stella/commit/7655d51a49597eecd510b5b212ce8ab8bc88cc61)]:
+  - @stll/ui@0.91.0
+
+## 0.6.16
+
+### Patch Changes
+
+- Updated dependencies [[`4d9d313`](https://github.com/stella/stella/commit/4d9d3134c132a0b3c005588624a0dd4096a1f358), [`e034ab2`](https://github.com/stella/stella/commit/e034ab28a81e2cfba784c523e00eb20ca17f3b12), [`f51823e`](https://github.com/stella/stella/commit/f51823ed31394c53538533189b9284af3e484cb0), [`e335127`](https://github.com/stella/stella/commit/e335127269927db46c6035451c66d782ef3af5bc), [`2902ea2`](https://github.com/stella/stella/commit/2902ea2475ee03df9c16889783684686a56ca2f1), [`611c27e`](https://github.com/stella/stella/commit/611c27ee631640a3826786e5da7bc734d6d563df), [`bc0782b`](https://github.com/stella/stella/commit/bc0782b934613f4d8f84d27eb8830f9de8780ed9), [`353fefb`](https://github.com/stella/stella/commit/353fefbfd02ba80646edff6738ad364384d0df51), [`3493d33`](https://github.com/stella/stella/commit/3493d33c38d730aaa95c8ca624b9a54fdea3d23c), [`be9916a`](https://github.com/stella/stella/commit/be9916ac9072029fc77096077be4ce01d7ee0ef3), [`b135cba`](https://github.com/stella/stella/commit/b135cbac718fc41005de7c88cb91878ac588f747)]:
+  - @stll/ui@0.90.0
+
 ## 0.6.15
 
 ### Patch Changes

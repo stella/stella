@@ -6,14 +6,14 @@
  * Positions are calculated from actual DOM positions of group headers.
  */
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { RefObject } from "react";
 
 import { Button } from "@stll/ui/button";
+import { useObservedValue } from "@stll/ui/effects-dom";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceGroup } from "@/lib/workspaces/types";
 
 type AlphabetIndexProps = {
@@ -22,12 +22,14 @@ type AlphabetIndexProps = {
   scrollContainerRef: RefObject<HTMLElement | null>;
 };
 
-type Positioned = {
+type Marker = {
   groupId: string;
   label: string;
   pct: number;
-  top: number;
 };
+
+/** Each indexed group's position, in % of the scroll height, by group id. */
+type GroupPositions = Readonly<Record<string, number>>;
 
 const MIN_GROUPS_FOR_INDEX = 6;
 
@@ -42,106 +44,118 @@ const getOffsetTop = (el: HTMLElement, container: HTMLElement): number => {
   return offset;
 };
 
+const groupLetter = (group: WorkspaceGroup): string =>
+  group.type === "personal"
+    ? "★"
+    : (group.clientName.at(0)?.toUpperCase() ?? "#");
+
+const findGroupHeader = (container: HTMLElement, groupId: string) =>
+  container.querySelector<HTMLElement>(
+    `[data-group-id="${CSS.escape(groupId)}"]`,
+  );
+
+/**
+ * Where the first group of each letter starts, or null while the container
+ * has no height to place them in.
+ */
+const measureGroupPositions = (
+  container: HTMLElement,
+  groups: readonly WorkspaceGroup[],
+): GroupPositions | null => {
+  const scrollHeight = container.scrollHeight;
+  if (scrollHeight <= 0) {
+    return null;
+  }
+  const positions: [string, number][] = [];
+  const seenLetters = new Set<string>();
+  for (const group of groups) {
+    const letter = groupLetter(group);
+    if (seenLetters.has(letter)) {
+      continue;
+    }
+    seenLetters.add(letter);
+    const header = findGroupHeader(container, group.groupId);
+    if (!header) {
+      continue;
+    }
+    const top = getOffsetTop(header, container);
+    positions.push([
+      group.groupId,
+      Math.min(98, Math.max(1, (top / scrollHeight) * 100)),
+    ]);
+  }
+  return Object.fromEntries(positions);
+};
+
 export const AlphabetIndex = ({
   groups,
   collapsedGroups,
   scrollContainerRef,
 }: AlphabetIndexProps) => {
-  const [markers, setMarkers] = useState<Positioned[]>([]);
   const [active, setActive] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // The index's own element, rendered (hidden) even while there are too few
+  // groups to index, so the measurement below always has an owner to run on.
+  const [indexElement, setIndexElement] = useState<HTMLDivElement | null>(null);
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
-  const recalc = useCallback(() => {
-    const sc = scrollContainerRef.current;
-    if (!sc || groups.length === 0) {
-      return;
-    }
-
-    const scrollHeight = sc.scrollHeight;
-    if (scrollHeight <= 0) {
-      return;
-    }
-
-    const result: Positioned[] = [];
-    const seenLetters = new Set<string>();
-
-    for (const g of groups) {
-      const letter =
-        g.type === "personal"
-          ? "★"
-          : (g.clientName.at(0)?.toUpperCase() ?? "#");
-
-      if (seenLetters.has(letter)) {
-        continue;
+  // Measured before the first paint and again when the scroll container
+  // resizes or groups collapse or expand (the content reflows).
+  const positions = useObservedValue<HTMLDivElement, GroupPositions | null>(
+    indexElement,
+    (_index, emit) => {
+      const container = scrollContainerRef.current;
+      if (!container) {
+        return () => undefined;
       }
-      seenLetters.add(letter);
+      const measure = () => {
+        const measured = measureGroupPositions(container, groups);
+        if (measured !== null) {
+          emit(measured);
+        }
+      };
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(container);
+      return () => observer.disconnect();
+    },
+    [groups, collapsedGroups, scrollContainerRef],
+    null,
+  );
 
-      const el = sc.querySelector<HTMLElement>(
-        `[data-group-id="${CSS.escape(g.groupId)}"]`,
-      );
-      if (!(el instanceof HTMLElement)) {
-        continue;
-      }
-
-      const absTop = getOffsetTop(el, sc);
-
-      result.push({
-        groupId: g.groupId,
-        label: letter,
-        pct: Math.min(98, Math.max(1, (absTop / scrollHeight) * 100)),
-        top: absTop,
-      });
-    }
-
-    setMarkers(result);
-  }, [scrollContainerRef, groups]);
-
-  useExternalSyncEffect(() => {
-    const sc = scrollContainerRef.current;
-    if (!sc) {
-      return undefined;
-    }
-    recalc();
-    const observer = new ResizeObserver(recalc);
-    observer.observe(sc);
-    return () => observer.disconnect();
-  }, [scrollContainerRef, recalc]);
-
-  // Recalculate when groups collapse/expand (content reflows)
-  useExternalSyncEffect(() => {
-    recalc();
-  }, [collapsedGroups, recalc]);
+  const markers: Marker[] = groups.flatMap((group) => {
+    const pct =
+      positions !== null && Object.hasOwn(positions, group.groupId)
+        ? positions[group.groupId]
+        : undefined;
+    return pct === undefined
+      ? []
+      : [{ groupId: group.groupId, label: groupLetter(group), pct }];
+  });
 
   const scrollTo = (groupId: string) => {
     const sc = scrollContainerRef.current;
     if (!sc) {
       return;
     }
-    const marker = markers.find((m) => m.groupId === groupId);
-    if (!marker) {
+    const target = findGroupHeader(sc, groupId);
+    if (!target) {
       return;
     }
-    sc.scrollTo({ top: marker.top, behavior: "instant" });
+    sc.scrollTo({ top: getOffsetTop(target, sc), behavior: "instant" });
 
     // Flash ring on the target group header
-    const target = sc.querySelector<HTMLElement>(
-      `[data-group-id="${CSS.escape(groupId)}"]`,
-    );
-    if (target) {
-      target.classList.add("ring-2", "ring-primary");
-      setTimeout(() => {
-        target.classList.remove("ring-2", "ring-primary");
-      }, 600);
-    }
+    target.classList.add("ring-2", "ring-primary");
+    setTimeout(() => {
+      target.classList.remove("ring-2", "ring-primary");
+    }, 600);
   };
 
-  if (markers.length < MIN_GROUPS_FOR_INDEX) {
-    return null;
-  }
+  const shown = markers.length >= MIN_GROUPS_FOR_INDEX;
 
   return (
     <div
+      hidden={!shown}
+      ref={setIndexElement}
       className={cn(
         "absolute end-0 top-0 bottom-0 z-20 max-lg:hidden",
         active
@@ -158,84 +172,85 @@ export const AlphabetIndex = ({
         scrollContainerRef.current?.scrollBy(0, e.deltaY);
       }}
     >
-      {markers.map((m) => {
-        const isHovered = hoveredId === m.groupId;
-        return (
-          <Button
-            className="absolute end-0 flex items-center"
-            key={m.groupId}
-            onClick={() => scrollTo(m.groupId)}
-            onMouseEnter={() => setHoveredId(m.groupId)}
-            onMouseLeave={() => setHoveredId(null)}
-            shape="round"
-            style={{ top: `${m.pct}%`, transform: "translateY(-50%)" }}
-            variant="plain"
-          >
-            <TruncatedText
-              className={cn(
-                "text-3xs rounded-full px-2.5 py-1 leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
-                isHovered ? "text-2xs max-w-72 opacity-100" : "max-w-52",
-                (() => {
-                  if (active) {
-                    return (() => {
-                      if (isHovered) {
-                        return "";
-                      }
-                      return "opacity-70";
-                    })();
-                  }
-                  return "pointer-events-none opacity-0 transition-opacity duration-300";
-                })(),
-              )}
-              style={{
-                backgroundColor: isHovered
-                  ? "color-mix(in srgb, var(--color-primary) 20%, var(--color-background))"
-                  : "color-mix(in srgb, var(--color-muted-foreground) 15%, var(--color-background))",
-                color: isHovered
-                  ? "var(--color-primary)"
-                  : "var(--color-muted-foreground)",
-              }}
+      {shown &&
+        markers.map((m) => {
+          const isHovered = hoveredId === m.groupId;
+          return (
+            <Button
+              className="absolute end-0 flex items-center"
+              key={m.groupId}
+              onClick={() => scrollTo(m.groupId)}
+              onMouseEnter={() => setHoveredId(m.groupId)}
+              onMouseLeave={() => setHoveredId(null)}
+              shape="round"
+              style={{ top: `${m.pct}%`, transform: "translateY(-50%)" }}
+              variant="plain"
             >
-              {m.label}
-            </TruncatedText>
-            <div
-              className="shrink-0 rounded-full transition-[width,height,opacity] duration-150"
-              style={{
-                backgroundColor: isHovered
-                  ? "var(--color-primary)"
-                  : "var(--color-muted-foreground)",
-                width: (() => {
-                  if (isHovered) {
-                    return "16px";
-                  }
-                  if (active) {
-                    return "12px";
-                  }
-                  return "8px";
-                })(),
-                height: (() => {
-                  if (isHovered) {
-                    return "6px";
-                  }
-                  if (active) {
-                    return "5px";
-                  }
-                  return "4px";
-                })(),
-                opacity: (() => {
-                  if (isHovered) {
-                    return 1;
-                  }
-                  if (active) {
-                    return 0.9;
-                  }
-                  return 0.5;
-                })(),
-              }}
-            />
-          </Button>
-        );
-      })}
+              <TruncatedText
+                className={cn(
+                  "text-3xs rounded-full px-2.5 py-1 leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
+                  isHovered ? "text-2xs max-w-72 opacity-100" : "max-w-52",
+                  (() => {
+                    if (active) {
+                      return (() => {
+                        if (isHovered) {
+                          return "";
+                        }
+                        return "opacity-70";
+                      })();
+                    }
+                    return "pointer-events-none opacity-0 transition-opacity duration-300";
+                  })(),
+                )}
+                style={{
+                  backgroundColor: isHovered
+                    ? "color-mix(in srgb, var(--color-primary) 20%, var(--color-background))"
+                    : "color-mix(in srgb, var(--color-muted-foreground) 15%, var(--color-background))",
+                  color: isHovered
+                    ? "var(--color-primary)"
+                    : "var(--color-muted-foreground)",
+                }}
+              >
+                {m.label}
+              </TruncatedText>
+              <div
+                className="shrink-0 rounded-full transition-[width,height,opacity] duration-150"
+                style={{
+                  backgroundColor: isHovered
+                    ? "var(--color-primary)"
+                    : "var(--color-muted-foreground)",
+                  width: (() => {
+                    if (isHovered) {
+                      return "16px";
+                    }
+                    if (active) {
+                      return "12px";
+                    }
+                    return "8px";
+                  })(),
+                  height: (() => {
+                    if (isHovered) {
+                      return "6px";
+                    }
+                    if (active) {
+                      return "5px";
+                    }
+                    return "4px";
+                  })(),
+                  opacity: (() => {
+                    if (isHovered) {
+                      return 1;
+                    }
+                    if (active) {
+                      return 0.9;
+                    }
+                    return 0.5;
+                  })(),
+                }}
+              />
+            </Button>
+          );
+        })}
     </div>
   );
 };

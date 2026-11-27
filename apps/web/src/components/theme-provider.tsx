@@ -1,12 +1,8 @@
-import {
-  createContext,
-  use,
-  useLayoutEffect,
-  useSyncExternalStore,
-} from "react";
+import { createContext, use, useSyncExternalStore } from "react";
 import type { PropsWithChildren } from "react";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
+
 import { useHydrated } from "@/hooks/use-hydrated";
 import { PALETTES, THEMES } from "@/lib/account/presentation-prefs/preferences";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
@@ -91,7 +87,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     setPrefs(() => ({ palette: next }));
   };
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (!hydrated) {
       return;
     }

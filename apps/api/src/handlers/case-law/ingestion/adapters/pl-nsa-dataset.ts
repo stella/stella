@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-nsa] migrated shard range and redirect transport to readPublisher; served response parsing is unchanged.
 import { panic, Result } from "better-result";
 import type { AsyncBuffer, FileMetaData } from "hyparquet";
 // parser-output-unchanged: Transport failures retain their typed cause; successfully read dataset records parse unchanged.
@@ -35,7 +36,11 @@ import type { Sha256Hasher } from "@stll/sha256/types";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -778,6 +783,23 @@ const refusedAddress = (): AdapterFetchError =>
  * A request that never got an answer: a dropped connection, an exhausted
  * timeout budget. The publisher said nothing, so asking again may help.
  */
+const datasetOutcomeError = (
+  path: string,
+  outcome: UnreadPublisherOutcome,
+  detail?: string,
+): AdapterFetchError => {
+  const failure =
+    outcome.type === "absent" || outcome.type === "refused"
+      ? PL_NSA_FAILURE.PERMANENT
+      : PL_NSA_FAILURE.TRANSIENT;
+  return unreadPublisherError({
+    outcome,
+    adapterKey: ADAPTER_KEYS.PL_NSA,
+    cursor: null,
+    message: `${failurePrefix(failure)}${path}${detail === undefined ? "" : ` ${detail}`}`,
+  });
+};
+
 const requestFailure =
   (path: string) =>
   (cause: unknown): AdapterFetchError =>
@@ -820,42 +842,46 @@ const readRepositoryRange = async ({
     return Result.err(refusedAddress());
   }
   const wanted = end - start + 1;
+  const outcome = await readPublisher(target.toString(), {
+    headers: { Range: `bytes=${start}-${end}` },
+    redirect: "error",
+    fetchStage,
+    refusalScope: fetchStage === "listing" ? "source" : "document",
+    adapterKey: ADAPTER_KEYS.PL_NSA,
+    signal,
+    timeoutMs: DOWNLOAD_CHUNK_TIMEOUT_MS,
+  });
+  if (outcome.type !== "present") {
+    return Result.err(
+      datasetOutcomeError(path, outcome, `for bytes ${start}-${end}`),
+    );
+  }
+  const response = outcome.value;
+  if (response.status !== 206 || response.body === null) {
+    const cancelled = await Result.tryPromise({
+      try: async () => await response.body?.cancel(),
+      catch: requestFailure(path),
+    });
+    if (Result.isError(cancelled)) {
+      return cancelled;
+    }
+    return Result.err(
+      plNsaDatasetError(
+        failureOfStatus(response.status),
+        `${path} answered ${response.status} for bytes ${start}-${end}`,
+        response.status,
+      ),
+    );
+  }
+  const body = response.body;
   const answered = await Result.tryPromise({
-    try: async () => {
-      const response = await fetchWithRetry(
-        target.toString(),
-        { headers: { Range: `bytes=${start}-${end}` }, redirect: "error" },
-        {
-          fetchStage,
-          adapterKey: ADAPTER_KEYS.PL_NSA,
-          signal,
-          timeoutMs: DOWNLOAD_CHUNK_TIMEOUT_MS,
-        },
-      );
-      if (response.status !== 206 || response.body === null) {
-        await response.body?.cancel();
-        return { status: response.status, bytes: null };
-      }
-      return {
-        status: response.status,
-        bytes: await readCappedBytes(response.body, wanted),
-      };
-    },
+    try: async () => await readCappedBytes(body, wanted),
     catch: requestFailure(path),
   });
   if (Result.isError(answered)) {
     return answered;
   }
-  const { bytes, status } = answered.value;
-  if (status !== 206) {
-    return Result.err(
-      plNsaDatasetError(
-        failureOfStatus(status),
-        `${path} answered ${status} for bytes ${start}-${end}`,
-        status,
-      ),
-    );
-  }
+  const bytes = answered.value;
   return bytes?.byteLength === wanted
     ? Result.ok(bytes)
     : Result.err(
@@ -880,31 +906,26 @@ const locateShard = async (
   // statically; the redirect is read rather than followed, and its target is
   // held to the host policy before readRepositoryRange requests it.
   const url = plNsaShardUrl(snapshot, target);
-  const answered = await Result.tryPromise({
-    try: async () => {
-      const response = await fetchWithRetry(
-        `${HUGGING_FACE_ORIGIN}/datasets/${snapshot.repository}/resolve/${snapshot.revision}/${target.path}`,
-        { method: "HEAD", redirect: "manual" },
-        {
-          fetchStage: "listing",
-          adapterKey: ADAPTER_KEYS.PL_NSA,
-          signal,
-          timeoutMs: LOCATE_TIMEOUT_MS,
-        },
-      );
-      await response.body?.cancel();
-      return {
-        ok: response.ok,
-        status: response.status,
-        location: response.headers.get("location"),
-      };
+  const outcome = await readPublisher(
+    `${HUGGING_FACE_ORIGIN}/datasets/${snapshot.repository}/resolve/${snapshot.revision}/${target.path}`,
+    {
+      method: "HEAD",
+      redirect: "manual",
+      acceptRedirect: true,
+      fetchStage: "listing",
+      refusalScope: "source",
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      signal,
+      timeoutMs: LOCATE_TIMEOUT_MS,
     },
-    catch: requestFailure(target.path),
-  });
-  if (Result.isError(answered)) {
-    return answered;
+  );
+  if (outcome.type !== "present") {
+    return Result.err(datasetOutcomeError(target.path, outcome));
   }
-  const { location, ok, status } = answered.value;
+  const response = outcome.value;
+  const location = response.headers.get("location");
+  const { ok, status } = response;
+  await response.body?.cancel();
   if (ok) {
     return Result.ok(url);
   }

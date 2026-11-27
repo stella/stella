@@ -247,7 +247,7 @@
       "peakRssMiB": 127
     },
     "Test CLI runtime package parity": {
-      "minutes": 10,
+      "minutes": 20,
       "samples": 19,
       "p95Seconds": 35,
       "p99Seconds": 35,
@@ -405,33 +405,12 @@
       "p99Seconds": 8,
       "peakRssMiB": 129
     },
-    "Query data state baseline": {
-      "minutes": 5,
-      "samples": 19,
-      "p95Seconds": 5,
-      "p99Seconds": 5,
-      "peakRssMiB": 2129
-    },
     "SQL performance baseline": {
       "minutes": 5,
       "samples": 18,
       "p95Seconds": 29,
       "p99Seconds": 29,
       "peakRssMiB": 218
-    },
-    "Failure-as-empty baseline": {
-      "minutes": 5,
-      "samples": 18,
-      "p95Seconds": 3,
-      "p99Seconds": 3,
-      "peakRssMiB": 624
-    },
-    "React state-write baselines": {
-      "minutes": 10,
-      "samples": 0,
-      "p95Seconds": 0,
-      "p99Seconds": 0,
-      "peakRssMiB": 2048
     },
     "Oxlint override union guard": {
       "minutes": 5,

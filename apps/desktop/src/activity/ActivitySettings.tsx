@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -16,6 +16,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ShieldAlertIcon, Trash2Icon } from "@stll/ui/icons";
 import {
   List,
@@ -184,7 +185,7 @@ function useActivitySettings(
   const requestId = useRef(0);
   const errorRead = t("errorRead");
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     const fail = (
       code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[

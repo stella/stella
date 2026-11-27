@@ -17,6 +17,7 @@ import billingDrafts from "./billing-drafts";
 import calendarEvents from "./calendar-events";
 import candidates from "./candidates";
 import create from "./create";
+import dayEntries from "./day-entries";
 import matters from "./matters";
 import resolveMatters from "./resolve";
 
@@ -48,6 +49,7 @@ export const desktopTimeEntriesRoute = mount(
       "/calendar-events": { GET: calendarEvents },
       "/matter-candidates": { GET: candidates },
       "/matter-candidates/resolve": { GET: resolveMatters },
+      "/day-entries": { GET: dayEntries },
       "/time-entries/batch": { PUT: batch },
       "/time-entries/batch/status": { PUT: batchStatus },
       "/matters": { GET: matters },

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { SearchIcon } from "@stll/ui/icons";
 import {
   InputGroup,
@@ -17,8 +18,6 @@ import {
   routePopupKey,
   scheduleSearchFocus,
 } from "@/components/chat/composer-submenu-search.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 /** Long composer lists (Skills, Context, a matter's files, the matter picker)
  *  stay short enough to open level with their trigger instead of being

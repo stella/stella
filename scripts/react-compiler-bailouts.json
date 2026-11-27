@@ -11,10 +11,6 @@
       "(BuildHIR::lowerExpression) Handle YieldExpression expressions"
     ]
   },
-  "apps/mobile/src/components/changes.tsx::useRevisedLoad": {
-    "memos": 0,
-    "reasons": ["Support spread syntax for hook arguments"]
-  },
   "apps/mobile/src/components/use-open-delivered-file.ts::useOpenDeliveredFile": {
     "memos": 0,
     "reasons": [
@@ -22,7 +18,7 @@
     ]
   },
   "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx::FileChatOverlayInner": {
-    "memos": 2,
+    "memos": 4,
     "reasons": [
       "Cannot access refs during render",
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
@@ -78,7 +74,7 @@
     "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
   },
   "apps/web/src/components/inspector/chat-tab-panel.tsx::ChatTabPanel": {
-    "memos": 1,
+    "memos": 3,
     "reasons": [
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]
@@ -129,12 +125,6 @@
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]
   },
-  "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx::CopyToMatterDialog": {
-    "memos": 0,
-    "reasons": [
-      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
-    ]
-  },
   "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts::useCreateBBoxes": {
     "memos": 1,
     "reasons": [
@@ -161,7 +151,7 @@
     "reasons": ["This value cannot be modified"]
   },
   "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx::WorkspaceTable": {
-    "memos": 9,
+    "memos": 6,
     "reasons": ["Use of incompatible library"]
   },
   "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx::WorkflowStartConfirmationPromptProvider": {
@@ -194,7 +184,7 @@
     ]
   },
   "apps/web/src/features/statutes/components/statute-compare-view.tsx::VirtualCompareGroups": {
-    "memos": 1,
+    "memos": 0,
     "reasons": ["Use of incompatible library"]
   },
   "apps/web/src/features/workspaces/team-avatars.tsx::TeamAvatars": {
@@ -210,7 +200,7 @@
     ]
   },
   "apps/web/src/lib/pdf/pdf-viewport.tsx::PDFViewerContent": {
-    "memos": 2,
+    "memos": 1,
     "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
   },
   "apps/web/src/routes/-protected-app.tsx::ProtectedAppFrame": {
@@ -286,7 +276,7 @@
     ]
   },
   "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx::TemplateStudioChatInner": {
-    "memos": 1,
+    "memos": 3,
     "reasons": [
       "Cannot access refs during render",
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { panic } from "better-result";
 import { createServer } from "node:http";
 import type { ServerResponse } from "node:http";
@@ -6,6 +6,7 @@ import type { ServerResponse } from "node:http";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { createNetworkCollector, summarizeCapture } from "../helpers/network";
+import { test } from "../helpers/storm-watch-fixture";
 
 test.use({
   storageState: { cookies: [], origins: [] },

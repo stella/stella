@@ -39,12 +39,63 @@ export type ProfileRoleTarget = {
   alignment: string | null;
   /** Null for a role the template does not number. */
   numbering: ProfileListLevel | null;
+  /** The left indent the style gives, in twentieths of a point, and the
+   *  size of its text in half-points; null where the template states
+   *  none. Both absent from a profile made before they were read. */
+  indentLeft?: number | null;
+  size?: number | null;
   confidence: number;
   evidence: RoleEvidence[];
 };
 
 /** How a heading and its title share a paragraph in the template's sample. */
 type HeadingJoin = "sameLine" | "lineBreak";
+
+/**
+ * Something in the template a firm may want to mend at its source. The
+ * output is right either way; the finding says what the template itself
+ * does when a document is made from it by hand.
+ *
+ * `numberDrawnAsPicture`, `textDrawnAsPicture`: the run properties of a
+ * list level, or of a style or the document defaults, carry a 3-D scene
+ * that shows nothing. A word processor draws such text as a picture: in an
+ * exported document the number or the text cannot be found, copied or read
+ * aloud. Clearing the 3-D format on the level or style mends it.
+ *
+ * `levelSetApart`: the style of a numbered level states bold, or a font
+ * size, that the styles of the other levels and of the body text do not.
+ * Under plain siblings every paragraph of that level reads as a heading.
+ * The output places the role in `insteadStyleId`, the style of the nearest
+ * level that looks like the rest, on the level's own place in the list, so
+ * number and indent stay; a profile with `levelLooks: "asTemplate"` keeps
+ * the template's style. Giving the style the look of its siblings mends it.
+ */
+export type TemplateHealthFinding =
+  | { kind: "numberDrawnAsPicture"; abstractNumId: number; ilvl: number }
+  | { kind: "textDrawnAsPicture"; styleId: string | null }
+  | {
+      kind: "levelSetApart";
+      role: LevelRole;
+      styleId: string;
+      bold: boolean;
+      /** In half-points; null when the style and the defaults state none. */
+      size: number | null;
+      insteadStyleId: string;
+    };
+
+/** The roles of the numbered levels of a provision, outermost first. */
+export const LEVEL_ROLES = [
+  "clause1",
+  "clause2",
+  "clause3",
+  "letter",
+  "roman",
+] as const satisfies readonly HouseStyleRole[];
+
+type LevelRole = (typeof LEVEL_ROLES)[number];
+
+/** Where the items of a list begin among the level roles. */
+const ITEM_DEPTH = LEVEL_ROLES.indexOf("letter");
 
 export type TemplateProfile = {
   version: 1;
@@ -57,6 +108,11 @@ export type TemplateProfile = {
   /** Levels of the outline list no style uses, below the roles' own. A
    *  format the roles' levels do not print is patched onto one of them. */
   spareLevels: ProfileListLevel[];
+  /** Levels of the template's other lists that no style uses. A bullet
+   *  counts nothing, so its mark need not stand in the outline list: it is
+   *  patched onto one of these first, and the outline's spare levels stay
+   *  for formats that count. Absent from a profile inferred before them. */
+  markLevels?: ProfileListLevel[];
   /** Top-level template blocks by what becomes of them. */
   regions: {
     /** Kept in front of the document: a letterhead, a memo header. */
@@ -74,6 +130,14 @@ export type TemplateProfile = {
     signature: { blockIds: string[] } | null;
   };
   headings: { article: HeadingJoin; annex: HeadingJoin };
+  /** Whether the template's sample starts a page between its front matter
+   *  (title, parties) and its first article. Absent when the sample has no
+   *  article, and from a profile made before this was read. */
+  frontMatterEndsPage?: boolean;
+  /** The style the template writes the text of its tables in. Absent when
+   *  it names none for that or its sample uses none, and from a profile
+   *  made before this was read. */
+  tableText?: { styleId: string };
   fields: {
     /** Kinds replaced by their shown text: they prompt, or change on open. */
     freezeKinds: string[];
@@ -84,6 +148,23 @@ export type TemplateProfile = {
   fillerStrings: string[];
   /** How the template numbers an annex heading; null when it shows none. */
   annex: { numbering: "list" | "field" | "typed" } | null;
+  /** The styles the template sets the provisions of an annex in, where it
+   *  has a list of their own for them (a heading and its clauses, named
+   *  for annexes): what stands under an annex heading is placed in these
+   *  and counted in that list. Absent when the template has no such list,
+   *  and from a profile made before this was read. */
+  annexRoles?: AnnexRoles;
+  /** The alignment of the template's default paragraph style, which a
+   *  paragraph placed without a style takes; null when it states none.
+   *  Absent from a profile inferred before it was read. */
+  defaultAlignment?: string | null;
+  /** What the template could have mended at its source. Absent from a
+   *  profile inferred before the template was read for it. */
+  health?: TemplateHealthFinding[];
+  /** What becomes of a level the template sets apart from its siblings
+   *  (`levelSetApart`): `even`, the default, places it in a sibling's
+   *  style; `asTemplate` keeps the style the template gives it. */
+  levelLooks?: "even" | "asTemplate";
   confidence: number;
 };
 
@@ -114,6 +195,8 @@ const NAME = {
   body: /základní|zakladni|body text|standard|fließtext|textkörper/iu,
   annexList: /seznam příloh|annex list|list of annexes|anlagenverzeichnis/iu,
   contents: /^(?:toc|obsah|verzeichnis|inhaltsverzeichnis)\b/iu,
+  tableText: /tabul|\btable\b|tabelle/iu,
+  preamble: /preamb|präambel/iu,
 } as const;
 
 const ANNEX_SAMPLE =
@@ -146,6 +229,8 @@ const CONFIDENCE = {
 } as const;
 
 const NO_BLOCKS: readonly DocxBlock[] = [];
+const NO_FINDINGS: readonly TemplateHealthFinding[] = [];
+const NO_LEVELS: readonly ProfileListLevel[] = [];
 
 type StyleFacts = {
   style: TemplateStyle;
@@ -154,6 +239,14 @@ type StyleFacts = {
   samples: readonly DocxBlock[];
 };
 
+/** Whether a list level prints a label: a number or a mark. A level in the
+ *  format `none`, or with an empty level text, counts and shows nothing. */
+const printsLabel = ({
+  numFmt,
+  lvlText,
+}: Pick<ProfileListLevel, "numFmt" | "lvlText">): boolean =>
+  numFmt !== "none" && lvlText.trim() !== "";
+
 const target = (
   { style, level }: StyleFacts,
   confidence: number,
@@ -161,7 +254,11 @@ const target = (
 ): ProfileRoleTarget => ({
   styleId: style.styleId,
   alignment: style.alignment,
-  numbering: level,
+  // A level that prints nothing numbers nothing: the style keeps its role
+  // and its place in the outline, without a list.
+  numbering: level !== null && printsLabel(level) ? level : null,
+  ...(style.indentLeft === undefined ? {} : { indentLeft: style.indentLeft }),
+  ...(style.size === undefined ? {} : { size: style.size }),
   confidence,
   evidence,
 });
@@ -233,22 +330,50 @@ const collectStyleFacts = ({
     }));
 };
 
-/** The list most numbered styles are bound to: the template's outline. */
+/** Sample paragraphs counted when two outlines are ranked. */
+const SAMPLES_RANKED_MAX = 999;
+
+/** A style made for the annexes of a document, by its name. */
+const ANNEX_STYLE = /příloh|priloh|annex|anlage|anhang|schedule|appendi/iu;
+
+/**
+ * The template's outline: of the lists with styles on two levels or more,
+ * the one its sample text is written in. A template often carries further
+ * lists with as many levels (schedules, a second language) that its sample
+ * body never uses. Among lists used alike, the one with more levels, then
+ * one whose styles are not named for annexes (the annexes of a report run
+ * longer than its body), then the one with more sample paragraphs.
+ */
+
 const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
   const byAbstract = Map.groupBy(
     facts.filter(({ level }) => level !== null),
     ({ level }) => level?.abstractNumId ?? -1,
   );
+  /** What a list is ranked by, most telling first. */
+  type Rank = { used: boolean; levels: number; body: boolean; samples: number };
+  const outranks = (left: Rank, right: Rank): boolean => {
+    if (left.used !== right.used) {
+      return left.used;
+    }
+    if (left.levels !== right.levels) {
+      return left.levels > right.levels;
+    }
+    return left.body === right.body ? left.samples > right.samples : left.body;
+  };
   let best: StyleFacts[] = [];
-  let bestScore = 0;
+  let bestRank: Rank | null = null;
   for (const group of byAbstract.values()) {
-    const levels = new Set(group.map(({ level }) => level?.ilvl)).size;
     const samples = group.reduce((sum, fact) => sum + fact.samples.length, 0);
-    // Levels first; the sample text breaks a tie between two outlines.
-    const score = levels * 1000 + samples;
-    if (levels >= 2 && score > bestScore) {
+    const rank: Rank = {
+      used: samples > 0,
+      levels: new Set(group.map(({ level }) => level?.ilvl)).size,
+      body: !group.some((fact) => ANNEX_STYLE.test(nameOf(fact))),
+      samples: Math.min(samples, SAMPLES_RANKED_MAX),
+    };
+    if (rank.levels >= 2 && (bestRank === null || outranks(rank, bestRank))) {
       best = group;
-      bestScore = score;
+      bestRank = rank;
     }
   }
   // By level; within a level the style the sample text uses comes first.
@@ -259,22 +384,74 @@ const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
   );
 };
 
+const OUTLINE_ROLES = [
+  "articleHeading",
+  "clause1",
+  "clause2",
+  "clause3",
+  "letter",
+  "roman",
+] as const satisfies readonly HouseStyleRole[];
+
 type OutlineRoles = Partial<
-  Record<
-    "articleHeading" | "clause1" | "clause2" | "clause3" | "letter" | "roman",
-    ProfileRoleTarget
-  >
+  Record<(typeof OUTLINE_ROLES)[number], ProfileRoleTarget>
 >;
 
-/** Reads the outline: counted levels are the heading and the clauses under
- *  it, the lettered level the letter items, the roman level below the
- *  points. */
-const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
+/** The roles of an outline, as an annex's own list fills them. */
+export type AnnexRoles = OutlineRoles;
+
+/**
+ * The clause depths among counted levels: levels in a row, the first one
+ * directly under the heading. `1.1.` stands directly under `1.`, `1.1.1.`
+ * directly under that; a counted level further down the list, past a
+ * lettered or roman one, is not the next clause depth. `printing` are the
+ * levels of the outline that print a label, in order: a level that prints
+ * nothing does not part two depths.
+ */
+const clauseChain = (
+  counted: readonly StyleFacts[],
+  printing: readonly number[],
+  heading: StyleFacts | null,
+): StyleFacts[] => {
+  const positionOf = (fact: StyleFacts | undefined): number | undefined =>
+    fact?.level === null || fact === undefined
+      ? undefined
+      : printing.indexOf(fact.level.ilvl);
+  const chain: StyleFacts[] = [];
+  let above = heading === null ? undefined : positionOf(heading);
+  for (const fact of counted) {
+    const position = positionOf(fact);
+    if (above !== undefined && position !== above + 1) {
+      break;
+    }
+    chain.push(fact);
+    above = position;
+  }
+  return chain;
+};
+
+/** Sorts the outline's levels: the lettered and roman ones to their roles,
+ *  a top level without a label to the heading, the counted ones in order. */
+const sortOutline = (
+  outline: readonly StyleFacts[],
+): { roles: OutlineRoles; counted: StyleFacts[]; printing: number[] } => {
   const roles: OutlineRoles = {};
   const counted: StyleFacts[] = [];
+  const printing = new Set<number>();
   for (const fact of outline) {
     const numFmt = fact.level?.numFmt ?? "";
     const top = fact.level?.ilvl === 0;
+    if (fact.level !== null && !printsLabel(fact.level)) {
+      // The top level of the outline is its heading also when it prints
+      // no number; a level below that prints nothing is no depth of it.
+      if (top) {
+        roles.articleHeading ??= target(fact, CONFIDENCE.level, "listLevel");
+      }
+      continue;
+    }
+    if (fact.level !== null) {
+      printing.add(fact.level.ilvl);
+    }
     if (isLetterFormat(numFmt) && !top) {
       roles.letter ??= target(fact, CONFIDENCE.nameAndLevel, "listLevel");
     } else if (isRomanFormat(numFmt) && !top) {
@@ -288,6 +465,18 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
       counted.push(fact);
     }
   }
+  return {
+    roles,
+    counted,
+    printing: [...printing].toSorted((left, right) => left - right),
+  };
+};
+
+/** Reads the outline: counted levels are the heading and the clauses under
+ *  it, the lettered level the letter items, the roman level below the
+ *  points. */
+const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
+  const { roles, counted, printing } = sortOutline(outline);
   const first = counted.at(0);
   if (first === undefined) {
     return roles;
@@ -297,7 +486,8 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
   // A level named a paragraph and printing a bare number is a clause; the
   // template then heads its sections outside this list, or not at all.
   const headsArticles =
-    words || NAME.heading.test(name) || !NAME.paragraph.test(name);
+    roles.articleHeading === undefined &&
+    (words || NAME.heading.test(name) || !NAME.paragraph.test(name));
   const clauses = headsArticles ? counted.slice(1) : counted;
   if (headsArticles) {
     roles.articleHeading = target(
@@ -309,9 +499,11 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
       "listLevel",
     );
   }
-  const [first1, first2, first3] = clauses.map((fact) =>
-    target(fact, CONFIDENCE.nameAndLevel, "listLevel"),
-  );
+  const [first1, first2, first3] = clauseChain(
+    clauses,
+    printing,
+    headsArticles ? first : null,
+  ).map((fact) => target(fact, CONFIDENCE.nameAndLevel, "listLevel"));
   if (first1 !== undefined) {
     roles.clause1 = first1;
   }
@@ -323,6 +515,71 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
   }
   return roles;
 };
+
+/**
+ * The outline the template keeps for its annexes: another list than the
+ * main one, with styles on two levels or more that are all named for
+ * annexes, and a level that heads articles. Among several, the one with
+ * more levels. Undefined when the template has none.
+ */
+const inferAnnexRoles = (
+  facts: readonly StyleFacts[],
+  roles: TemplateProfile["roles"],
+): AnnexRoles | undefined => {
+  // The main outline's list, also where its heading prints no number.
+  const main = OUTLINE_ROLES.map(
+    (role) => roles[role]?.numbering?.abstractNumId,
+  ).find((abstractNumId) => abstractNumId !== undefined);
+  const lists = Map.groupBy(
+    facts.filter(({ level }) => level !== null),
+    ({ level }) => level?.abstractNumId ?? -1,
+  );
+  let best: AnnexRoles | undefined;
+  let bestLevels = 0;
+  for (const [abstractNumId, group] of lists) {
+    const levels = new Set(group.map(({ level }) => level?.ilvl)).size;
+    if (
+      main === undefined ||
+      abstractNumId === main ||
+      levels < 2 ||
+      levels <= bestLevels ||
+      !group.every((fact) => ANNEX_STYLE.test(nameOf(fact)))
+    ) {
+      continue;
+    }
+    const read = readOutline(
+      group.toSorted(
+        (left, right) => (left.level?.ilvl ?? 0) - (right.level?.ilvl ?? 0),
+      ),
+    );
+    if (read.articleHeading !== undefined) {
+      best = inOneList(read, read.articleHeading);
+      bestLevels = levels;
+    }
+  }
+  return best;
+};
+
+/**
+ * The roles of an outline with every level in the list its heading is in.
+ * Styles of one outline may name different lists of the same definition;
+ * paragraphs that count together are numbered in one.
+ */
+const inOneList = (
+  roles: OutlineRoles,
+  { numbering: heading }: ProfileRoleTarget,
+): OutlineRoles =>
+  Object.fromEntries(
+    Object.entries(roles).map(([role, placed]) => [
+      role,
+      heading === null || placed.numbering === null
+        ? placed
+        : {
+            ...placed,
+            numbering: { ...placed.numbering, numId: heading.numId },
+          },
+    ]),
+  );
 
 const byName = (
   facts: readonly StyleFacts[],
@@ -450,6 +707,13 @@ const inferRoles = (
     );
   const annexSample = bySample(outside, ANNEX_SAMPLE);
   const annexListNamed = byName(outside, NAME.annexList);
+  // The style of a heading without a number (`Preambule`): named for the
+  // preamble and in no list; the numbered one of that name is the recital's.
+  const headingNamed = byName(
+    outside,
+    NAME.preamble,
+    (fact) => isUnnumbered(fact) && fact.style.type === "paragraph",
+  );
 
   return {
     title,
@@ -478,6 +742,10 @@ const inferRoles = (
       annexSample === undefined
         ? null
         : unnumbered(target(annexSample, CONFIDENCE.sample, "sample")),
+    heading:
+      headingNamed === undefined
+        ? null
+        : target(headingNamed, CONFIDENCE.name, "styleName"),
     body,
   };
 };
@@ -486,6 +754,28 @@ const joinOf = (samples: readonly DocxBlock[]): HeadingJoin =>
   samples.some(({ text }) => text.trim().includes("\n"))
     ? "lineBreak"
     : "sameLine";
+
+/**
+ * The style of the text in the template's tables: a paragraph style named
+ * for tables, in no list, that the sample writes in table cells only. Of
+ * several, the one the sample uses most.
+ */
+const inferTableText = (
+  facts: readonly StyleFacts[],
+  nested: ReadonlySet<string>,
+): TemplateProfile["tableText"] => {
+  const [most] = facts
+    .filter(
+      ({ style, level, samples }) =>
+        style.type === "paragraph" &&
+        level === null &&
+        NAME.tableText.test(style.name ?? style.styleId) &&
+        samples.length > 0 &&
+        samples.every(({ id }) => nested.has(id)),
+    )
+    .toSorted((left, right) => right.samples.length - left.samples.length);
+  return most === undefined ? undefined : { styleId: most.style.styleId };
+};
 
 type Structure = {
   topLevel: DocxBlock[];
@@ -684,17 +974,257 @@ const STRUCTURAL_ROLES = [
   "body",
 ] as const satisfies readonly HouseStyleRole[];
 
+/** A list has nine levels; a template has some lists and some styles. A
+ *  template with more findings than this is reported up to here: the
+ *  profile stays readable, and so many say the same thing anyway. */
+const HEALTH_FINDINGS_MAX = 2000;
+
+type Look = { bold: boolean; size: number | null };
+
+const sameLook = (left: Look, right: Look): boolean =>
+  left.bold === right.bold && left.size === right.size;
+
+/**
+ * The numbered levels whose style looks other than the levels around it:
+ * bold, or in another size. The look the levels are held to is the one most
+ * of their styles and the body's share; without such a look, or without
+ * the styles' looks in the inspection, nothing is found.
+ */
+const levelsSetApart = (
+  { styles }: TemplateInspection,
+  roles: TemplateProfile["roles"],
+): TemplateHealthFinding[] => {
+  const lookOf = (styleId: string | undefined): Look | null => {
+    const style = styles.find((candidate) => candidate.styleId === styleId);
+    const bold = style?.bold;
+    return bold === undefined ? null : { bold, size: style?.size ?? null };
+  };
+  const levels = LEVEL_ROLES.flatMap((role, depth) => {
+    const styleId = roles[role]?.styleId;
+    const look = lookOf(styleId);
+    return styleId === undefined || look === null
+      ? []
+      : [{ role, depth, styleId, look }];
+  });
+  const body = lookOf(roles.body?.styleId);
+  const looksByStyle = new Map(
+    levels.map(({ styleId, look }) => [styleId, look]),
+  );
+  if (roles.body !== null && body !== null) {
+    looksByStyle.set(roles.body.styleId, body);
+  }
+  // Each look once, with the number of styles that have it.
+  const byLook = new Map<string, { look: Look; styles: number }>();
+  for (const look of looksByStyle.values()) {
+    const key = `${String(look.bold)}:${String(look.size)}`;
+    const counted = byLook.get(key);
+    if (counted === undefined) {
+      byLook.set(key, { look, styles: 1 });
+    } else {
+      counted.styles += 1;
+    }
+  }
+  const [most, next] = [...byLook.values()].toSorted(
+    (left, right) => right.styles - left.styles,
+  );
+  // Two looks with as many styles each: none is the template's own.
+  if (
+    most === undefined ||
+    most.styles < 2 ||
+    (next !== undefined && next.styles === most.styles)
+  ) {
+    return [];
+  }
+  const even = levels.filter(({ look }) => sameLook(look, most.look));
+  return levels.flatMap(({ role, depth, styleId, look }) => {
+    if (sameLook(look, most.look)) {
+      return [];
+    }
+    // A level of its own kind first (a clause for a clause, an item for
+    // an item), then the nearest, the outer one of two.
+    const otherKind = (other: number): number =>
+      other < ITEM_DEPTH === depth < ITEM_DEPTH ? 0 : 1;
+    const instead = even.toSorted(
+      (left, right) =>
+        otherKind(left.depth) - otherKind(right.depth) ||
+        Math.abs(left.depth - depth) - Math.abs(right.depth - depth) ||
+        left.depth - right.depth,
+    )[0];
+    return instead === undefined
+      ? []
+      : [
+          {
+            kind: "levelSetApart" as const,
+            role,
+            styleId,
+            bold: look.bold,
+            size: look.size,
+            insteadStyleId: instead.styleId,
+          },
+        ];
+  });
+};
+
+/** The template's findings, each once, in the order the template has them. */
+const inferHealth = (
+  inspection: TemplateInspection,
+  roles: TemplateProfile["roles"],
+): TemplateHealthFinding[] => {
+  const { invisibleEffects = [] } = inspection;
+  const findings = new Map<string, TemplateHealthFinding>();
+  for (const { effect, owner } of invisibleEffects) {
+    // Of the effects that show nothing only the 3-D scene changes how the
+    // text is written out.
+    if (effect !== "scene3d") {
+      continue;
+    }
+    if (owner.kind === "level") {
+      if (owner.abstractNumId !== null && owner.ilvl !== null) {
+        const { abstractNumId, ilvl } = owner;
+        findings.set(`level ${String(abstractNumId)} ${String(ilvl)}`, {
+          kind: "numberDrawnAsPicture",
+          abstractNumId,
+          ilvl,
+        });
+      }
+    } else if (owner.kind === "style" || owner.kind === "defaults") {
+      const styleId = owner.kind === "style" ? owner.styleId : null;
+      findings.set(`style ${styleId ?? ""}`, {
+        kind: "textDrawnAsPicture",
+        styleId,
+      });
+    }
+  }
+  for (const finding of levelsSetApart(inspection, roles)) {
+    if (finding.kind === "levelSetApart") {
+      findings.set(`apart ${finding.role}`, finding);
+    }
+  }
+  return [...findings.values()].slice(0, HEALTH_FINDINGS_MAX);
+};
+
+/**
+ * The list levels something of the template stands on: a style bound to
+ * one, or a paragraph of the template numbered by one (a numbered line in
+ * a letterhead the output keeps). Giving such a level another mark would
+ * change what those print.
+ */
+const occupiedLevels = ({
+  styles,
+  blocks,
+  numbering: { nums },
+}: TemplateInspection): Set<string> => {
+  const listOf = new Map(
+    nums.map(({ numId, abstractNumId }) => [numId, abstractNumId]),
+  );
+  const occupied = new Set<string>();
+  for (const { numPr } of styles) {
+    const list = numPr === null ? undefined : listOf.get(numPr.numId);
+    if (numPr !== null && list !== undefined) {
+      occupied.add(`${String(list)}:${String(numPr.ilvl)}`);
+    }
+  }
+  for (const { numbering } of blocks) {
+    if (numbering !== null) {
+      occupied.add(
+        `${String(numbering.abstractNumId)}:${String(numbering.ilvl)}`,
+      );
+    }
+  }
+  return occupied;
+};
+
+/**
+ * The deeper levels of another list of the template that nothing stands
+ * on: none of the roles' lists, not the outline's, no level a style is
+ * bound to or a paragraph of the template is numbered by.
+ */
+const inferMarkLevels = (
+  inspection: TemplateInspection,
+  roles: TemplateProfile["roles"],
+  outlineLevel: ProfileListLevel | null,
+): ProfileListLevel[] => {
+  const numIdByList = new Map(
+    inspection.numbering.nums.map(({ numId, abstractNumId }) => [
+      abstractNumId,
+      numId,
+    ]),
+  );
+  const roleLists = new Set(
+    Object.values(roles).flatMap((role) =>
+      role?.numbering ? [role.numbering.abstractNumId] : [],
+    ),
+  );
+  const markList = inspection.numbering.abstractNums.find(
+    ({ abstractNumId, levels }) =>
+      abstractNumId !== outlineLevel?.abstractNumId &&
+      !roleLists.has(abstractNumId) &&
+      numIdByList.has(abstractNumId) &&
+      levels.length > 1 &&
+      levels.every(({ ilvl, pStyle }) => ilvl === 0 || pStyle === null),
+  );
+  const markNumId =
+    markList === undefined
+      ? undefined
+      : numIdByList.get(markList.abstractNumId);
+  if (markList === undefined || markNumId === undefined) {
+    return [];
+  }
+  const occupied = occupiedLevels(inspection);
+  return markList.levels
+    .filter(
+      ({ ilvl }) =>
+        ilvl > 0 &&
+        !occupied.has(`${String(markList.abstractNumId)}:${String(ilvl)}`),
+    )
+    .map(({ ilvl, numFmt, lvlText, start, indent }) => ({
+      numId: markNumId,
+      ilvl,
+      abstractNumId: markList.abstractNumId,
+      numFmt,
+      lvlText,
+      start,
+      indent,
+    }));
+};
+
 /**
  * Infers a template's profile from its inspection. Deterministic: the same
  * template gives the same profile. Readings carry a confidence and their
  * evidence; a person confirms or corrects them before the profile is stored.
  */
+/**
+ * Whether the sample starts a page somewhere between its first block and
+ * its first article: by a break among the runs, a paragraph's own page
+ * start, or a section's end. Undefined when the sample has no article.
+ */
+const startsPageBeforeArticle = (
+  topLevel: readonly DocxBlock[],
+  article: ProfileRoleTarget | null,
+): boolean | undefined => {
+  const first = topLevel.findIndex(
+    ({ kind, styleId }) => kind === "paragraph" && styleId === article?.styleId,
+  );
+  if (article === null || first <= 0) {
+    return undefined;
+  }
+  return topLevel
+    .slice(0, first + 1)
+    .some(
+      (block, position) =>
+        (position > 0 && block.pageBreakBefore === true) ||
+        (position < first &&
+          ((block.pageBreaks ?? 0) > 0 || block.endsSection === true)),
+    );
+};
+
 export const inferTemplateProfile = (
   inspection: TemplateInspection,
 ): TemplateProfile => {
   const facts = collectStyleFacts(inspection);
   const structure = readStructure(inspection.blocks);
   const roles = inferRoles(facts, structure.topLevel);
+  const annexRoles = inferAnnexRoles(facts, roles);
   const samplesOf = (role: ProfileRoleTarget | null): readonly DocxBlock[] =>
     facts.find(({ style }) => style.styleId === role?.styleId)?.samples ??
     NO_BLOCKS;
@@ -761,6 +1291,20 @@ export const inferTemplateProfile = (
             indent,
           }));
 
+  const markLevels = inferMarkLevels(inspection, roles, outlineLevel);
+
+  const tableText = inferTableText(
+    facts,
+    new Set(
+      [...structure.nestedOf.values()].flatMap((blocks) =>
+        blocks.map(({ id }) => id),
+      ),
+    ),
+  );
+  const pageBeforeArticle = startsPageBeforeArticle(
+    structure.topLevel,
+    roles.articleHeading,
+  );
   const kinds = [...new Set(inspection.fields.map(({ kind }) => kind))];
   const structural = STRUCTURAL_ROLES.map(
     (role) => roles[role]?.confidence ?? 0,
@@ -771,6 +1315,7 @@ export const inferTemplateProfile = (
     layout: columnTable ? "parallelColumns" : "flow",
     roles,
     spareLevels,
+    markLevels,
     ...inferRegions({ inspection, structure, roles }),
     headings: {
       article: joinOf(
@@ -778,6 +1323,10 @@ export const inferTemplateProfile = (
       ),
       annex: joinOf(annexSamples),
     },
+    ...(pageBeforeArticle === undefined
+      ? {}
+      : { frontMatterEndsPage: pageBeforeArticle }),
+    ...(tableText === undefined ? {} : { tableText }),
     fields: {
       freezeKinds: kinds
         .filter((kind) => VOLATILE_FIELD_KINDS.has(kind))
@@ -788,6 +1337,12 @@ export const inferTemplateProfile = (
     },
     fillerStrings: inferFillerStrings(inspection.blocks),
     annex,
+    ...(annexRoles === undefined ? {} : { annexRoles }),
+    defaultAlignment:
+      inspection.styles.find(
+        ({ type, isDefault }) => type === "paragraph" && isDefault,
+      )?.alignment ?? null,
+    health: inferHealth(inspection, roles),
     // A template without sample text shows no role in use, and one whose
     // body runs in columns is not filled by column yet.
     confidence:
@@ -815,6 +1370,64 @@ export type TemplateProfileIssue = {
 };
 
 /**
+ * An issue for every role of the annexes' outline that names a style or a
+ * list level the template does not have. The role on the issue is the one
+ * the annex target stands in for.
+ */
+const annexRoleIssues = (
+  { annexRoles }: TemplateProfile,
+  inspection: TemplateInspection,
+  {
+    styles,
+    abstractByNum,
+  }: {
+    styles: ReadonlySet<string>;
+    abstractByNum: ReadonlyMap<number, number>;
+  },
+): TemplateProfileIssue[] => {
+  const issues: TemplateProfileIssue[] = [];
+  for (const role of OUTLINE_ROLES) {
+    const roleTarget = annexRoles?.[role];
+    if (roleTarget === undefined) {
+      continue;
+    }
+    if (!styles.has(roleTarget.styleId)) {
+      issues.push({ severity: "error", code: "unknownStyle", role });
+    }
+    const { numbering } = roleTarget;
+    const known =
+      numbering === null ||
+      (abstractByNum.get(numbering.numId) === numbering.abstractNumId &&
+        inspection.numbering.abstractNums.some(
+          ({ abstractNumId, levels }) =>
+            abstractNumId === numbering.abstractNumId &&
+            levels.some(({ ilvl }) => ilvl === numbering.ilvl),
+        ));
+    if (!known) {
+      issues.push({ severity: "error", code: "unknownListLevel", role });
+    }
+  }
+  return issues;
+};
+
+/** An issue for every spare or mark level the template does not have. */
+const unknownLevelIssues = (
+  profile: TemplateProfile,
+  inspection: TemplateInspection,
+  abstractByNum: ReadonlyMap<number, number>,
+): TemplateProfileIssue[] =>
+  [...profile.spareLevels, ...(profile.markLevels ?? NO_LEVELS)].flatMap(
+    ({ abstractNumId, numId, ilvl }): TemplateProfileIssue[] => {
+      const known = inspection.numbering.abstractNums
+        .find((list) => list.abstractNumId === abstractNumId)
+        ?.levels.some((level) => level.ilvl === ilvl);
+      return known === true && abstractByNum.get(numId) === abstractNumId
+        ? []
+        : [{ severity: "error", code: "unknownListLevel" }];
+    },
+  );
+
+/**
  * Checks a profile against the template it is used with: a stored profile
  * outlives edits to its template, and a corrected one may name a style the
  * template lacks. An `error` means no plan can be built from it.
@@ -839,6 +1452,25 @@ export const validateTemplateProfile = (
       abstractNumId,
     ]),
   );
+  // A level set apart is placed in the style its finding names.
+  for (const finding of profile.health ?? NO_FINDINGS) {
+    if (
+      finding.kind === "levelSetApart" &&
+      !facts.has(finding.insteadStyleId)
+    ) {
+      issues.push({
+        severity: "error",
+        code: "unknownStyle",
+        role: finding.role,
+      });
+    }
+  }
+  if (
+    profile.tableText !== undefined &&
+    !facts.has(profile.tableText.styleId)
+  ) {
+    issues.push({ severity: "error", code: "unknownStyle" });
+  }
   const levelUsers = new Map<string, HouseStyleRole>();
   for (const role of HOUSE_STYLE_ROLES) {
     const roleTarget = profile.roles[role];
@@ -875,14 +1507,13 @@ export const validateTemplateProfile = (
     levelUsers.set(key, role);
   }
 
-  for (const { abstractNumId, numId, ilvl } of profile.spareLevels) {
-    const known = inspection.numbering.abstractNums
-      .find((list) => list.abstractNumId === abstractNumId)
-      ?.levels.some((level) => level.ilvl === ilvl);
-    if (known !== true || abstractByNum.get(numId) !== abstractNumId) {
-      issues.push({ severity: "error", code: "unknownListLevel" });
-    }
-  }
+  issues.push(...unknownLevelIssues(profile, inspection, abstractByNum));
+  issues.push(
+    ...annexRoleIssues(profile, inspection, {
+      styles: new Set(facts.keys()),
+      abstractByNum,
+    }),
+  );
 
   const { topLevel } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);
@@ -965,18 +1596,19 @@ const listLevelSchema = v.strictObject({
 
 const confidenceSchema = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 
-const roleTargetSchema = v.nullable(
-  v.strictObject({
-    styleId: idSchema,
-    alignment: v.nullable(textSchema),
-    numbering: v.nullable(listLevelSchema),
-    confidence: confidenceSchema,
-    evidence: v.pipe(
-      v.array(v.picklist(ROLE_EVIDENCE)),
-      v.maxLength(ROLE_EVIDENCE.length),
-    ),
-  }),
-);
+const roleTargetObjectSchema = v.strictObject({
+  styleId: idSchema,
+  alignment: v.nullable(textSchema),
+  numbering: v.nullable(listLevelSchema),
+  indentLeft: v.exactOptional(twipsSchema),
+  size: v.exactOptional(v.nullable(v.pipe(v.number(), v.minValue(1)))),
+  confidence: confidenceSchema,
+  evidence: v.pipe(
+    v.array(v.picklist(ROLE_EVIDENCE)),
+    v.maxLength(ROLE_EVIDENCE.length),
+  ),
+});
+const roleTargetSchema = v.nullable(roleTargetObjectSchema);
 
 const blockIdsSchema = v.pipe(v.array(idSchema), v.maxLength(BLOCKS_MAX));
 const slotSchema = v.nullable(v.strictObject({ blockIds: blockIdsSchema }));
@@ -1011,9 +1643,14 @@ const profileSchema = v.strictObject({
     signature: roleTargetSchema,
     annexList: roleTargetSchema,
     annexHeading: roleTargetSchema,
+    // A profile stored before the role was read has none.
+    heading: v.optional(roleTargetSchema, null),
     body: roleTargetSchema,
-  } satisfies Record<HouseStyleRole, typeof roleTargetSchema>),
+  } satisfies Record<HouseStyleRole, unknown>),
   spareLevels: v.pipe(v.array(listLevelSchema), v.maxLength(LEVELS_MAX)),
+  markLevels: v.exactOptional(
+    v.pipe(v.array(listLevelSchema), v.maxLength(LEVELS_MAX)),
+  ),
   regions: v.strictObject({
     keepBefore: blockIdsSchema,
     contents: blockIdsSchema,
@@ -1021,6 +1658,8 @@ const profileSchema = v.strictObject({
   }),
   slots: v.strictObject({ party: slotSchema, signature: slotSchema }),
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
+  frontMatterEndsPage: v.exactOptional(v.boolean()),
+  tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
   fields: v.strictObject({
     freezeKinds: fieldKindsSchema,
     liveKinds: fieldKindsSchema,
@@ -1029,6 +1668,44 @@ const profileSchema = v.strictObject({
   annex: v.nullable(
     v.strictObject({ numbering: v.picklist(["list", "field", "typed"]) }),
   ),
+  annexRoles: v.exactOptional(
+    v.strictObject({
+      articleHeading: v.exactOptional(roleTargetObjectSchema),
+      clause1: v.exactOptional(roleTargetObjectSchema),
+      clause2: v.exactOptional(roleTargetObjectSchema),
+      clause3: v.exactOptional(roleTargetObjectSchema),
+      letter: v.exactOptional(roleTargetObjectSchema),
+      roman: v.exactOptional(roleTargetObjectSchema),
+    }),
+  ),
+  defaultAlignment: v.exactOptional(v.nullable(textSchema)),
+  health: v.exactOptional(
+    v.pipe(
+      v.array(
+        v.variant("kind", [
+          v.strictObject({
+            kind: v.literal("numberDrawnAsPicture"),
+            abstractNumId: v.pipe(v.number(), v.integer()),
+            ilvl: v.pipe(v.number(), v.integer(), v.minValue(0)),
+          }),
+          v.strictObject({
+            kind: v.literal("textDrawnAsPicture"),
+            styleId: v.nullable(textSchema),
+          }),
+          v.strictObject({
+            kind: v.literal("levelSetApart"),
+            role: v.picklist(LEVEL_ROLES),
+            styleId: textSchema,
+            bold: v.boolean(),
+            size: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+            insteadStyleId: textSchema,
+          }),
+        ]),
+      ),
+      v.maxLength(HEALTH_FINDINGS_MAX),
+    ),
+  ),
+  levelLooks: v.exactOptional(v.picklist(["even", "asTemplate"])),
   confidence: confidenceSchema,
 });
 

@@ -3,10 +3,10 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

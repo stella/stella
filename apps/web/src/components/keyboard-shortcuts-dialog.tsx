@@ -14,10 +14,10 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { PencilIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";

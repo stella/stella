@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useLatestCallback } from "@stll/ui/effects";
+
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";

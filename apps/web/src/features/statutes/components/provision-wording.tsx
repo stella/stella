@@ -11,12 +11,12 @@ import {
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
 import { provisionBlocks } from "@stll/legal-ast/provision-preview";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { statuteOptions } from "@/features/statutes/queries/statutes";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
 // The statute reader carries no in-page find bar, so every block renders

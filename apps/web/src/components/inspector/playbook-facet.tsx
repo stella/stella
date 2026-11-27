@@ -20,11 +20,11 @@ import {
 } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import type { DocxEditorRef } from "@stll/folio-react";
-import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect, useNow } from "@stll/ui/effects";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -237,7 +237,6 @@ import { Switch } from "@/components/switch";
 import Tooltip from "@/components/tooltip";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
@@ -2645,24 +2644,14 @@ type ReviewProgressStateProps = {
 
 /**
  * How long the worker has been on this run, ticking once a second, or `null`
- * while it still sits queued. The clock is an external system — the wall — so
- * it is synchronized rather than derived.
+ * while it still sits queued. The wall clock is the shared `useNow` clock;
+ * the elapsed time is derived from it.
  */
 const useElapsedClock = (startedAt: string | null): number | null => {
-  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
-  useExternalSyncEffect(() => {
-    if (startedAt === null) {
-      setElapsedMs(null);
-      return undefined;
-    }
-    const startedAtMs = new Date(startedAt).getTime();
-    const tick = () =>
-      setElapsedMs(Temporal.Now.instant().epochMilliseconds - startedAtMs);
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [startedAt]);
-  return elapsedMs;
+  const now = useNow(1000);
+  return startedAt === null
+    ? null
+    : Math.max(0, now - new Date(startedAt).getTime());
 };
 
 const ReviewProgressState = ({
@@ -3782,13 +3771,23 @@ const ReviewResultList = ({
   );
   const listRef = useRef<HTMLUListElement>(null);
   // Keyed on ids, not on the derived list: the list is a new array every
-  // render, and an effect keyed on it re-opened the focused card on the very
-  // render that collapsed it. Focus moving is the only thing that opens.
+  // render, and keying on it re-opened the focused card on the very render
+  // that collapsed it. Focus moving is the only thing that opens, adjusted
+  // during render so the card is open in the commit the focus arrives in.
   const focusedItemId =
     focusedSuggestionId === null
       ? null
       : (orderedItems.find((item) => item.suggestionId === focusedSuggestionId)
           ?.id ?? null);
+  const [openedFocusedItemId, setOpenedFocusedItemId] = useState<string | null>(
+    null,
+  );
+  if (focusedItemId !== openedFocusedItemId) {
+    setOpenedFocusedItemId(focusedItemId);
+    if (focusedItemId !== null) {
+      openCard(focusedItemId);
+    }
+  }
   useExternalSyncEffect(() => {
     if (focusedSuggestionId === null) {
       return;
@@ -3798,9 +3797,6 @@ const ReviewResultList = ({
         `[data-suggestion-id="${CSS.escape(focusedSuggestionId)}"]`,
       )
       ?.scrollIntoView({ block: "nearest" });
-    if (focusedItemId !== null) {
-      openCard(focusedItemId);
-    }
   }, [focusedSuggestionId, focusedItemId]);
 
   return (

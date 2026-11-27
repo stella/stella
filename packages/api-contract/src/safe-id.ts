@@ -134,6 +134,7 @@ export type SafeIdType =
   | "documentReviewReferencePassage"
   | "documentReviewRun"
   | "documentTranslationRun"
+  | "recordingTranscriptionRun"
   | "documentTranslationUnit"
   | "documentType"
   | "entity"

@@ -596,7 +596,7 @@ const runSelfTest = (): number => {
   const { diff, diffWorks } = selfTestDiff(firstKey, secondKey);
   const sourceFilterWorks =
     isScannedSource("apps/web/src/components/globe.tsx") &&
-    !isScannedSource("apps/web/src/hooks/use-effect.ts");
+    !isScannedSource("packages/ui/src/effects/effects.ts");
   const roots = reactPackageRoots();
   const packageScopeWorks =
     roots.includes("packages/ui") &&

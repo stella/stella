@@ -97,7 +97,7 @@ test("an exact named subset retains manifest order", () => {
   );
 });
 
-test("checkBudgetP95Seconds falls back to budget minutes when a check has no measured samples", () => {
+test("checkBudgetP95Seconds caps unmeasured check weights so timeout ceilings do not skew partitions", () => {
   const budgets = {
     "ci-checks-policy": {},
     "ci-checks-rest": {
@@ -120,7 +120,7 @@ test("checkBudgetP95Seconds falls back to budget minutes when a check has no mea
   };
   expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Measured")).toBe(42);
   expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Unmeasured")).toBe(
-    1200,
+    60,
   );
   expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Missing")).toBe(60);
 });
@@ -1825,4 +1825,36 @@ test("the pool run admits checks by the peaks in its budgets file", async () => 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("priority schedules heavier checks first while preserving tie order and registry reporting", async () => {
+  const weights: Record<string, number> = {
+    FastFirst: 5,
+    MediumA: 40,
+    MediumB: 40,
+    SlowLast: 180,
+  };
+  const planned: PlannedCheck[] = Object.keys(weights).map((name) => ({
+    check: check(name),
+    status: "selected",
+    env: {},
+    continueOnError: false,
+  }));
+  const started: string[] = [];
+  const reported: string[] = [];
+  const results = await runChecks({
+    planned,
+    concurrency: 1,
+    priority: (pooled) => weights[pooled.name] ?? 0,
+    launch: async (_index, pooled): Promise<Launched> => {
+      started.push(pooled.name);
+      return { exitCode: 0, stopped: undefined, maxRssBytes: undefined };
+    },
+    report: (_index, result) => {
+      reported.push(result.name);
+    },
+  });
+  expect(started).toEqual(["SlowLast", "MediumA", "MediumB", "FastFirst"]);
+  expect(reported).toEqual(["FastFirst", "MediumA", "MediumB", "SlowLast"]);
+  expect(results.map(({ name }) => name)).toEqual(reported);
 });

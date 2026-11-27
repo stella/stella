@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { chatElapsedReading } from "@stll/api-contract/chat-turn-duration";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Loader } from "@stll/ui/loader";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
@@ -14,7 +15,6 @@ import {
   type TurnActivePhase,
   turnLiveStatus,
 } from "@/components/chat/chat-turn-status.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 
 export const ChatTurnStatus = ({ turn }: { turn: ChatTurnStatusInput }) => {
@@ -49,7 +49,6 @@ const LiveTurnStatus = ({
   // The clock is the external system: the line redraws once a second for as
   // long as the turn runs, whether or not anything streams.
   useExternalSyncEffect(() => {
-    setNow(performance.now());
     const interval = setInterval(() => setNow(performance.now()), TICK_MS);
     return () => clearInterval(interval);
   }, []);

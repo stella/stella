@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
@@ -6,7 +6,6 @@ import { useDebounce } from "use-debounce";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { readChatDraftText } from "@/lib/anonymize/use-chat-anonymize.logic";
 import { queryView } from "@/lib/query-view.logic";
@@ -25,26 +24,36 @@ export const useChatDraftText = (
   editor: Editor | null,
   enabled = true,
 ): string => {
-  const [text, setText] = useState(() =>
-    enabled && editor ? readChatDraftText(editor) : "",
+  const watched = enabled ? editor : null;
+  return useSyncExternalStore(
+    watched ? subscribeToEditorUpdates(watched) : noopSubscribe,
+    () => (watched ? readChatDraftText(watched) : ""),
+    noDraftText,
   );
+};
 
-  useExternalSyncEffect(() => {
-    if (!editor || !enabled) {
-      setText("");
-      return undefined;
-    }
-    setText(readChatDraftText(editor));
-    const onUpdate = () => {
-      setText(readChatDraftText(editor));
-    };
-    editor.on("update", onUpdate);
+const noopSubscribe = () => () => undefined;
+const noDraftText = () => "";
+
+// One subscribe function per editor, so the store keeps its subscription
+// across renders instead of re-subscribing every time.
+const editorUpdateSubscriptions = new WeakMap<
+  Editor,
+  (onChange: () => void) => () => void
+>();
+const subscribeToEditorUpdates = (editor: Editor) => {
+  const existing = editorUpdateSubscriptions.get(editor);
+  if (existing) {
+    return existing;
+  }
+  const subscribe = (onChange: () => void) => {
+    editor.on("update", onChange);
     return () => {
-      editor.off("update", onUpdate);
+      editor.off("update", onChange);
     };
-  }, [editor, enabled]);
-
-  return text;
+  };
+  editorUpdateSubscriptions.set(editor, subscribe);
+  return subscribe;
 };
 
 const ANON_PREVIEW_DEBOUNCE_MS = 200;

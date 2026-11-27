@@ -1,4 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+
+import { test } from "../helpers/storm-watch-fixture";
 
 test("rebuilds rotated pages from masked pixels and removes source data", async ({
   page,

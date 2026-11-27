@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useKeyedState } from "@stll/ui/effects";
 import { AddCommentIcon, Trash2Icon } from "@stll/ui/icons";
 
 import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
@@ -21,7 +22,6 @@ import {
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 
 /**
@@ -42,6 +42,13 @@ const markGeometry = (
   range.selectNode(box);
   return selectionToolbarAnchor({ range, root });
 };
+
+// The container's document, read from the container itself once it has
+// mounted: `null` on the server and in the first render, then the document
+// (the store's mount check re-reads it after the commit that attaches it).
+// It never changes for a mounted container, so there is nothing to subscribe to.
+const noDocumentChanges = () => () => undefined;
+const noDocument = () => null;
 
 /**
  * The bar over a mark the reader pressed: the author changes a highlight's
@@ -64,8 +71,16 @@ export const DocumentMarkBar = ({
   rootRef: RefObject<HTMLElement | null>;
 }) => {
   const t = useTranslations();
-  const [geometry, setGeometry] = useState<SelectionToolbarAnchor | null>(null);
-  const [doc, setDoc] = useState<Document | null>(null);
+  // The geometry belongs to one mark and starts over when the mark changes.
+  const [geometry, setGeometry] = useKeyedState<SelectionToolbarAnchor | null>(
+    mark.id,
+    null,
+  );
+  const doc = useSyncExternalStore(
+    noDocumentChanges,
+    () => rootRef.current?.ownerDocument ?? null,
+    noDocument,
+  );
 
   useExternalSyncEffect(() => {
     const root = rootRef.current;
@@ -73,19 +88,20 @@ export const DocumentMarkBar = ({
       return undefined;
     }
     const ownerDoc = root.ownerDocument;
-    setDoc(ownerDoc);
     const update = () => setGeometry(markGeometry(root, mark.id));
-    update();
+    // The first measurement waits for the frame, like every later one.
+    const firstFrame = requestAnimationFrame(update);
     ownerDoc.addEventListener("scroll", update, true);
     ownerDoc.defaultView?.addEventListener("resize", update);
     const observer = new ResizeObserver(update);
     observer.observe(root);
     return () => {
+      cancelAnimationFrame(firstFrame);
       observer.disconnect();
       ownerDoc.removeEventListener("scroll", update, true);
       ownerDoc.defaultView?.removeEventListener("resize", update);
     };
-  }, [mark.id, rootRef]);
+  }, [mark.id, rootRef, setGeometry]);
 
   if (geometry === null) {
     return null;

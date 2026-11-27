@@ -82,6 +82,10 @@ const CURATED_WRITE_CAPABILITIES = {
   save_filled_template: {
     noCapabilityReason: "This native tool owns filled-template persistence.",
   },
+  reformat_into_template: {
+    noCapabilityReason:
+      "This native tool owns applying a template's house style to a document.",
+  },
   save_playbook: {
     noCapabilityReason: "This native tool owns playbook persistence.",
   },

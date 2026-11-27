@@ -20,8 +20,13 @@ import { panic, Result } from "better-result";
  * restores it before returning.
  */
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { load } from "@stll/html";
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -34,14 +39,11 @@ import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-
 import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { AT_BVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
 import {
-  assembleAtRisDecision,
   AT_COURTS_SOURCE,
+  buildAtRisDecision,
 } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import type { AtRisSourceDefinition } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
-import {
-  assembleAtFindokDecision,
-  parseFindokManifest,
-} from "@/api/handlers/case-law/ingestion/adapters/at-findok";
+import { createAtFindokAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { AT_LVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-lvwg";
 import {
   AT_RIS_APPLICATIONS,
@@ -81,52 +83,38 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { buildCzUsListedRecord } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
-import {
-  ecjRawParts,
-  euEcjAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import {
-  assembleHuBhgyDecision,
-  huBhgyDocumentOf,
-  huBhgyRawPartsOf,
-  normalizeHuBhgyRow,
-} from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
+import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
+  plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
-import {
-  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
-  plKisRawPartsOf,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { fetchPlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { buildPlKisDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
+import { fetchPlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
-  assemblePlSnDecision,
-  normalizePlSnDetail,
-  readPlSnEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
+  huggingFaceShardSource,
+  PL_NSA_SNAPSHOT,
+  readPlNsaRows,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import { buildPlSnDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import {
-  assemblePlTkDecision,
-  plTkRawPartsOf,
+  buildPlTkDecision,
+  createPlTkPageCache,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import { plUodoAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import {
-  assemblePlUodoDecision,
-  normalizePlUodoRow,
-  plUodoBodyFrom,
-  plUodoRawPartsOf,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
-import {
-  assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   assemblePlUokikRuling,
+  buildPlUokikDecision,
   parsePlUokikDetail,
   PL_UOKIK_FILE_STATUS,
   PL_UOKIK_LABEL,
-  plUokikRawPartsOf,
+  plUokikDetailUrl,
+  plUokikFileUrl,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   unreadPublisherError,
@@ -160,11 +148,6 @@ import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const buildCzNssDecision = guardParser(uncheckedBuildCzNssDecision);
-const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
-const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);
-
-const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
-const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
 const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
 
 /** What a guard has to drive one adapter with. */
@@ -943,10 +926,24 @@ const plCourtsDecision = (
  * every run.
  */
 export const plCourtsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () =>
-    await Promise.resolve(
-      plCourtsDecision("listing-dump", PL_COURTS_DUMP_KEYS),
-    ),
+  buildDecision: async () => {
+    const listingRow = plCourtsListingRow(PL_COURTS_DUMP_KEYS);
+    const built = await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(PL_COURTS_DETAIL_PAYLOAD, {
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+            }),
+          ),
+      ),
+      async () =>
+        await plCourtsAdapter.reconciliation.buildDecision(listingRow),
+    );
+    return built.type === "built"
+      ? built.decision
+      : panic(`the pl-courts fixture built ${built.type}`);
+  },
 });
 
 /**
@@ -1007,21 +1004,10 @@ const PL_SN_DETAIL_PAYLOAD = JSON.stringify({
 });
 
 /**
- * The detail payload the inventory reads, as the inner record the adapter
- * hands its own normalizer.
- */
-const plSnDetailRecord = (): Record<string, unknown> => {
-  const payload: unknown = JSON.parse(PL_SN_DETAIL_PAYLOAD);
-  const inner = readPlSnEnvelope(payload);
-  return isRecord(inner) ? inner : panic("the pl-sn fixture states no detail");
-};
-
-/**
- * Built from the payloads directly rather than through the adapter's fetch
- * path. What these guards certify is the mapping from a stated field to the
- * row, and driving a stubbed transport to reach it only added this publisher's
- * one-second request gate to every run. The field inventory needs no PDF;
- * the raw-capture guard supplies one to exercise document retention as well.
+ * Driven through `buildPlSnDecision` with stubbed transport so the read-fault
+ * guard exercises the proxy's detail and document reads. The field inventory
+ * needs no PDF; the raw-capture guard supplies one to exercise document
+ * retention as well.
  */
 export const plSnFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
   buildDecision: async () => {
@@ -1029,33 +1015,46 @@ export const plSnFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
       documentUrl === undefined
         ? undefined
         : new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
-    const built = await assemblePlSnDecision({
-      item: { ...PL_SN_LISTING_ROW },
-      detail: normalizePlSnDetail(plSnDetailRecord()),
-      documentBytes,
-      rawParts: {
-        listing: JSON.stringify(PL_SN_LISTING_ROW),
-        detail: PL_SN_DETAIL_PAYLOAD,
-        ...(documentBytes === undefined
-          ? {}
-          : {
-              document: JSON.stringify({
-                success: true,
-                data: [
-                  {
-                    success: true,
-                    data: {
-                      raw: Buffer.from(documentBytes).toBase64(),
-                    },
-                  },
-                ],
-              }),
-            }),
-      },
+    const documentPayload = JSON.stringify({
+      success: true,
+      data: [
+        {
+          success: true,
+          data:
+            documentBytes === undefined
+              ? {}
+              : {
+                  raw: Buffer.from(documentBytes).toBase64(),
+                },
+        },
+      ],
     });
-    return built.type === "unkeyable"
-      ? panic("pl-sn fixture did not build")
-      : built.decision;
+    return await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const rawUrl = input instanceof Request ? input.url : String(input);
+        const task = new URL(rawUrl).searchParams.get("task");
+        const body =
+          task === "OrzeczeniePlikPdf" ? documentPayload : PL_SN_DETAIL_PAYLOAD;
+        return await Promise.resolve(
+          new Response(body, {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+      async () => {
+        const built = await buildPlSnDecision({
+          cursor: "2026-06:0",
+          item: { ...PL_SN_LISTING_ROW },
+          listingRaw: JSON.stringify(PL_SN_LISTING_ROW),
+        });
+        if (Result.isError(built)) {
+          return await Promise.reject(built.error);
+        }
+        return built.value.type === "unkeyable"
+          ? panic("pl-sn fixture did not build")
+          : built.value.decision;
+      },
+    );
   },
 });
 
@@ -1114,20 +1113,49 @@ const PL_KIO_DOCUMENT = `<!DOCTYPE html><html><head><title>2845_2846_25.docx</ti
 <p>Krajowa Izba Odwoławcza - w składzie: Przewodnicząca: Ewa Sikorska</p>
 <p>orzeka: oddala odwołania.</p></body></html>`;
 
-/** Built from the three payloads directly, as the crawl hands them over. */
+/** Built through the adapter's publisher reads, serving the detail and document pages. */
 export const plKioFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    const built = assemblePlKioDecision({
-      item: { ...PL_KIO_LISTING_ROW },
-      detailHtml: PL_KIO_DETAIL_PAGE,
-      document: { type: "read", html: PL_KIO_DOCUMENT },
-    });
-    return await Promise.resolve(
-      built.type === "built"
-        ? built.decision
-        : panic("pl-kio fixture did not build"),
-    );
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (pathname === `/Home/Details/${PL_KIO_LISTING_ROW.id}`) {
+          return await Promise.resolve(
+            new Response(PL_KIO_DETAIL_PAGE, {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }),
+          );
+        }
+        if (pathname === `/Home/ContentHtml/${PL_KIO_LISTING_ROW.id}`) {
+          return await Promise.resolve(
+            new Response(PL_KIO_DOCUMENT, {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }),
+          );
+        }
+        return panic(`pl-kio fixture serves no ${pathname}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const fetched = await fetchPlKioDecision({
+          cursor: "fixture",
+          item: { ...PL_KIO_LISTING_ROW },
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(fetched)) {
+          return await Promise.reject(fetched.error);
+        }
+        return fetched.value.type === "built"
+          ? fetched.value.decision
+          : panic("pl-kio fixture did not build");
+      },
+    ),
 });
 
 // ── PL common courts (ncourt-api) fixture ────────────────
@@ -1195,24 +1223,53 @@ const PL_NCOURT_LISTING_XML = `<judgement>${Object.entries(
   .map(([name, value]) => `<${name}>${value}</${name}>`)
   .join("")}</judgement>`;
 
-/** Built from the three payloads directly, as the crawl hands them over. */
+/** Built through the adapter's publisher reads, serving the detail and content XML. */
 export const plNcourtFixture = (): EnrolledAdapterFixture => ({
   rawFieldValues: {
     excerpt: PL_NCOURT_LISTING_XML,
     "xPart@xml:space": PL_NCOURT_CONTENT,
   },
-  buildDecision: async () => {
-    const built = assemblePlNcourtDecision({
-      listingXml: PL_NCOURT_LISTING_XML,
-      detailXml: PL_NCOURT_DETAIL,
-      contentXml: PL_NCOURT_CONTENT,
-    });
-    return await Promise.resolve(
-      built.type === "built"
-        ? built.decision
-        : panic("pl-ncourt fixture did not build"),
-    );
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (pathname.endsWith("/judgement/details")) {
+          return await Promise.resolve(
+            new Response(PL_NCOURT_DETAIL, {
+              headers: { "Content-Type": "text/xml; charset=utf-8" },
+            }),
+          );
+        }
+        if (pathname.endsWith("/judgement/content")) {
+          return await Promise.resolve(
+            new Response(PL_NCOURT_CONTENT, {
+              headers: { "Content-Type": "text/xml; charset=utf-8" },
+            }),
+          );
+        }
+        return panic(`pl-ncourt fixture serves no ${pathname}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const fetched = await fetchPlNcourtDecision({
+          cursor: "fixture",
+          listingXml: PL_NCOURT_LISTING_XML,
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(fetched)) {
+          return await Promise.reject(fetched.error);
+        }
+        return fetched.value.type === "built"
+          ? fetched.value.decision
+          : panic("pl-ncourt fixture did not build");
+      },
+    ),
 });
 
 // ── CZ ÚS fixture ────────────────────────────────────────
@@ -1439,55 +1496,81 @@ export const euEcjFixture = (
   return {
     rawFieldValues,
     buildDecision: async () => {
+      const html = await readGzipText(documentUrl);
       const notice = await readGzipText(
         new URL("eu-ecj-notice-en.xml.gz", EU_ECJ_ADAPTER_FIXTURES),
       );
       const formex = await readGzipText(
         new URL(`${EU_ECJ_CELEX}.en.fmx.xml.gz`, EU_ECJ_PARSER_FIXTURES),
       );
-      const parts = ecjRawParts({
-        binding: { ...EU_ECJ_BINDING },
-        html: await readGzipText(documentUrl),
-        notice,
-        formex,
-      });
-
-      for (const field of await euEcjAdapter.sourceFields.listSourceFields(
-        parts,
-      )) {
-        if (field.startsWith("notice.")) {
-          rawFieldValues[field] = notice;
+      const built = await withTestFetch(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) => {
+            const url = new URL(
+              input instanceof Request ? input.url : String(input),
+            );
+            if (url.pathname.endsWith("/sparql")) {
+              return await Promise.resolve(
+                new Response(
+                  JSON.stringify({
+                    results: { bindings: [{ ...EU_ECJ_BINDING }] },
+                  }),
+                  {
+                    headers: {
+                      "Content-Type": "application/sparql-results+json",
+                    },
+                  },
+                ),
+              );
+            }
+            if (url.pathname.includes("/resource/celex/")) {
+              return await Promise.resolve(
+                new Response(notice, {
+                  headers: { "Content-Type": "application/xml; charset=utf-8" },
+                }),
+              );
+            }
+            const headers = new Headers(
+              input instanceof Request ? input.headers : init?.headers,
+            );
+            const accept = headers.get("accept") ?? "";
+            if (accept.includes("fmx4") || url.pathname.endsWith("/DOC_1")) {
+              return await Promise.resolve(
+                new Response(formex, {
+                  headers: { "Content-Type": "application/xml; charset=utf-8" },
+                }),
+              );
+            }
+            return await Promise.resolve(
+              new Response(html, {
+                headers: {
+                  "Content-Type": "application/xhtml+xml; charset=utf-8",
+                },
+              }),
+            );
+          },
+        ),
+        async () =>
+          await euEcjAdapter.reconciliation.buildDecision({
+            celex: EU_ECJ_CELEX,
+            language: "EN",
+          }),
+      );
+      if (built.type !== "built") {
+        return panic(`eu-ecj fixture did not build: ${built.type}`);
+      }
+      const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
+      if (parts !== null) {
+        for (const field of await euEcjAdapter.sourceFields.listSourceFields(
+          parts,
+        )) {
+          if (field.startsWith("notice.")) {
+            rawFieldValues[field] = notice;
+          }
         }
       }
       rawFieldValues["formex.body"] = formex;
-
-      const reparsed = await euEcjAdapter.reparseStoredRaw?.({
-        raw: new TextEncoder().encode(encodeSourceRawEnvelope(parts)),
-        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-        caseNumber: "C-128/22",
-        sourceDocumentId: `${EU_ECJ_CELEX}:en`,
-        language: "en",
-        // What the crawl read off the ECLI before the notice stated it, so the
-        // fixture proves the notice replaces the inference rather than agreeing
-        // with a value handed to it.
-        court: "",
-        ecli: EU_ECJ_BINDING.ecli.value,
-        decisionDate: EU_ECJ_BINDING.date.value,
-        decisionType: "judgment",
-        sourceUrl: `https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:${EU_ECJ_CELEX}`,
-        documentUrl: `https://publications.europa.eu/resource/cellar/${EU_ECJ_EXPRESSION}.05`,
-        metadata: {
-          celex: EU_ECJ_CELEX,
-          manifestationUri: EU_ECJ_BINDING.manifestation.value,
-          languageUri: EU_ECJ_BINDING.language.value,
-          cdmType: EU_ECJ_BINDING.type.value,
-        },
-      });
-      return reparsed?.type === "parsed"
-        ? reparsed.result
-        : panic(
-            `eu-ecj fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
-          );
+      return built.decision;
     },
   };
 };
@@ -2279,15 +2362,29 @@ export const atRisFixture = (
     ),
   },
   buildDecision: async () =>
-    await Promise.resolve(
-      assembleAtRisDecision(
-        AT_RIS_SOURCES[adapter],
-        atRisListingItem(adapter),
-        {
-          documentXml: atRisDocumentXml(adapter),
-          headnoteListing: atRisHeadnoteListing(adapter),
-        },
-      ),
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.startsWith("/Dokumente/")) {
+          return await Promise.resolve(
+            new Response(atRisDocumentXml(adapter), {
+              headers: { "Content-Type": "application/xml" },
+            }),
+          );
+        }
+        return await Promise.resolve(
+          new Response(atRisHeadnoteListing(adapter), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+      async () =>
+        await buildAtRisDecision(
+          AT_RIS_SOURCES[adapter],
+          atRisListingItem(adapter),
+        ),
     ),
 });
 
@@ -2382,19 +2479,42 @@ export const atFindokFixture = (): EnrolledAdapterFixture => ({
     ),
   },
   buildDecision: async () => {
-    const manifest = parseFindokManifest("bfg", AT_FINDOK_MANIFEST);
-    const item = manifest.items.at(0);
-    if (item === undefined) {
-      panic("the at-findok fixture manifest states no row");
-    }
-    return await Promise.resolve(
-      assembleAtFindokDecision(
-        { collection: "bfg", item },
-        {
-          documentXml: AT_FINDOK_DECISION_XML,
-          headnoteXml: AT_FINDOK_HEADNOTE_XML,
-        },
-      ),
+    const zip = new ZipArchive();
+    zip.set(
+      `Gesamt/${AT_FINDOK_STAMM_NR}.Entscheidungstext.xml`,
+      AT_FINDOK_DECISION_XML,
+    );
+    zip.set(
+      `Gesamt/${AT_FINDOK_STAMM_NR}.Rechtssaetze.xml`,
+      AT_FINDOK_HEADNOTE_XML,
+    );
+    const archiveBytes = await zip.generate({ compression: "store" });
+    const manifestBytes = Bun.gzipSync(AT_FINDOK_MANIFEST);
+    return await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const rawUrl = input instanceof Request ? input.url : String(input);
+        if (rawUrl.includes("bestandsliste-")) {
+          return await Promise.resolve(new Response(manifestBytes));
+        }
+        return await Promise.resolve(new Response(archiveBytes));
+      }),
+      async () => {
+        const adapter = createAtFindokAdapter({
+          now: () => new Date("2026-09-18T00:00:00Z"),
+          sleep: async () => {
+            await Promise.resolve();
+          },
+        });
+        const page = await adapter.fetchPage(null, {});
+        if (page.isErr()) {
+          return await Promise.reject(page.error);
+        }
+        const decision = page.value.decisions.at(0);
+        if (decision === undefined) {
+          return panic("the at-findok fixture manifest states no row");
+        }
+        return decision;
+      },
     );
   },
 });
@@ -2455,22 +2575,25 @@ export const huBhgyFixture = (
   },
   buildDecision: async () => {
     const bytes = new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
-    const document =
-      huBhgyDocumentOf(bytes) ??
-      panic("the hu-bhgy fixture is not a decision file");
     // Exercise a non-empty restriction; the captured listing leaves it null.
     const row = {
       ...HU_BHGY_LISTING_ROW,
       NemHivatkozhatoSzoveg: "Nem hivatkozható",
     };
-    const built = await assembleHuBhgyDecision({
-      row: normalizeHuBhgyRow(row),
-      document,
-      rawParts: huBhgyRawPartsOf(row, document),
-    });
-    return built.type === "unkeyable"
-      ? panic("hu-bhgy fixture did not build")
-      : built.decision;
+    const built = await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(bytes, {
+              headers: { "Content-Type": "application/octet-stream" },
+            }),
+          ),
+      ),
+      async () => await huBhgyAdapter.reconciliation.buildDecision(row),
+    );
+    return built.type === "built"
+      ? built.decision
+      : panic(`hu-bhgy fixture did not build: ${built.type}`);
   },
 });
 
@@ -2636,65 +2759,200 @@ const PL_TK_LISTING_ROW: PlTkListingRow = {
   defect: undefined,
 };
 
-/** Built through the adapter's own assembler, from the row and the page. */
+/** Built through the adapter's publisher reads, serving the case page. */
 export const plTkFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    const built = assemblePlTkDecision({
-      row: PL_TK_LISTING_ROW,
-      casePage: PL_TK_CASE_PAGE,
-      rawParts: plTkRawPartsOf(PL_TK_LISTING_ROW, PL_TK_CASE_PAGE),
-    });
-    return await Promise.resolve(
-      built.type === "unkeyable"
-        ? panic("pl-tk fixture did not build")
-        : built.decision,
-    );
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (pathname === "/ipo/Sprawa") {
+          return await Promise.resolve(
+            new Response(PL_TK_CASE_PAGE, {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }),
+          );
+        }
+        return panic(`pl-tk fixture serves no ${pathname}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const built = await buildPlTkDecision({
+          cursor: "fixture",
+          pageCache: createPlTkPageCache(),
+          row: PL_TK_LISTING_ROW,
+          session: { sessionId: "fixture-session" },
+          signal: undefined,
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(built)) {
+          return await Promise.reject(built.error);
+        }
+        return built.value.type === "unkeyable"
+          ? panic("pl-tk fixture did not build")
+          : built.value.decision;
+      },
+    ),
 });
 
 // ── PL NSA fixture ───────────────────────────────────────
 
 /** Rows recorded from the dataset, each with its shard and row. */
-const PL_NSA_ROWS = new URL(
-  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-nsa-rows.json",
+const PL_NSA_PARQUET = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-nsa-rows.parquet",
   import.meta.url,
 );
 
+/** Row index of `nsa-wyrok-thesis-collection` in `pl-nsa-rows.parquet`. */
+const PL_NSA_FIXTURE_ROW_INDEX = 2;
+const PL_NSA_FIXTURE_TOTAL_ROWS = 28;
+
 /**
- * A recorded NSA judgment with its thesis, publication and cited provisions,
- * plus the two columns no recorded row fills — a gloss note and a dissenting
- * opinion — in the form the dataset prints them, so every column the source
- * states is stated here.
+ * One judgment from the pinned `JuDDGES/pl-nsa` dataset, downloaded through
+ * `huggingFaceShardSource` with stubbed transport so the read-fault guard
+ * drives both the repository redirect (`HEAD`) and ranged shard read (`GET`).
+ * The two columns no recorded row fills — a gloss note and a dissenting
+ * opinion — are overlaid in the form the dataset prints them so every column
+ * the source states is exercised.
  */
 export const plNsaFixture = (
-  documentUrl = PL_NSA_ROWS,
+  documentUrl = PL_NSA_PARQUET,
 ): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    const recorded: unknown = await Bun.file(documentUrl).json();
-    const entry = isUnknownArray(recorded)
-      ? recorded.find(
-          (candidate: unknown) =>
-            isRecord(candidate) &&
-            candidate["case"] === "nsa-wyrok-thesis-collection",
-        )
-      : undefined;
-    const values: unknown = isRecord(entry) ? entry["values"] : undefined;
-    if (!isRecord(values)) {
-      return panic("the pl-nsa fixture holds no recorded NSA judgment");
+    if (documentUrl.pathname.endsWith(".json")) {
+      const recorded: unknown = await Bun.file(documentUrl).json();
+      const entry = isUnknownArray(recorded)
+        ? recorded.find(
+            (candidate: unknown) =>
+              isRecord(candidate) &&
+              candidate["case"] === "nsa-wyrok-thesis-collection",
+          )
+        : undefined;
+      const values: unknown = isRecord(entry) ? entry["values"] : undefined;
+      if (!isRecord(values)) {
+        return panic("the pl-nsa fixture holds no recorded NSA judgment");
+      }
+      const shard =
+        PL_NSA_SNAPSHOT.shards[0] ?? panic("the pinned revision has no shard");
+      const built = assemblePlNsaDecision({
+        source: {
+          ...values,
+          glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
+          dissenting_opinion:
+            "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
+        },
+        position: { shard, row: 93 },
+        snapshot: PL_NSA_SNAPSHOT,
+      });
+      return built.decision;
     }
-    const shard =
-      PL_NSA_SNAPSHOT.shards[0] ?? panic("the pinned revision has no shard");
-    const built = assemblePlNsaDecision({
-      source: {
-        ...values,
-        glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
-        dissenting_opinion:
-          "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
-      },
-      position: { shard, row: 93 },
-      snapshot: PL_NSA_SNAPSHOT,
-    });
-    return built.decision;
+    const parquetBytes = new Uint8Array(
+      await Bun.file(documentUrl).arrayBuffer(),
+    );
+    const fixtureShard = {
+      index: 0,
+      path: "data/train-00000-of-00046.parquet",
+      bytes: parquetBytes.byteLength,
+      sha256: createSha256().update(parquetBytes).digest("hex"),
+      rows: PL_NSA_FIXTURE_TOTAL_ROWS,
+    };
+    const fixtureSnapshot = {
+      ...PL_NSA_SNAPSHOT,
+      shards: [fixtureShard],
+    };
+    const directory = await mkdtemp(nodePath.join(tmpdir(), "pl-nsa-fixture-"));
+    try {
+      return await withTestFetch(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) => {
+            const url = input instanceof Request ? input.url : String(input);
+            if (
+              init?.method === "HEAD" &&
+              url.startsWith("https://huggingface.co/datasets/")
+            ) {
+              return await Promise.resolve(
+                new Response(null, {
+                  status: 302,
+                  headers: {
+                    location: "https://cdn.hf.co/pl-nsa-fixture-shard",
+                  },
+                }),
+              );
+            }
+            if (url !== "https://cdn.hf.co/pl-nsa-fixture-shard") {
+              return await Promise.resolve(new Response(null, { status: 404 }));
+            }
+            const range = new Headers(init?.headers).get("range") ?? "";
+            const [start, end] = range
+              .replace("bytes=", "")
+              .split("-")
+              .map(Number);
+            return await Promise.resolve(
+              new Response(parquetBytes.slice(start, (end ?? 0) + 1), {
+                status: 206,
+              }),
+            );
+          },
+        ),
+        async () => {
+          const source = huggingFaceShardSource({
+            snapshot: fixtureSnapshot,
+            cacheDirectory: directory,
+          });
+          const file = await source.local(fixtureShard);
+          if (Result.isError(file)) {
+            return await Promise.reject(file.error);
+          }
+          const rows = await readPlNsaRows({
+            file: file.value,
+            expectedRows: fixtureShard.rows,
+            rowStart: PL_NSA_FIXTURE_ROW_INDEX,
+            rowEnd: PL_NSA_FIXTURE_ROW_INDEX + 1,
+          });
+          if (Result.isError(rows)) {
+            return await Promise.reject(rows.error);
+          }
+          const values = rows.value.at(0);
+          if (values === undefined) {
+            return panic("the pl-nsa fixture holds no recorded NSA judgment");
+          }
+          const shard =
+            PL_NSA_SNAPSHOT.shards[0] ??
+            panic("the pinned revision has no shard");
+          const built = assemblePlNsaDecision({
+            source: {
+              ...values,
+              // Parquet timestamps decode as UTC Date instances; restore the
+              // Warsaw-offset ISO strings from the recorded row so the stored
+              // raw envelope matches the canonical replay fingerprint.
+              judgment_date: "2013-04-04T00:00:00+02:00",
+              submission_date: "2012-07-17T00:00:00+02:00",
+              related_docket_numbers: [
+                {
+                  judgment_id: "/doc/8466864ADB",
+                  docket_number: "I SA/Wa 1427/11",
+                  judgment_date: "2012-03-08T00:00:00+01:00",
+                  judgment_type: "Wyrok WSA w Warszawie",
+                },
+              ],
+              glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
+              dissenting_opinion:
+                "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
+            },
+            position: { shard, row: 93 },
+            snapshot: PL_NSA_SNAPSHOT,
+          });
+          return built.decision;
+        },
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   },
 });
 
@@ -2842,16 +3100,42 @@ export const plKisFixture = (): EnrolledAdapterFixture => ({
     "informacja/nazwa": "Zmiana wiążącej informacji stawkowej",
     "informacja/informacjaTytulDto": [],
   },
-  buildDecision: async () => {
-    const row = { ...PL_KIS_LISTING_ROW };
-    const built = await assemblePlKisDecision({
-      row,
-      rawParts: plKisRawPartsOf(row, PL_KIS_DETAIL),
-    });
-    return built.type === "built"
-      ? built.decision
-      : panic("pl-kis fixture did not build");
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (
+          pathname.endsWith(`/informacje/${PL_KIS_LISTING_ROW.ID_INFORMACJI}`)
+        ) {
+          return await Promise.resolve(
+            new Response(PL_KIS_DETAIL, {
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+            }),
+          );
+        }
+        return panic(`pl-kis fixture serves no ${pathname}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const built = await buildPlKisDecision(
+          { ...PL_KIS_LISTING_ROW },
+          null,
+        ).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(built)) {
+          return await Promise.reject(built.error);
+        }
+        return built.value.type === "built"
+          ? built.value.decision
+          : panic("pl-kis fixture did not build");
+      },
+    ),
 });
 
 // ── PL UODO fixture ──────────────────────────────────────
@@ -2930,16 +3214,18 @@ export const plUodoFixture = (
       return panic("the pl-uodo listing fixture lost its decision");
     }
     const listing = plUodoUnionRow(captured);
-    const row = normalizePlUodoRow(listing);
-    const body = plUodoBodyFrom(
-      row,
-      new Uint8Array(await Bun.file(documentUrl).arrayBuffer()),
+    const bytes = new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
+    const built = await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(bytes, {
+              headers: { "Content-Type": "application/xml; charset=utf-8" },
+            }),
+          ),
+      ),
+      async () => await plUodoAdapter.reconciliation.buildDecision(listing),
     );
-    const built = assemblePlUodoDecision({
-      row,
-      body,
-      rawParts: plUodoRawPartsOf(listing, body),
-    });
     return built.type === "built"
       ? built.decision
       : panic(`pl-uodo fixture did not build: ${built.type}`);
@@ -3049,17 +3335,50 @@ export const plUokikFixture = (): EnrolledAdapterFixture => ({
       parsePlUokikDetail(html)
         ?.fields.find(({ label }) => label === PL_UOKIK_LABEL.DECISION_FILES)
         ?.files.at(0)?.name ?? panic("the pl-uokik page names no file");
-    const built = await assemblePlUokikDecision({
-      entry,
-      rawParts: plUokikRawPartsOf(entry, html),
-      files: [
-        {
-          name,
-          status: PL_UOKIK_FILE_STATUS.READ,
-          bytes: new Uint8Array(await Bun.file(PL_UOKIK_PDF).arrayBuffer()),
-        },
-      ],
-    });
+    const pdfBytes = new Uint8Array(await Bun.file(PL_UOKIK_PDF).arrayBuffer());
+    const detailUrl = plUokikDetailUrl(PL_UOKIK_DECISION_UNID);
+    const fileUrl =
+      plUokikFileUrl(PL_UOKIK_DECISION_UNID, name) ??
+      panic("the pl-uokik fixture file URL is unusable");
+    const built = await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const href = input instanceof Request ? input.url : String(input);
+        if (href === detailUrl) {
+          return await Promise.resolve(
+            new Response(html, {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }),
+          );
+        }
+        if (
+          href === fileUrl ||
+          href.includes(`/${PL_UOKIK_DECISION_UNID}/$FILE/`)
+        ) {
+          return await Promise.resolve(
+            new Response(pdfBytes, {
+              headers: { "Content-Type": "application/pdf" },
+            }),
+          );
+        }
+        return panic(`pl-uokik fixture serves no ${href}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const observed = await buildPlUokikDecision({
+          cursor: "fixture",
+          entry,
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(observed)) {
+          return await Promise.reject(observed.error);
+        }
+        return observed.value.built;
+      },
+    );
     if (built.type !== "built") {
       return panic(`pl-uokik fixture did not build: ${built.type}`);
     }

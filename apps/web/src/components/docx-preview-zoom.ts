@@ -1,12 +1,13 @@
 import { useState } from "react";
-import type { RefObject } from "react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import { panic } from "better-result";
 
 import { fitWidthZoom } from "@stll/folio-core/paged-layout/fitWidthZoom";
+import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useObservedValue } from "@stll/ui/effects-dom";
 
 import { DOCX_PAGE_WIDTH } from "@/components/docx/docx-page.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 // Target the typical Word text area (page minus ~1-inch margins on
 // each side at 96 DPI). Fitting to this rather than the full 816px
@@ -36,7 +37,7 @@ const clampDocxZoom = (zoom: number) =>
   Math.max(DOCX_MIN_ZOOM, Math.min(DOCX_MAX_ZOOM, zoom));
 
 type DocxFitZoomResult = {
-  containerRef: (node: HTMLElement | null) => (() => void) | undefined;
+  containerRef: Dispatch<SetStateAction<HTMLElement | null>>;
   fitZoom: number;
 };
 
@@ -65,81 +66,83 @@ export const useDocxFitZoom = ({
   fit,
   scaleOffset = 0,
 }: DocxFitZoomOptions): DocxFitZoomResult => {
-  const [fitZoom, setFitZoom] = useState(DOCX_DEFAULT_ZOOM);
+  const [container, setContainer] = useState<HTMLElement | null>(null);
+  // The fit as primitives, so a caller's fresh `fit` object does not
+  // re-subscribe the observer.
+  const fitType = fit.type;
+  const fitWidth =
+    fit.type === "width" ? (fit.fitWidth ?? DOCX_TEXT_AREA_WIDTH) : null;
+  const maxAutoZoom =
+    fit.type === "width" ? (fit.maxAutoZoom ?? DOCX_MAX_ZOOM) : null;
 
-  // Callback ref: React invokes this once when the container
-  // attaches to the DOM and runs the returned cleanup when it
-  // detaches. Subscribing via useEffect on a passed-in RefObject
-  // does not work here because the real container only appears
-  // after a loading fallback unmounts, and useEffect does not
-  // re-run on ref mutation. The callback-ref form attaches the
-  // ResizeObserver exactly once per node lifetime regardless of
-  // parent re-renders.
-  const containerRef = (node: HTMLElement | null) => {
-    if (!node) {
-      return undefined;
-    }
-
-    // The widest scrollbar edge seen so far, which the editor's fit keeps.
-    let reservedEdge = 0;
-    const updateZoom = () => {
-      const { clientWidth, offsetWidth } = node;
-      if (clientWidth <= 0) {
-        return;
-      }
-      switch (fit.type) {
-        case "editor": {
-          const editorFit = fitWidthZoom({
-            clientWidth,
-            offsetWidth,
-            pageWidth: DOCX_PAGE_WIDTH,
-            reservedEdge,
-          });
-          reservedEdge = editorFit.reservedEdge;
-          if (editorFit.zoom !== null) {
-            setFitZoom(clampDocxZoom(editorFit.zoom));
+  // The container is held in state (`ref={containerRef}`): the real container
+  // only appears after a loading fallback unmounts, and the observer follows
+  // whichever node is attached, once per node lifetime.
+  const fitZoom = useObservedValue<HTMLElement, number>(
+    container,
+    (node, emit) => {
+      // The widest scrollbar edge seen so far, which the editor's fit keeps.
+      let reservedEdge = 0;
+      const updateZoom = () => {
+        const { clientWidth, offsetWidth } = node;
+        if (clientWidth <= 0) {
+          return;
+        }
+        switch (fitType) {
+          case "editor": {
+            const editorFit = fitWidthZoom({
+              clientWidth,
+              offsetWidth,
+              pageWidth: DOCX_PAGE_WIDTH,
+              reservedEdge,
+            });
+            reservedEdge = editorFit.reservedEdge;
+            if (editorFit.zoom !== null) {
+              emit(clampDocxZoom(editorFit.zoom));
+            }
+            return;
           }
-          return;
+          case "width": {
+            const availableWidth = Math.max(
+              1,
+              clientWidth - DOCX_FIT_PADDING * 2,
+            );
+            const cappedFitZoom = Math.min(
+              maxAutoZoom ?? DOCX_MAX_ZOOM,
+              availableWidth / (fitWidth ?? DOCX_TEXT_AREA_WIDTH),
+            );
+            emit(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
+            return;
+          }
+          default: {
+            fitType satisfies never;
+            panic("Unhandled DOCX fit");
+          }
         }
-        case "width": {
-          const {
-            fitWidth = DOCX_TEXT_AREA_WIDTH,
-            maxAutoZoom = DOCX_MAX_ZOOM,
-          } = fit;
-          const availableWidth = Math.max(
-            1,
-            clientWidth - DOCX_FIT_PADDING * 2,
-          );
-          const cappedFitZoom = Math.min(
-            maxAutoZoom,
-            availableWidth / fitWidth,
-          );
-          setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
-          return;
-        }
-        default: {
-          fit satisfies never;
-          panic("Unhandled DOCX fit");
-        }
-      }
-    };
+      };
 
-    updateZoom();
-    // Belt-and-braces retry on the next frame for surfaces
-    // where the parent finishes sizing after our first measure
-    // (e.g., inspector pane expanding on the same commit as
-    // the docx tab opening).
-    const rafId = requestAnimationFrame(updateZoom);
-    const observer = new ResizeObserver(updateZoom);
-    observer.observe(node);
+      updateZoom();
+      // Belt-and-braces retry on the next frame for surfaces
+      // where the parent finishes sizing after our first measure
+      // (e.g., inspector pane expanding on the same commit as
+      // the docx tab opening).
+      const rafId = requestAnimationFrame(updateZoom);
+      const observer = new ResizeObserver(updateZoom);
+      observer.observe(node);
 
-    return () => {
-      cancelAnimationFrame(rafId);
-      observer.disconnect();
-    };
+      return () => {
+        cancelAnimationFrame(rafId);
+        observer.disconnect();
+      };
+    },
+    [fitType, fitWidth, maxAutoZoom],
+    DOCX_DEFAULT_ZOOM,
+  );
+
+  return {
+    containerRef: setContainer,
+    fitZoom: clampDocxZoom(fitZoom + scaleOffset),
   };
-
-  return { containerRef, fitZoom: clampDocxZoom(fitZoom + scaleOffset) };
 };
 
 export const useDocxWheelZoom = (

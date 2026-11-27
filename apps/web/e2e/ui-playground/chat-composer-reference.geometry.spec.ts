@@ -15,6 +15,7 @@ import {
   test,
   waitForStableGeometry,
 } from "../helpers/stable-geometry";
+import { newWatchedContext } from "../helpers/storm-watch-fixture";
 
 const CHIP = '[data-chip-kind="reference"]';
 // Subpixel layout can put an edge a fraction past its container.
@@ -241,7 +242,7 @@ test("hint-bearing chips keep a full coarse-pointer target", async ({
   browser,
   baseURL,
 }) => {
-  const context = await browser.newContext({
+  const context = await newWatchedContext(browser, {
     ...(baseURL === undefined ? {} : { baseURL }),
     hasTouch: true,
     viewport: { width: 390, height: 844 },

@@ -15,6 +15,7 @@ import {
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
@@ -47,7 +48,6 @@ import {
   CATALOGUE_CONTRIBUTING_URL,
   CATALOGUE_ENTRIES_URL,
 } from "@/features/knowledge/public/tools/tool-detail.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";

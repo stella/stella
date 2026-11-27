@@ -1,16 +1,20 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFindSurface } from "@/lib/find-owner";
 import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
@@ -43,36 +47,43 @@ type InspectorFindOptions = {
 
 /**
  * Moving the reader is something the reader asks for: a new query, Next or
- * Previous, or opening the bar with terms. The text changing under an open
- * bar (a provision card unfolds, a disclosure opens, a note arrives) repaints
- * the marks and may move the active index, but never the view.
+ * Previous, or opening the bar with terms. Each such command carries a fresh
+ * request, answered once by the match collection that sees it. The text
+ * changing under an open bar (a provision card unfolds, a disclosure opens, a
+ * note arrives) repaints the marks and may move the active index, but never
+ * the view.
  */
-const FIND_SCROLL_INTENT = {
-  /** Take the reader to the active match once, then settle. */
-  reveal: "reveal",
-  /** Repaint in place. */
-  stay: "stay",
-} as const;
-type FindScrollIntent =
-  (typeof FIND_SCROLL_INTENT)[keyof typeof FIND_SCROLL_INTENT];
+type RevealRequest = { readonly reveal: true };
+const requestReveal = (): RevealRequest => ({ reveal: true });
 
 type FindBarState =
   | { open: false }
   | {
       open: true;
       query: string;
-      matchCount: number;
+      /**
+       * How many matches the query has in the reader's text, or `null` until
+       * that text has been counted (a reader opening with search terms
+       * counts on its first frame).
+       */
+      matchCount: number | null;
       activeIndex: number;
       /**
        * Bumped on every awarded find command, so a shortcut pressed while
        * the bar is already open still returns the caret to the query.
        */
       focusRequest: number;
-      /** Whether the next match collection takes the reader to the active match. */
-      scrollIntent: FindScrollIntent;
-      /** A citation can request the same search passage again after the reader moved away. */
-      landingRequest: number;
+      /** The command still to take the reader to the active match, if any. */
+      reveal: RevealRequest | null;
     };
+
+/** What a drawing of the matches reads from the bar. */
+type FindInputs = {
+  activeIndex: number;
+  enabled: boolean;
+  findQuery: string;
+  reveal: RevealRequest | null;
+};
 
 const FIND_CLOSED: FindBarState = { open: false };
 const FIND_OPENED: FindBarState = {
@@ -81,18 +92,7 @@ const FIND_OPENED: FindBarState = {
   matchCount: 0,
   activeIndex: 0,
   focusRequest: 0,
-  scrollIntent: FIND_SCROLL_INTENT.reveal,
-  landingRequest: 0,
-};
-
-/** What a match collection reads from the bar. */
-type FindInputs = {
-  activeIndex: number;
-  scrollIntent: FindScrollIntent;
-  enabled: boolean;
-  findQuery: string;
-  /** Keys reapplication even when a citation's query and active index stay the same. */
-  landingRequest: number;
+  reveal: null,
 };
 
 /**
@@ -107,6 +107,10 @@ const highlightRegistry = (): HighlightRegistry | undefined =>
 /** The state after a find command: opened, or open with focus asked for again. */
 const findCommanded = (prev: FindBarState): FindBarState =>
   prev.open ? { ...prev, focusRequest: prev.focusRequest + 1 } : FIND_OPENED;
+
+/** The active match, or the first one once the text has fewer. */
+const activeWithin = (activeIndex: number, matchCount: number): number =>
+  activeIndex < matchCount ? activeIndex : 0;
 
 /**
  * Find-in-text for an inspector reader: the shortcut registration, the match
@@ -125,12 +129,121 @@ export const useInspectorFind = ({
 }: InspectorFindOptions) => {
   const [findState, setFindState] = useState<FindBarState>(() =>
     initialQuery?.trim()
-      ? { ...FIND_OPENED, query: initialQuery.trim() }
+      ? {
+          ...FIND_OPENED,
+          query: initialQuery.trim(),
+          matchCount: null,
+          reveal: requestReveal(),
+        }
       : FIND_CLOSED,
   );
   const safeKey = sanitizeHighlightKey(highlightKey);
   const allHighlightName = `stella-inspector-find-${safeKey}`;
   const activeHighlightName = `stella-inspector-find-active-${safeKey}`;
+
+  // The text read once, until it changes, and the drawing of the current
+  // query's matches over it. Both outlive renders: a keystroke queries the
+  // index, a step moves only the active mark, and scrolling draws the
+  // matches that come near the viewport.
+  const indexRef = useRef<ReaderFindIndex | null>(null);
+  const paintRef = useRef<FindPaint | null>(null);
+  // The drawing whose match count the bar holds, and the last reveal request
+  // answered: a repaint for the same request leaves the view where it is.
+  const countedPaintRef = useRef<FindPaint | null>(null);
+  const answeredRevealRef = useRef<RevealRequest | null>(null);
+
+  const stopFindPaint = () => {
+    stopPaint(paintRef.current);
+    paintRef.current = null;
+  };
+
+  /**
+   * The matches of `query` drawn over the reader's current text, reusing the
+   * reading and the drawing while neither changed; `null`, with every mark
+   * removed, when there is nothing to search.
+   */
+  const collect = (query: string, isEnabled: boolean): FindPaint | null => {
+    const root = contentRef.current;
+    if (!isEnabled || !root || query.length === 0) {
+      stopFindPaint();
+      highlightRegistry()?.delete(allHighlightName);
+      highlightRegistry()?.delete(activeHighlightName);
+      return null;
+    }
+    let textIndex = indexRef.current;
+    if (textIndex === null || textIndex.root !== root) {
+      textIndex = buildReaderFindIndex(root);
+      indexRef.current = textIndex;
+    }
+    const current = paintRef.current;
+    if (
+      current?.index === textIndex &&
+      current.query === query &&
+      current.allName === allHighlightName &&
+      current.activeName === activeHighlightName
+    ) {
+      return current;
+    }
+    stopFindPaint();
+    const paint = startPaint({
+      activeName: activeHighlightName,
+      allName: allHighlightName,
+      index: textIndex,
+      query,
+    });
+    paintRef.current = paint;
+    return paint;
+  };
+
+  /** Draws the active mark, and takes the reader to it once per request. */
+  const drawActive = (
+    paint: FindPaint,
+    index: number,
+    reveal: RevealRequest | null,
+  ) => {
+    if (paint.matches.length === 0) {
+      paint.active = null;
+      highlightRegistry()?.delete(activeHighlightName);
+      // A request that found nothing is answered: text arriving later
+      // repaints in place.
+      answeredRevealRef.current = reveal;
+      return;
+    }
+    const activeRange = paintActive(
+      paint,
+      activeWithin(index, paint.matches.length),
+    );
+    if (
+      activeRange &&
+      reveal !== null &&
+      reveal !== answeredRevealRef.current
+    ) {
+      answeredRevealRef.current = reveal;
+      scrollRangeIntoView(activeRange);
+    }
+  };
+
+  /** Hands the bar the count of a drawing; for events outside a render. */
+  const publishCount = (paint: FindPaint) => {
+    countedPaintRef.current = paint;
+    const total = paint.matches.length;
+    setFindState((prev) => {
+      if (!prev.open) {
+        return prev;
+      }
+      const activeIndex = activeWithin(prev.activeIndex, total);
+      return prev.matchCount === total && prev.activeIndex === activeIndex
+        ? prev
+        : { ...prev, matchCount: total, activeIndex };
+    });
+  };
+
+  /** Collects a query typed or handed in, counted in the same update. */
+  const countFor = (query: string): number => {
+    const paint = collect(query, enabled);
+    countedPaintRef.current = paint;
+    return paint?.matches.length ?? 0;
+  };
 
   // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const clearFind = useCallback(() => {
@@ -155,15 +268,13 @@ export const useInspectorFind = ({
   };
 
   const setFindQuery = (query: string) => {
+    if (!findState.open) {
+      return;
+    }
+    const matchCount = countFor(query.trim());
+    const reveal = requestReveal();
     setFindState((prev) =>
-      prev.open
-        ? {
-            ...prev,
-            query,
-            activeIndex: 0,
-            scrollIntent: FIND_SCROLL_INTENT.reveal,
-          }
-        : prev,
+      prev.open ? { ...prev, query, matchCount, activeIndex: 0, reveal } : prev,
     );
   };
 
@@ -171,52 +282,52 @@ export const useInspectorFind = ({
     if (!enabled) {
       return;
     }
+    const trimmed = query.trim();
+    const matchCount = countFor(trimmed);
+    const reveal = requestReveal();
     setFindState((prev) => ({
       open: true,
-      query: query.trim(),
-      matchCount: 0,
+      query: trimmed,
+      matchCount,
       activeIndex: 0,
       focusRequest: prev.open ? prev.focusRequest : 0,
-      landingRequest: prev.open ? prev.landingRequest + 1 : 1,
-      scrollIntent: FIND_SCROLL_INTENT.reveal,
+      reveal,
     }));
   };
 
-  const nextMatch = () => {
+  const stepMatch = (step: 1 | -1) => {
+    const reveal = requestReveal();
     setFindState((prev) => {
-      if (!prev.open || prev.matchCount === 0) {
+      if (!prev.open || prev.matchCount === null || prev.matchCount === 0) {
         return prev;
       }
+      const current = activeWithin(prev.activeIndex, prev.matchCount);
       return {
         ...prev,
-        activeIndex: (prev.activeIndex + 1) % prev.matchCount,
-        scrollIntent: FIND_SCROLL_INTENT.reveal,
+        activeIndex: (current + step + prev.matchCount) % prev.matchCount,
+        reveal,
       };
     });
   };
 
+  const nextMatch = () => {
+    stepMatch(1);
+  };
+
   const previousMatch = () => {
-    setFindState((prev) => {
-      if (!prev.open || prev.matchCount === 0) {
-        return prev;
-      }
-      return {
-        ...prev,
-        activeIndex: (prev.activeIndex - 1 + prev.matchCount) % prev.matchCount,
-        scrollIntent: FIND_SCROLL_INTENT.reveal,
-      };
-    });
+    stepMatch(-1);
   };
 
   const findOpen = findState.open;
   const findQuery = findState.open ? findState.query : "";
-  const matchCount = findState.open ? findState.matchCount : 0;
-  const activeIndex = findState.open ? findState.activeIndex : 0;
+  // A disabled reader has nothing to search; its marks are gone too.
+  const matchCount = findState.open && enabled ? findState.matchCount : 0;
+  const activeIndex =
+    findState.open && matchCount !== null
+      ? activeWithin(findState.activeIndex, matchCount)
+      : 0;
   const focusRequest = findState.open ? findState.focusRequest : 0;
-  const scrollIntent = findState.open
-    ? findState.scrollIntent
-    : FIND_SCROLL_INTENT.stay;
-  const landingRequest = findState.open ? findState.landingRequest : 0;
+  const reveal = findState.open ? findState.reveal : null;
 
   // The DOCX pane and a table view's toolbar are candidates for the same
   // press: an inspector reader reaches the whole app while it is showing
@@ -254,124 +365,33 @@ export const useInspectorFind = ({
     };
   }, [closeFind, enabled, findOpen, panelRef]);
 
-  // The text read once, until it changes, and the drawing of the current
-  // query's matches over it. Both outlive renders: a keystroke queries the
-  // index, a step moves only the active mark, and scrolling draws the
-  // matches that come near the viewport.
-  const indexRef = useRef<ReaderFindIndex | null>(null);
-  const paintRef = useRef<FindPaint | null>(null);
-
-  const stopFindPaint = () => {
-    stopPaint(paintRef.current);
-    paintRef.current = null;
-  };
-
-  // One collection for both things that change what matches: the bar's own
-  // values, and the reader's text arriving later. Called with the values
-  // rather than closing over them, so the effect below lists what it reads.
-  const applyFind = useLatestCallback(
-    ({
-      activeIndex: index,
-      enabled: isEnabled,
-      findQuery: queryInput,
-      scrollIntent: intent,
-    }: FindInputs) => {
-      const root = contentRef.current;
-      const query = queryInput.trim();
-      if (!isEnabled || !root || query.length === 0) {
-        stopFindPaint();
-        highlightRegistry()?.delete(allHighlightName);
-        highlightRegistry()?.delete(activeHighlightName);
-        setFindState((prev) =>
-          prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
-            ? { ...prev, matchCount: 0, activeIndex: 0 }
-            : prev,
-        );
-        return;
+  // Draws what the bar asks for before the frame paints. A query typed or
+  // handed in was counted by its handler; a drawing the bar has not counted
+  // (a reader opening with search terms, a reader enabled again) is counted
+  // on the next frame. Called with the values rather than closing over them,
+  // so the effect below lists what it reads.
+  const drawFind = useLatestCallback((inputs: FindInputs) => {
+    const paint = collect(inputs.findQuery.trim(), inputs.enabled);
+    if (paint === null) {
+      return undefined;
+    }
+    drawActive(paint, inputs.activeIndex, inputs.reveal);
+    if (paint === countedPaintRef.current) {
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => {
+      if (paintRef.current === paint) {
+        publishCount(paint);
       }
-
-      let textIndex = indexRef.current;
-      if (textIndex === null || textIndex.root !== root) {
-        textIndex = buildReaderFindIndex(root);
-        indexRef.current = textIndex;
-      }
-      let paint = paintRef.current;
-      if (
-        paint === null ||
-        paint.index !== textIndex ||
-        paint.query !== query ||
-        paint.allName !== allHighlightName ||
-        paint.activeName !== activeHighlightName
-      ) {
-        stopFindPaint();
-        paint = startPaint({
-          activeName: activeHighlightName,
-          allName: allHighlightName,
-          index: textIndex,
-          query,
-        });
-        paintRef.current = paint;
-      }
-      const { matches } = paint;
-      setFindState((prev) =>
-        prev.open && prev.matchCount !== matches.length
-          ? { ...prev, matchCount: matches.length }
-          : prev,
-      );
-
-      if (matches.length === 0) {
-        paint.active = null;
-        highlightRegistry()?.delete(activeHighlightName);
-        setFindState((prev) =>
-          prev.open &&
-          (prev.activeIndex !== 0 ||
-            prev.scrollIntent !== FIND_SCROLL_INTENT.stay)
-            ? {
-                ...prev,
-                activeIndex: 0,
-                scrollIntent: FIND_SCROLL_INTENT.stay,
-              }
-            : prev,
-        );
-        return;
-      }
-
-      const safeActiveIndex = index >= matches.length ? 0 : index;
-      if (safeActiveIndex !== index) {
-        setFindState((prev) =>
-          prev.open ? { ...prev, activeIndex: safeActiveIndex } : prev,
-        );
-        return;
-      }
-
-      const activeRange = paintActive(paint, safeActiveIndex);
-      if (activeRange && intent === FIND_SCROLL_INTENT.reveal) {
-        scrollRangeIntoView(activeRange);
-        setFindState((prev) =>
-          prev.open && prev.scrollIntent === FIND_SCROLL_INTENT.reveal
-            ? { ...prev, scrollIntent: FIND_SCROLL_INTENT.stay }
-            : prev,
-        );
-      }
-    },
-  );
-
-  useLayoutEffect(() => {
-    applyFind({
-      activeIndex,
-      enabled,
-      findQuery,
-      landingRequest,
-      scrollIntent,
     });
-  }, [
-    activeIndex,
-    applyFind,
-    enabled,
-    findQuery,
-    landingRequest,
-    scrollIntent,
-  ]);
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  });
+  useLayoutSyncEffect(
+    () => drawFind({ activeIndex, enabled, findQuery, reveal }),
+    [activeIndex, drawFind, enabled, findQuery, reveal],
+  );
 
   // The marks belong to this reader: they go when it unmounts.
   useMountEffect(() => () => {
@@ -383,13 +403,12 @@ export const useInspectorFind = ({
   // version of the text, so it is read again and the query rerun on it.
   const reapplyFind = useLatestCallback(() => {
     indexRef.current = null;
-    applyFind({
-      activeIndex,
-      enabled,
-      findQuery,
-      landingRequest,
-      scrollIntent,
-    });
+    const paint = collect(findQuery.trim(), enabled);
+    if (paint === null) {
+      return;
+    }
+    publishCount(paint);
+    drawActive(paint, activeIndex, reveal);
   });
   useExternalSyncEffect(() => {
     const root = contentRef.current;
@@ -410,7 +429,8 @@ export const useInspectorFind = ({
   }, [contentRef, enabled, reapplyFind]);
 
   return {
-    activeMatchNumber: matchCount === 0 ? 0 : activeIndex + 1,
+    activeMatchNumber:
+      matchCount === null || matchCount === 0 ? 0 : activeIndex + 1,
     clearFind,
     closeFind,
     findOpen,
@@ -466,7 +486,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
   }
 
   const counter = (() => {
-    if (!findQuery) {
+    if (!findQuery || matchCount === null) {
       return "";
     }
     if (matchCount === 0) {
@@ -533,7 +553,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
       </span>
       <Button
         aria-label={t("common.previousMatch")}
-        disabled={matchCount === 0}
+        disabled={matchCount === null || matchCount === 0}
         disabledReason={t("workspaces.filters.noMatches")}
         onClick={previousMatch}
         size="icon-xs"
@@ -544,7 +564,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
       </Button>
       <Button
         aria-label={t("common.nextMatch")}
-        disabled={matchCount === 0}
+        disabled={matchCount === null || matchCount === 0}
         disabledReason={t("workspaces.filters.noMatches")}
         onClick={nextMatch}
         size="icon-xs"

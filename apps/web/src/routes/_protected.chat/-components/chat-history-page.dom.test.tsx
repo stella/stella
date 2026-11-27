@@ -1,6 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { setTimeout as sleep } from "node:timers/promises";
+import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
@@ -33,7 +32,6 @@ const { AnalyticsContext } = await import("@/lib/analytics/provider");
 const { noopAnalytics } = await import("@/lib/analytics/noop");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
-const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
 const { ChatHistoryPage } = await import("./chat-history.page");
 
 type ChatHistorySearch = Parameters<typeof ChatHistoryPage>[0]["search"];
@@ -300,10 +298,16 @@ afterEach(() => {
   markRequests.length = 0;
   unexpected.length = 0;
 });
+const withFakeTimers = async (run: () => Promise<void>) => {
+  jest.useFakeTimers();
+  try {
+    await run();
+  } finally {
+    restoreRealTimers();
+  }
+};
+
 afterAll(async () => {
-  await testing.act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 
@@ -390,24 +394,17 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
   await appRouter.load();
   const ui = testing.render(
     <AnalyticsContext value={noopAnalytics}>
-      <RenderLoopGuard>
-        <QueryClientProvider client={createClient()}>
-          {/* Pin calendar grouping without freezing Date.now(), which the
-              debounce uses to decide whether its trailing timer can fire. */}
-          <IntlProvider
-            locale="en"
-            messages={messages}
-            now={NOW}
-            timeZone="UTC"
-          >
-            <FormattingProvider locale="en" timeZone="UTC">
-              <AuthenticatedUserProvider user={user}>
-                <router.RouterProvider router={appRouter} />
-              </AuthenticatedUserProvider>
-            </FormattingProvider>
-          </IntlProvider>
-        </QueryClientProvider>
-      </RenderLoopGuard>
+      <QueryClientProvider client={createClient()}>
+        {/* Pin calendar grouping without freezing Date.now(), which the
+            debounce uses to decide whether its trailing timer can fire. */}
+        <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <AuthenticatedUserProvider user={user}>
+              <router.RouterProvider router={appRouter} />
+            </AuthenticatedUserProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </QueryClientProvider>
     </AnalyticsContext>,
   );
   const navigateTo = async (next: ChatHistorySearch) => {
@@ -590,14 +587,16 @@ describe("chat history page", () => {
       expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
     );
 
-    await testing.act(async () => {
-      testing.fireEvent.change(field, { target: { value: "lease" } });
-    });
-    // The URL moves on before the typing's debounce fires.
-    await navigateTo({ q: "claim" });
-    await testing.act(async () => {
-      // real-time: this assertion covers expiry of the abandoned debounce.
-      await sleep(1000);
+    await withFakeTimers(async () => {
+      await testing.act(async () => {
+        testing.fireEvent.change(field, { target: { value: "lease" } });
+      });
+      // The URL moves on before the typing's debounce fires.
+      await navigateTo({ q: "claim" });
+      await testing.act(async () => {
+        jest.advanceTimersByTime(1000);
+        await Promise.resolve();
+      });
     });
 
     expect(inputValue(field)).toBe("claim");

@@ -11,9 +11,10 @@ import { panic } from "better-result";
 import type { Result } from "better-result";
 import { createStore, useStore } from "zustand";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import type { ViewerSurface } from "@/components/viewer/recoverable-viewer-boundary";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";

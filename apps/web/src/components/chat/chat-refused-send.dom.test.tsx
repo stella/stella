@@ -35,7 +35,7 @@ const { CHAT_SEND_KEPT, CHAT_SEND_SENT, useChatEditor } =
 const { toSafeId } = await import("@/lib/safe-id");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const { EditorContent } = await import("@tiptap/react");
-const { useExternalSyncEffect } = await import("@/hooks/use-effect");
+const { useExternalSyncEffect } = await import("@stll/ui/effects");
 
 afterEach(async () => {
   await act(async () => cleanup());
