@@ -47,16 +47,6 @@ const CASES = [
     outside: "packages/ui/src/probe.tsx",
   },
   {
-    check: "ci-checks-rest/Query data state baseline",
-    inside: "apps/web/src/probe.tsx",
-    outside: "apps/api/src/probe.ts",
-  },
-  {
-    check: "ci-checks-rest/Failure-as-empty baseline",
-    inside: "apps/api/src/probe.ts",
-    outside: "apps/web/src/probe.tsx",
-  },
-  {
     check: "ci-checks-rest/Bridge-version guard",
     inside: "apps/desktop/src/shared/rpc.ts",
     outside: "apps/desktop/src/mainview/App.tsx",
@@ -96,8 +86,8 @@ test.each(CASES)(
 
 test("path inputs see derived outputs of a changed generator input", () => {
   // CLI capability shards generate apps/api/src/mcp/generated/*.ts, which CI
-  // restores before the census scans apps/api/src.
-  const check = "ci-checks-rest/Failure-as-empty baseline";
+  // restores before guards scan apps/api/src.
+  const check = "ci-checks-rest/SQL performance baseline";
   expect(inputs.get(check)).not.toContain("@stll/cli");
   expect(
     selectRootChecks({

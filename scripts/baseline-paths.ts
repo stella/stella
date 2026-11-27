@@ -34,9 +34,6 @@ export const BASELINE_PATHS = {
   rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
-  /** .oxlint-plugins/no-variable-arity-values.ts */
-  noVariableArityValues:
-    ".oxlint-plugins/no-variable-arity-values-baseline.json",
   /** scripts/check-write-contracts.ts */
   writeContracts: "scripts/write-contract-routes-baseline.json",
   /** scripts/check-aggregate-mutations.ts */
@@ -59,10 +56,6 @@ export const BASELINE_PATHS = {
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
   designLint: "scripts/design-lint-baseline.json",
-  /** scripts/query-data-state-baseline.ts */
-  queryDataState: ".oxlint-plugins/query-data-requires-state-baseline.json",
-  /** scripts/failure-as-empty-baseline.ts */
-  failureAsEmpty: ".oxlint-plugins/no-failure-as-empty-baseline.json",
   /** scripts/typecheck-baseline.ts */
   typecheck: "scripts/typecheck-baseline.json",
   /** scripts/transfer-read-guard.ts */
@@ -89,9 +82,6 @@ export const BASELINE_PATHS = {
   /** apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts */
   caseLawSilentDrop:
     "apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json",
-  /** apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts */
-  caseLawReadFault:
-    "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json",
   /** apps/api/scripts/update-structure-fidelity-baseline.ts */
   caseLawStructureFidelity:
     "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json",
