@@ -80,6 +80,11 @@ export type LabelIndex = {
   /** The column of each block of a document that runs in parallel columns;
    *  empty for any other document. */
   columnByBlockId: ReadonlyMap<string, number>;
+  /** How long the typed label is that a heading opens with when it has no
+   *  entry here because it counts the articles of a part of its own
+   *  (`Article 4` of a model contract behind an agreement): the label is
+   *  the heading's own name, no citation of another provision. */
+  ownLabelLengths: ReadonlyMap<string, number>;
 };
 
 const HEADING_TITLE_MAX = 160;
@@ -429,8 +434,9 @@ type Walk = {
   schemes: { body: Scheme; annexes: Scheme };
   /** Positions of annex lines that name an annex without opening it. */
   listedAnnexes: ReadonlySet<number>;
-  /** Ordinals of the articles the document's automatic numbering heads. */
-  numberedArticles: ReadonlySet<number>;
+  /** Positions of typed article headings that head no article of the
+   *  document's own numbering. */
+  articleMentions: ReadonlySet<number>;
   /** Positions of numbered list items that only list the headings. */
   listedHeadings: ReadonlySet<number>;
   article: LabelEntry | null;
@@ -625,6 +631,79 @@ const isArticleMention = (
     numberedArticles.has(ordinal) &&
     isNamedArticle(row)
   );
+};
+
+/**
+ * The positions of the typed article headings that head no article of the
+ * document's own numbering. A mention is one; so is every heading that
+ * counts on from it (`Article 4` behind a mentioned `Article 3`): a part
+ * that counts its own articles (a model contract in an annex) is one run,
+ * and its later headings are no more the document's articles than its
+ * first ones, whose numbers the document's own articles happen to take.
+ */
+const articleMentionPositions = (
+  numberedArticles: ReadonlySet<number>,
+  labelled: readonly LabelledRow[],
+): { mentions: Set<number>; countedOn: Set<number> } => {
+  const mentions = new Set<number>();
+  /** The headings that are here only because they count on, by ordinal. */
+  const countedOn = new Map<number, number>();
+  const scheme = numberedScheme(labelled);
+  const typed: { position: number; ordinal: number | null }[] = [];
+  /** The ordinal of the typed article heading read last, when it was one
+   *  of these. */
+  let counted: number | null = null;
+  for (const row of labelled) {
+    // An article of the document's own numbering ends such a run: a typed
+    // heading behind it counts on from nothing.
+    if (
+      row.raw.origin === "auto" &&
+      row.block.outlineLevel !== null &&
+      (isNamedArticle(row) || headsArticle(scheme, row))
+    ) {
+      counted = null;
+      continue;
+    }
+    if (row.raw.origin !== "manual" || !isNamedArticle(row)) {
+      continue;
+    }
+    const { core, path } = row.raw.shape;
+    const ordinal = countedOrdinal(core) ?? path?.at(0) ?? null;
+    const heads = path === null || path.length <= 1;
+    if (heads) {
+      typed.push({ position: row.position, ordinal });
+    }
+    const mentioned = isArticleMention(numberedArticles, row);
+    if (mentioned || (heads && counted !== null && ordinal === counted + 1)) {
+      mentions.add(row.position);
+      if (!mentioned && ordinal !== null) {
+        countedOn.set(row.position, ordinal);
+      }
+      // A clause of such an article (`Article 4.2`) counts nothing on.
+      counted = heads ? ordinal : counted;
+    } else {
+      counted = null;
+    }
+  }
+  // Where the document has a typed article of that number of its own, the
+  // heading stays in the index beside it: a citation of the number then
+  // has two places it may mean and is linked to neither, instead of being
+  // linked to the one that happened to be left.
+  for (const [position, ordinal] of countedOn) {
+    if (
+      typed.some(
+        (other) => other.ordinal === ordinal && !mentions.has(other.position),
+      )
+    ) {
+      mentions.delete(position);
+    }
+  }
+  return {
+    mentions,
+    countedOn: new Set(
+      [...countedOn.keys()].filter((position) => mentions.has(position)),
+    ),
+  };
 };
 
 /**
@@ -856,7 +935,7 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
     return isAnnexRow(row) ? openAnnex(walk, row) : null;
   }
   if (isNamedArticle(row)) {
-    if (walk.annex === null && isArticleMention(walk.numberedArticles, row)) {
+    if (walk.annex === null && walk.articleMentions.has(row.position)) {
       return null;
     }
     // A keyword over a dotted number (`Article 5.1 Fees`) heads a clause of
@@ -1121,7 +1200,13 @@ export const buildLabelIndex = ({
   const labelled = rows.filter(isLabelled);
   const numberedArticles = numberedArticleOrdinals(labelled);
   const listedHeadings = listedHeadingPositions(labelled);
-  // Mentions say nothing about how the document numbers itself.
+  const { mentions: articleMentions, countedOn } = articleMentionPositions(
+    numberedArticles,
+    labelled,
+  );
+  // Mentions say nothing about how the document numbers itself. A heading
+  // that only counts on from one still says how its part is numbered: it
+  // stays among the rows the schemes are read from.
   const structural = labelled.filter(
     (row) => !isArticleMention(numberedArticles, row),
   );
@@ -1150,7 +1235,7 @@ export const buildLabelIndex = ({
     const opened: Walk = {
       rows,
       listedAnnexes,
-      numberedArticles,
+      articleMentions,
       listedHeadings,
       schemes,
       article: spanning?.article ?? null,
@@ -1224,5 +1309,14 @@ export const buildLabelIndex = ({
     ),
     contentsBlockIds,
     columnByBlockId,
+    ownLabelLengths: new Map(
+      labelled
+        .filter(
+          ({ position, block }) =>
+            countedOn.has(position) &&
+            !entries.some(({ blockId }) => blockId === block.id),
+        )
+        .map(({ block, raw }) => [block.id, raw.manualLength]),
+    ),
   };
 };

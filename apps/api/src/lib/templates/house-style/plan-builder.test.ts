@@ -2576,6 +2576,79 @@ describe("buildTemplatePlan, a heading's title over two paragraphs", () => {
   });
 });
 
+describe("buildTemplatePlan, a typed article behind the document's numbered ones", () => {
+  test("a mention in front of the numbered articles does not take a later typed article with it", () => {
+    const article = (label: string, text: string) => ({
+      ...numbered(label, text, 1),
+      styleName: "heading 1",
+      outlineLevel: 0,
+    });
+    const manifest = manifestOf([
+      "AGREEMENT",
+      // A summary names the second article.
+      { text: "Article 2 Term", styleName: "heading 5", outlineLevel: 4 },
+      "The term is summarised here.",
+      article("1.", "Definitions"),
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      article("2.", "Term"),
+      numbered("2.1", "The agreement runs for one year.", 1),
+      // The third article is typed, and is the document's own.
+      { text: "Article 3 Notices", styleName: "heading 1", outlineLevel: 0 },
+      "Notices are given in writing.",
+    ]);
+    const index = buildLabelIndex(manifest);
+    expect(
+      index.entryByBlockId.get(blockIdOf(manifest, "Article 3 Notices")),
+    ).toMatchObject({ level: "article", origin: "manual" });
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Term")),
+    ).toBe(false);
+  });
+});
+
+describe("buildTemplatePlan, a number two typed articles have", () => {
+  test("a heading that counts on stays in the index where the document has a typed article of that number", () => {
+    const manifest = manifestOf([
+      "AGREEMENT",
+      // A typed article of the document's own, out of the numbered run.
+      { text: "Article 3 Notices", styleName: "heading 1", outlineLevel: 0 },
+      "Notices are given in writing.",
+      {
+        ...numbered("1.", "Definitions", 1),
+        styleName: "heading 1",
+        outlineLevel: 0,
+      },
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      // A part that counts its own articles, up to the same number.
+      { text: "Article 1 Subject", styleName: "heading 5", outlineLevel: 4 },
+      "This contract implements the agreement.",
+      { text: "Article 2 Price", styleName: "heading 5", outlineLevel: 4 },
+      "The price is fixed.",
+      { text: "Article 3 Term", styleName: "heading 5", outlineLevel: 4 },
+      "The term is one year as stated in Article 3.",
+    ]);
+    const index = buildLabelIndex(manifest);
+    // Both articles of that number are in the index, so a citation of it
+    // has two places it may mean.
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 3 Notices")),
+    ).toBe(true);
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 3 Term")),
+    ).toBe(true);
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Price")),
+    ).toBe(false);
+    // And the citation is linked to neither.
+    const { plan } = build(manifest);
+    expect(
+      (plan.references ?? []).filter(
+        ({ blockId }) => blockId === blockIdOf(manifest, "The term is one"),
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("buildTemplatePlan, an article heading the index does not count", () => {
   test("a heading that opens with an article's name is set as a heading and keeps its typed label", () => {
     const article = (label: string, text: string) => ({
@@ -2606,5 +2679,60 @@ describe("buildTemplatePlan, an article heading the index does not count", () =>
     expect(typed).not.toHaveProperty("stripLabel");
     // The numbered articles keep their numbers.
     expect(itemOf(plan, manifest, "Definitions")?.numbering).not.toBeNull();
+  });
+
+  test("the articles of a part that counts its own are set alike, also past the document's last number", () => {
+    const article = (label: string, text: string) => ({
+      ...numbered(label, text, 1),
+      styleName: "heading 1",
+      outlineLevel: 0,
+    });
+    const own = (text: string) => ({
+      text,
+      styleName: "heading 5",
+      outlineLevel: 4,
+    });
+    const manifest = manifestOf([
+      "AGREEMENT",
+      article("1.", "Definitions"),
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      article("2.", "Term"),
+      numbered("2.1", "The agreement runs for one year.", 1),
+      // The model contract has more articles than the agreement.
+      own("Article 1 Subject matter"),
+      "This specific contract implements the agreement.",
+      own("Article 2 Price"),
+      "The price is fixed.",
+      own("Article 3 Communication details"),
+      "Notices go to the addresses below.",
+      own("Article 4 Guarantee"),
+      "A guarantee is provided on request.",
+    ]);
+    const { plan } = build(manifest);
+    for (const start of [
+      "Article 1 Subject",
+      "Article 2 Price",
+      "Article 3 Communication",
+      "Article 4 Guarantee",
+    ]) {
+      const typed = itemOf(plan, manifest, start);
+      expect(typed).toMatchObject({
+        styleId: PROFILE.roles.articleHeading?.styleId,
+        numbering: null,
+      });
+      expect(typed).not.toHaveProperty("stripLabel");
+    }
+    // The label of a heading that counts on is the heading's own name: it
+    // is read as no citation.
+    const { note } = build(manifest);
+    for (const start of ["Article 3 Communication", "Article 4 Guarantee"]) {
+      expect(
+        note.items.filter(
+          (item) =>
+            item.kind === "referenceUnlinked" &&
+            item.blockId === blockIdOf(manifest, start),
+        ),
+      ).toEqual([]);
+    }
   });
 });
