@@ -2969,6 +2969,97 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
   });
 });
 
+describe("buildTemplatePlan, a source list deeper than the template's levels", () => {
+  const reading = (
+    blockId: string,
+    role: "title" | "articleHeading" | "clause1" | "letter" | "roman",
+  ) => ({
+    blockId,
+    role,
+    confidence: 0.9,
+    alternatives: [],
+    mergedIntoBlockId: null,
+  });
+  const manifest = (): DocxBlockManifest => {
+    const built = manifestOf([
+      "AGREEMENT",
+      "Článek I.\nPurchase",
+      "The Company sells the Shares.",
+      "the Initial Shares;",
+      "at the Closing, either",
+      "in cash; or",
+      "by wire transfer;",
+      "the Additional Shares.",
+    ]);
+    const levels: Record<number, [string, number]> = {
+      2: ["1.1", 1],
+      3: ["(a)", 2],
+      4: ["(i)", 3],
+      5: ["(A)", 4],
+      6: ["(B)", 4],
+      7: ["(b)", 2],
+    };
+    return {
+      ...built,
+      blocks: built.blocks.map((block, position) => {
+        const level = levels[position];
+        return level === undefined
+          ? block
+          : {
+              ...block,
+              label: level[0],
+              hash: `h${String(position)}`,
+              numbering: { numId: 1, ilvl: level[1], abstractNumId: 1 },
+            };
+      }),
+    };
+  };
+  const roles = [
+    reading("p0", "title"),
+    reading("p1", "articleHeading"),
+    reading("p2", "clause1"),
+    reading("p3", "letter"),
+    reading("p4", "roman"),
+    reading("p5", "letter"),
+    reading("p6", "letter"),
+    reading("p7", "letter"),
+  ];
+
+  test("an item the template would set left of its parent hangs in from the parent's text", () => {
+    const letter = PROFILE.roles.letter?.numbering?.indent;
+    const roman = PROFILE.roles.roman?.numbering?.indent;
+    expect(letter?.left ?? 0).toBeLessThan(roman?.left ?? 0);
+    const built = manifest();
+    const { plan } = build(built, "keepSource", { roles });
+    const hanging = letter?.hanging ?? 0;
+    expect(hanging).toBeGreaterThan(0);
+    for (const text of ["in cash", "by wire"]) {
+      expect(itemOf(plan, built, text)?.indent).toEqual({
+        left: (roman?.left ?? 0) + hanging,
+        hanging,
+      });
+    }
+    // Items at their own depth keep the template's indent.
+    for (const text of ["the Initial", "at the Closing", "the Additional"]) {
+      expect(itemOf(plan, built, text)).not.toHaveProperty("indent");
+    }
+  });
+
+  test("items under a line set in capitals keep the template's indent", () => {
+    const built = manifest();
+    const capitals = {
+      ...built,
+      blocks: built.blocks.map((block) =>
+        block.text === "at the Closing, either"
+          ? { ...block, text: "AT THE CLOSING" }
+          : block,
+      ),
+    };
+    const { plan } = build(capitals, "keepSource", { roles });
+    expect(itemOf(plan, capitals, "in cash")).not.toHaveProperty("indent");
+  });
+});
+
 describe("buildTemplatePlan, a heading's title over two paragraphs", () => {
   test("the second line of the title is set as the heading is, not as text", () => {
     const manifest = manifestOf([

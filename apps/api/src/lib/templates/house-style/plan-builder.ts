@@ -763,6 +763,9 @@ type Placed = {
   itemIndents: Map<string, number>;
   /** The alignment placed paragraphs keep from the source. */
   alignments: Map<string, TemplatePlanAlignment>;
+  /** The indent of a numbered item the template's levels would set left
+   *  of the item it belongs to. */
+  nestedIndents: Map<string, TemplatePlanIndent>;
 };
 
 const roleOf = (
@@ -1575,6 +1578,75 @@ const standsUnder = (line: Placement, item: Placement): boolean => {
   );
 };
 
+/** Where the text of a numbered item starts in the output: at its role's
+ *  level, which a spare level standing in for it takes the indent of. */
+const numberedTextStartOf = (
+  { profile }: Context,
+  { role, level }: Placement,
+): number | null =>
+  (profile.roles[role]?.numbering ?? level)?.indent.left ?? null;
+
+/**
+ * Whether a numbered line reads as a heading the items under it do not
+ * hang from: centred, or set in capitals (`A. COMMON STOCK`).
+ */
+const headsItems = ({ block, entry }: Placement): boolean => {
+  const text = block.text.slice(entry?.manualLength ?? 0);
+  const letters = text.replace(/[^\p{L}]/gu, "");
+  return (
+    block.alignment === "center" ||
+    (letters.length > 1 && letters === letters.toUpperCase())
+  );
+};
+
+/**
+ * Keeps an item deeper than the item it belongs to. The template has fewer
+ * levels than a deep source list (`(A)` under `(iv)` under `(a)`): the
+ * spare level that numbers the deepest items takes the indent of a
+ * shallower one and would set them left of the item they belong to. Such
+ * an item hangs one step in from its parent's text instead. Where the
+ * template sets a level at its parent's indent (`1.1` and `1.1.1` aligned)
+ * that is its house style and stays. Every paragraph of the source's list
+ * closes the deeper items in front of it; a heading, a bullet and a line
+ * set as a heading are nobody's parent.
+ */
+const nestDeeperItems = (context: Context, placed: Placed): void => {
+  const stacks = new Map<number, { ilvl: number; start: number | null }[]>();
+  for (const placement of placed.placements) {
+    const { block, numbered, role } = placement;
+    const source = block.numbering;
+    if (source === null || context.tableOf.has(block.id)) {
+      continue;
+    }
+    const stack = stacks.get(source.abstractNumId) ?? [];
+    stacks.set(source.abstractNumId, stack);
+    while ((stack.at(-1)?.ilvl ?? -1) >= source.ilvl) {
+      stack.pop();
+    }
+    const start =
+      numbered &&
+      placement.pattern?.numFmt !== "bullet" &&
+      LEVEL_ROLES.some((level) => level === role)
+        ? numberedTextStartOf(context, placement)
+        : null;
+    if (start === null) {
+      stack.push({ ilvl: source.ilvl, start: null });
+      continue;
+    }
+    const parent = stack.at(-1)?.start ?? null;
+    const hanging = placement.level?.indent.hanging ?? null;
+    let own = start;
+    if (parent !== null && start < parent && hanging !== null && hanging > 0) {
+      own = parent + hanging;
+      placed.nestedIndents.set(block.id, { left: own, hanging });
+    }
+    stack.push({
+      ilvl: source.ilvl,
+      start: headsItems(placement) ? null : own,
+    });
+  }
+};
+
 /**
  * Sets the unnumbered lines that continue a numbered item under that
  * item's text: the address lines under `(i)`, a second paragraph of a
@@ -1930,6 +2002,7 @@ const placeParagraphs = (context: Context): Placed => {
     tabStops: new Map(),
     itemIndents: new Map(),
     alignments: new Map(),
+    nestedIndents: new Map(),
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
@@ -2015,6 +2088,7 @@ const placeParagraphs = (context: Context): Placed => {
   keepLinesWithBody(context, placed);
   keepClosingTogether(context, placed);
   alignPartyLines(context, placed);
+  nestDeeperItems(context, placed);
   indentContinuations(context, placed);
   setMarginLines(context, placed);
   alignFrontLines(context, placed);
@@ -2290,6 +2364,8 @@ type ParagraphItemOptions = {
   itemIndent: number | undefined;
   /** The alignment the paragraph keeps from the source. */
   alignment: TemplatePlanAlignment | undefined;
+  /** The indent that keeps a numbered item deeper than its parent. */
+  nestedIndent: TemplatePlanIndent | undefined;
   /** The section the paragraph is the last of, when it stays a section. */
   endsSection: TemplatePlanSection | undefined;
 };
@@ -2306,6 +2382,7 @@ const paragraphItems = ({
   itemIndent,
   alignment,
   endsSection,
+  nestedIndent,
 }: ParagraphItemOptions): TemplatePlanSourceItem[] => {
   const { profile } = context;
   const { block } = placement;
@@ -2323,8 +2400,10 @@ const paragraphItems = ({
     mergeNext = allLabel ? "none" : "space";
   }
   const numbering = numberingOf(placement);
-  // A number no list prints is text in front of the paragraph.
-  const hang = numbering === null ? hangOf(context, placement) : null;
+  // A number no list prints is text in front of the paragraph; one a list
+  // prints left of the item it belongs to hangs in from that item.
+  const hang =
+    numbering === null ? hangOf(context, placement) : (nestedIndent ?? null);
   const under = itemIndent === undefined ? null : { left: itemIndent };
   const item: TemplatePlanSourceItem = {
     kind: "source",
@@ -2476,6 +2555,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       itemIndent: placed.itemIndents.get(block.id),
       alignment: placed.alignments.get(block.id),
       endsSection: context.keptSections.ends.get(block.id),
+      nestedIndent: placed.nestedIndents.get(block.id),
     });
     placedCount += paragraph.length;
     body.push(...paragraph);
