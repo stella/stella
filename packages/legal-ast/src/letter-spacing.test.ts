@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type { Block } from "@stll/legal-ast/document-ast";
-import { plainTextOf } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
-import { withAttestedLetterSpacing } from "./letter-spacing";
+import type { Block } from "./document-ast.js";
+import { plainTextOf } from "./document-ast.js";
+import { withAttestedLetterSpacing } from "./letter-spacing.js";
 
 const czechWord = fc.stringMatching(
   /^[A-Za-zÁČĎÉĚÍŇÓŘŠŤÚŮÝŽáčďéěíňóřšťúůýž]{2,12}$/u,

@@ -10,6 +10,8 @@ import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { CZ_ISIR_METADATA_KEY } from "@stll/legal-ast/cz-isir-decision";
+
 import {
   czIsirAdapter,
   czIsirFetchPage,
@@ -18,7 +20,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-isir";
 import { CZ_ISIR_FEED_URL } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-feed";
 import { probeCzIsirRemoval } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-removal";
-import { CZ_ISIR_METADATA_KEY } from "@/api/lib/legal-search/cz-isir-decision";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,

@@ -325,9 +325,10 @@ export const repairAppliedCorpusProjectionDriftTx = async (
     .returning({ id: corpusIndexProjectionIntents.id });
   // The copy is drift, so the state stops naming it and becomes a first
   // append: it needs work until a re-append lands, whatever a failed attempt
-  // charges short of `blocked`. The re-append waits for the retired revision
-  // to settle, so the state is queued for the append walk at the instant it
-  // can have settled.
+  // charges short of `blocked`. Where hits carry their revision the re-append
+  // runs beside the retired revision's delete and the state is runnable now;
+  // otherwise it waits for that revision to settle and is queued for the
+  // instant it can have (`corpusProjectionRetiredRevisionRunnableAt`).
   // audit: skip - applied-state bookkeeping on the derived public corpus projection
   const unnamed = await tx
     .update(corpusIndexProjectionStates)
@@ -341,6 +342,7 @@ export const repairAppliedCorpusProjectionDriftTx = async (
       updatedAt: corpusProjectionRetiredRevisionRunnableAt(
         manifest,
         corpusIndexProjectionStates.appliedRevision,
+        repairAt,
       ),
     })
     .where(

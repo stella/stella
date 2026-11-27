@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { propertyTestTimeout } from "@stll/property-testing";
 import { deferred, settledWithin } from "@stll/test-kit";
 
@@ -36,7 +37,6 @@ import {
   collectionDocumentPartSchema,
   decodeCollectionDocumentBody,
 } from "@/api/lib/legal-search/collection-document-part";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";

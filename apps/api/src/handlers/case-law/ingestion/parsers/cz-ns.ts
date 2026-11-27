@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
@@ -41,15 +42,15 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
-
-import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import { withAttestedLetterSpacing } from "@stll/legal-ast/letter-spacing";
 import {
   isPageNumberLine,
   isRunningHeaderLine,
   withoutSoftHyphens,
-} from "@/api/lib/legal-search/parsers/page-furniture";
+} from "@stll/legal-ast/page-furniture";
+
+import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {

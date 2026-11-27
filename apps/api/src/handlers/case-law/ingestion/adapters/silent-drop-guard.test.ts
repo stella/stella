@@ -5,12 +5,12 @@ import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
+import { isExcludedHtmlTag } from "@/api/lib/legal-search/parsers/visible-html-text";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   brTjdftFixture,
@@ -19,7 +19,6 @@ import {
   czNsSbirkaFixture,
   czNssFixture,
   czRegionalFixture,
-  czUsFixture,
   type EnrolledAdapterFixture,
   euEcjFixture,
   plCourtsFixture,
@@ -29,7 +28,6 @@ import {
   plNsaFixture,
   plTkFixture,
   plUodoFixture,
-  plUokikFixture,
   skUsFixture,
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
@@ -44,6 +42,7 @@ type SupportedDriver = {
   file?: string;
   text?: string;
   textRoot?: string;
+  jsonKeys?: readonly string[];
 };
 type Driver = SupportedDriver | { driver: "unsupported"; reason: string };
 const DRIVERS = {
@@ -52,6 +51,9 @@ const DRIVERS = {
     fixture: czNsFixture,
     part: "print",
     file: "cz-ns-page.json.gz",
+    // The print page opens with a back button and the #box-table-a metadata
+    // table (certified by the field inventory); decision text follows it.
+    textRoot: "#box-table-a ~ *",
   },
   "cz-nss": {
     driver: "html",
@@ -70,10 +72,9 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
 </body></html>`,
   },
   "cz-us": {
-    driver: "html",
-    fixture: czUsFixture,
-    part: "document",
-    file: "cz-us-page.json.gz",
+    driver: "unsupported",
+    reason:
+      "Primary decision text is RTF in input#docContentHidden, which requires an RTF/byte-level driver.",
   },
   "cz-regional": {
     driver: "json-text",
@@ -106,30 +107,48 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     fixture: plKioFixture,
     part: "document",
     file: "pl-kio-content-30308.html.gz",
+    // Document <head> holds only the exported filename <title>; decision text is in <body>.
+    textRoot: "body",
   },
   "pl-tk": {
     driver: "html",
     fixture: plTkFixture,
     part: "case-page",
     file: "../parsers/__fixtures__/pl-tk-case-sk-14-11.html.gz",
+    // The case page is a full portal page whose metadata tabs and bench table
+    // are certified by the field inventory; the fixture ruling text is #tekst_9897.
+    textRoot: "#tekst_9897",
   },
   "pl-nsa": {
     driver: "json-text",
     fixture: plNsaFixture,
     part: "row",
     file: "pl-nsa-rows.json",
+    // The parser builds the document from the four section columns; full_text
+    // is the retention reference/fallback.
+    jsonKeys: [
+      "thesis",
+      "sentence",
+      "reasons_for_judgment",
+      "dissenting_opinion",
+    ],
   },
   "pl-ncourt": {
     driver: "xml",
     fixture: plNcourtFixture,
     part: "document",
     file: "pl-ncourt-content-155020000001003_II_Ca_000236_2018_Uz_2018-03-22_001.xml.gz",
+    // <xPart>/<xName> is the envelope title stored in metadata.documentTitle
+    // (certified by the field inventory); decision text lives in <xBlock>.
+    textRoot: "xBlock",
   },
   "eu-ecj": {
     driver: "html",
     fixture: euEcjFixture,
     part: "document",
     file: "eu-ecj-fulltext-en.html",
+    // Document <head> holds only CELEX <title>/meta; ecjDocumentRoot reads <body>.
+    textRoot: "body",
   },
   "uk-fcl": {
     driver: "xml",
@@ -155,10 +174,9 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     file: "../parsers/__fixtures__/pl-uodo-dkn-5131-45-2022.xml",
   },
   "pl-uokik": {
-    driver: "html",
-    fixture: plUokikFixture,
-    part: "detail",
-    file: "pl-uokik-detail-2520d55b0f17a317c1257ec6007b9773.html",
+    driver: "unsupported",
+    reason:
+      "Decision text is read from stored PDF objects, which require an object-level driver.",
   },
   "cz-uohs": {
     driver: "unsupported",
@@ -218,16 +236,18 @@ afterEach(() => {
 });
 
 type Slot = { path: readonly (string | number)[]; text: string };
+const DEFAULT_JSON_TEXT_KEYS: readonly string[] = ["text", "full_text"];
 const slotsOf = (
   value: unknown,
   driver: SupportedDriver["driver"],
+  jsonKeys: readonly string[] = DEFAULT_JSON_TEXT_KEYS,
   path: readonly (string | number)[] = [],
 ): Slot[] => {
   if (typeof value === "string") {
     const key = path.at(-1);
     return (
       driver === "json-text"
-        ? key === "text" || key === "full_text"
+        ? typeof key === "string" && jsonKeys.includes(key)
         : /<[A-Za-z][^>]*>/u.test(value)
     )
       ? [{ path, text: value }]
@@ -235,12 +255,12 @@ const slotsOf = (
   }
   if (Array.isArray(value)) {
     return value.flatMap((item, index) =>
-      slotsOf(item, driver, [...path, index]),
+      slotsOf(item, driver, jsonKeys, [...path, index]),
     );
   }
   return isRecord(value)
     ? Object.entries(value).flatMap(([key, item]) =>
-        slotsOf(item, driver, [...path, key]),
+        slotsOf(item, driver, jsonKeys, [...path, key]),
       )
     : [];
 };
@@ -305,60 +325,6 @@ const inputOf = (
   documentUrl: decision.documentUrl ?? null,
   metadata: decision.metadata,
 });
-const czUsRecordedInput = async (
-  base: StoredRawReparseInput,
-): Promise<StoredRawReparseInput> => {
-  const bytes = await Bun.file(
-    new URL("__fixtures__/cz-us-page.json.gz", import.meta.url),
-  ).bytes();
-  const recorded = payloadOf(new TextDecoder().decode(Bun.gunzipSync(bytes)));
-  const page = isRecord(recorded) ? recorded["page"] : undefined;
-  const rows = isRecord(page) ? page["decisions"] : undefined;
-  const row = Array.isArray(rows) ? rows.at(0) : undefined;
-  if (!isRecord(row)) {
-    return panic("CZ-US recording has no decision row");
-  }
-  const legacy =
-    typeof row["sourceRaw"] === "string"
-      ? payloadOf(row["sourceRaw"])
-      : undefined;
-  if (!isRecord(legacy) || typeof legacy["textHtml"] !== "string") {
-    return panic("CZ-US recording has no legacy textHtml");
-  }
-  const metadata = isRecord(row["metadata"]) ? row["metadata"] : {};
-  const optionalString = (key: string): string | null =>
-    typeof row[key] === "string" ? row[key] : null;
-  const requiredString = (key: string): string => {
-    const value = row[key];
-    return typeof value === "string"
-      ? value
-      : panic(`CZ-US recording is missing ${key}`);
-  };
-  const raw = encodeSourceRawEnvelope({
-    ...(typeof legacy["listingHtml"] === "string"
-      ? { listing: legacy["listingHtml"] }
-      : {}),
-    document: legacy["textHtml"],
-    ...(typeof legacy["abstractHtml"] === "string"
-      ? { abstract: legacy["abstractHtml"] }
-      : {}),
-  });
-  return {
-    ...base,
-    raw: new TextEncoder().encode(raw),
-    contentType: optionalString("sourceRawContentType"),
-    caseNumber: requiredString("caseNumber"),
-    sourceDocumentId: optionalString("sourceDocumentId"),
-    language: requiredString("language"),
-    court: requiredString("court"),
-    ecli: optionalString("ecli"),
-    decisionDate: optionalString("decisionDate"),
-    decisionType: optionalString("decisionType"),
-    sourceUrl: optionalString("sourceUrl"),
-    documentUrl: optionalString("documentUrl"),
-    metadata,
-  };
-};
 const fixturePayload = async (
   driver: SupportedDriver,
   original: string,
@@ -388,26 +354,6 @@ const fixturePayload = async (
       ? (decodeSourceRawEnvelope(raw)?.[driver.part] ??
           panic("Recording has no print"))
       : panic("Recording has no raw");
-  }
-  if (file === "cz-us-page.json.gz") {
-    const page = isRecord(recorded) ? recorded["page"] : undefined;
-    const rows = isRecord(page) ? page["decisions"] : undefined;
-    const first = Array.isArray(rows) ? rows.at(0) : undefined;
-    const raw = isRecord(first) ? first["sourceRaw"] : undefined;
-    if (typeof raw !== "string") {
-      return panic("Recording has no raw");
-    }
-    const envelope = decodeSourceRawEnvelope(raw);
-    if (envelope !== null) {
-      return (
-        envelope[driver.part] ?? panic("Recording has no decision document")
-      );
-    }
-    const legacy = payloadOf(raw);
-    const textHtml = isRecord(legacy) ? legacy["textHtml"] : undefined;
-    return typeof textHtml === "string"
-      ? textHtml
-      : panic("Legacy recording has no decision document");
   }
   if (file.startsWith("pl-kis-detail-") && driver.part === "detail") {
     const source = plKisMarkupSlot(recorded);
@@ -471,9 +417,6 @@ const missingFrom = ({
     (token) => !fulltext.includes(token) && !reported.includes(token),
   );
 };
-const expected = new Map<string, readonly string[]>(
-  Object.entries(baseline.misses),
-);
 test("every registered replay path has exactly one probe disposition", () => {
   expect([...drivers.keys()].toSorted()).toEqual(
     replayAdapters.map(({ key }) => key).toSorted(),
@@ -490,15 +433,10 @@ for (const adapter of replayAdapters) {
       drivers.get(adapter.key) ??
       panic(`Missing probe driver for ${adapter.key}`);
     if (driver.driver === "unsupported") {
-      expect(expected.has(adapter.key)).toBe(false);
       return;
     }
     const replay = adapter.reparseStoredRaw ?? panic("Replay disappeared");
-    const fixtureInput = inputOf(await driver.fixture().buildDecision());
-    const input =
-      adapter.key === "cz-us"
-        ? await czUsRecordedInput(fixtureInput)
-        : fixtureInput;
+    const input = inputOf(await driver.fixture().buildDecision());
     const parts =
       decodeSourceRawEnvelope(new TextDecoder().decode(input.raw)) ??
       panic("Fixture has no envelope");
@@ -506,7 +444,7 @@ for (const adapter of replayAdapters) {
       driver,
       parts[driver.part] ?? panic(`Fixture has no ${driver.part}`),
     );
-    const slots = slotsOf(payload, driver.driver);
+    const slots = slotsOf(payload, driver.driver, driver.jsonKeys);
     expect(
       slots.length,
       `${adapter.key}: fixture reaches no text`,
@@ -543,7 +481,11 @@ for (const adapter of replayAdapters) {
                 roots
                   .toArray()
                   .flatMap((node) =>
-                    isTag(node) && node.children.length > 0 ? [node.name] : [],
+                    isTag(node) &&
+                    node.children.length > 0 &&
+                    !(driver.driver === "html" && isExcludedHtmlTag(node.name))
+                      ? [node.name]
+                      : [],
                   ),
               ),
             ].toSorted();
@@ -588,15 +530,10 @@ for (const adapter of replayAdapters) {
     const observed = misses.toSorted();
     expect(
       observed,
-      "New misses fail; passing baseline entries must be removed",
-    ).toEqual([...(expected.get(adapter.key) ?? [])]);
+      "Child-drop probes must survive as text or be reported in unmapped.",
+    ).toEqual([]);
   }, 60_000);
 }
-test("a removed adapter cannot leave a stale suppression", () => {
-  for (const key of expected.keys()) {
-    expect(drivers.has(key)).toBe(true);
-  }
-});
 test("a marker must survive as text or be present in the unmapped report", () => {
   expect(
     missingFrom({

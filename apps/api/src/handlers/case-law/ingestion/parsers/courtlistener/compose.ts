@@ -1,3 +1,4 @@
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: imports the unchanged citation scope shape from its pure owner.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 import { Result } from "better-result";
@@ -11,9 +12,14 @@ import { Result } from "better-result";
  * no opinion is published without the others.
  */
 
+import type { CitationOpinionScope } from "@stll/legal-ast/citation-opinion-scope";
 // parser-output-unchanged: imports the document AST from its package owner
 import { isApparatusRole } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type {
+  DecisionSection,
+  DecisionSectionType,
+} from "@stll/legal-ast/document-types";
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -31,11 +37,6 @@ import {
   scanRun,
   US_CITATION_WORK_LIMIT,
 } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
-import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
-import type {
-  DecisionSection,
-  DecisionSectionType,
-} from "@/api/lib/legal-search/document-types";
 
 import {
   composeFrontMatter,

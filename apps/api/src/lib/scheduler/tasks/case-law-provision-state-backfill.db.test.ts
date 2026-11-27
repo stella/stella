@@ -7,13 +7,13 @@ import {
   expect,
   test,
 } from "bun:test";
-import { setTimeout as sleepWithSignal } from "node:timers/promises";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import {
   PROVISION_EXTRACTION_ADMISSION_REVISION,
   PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "@stll/legal-atlas/provision-extraction-admission";
+import { settledWithin, waitForAbort } from "@stll/test-kit";
 
 import { BackfillFailedError } from "@/api/db/backfill-runtime";
 import type { withLongRunningConnection } from "@/api/db/long-running-connection";
@@ -350,10 +350,11 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     const sleeping = Promise.withResolvers<undefined>();
     const task = fixture({
       verdict: { kind: "degraded", signals: [] },
-      sleep: async (milliseconds, signal) => {
-        const pending = sleepWithSignal(milliseconds, undefined, { signal });
+      sleep: async (_milliseconds, signal) => {
+        const pending = waitForAbort(signal);
         sleeping.resolve(undefined);
-        await pending;
+        const reason = await pending;
+        throw reason;
       },
     });
     // A degraded verdict retains the seeded maximum pacing delay.
@@ -377,11 +378,10 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     await sleeping.promise;
     expect(task.sleeps).toEqual([30_000]);
     task.controller.abort(new Error("scheduler shutdown"));
-    const outcome = await Promise.race([
-      run.then(() => "aborted"),
-      Bun.sleep(500).then(() => "still sleeping"),
-    ]);
-    expect(outcome).toBe("aborted");
+    await settledWithin(run, {
+      description: "provision state backfill to abort",
+      timeoutMs: 5000,
+    });
     expect(task.events).toEqual([
       "scheduler.case_law_provision_state_backfill_aborted",
     ]);

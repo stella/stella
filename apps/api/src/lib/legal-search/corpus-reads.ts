@@ -1,4 +1,5 @@
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import {
   readCorpusAst as readAstWithDenial,
@@ -16,10 +17,6 @@ import {
   selectCorpusTombstones,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 
 /**

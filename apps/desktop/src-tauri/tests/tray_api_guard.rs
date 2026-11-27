@@ -25,6 +25,7 @@ fn tauri_source() -> PathBuf {
     .expect("tauri must have a pinned version");
   // Cargo resolves custom registries and cache locations; the test must not
   // duplicate its environment or registry-directory conventions.
+  // kit-allow: queries rustc for the host target passed to cargo metadata
   let compiler_target = Command::new("rustc")
     .args(["--print", "host-tuple"])
     .output()
@@ -35,6 +36,7 @@ fn tauri_source() -> PathBuf {
   );
   let compiler_target = String::from_utf8(compiler_target.stdout)
     .expect("The compiler target must be UTF-8");
+  // kit-allow: queries offline cargo metadata for the lockfile-pinned tauri source path
   let output = Command::new("cargo")
     .args([
       "metadata",

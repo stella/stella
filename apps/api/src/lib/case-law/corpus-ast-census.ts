@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import { emptyAstSchema } from "@stll/legal-ast/document-types";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
@@ -20,7 +21,6 @@ import {
   prefetchCorpusTombstones,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
-import { emptyAstSchema } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { withTimeout } from "@/api/lib/with-timeout";
 

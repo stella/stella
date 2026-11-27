@@ -4,7 +4,6 @@ import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
 import {
   analyzeMigrationSqlPerf,
   analyzeSqlPerf,
-  isBaselinedSqlPerfKind,
   listSqlPerfAllowComments,
   reportSqlPerfOrColumns,
 } from "./sql-perf-detector.ts";
@@ -444,8 +443,6 @@ test("an optional keyset bound takes a reason and is never baselined", () => {
     hits: [],
     commentErrors: [],
   });
-  expect(isBaselinedSqlPerfKind("optional-keyset")).toBe(false);
-  expect(isBaselinedSqlPerfKind("leading-wildcard")).toBe(true);
 });
 
 const migrationHitLines = (source: string) =>
@@ -812,8 +809,7 @@ test.each([
   expect(kinds(source)).toEqual([]);
 });
 
-test("per-source count findings cannot use a legacy baseline and need a visible concrete exemption", () => {
-  expect(isBaselinedSqlPerfKind("per-source-full-count")).toBe(false);
+test("per-source count findings need a visible concrete exemption", () => {
   const query =
     "const total = sql`SELECT count(*) FROM case_law_decisions WHERE source_id = ${source}`;";
   expect(kinds(query)).toEqual(["per-source-full-count"]);

@@ -30,6 +30,7 @@ import {
   hasInlineChildren,
 } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 
 import {
   ecjDocumentHtml,
@@ -41,7 +42,6 @@ import {
   normalizeOracleText,
   parseFormex,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex";
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {

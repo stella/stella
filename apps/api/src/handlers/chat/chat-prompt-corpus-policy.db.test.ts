@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -27,7 +28,6 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { loadCourtParagraphNumbers } from "@/api/lib/case-law/court-paragraph-numbers";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { readStoredVersionAst } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type {

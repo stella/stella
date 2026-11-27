@@ -32,12 +32,15 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import { withExceptionScope } from "@stll/errors/exception-scope-context";
+import type { CitationOpinionScope } from "@stll/legal-ast/citation-opinion-scope";
 import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 import type {
   DocumentStage,
   DocumentStageObserver,
@@ -53,17 +56,11 @@ import {
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
   type DocumentStagePageOptions,
   withDocumentStageWindow,
 } from "@/api/lib/legal-search/document-stage-observation";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -132,7 +129,7 @@ export const DOCUMENT_DELIVERY = {
 type DocumentDelivery =
   (typeof DOCUMENT_DELIVERY)[keyof typeof DOCUMENT_DELIVERY];
 
-export type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
+export type { CitationOpinionScope } from "@stll/legal-ast/citation-opinion-scope";
 
 /** Result of parsing a single court decision from a source. */
 export type RawIngestionResult = {

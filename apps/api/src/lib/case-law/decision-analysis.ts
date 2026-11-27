@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
@@ -19,7 +20,6 @@ import {
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,

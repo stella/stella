@@ -8,7 +8,7 @@ import {
   isPageNumberLine,
   isRunningHeaderLine,
   withoutSoftHyphens,
-} from "./page-furniture";
+} from "./page-furniture.js";
 
 describe("running headers", () => {
   test.each([

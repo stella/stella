@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: [cz-nss] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
 // parser-output-unchanged: [cz-uohs] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
 // parser-output-unchanged: [pl-kio] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.

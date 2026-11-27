@@ -9,8 +9,6 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { createProgram } from "../packages/scripts/src/typescript-program";
-import { BASELINE_PATHS } from "./baseline-paths.ts";
-import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 export const REACHABILITY_CATEGORIES = [
   "imported-source-subject",
@@ -40,28 +38,6 @@ type AnalyzeOptions = {
   siblingSource?: (
     filename: string,
   ) => ts.SourceFile | undefined | Promise<ts.SourceFile | undefined>;
-};
-
-export const parseReachabilityBaseline = (
-  text: string,
-  label: string = BASELINE_PATHS.testSubjectReachability,
-): Record<string, string[]> => {
-  const parsed: unknown = JSON.parse(text);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return panic(`${label} must be an object`);
-  }
-  const entries: (readonly [string, string[]])[] = [];
-  for (const [file, members] of Object.entries(parsed)) {
-    if (
-      !TEST_FILE.test(file) ||
-      !Array.isArray(members) ||
-      members.some((member) => typeof member !== "string")
-    ) {
-      return panic(`Invalid ${label} entry: ${file}`);
-    }
-    entries.push([file, members]);
-  }
-  return Object.fromEntries(entries);
 };
 
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
@@ -1373,24 +1349,6 @@ export const analyzeTestSubjectReachability = async ({
   }
 };
 
-const baselineMembers = (text: string, label: string): string[] =>
-  Object.entries(parseReachabilityBaseline(text, label)).flatMap(
-    ([file, members]) => members.map((member) => `${file}:${member}`),
-  );
-
-export const checkReachabilityBaselineMembership = (
-  repoRoot: string,
-  args: readonly string[],
-): number =>
-  runLedgerMembershipGuard({
-    ledgerRel: BASELINE_PATHS.testSubjectReachability,
-    repoRoot,
-    parseLedger: baselineMembers,
-    label: "test subject reachability",
-    remediation: "remove the new exception and make the test reach its subject",
-    args,
-  });
-
 if (import.meta.main) {
   const repoRoot = path.resolve(import.meta.dir, "..");
   if (process.argv.includes("--self-test")) {
@@ -1412,55 +1370,13 @@ if (import.meta.main) {
     );
     process.exit(childExitStatus(result));
   }
-  if (!process.argv.includes("--base")) {
-    panic(
-      "Usage: bun scripts/test-subject-reachability.ts --self-test | --base",
-    );
-  }
-  const membershipStatus = checkReachabilityBaselineMembership(
-    repoRoot,
-    process.argv.slice(2),
-  );
-  if (membershipStatus !== 0) {
-    process.exit(membershipStatus);
-  }
   const findings = await analyzeTestSubjectReachability({ repoRoot });
-  const baseline = parseReachabilityBaseline(
-    readFileSync(
-      path.join(repoRoot, "scripts/test-subject-reachability-baseline.json"),
-      "utf-8",
-    ),
-  );
-  const current = new Map<string, string[]>();
-  for (const finding of findings) {
-    const member = `${finding.kind}${finding.name ? `:${finding.name}` : ""}`;
-    current.set(finding.file, [...(current.get(finding.file) ?? []), member]);
-  }
-  const failures: string[] = [];
-  for (const [file, members] of current) {
-    const allowed = new Set(baseline[file]);
-    for (const member of members) {
-      if (!allowed.has(member)) {
-        const finding = findings.find(
-          (candidate) =>
-            candidate.file === file &&
-            `${candidate.kind}${candidate.name ? `:${candidate.name}` : ""}` ===
-              member,
-        );
-        const attempted = finding?.attempted?.join(", ") ?? "not applicable";
-        failures.push(`${file}: ${member} (attempted: ${attempted})`);
-      }
-    }
-  }
-  for (const [file, allowed] of Object.entries(baseline)) {
-    const actual = new Set(current.get(file));
-    for (const member of allowed) {
-      if (!actual.has(member)) {
-        failures.push(`${file}: remove cleaned baseline member ${member}`);
-      }
-    }
-  }
-  if (failures.length > 0) {
+  if (findings.length > 0) {
+    const failures = findings.map((finding) => {
+      const member = `${finding.kind}${finding.name ? `:${finding.name}` : ""}`;
+      const attempted = finding.attempted?.join(", ") ?? "not applicable";
+      return `${finding.file}: ${member} (attempted: ${attempted})`;
+    });
     panic(`Test subject reachability census failed:\n${failures.join("\n")}`);
   }
 }

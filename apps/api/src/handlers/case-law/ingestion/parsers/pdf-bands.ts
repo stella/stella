@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [pl-sn] the PDF reader moved here from pl-sn.ts; the Supreme Court page reading is the same code, reached the same way.
 // parser-output-unchanged: [pl-kis] the PDF reader moved here from pl-sn.ts; the default reading pl-kis uses is the same code.
@@ -34,16 +35,16 @@ import { panic } from "better-result";
 // parser-output-unchanged: imports the document AST from its package owner
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { Inline } from "@stll/legal-ast/document-ast";
-import { AUTHORITY_PARAGRAPH_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
-import { collapseSpacedLetters } from "@stll/text-normalize";
-
 import {
   continuesSentence,
   INDENT_THRESHOLD_PT,
   opensBlockParagraph,
   POINT_MARKERS,
   type PointMarkers,
-} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
+} from "@stll/legal-ast/hard-wrapped-lines";
+import { AUTHORITY_PARAGRAPH_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import {
   buildFontStyleRanges,
   normalizeSpanText,

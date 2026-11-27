@@ -33,6 +33,7 @@ import type {
   TemplatePlanReference,
   TemplatePlanSection,
   TemplatePlanSourceItem,
+  TemplatePlanSpacing,
   TrackedChanges,
   TrackedChangesView,
 } from "@/api/lib/templates/house-style/folio-contract";
@@ -45,6 +46,7 @@ import type {
   LabelEntry,
   LabelIndex,
 } from "@/api/lib/templates/house-style/label-index";
+import { readLetterHead } from "@/api/lib/templates/house-style/letter-head";
 import {
   levelsInLanguage,
   numberPlacements,
@@ -80,6 +82,7 @@ import type {
 } from "@/api/lib/templates/house-style/role-proposer";
 import { LEVEL_ROLES } from "@/api/lib/templates/house-style/template-profile";
 import type {
+  AnnexRoles,
   ProfileListLevel,
   ProfileRoleTarget,
   TemplateHealthFinding,
@@ -262,6 +265,19 @@ export type FormattingNoteItem =
    *  text of table cells. The template's text styles set every line at the
    *  left. */
   | { kind: "alignmentsKept"; blocks: number }
+  /** `blocks` cell paragraphs the source sets tight by hand (no space in
+   *  front of them, none behind them) stay tight: the rows of a table keep
+   *  their height in the template's text style. */
+  | { kind: "cellSpacingKept"; blocks: number }
+  /** The letterhead the template keeps: `filled` cells took the letter's
+   *  own addressee, date or reference; `left` cells still show the
+   *  template's sample text, because the letter states nothing for them,
+   *  and have to be filled in by hand. */
+  | {
+      kind: "letterheadFilled";
+      filled: ("addressee" | "date" | "reference")[];
+      left: ("addressee" | "date" | "reference")[];
+    }
   /** Drawn marks of the page the source was laid out on (dots, rules and
    *  lines placed at coordinates of that page) were left out: `marks` of
    *  them, anchored in the paragraph `blockId`. Set anew, the text stands
@@ -299,7 +315,11 @@ export type FormattingNoteItem =
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
       blockIds: string[];
-    };
+    }
+  /** The template's table of contents was left out: its field collects
+   *  its entries from styles none of the document's headings is placed
+   *  in, so it would fill empty. */
+  | { kind: "contentsNotKept"; reason: "noHeadingCollected" };
 
 /** What was done and what a person should look at. Ids, enums and counts:
  *  the wording is the caller's, in the reader's language. */
@@ -439,9 +459,15 @@ type Context = {
   decisions: ReadonlyMap<string, string>;
   proposalById: ReadonlyMap<string, RoleProposal>;
   outline: OutlineLevels;
+  /** The profile and its outline as they hold under an annex heading,
+   *  when the template has an outline of its own for annexes. */
+  annex: { profile: TemplateProfile; outline: OutlineLevels } | null;
   /** Blocks placed under a role the template has no style for. */
   stylelessRoles: Map<HouseStyleRole, number>;
   items: FormattingNoteItem[];
+  /** What goes into the template's letterhead; null without one or
+   *  without a letter. */
+  headerFill: HeaderFill | null;
 };
 
 type KeptSections = {
@@ -498,11 +524,75 @@ const evenedStyle = (
   };
 };
 
+const NO_ANNEX_ROLES: AnnexRoles = {};
+/** The roles an outline fills: a heading and what is counted under it. */
+const OUTLINE_ROLES = [
+  "articleHeading",
+  ...CLAUSE_ROLES,
+  "letter",
+  "roman",
+] as const satisfies readonly HouseStyleRole[];
+
+const outlineOf = ({ roles }: TemplateProfile): OutlineLevels => ({
+  article: roles.articleHeading?.numbering ?? null,
+  clauses: CLAUSE_ROLES.map((role) => roles[role]?.numbering ?? null),
+});
+
+/**
+ * The profile as it holds under an annex heading: the roles of the
+ * template's outline for annexes stand in for the main outline's, level by
+ * level. Null when the template has no such outline.
+ */
+const annexOf = (profile: TemplateProfile): Context["annex"] => {
+  const { annexRoles, roles } = profile;
+  // A clause counts under its heading only in the heading's list: an
+  // outline for annexes that lacks a level the main outline numbers would
+  // leave that level in the main list, under a heading of the other. Such
+  // an outline is not used.
+  if (
+    annexRoles === undefined ||
+    OUTLINE_ROLES.some(
+      (role) =>
+        (roles[role]?.numbering ?? null) !== null &&
+        annexRoles[role] === undefined,
+    )
+  ) {
+    return null;
+  }
+  const under: TemplateProfile = {
+    ...profile,
+    roles: { ...roles, ...annexRoles },
+  };
+  return { profile: under, outline: outlineOf(under) };
+};
+
+/**
+ * The profile and outline a labelled paragraph is set by. What stands
+ * under an annex heading is set as the template sets the provisions of its
+ * annexes, where it has a list of their own for them.
+ */
+const settingOf = (
+  context: Context,
+  block: DocxBlock,
+  entry: LabelEntry | null,
+): { profile: TemplateProfile; outline: OutlineLevels } => {
+  // A line without a label (a heading's title in a paragraph of its own)
+  // is under the annex its place in the document says.
+  const annexBlockId =
+    entry === null
+      ? context.index.contextByBlockId.get(block.id)?.annexBlockId
+      : entry.annexBlockId;
+  return context.annex !== null && (annexBlockId ?? null) !== null
+    ? context.annex
+    : context;
+};
+
 const styleTarget = (
   context: Context,
   role: HouseStyleRole,
+  profile: TemplateProfile = context.profile,
 ): ProfileRoleTarget | null => {
-  const { profile, stylelessRoles } = context;
+  const { stylelessRoles } = context;
   const own = profile.roles[role];
   if (own !== null) {
     return evenedStyle(context, role, own);
@@ -554,23 +644,50 @@ const bulletPatternOf = (
 };
 
 /** One paragraph's style and what it asks of the numbering. */
+/**
+ * The level a paragraph of `role` counts on and the style it is set in, by
+ * `profile`.
+ */
+const targetsOf = (
+  context: Context,
+  profile: TemplateProfile,
+  {
+    block,
+    role,
+    entry,
+  }: { block: DocxBlock; role: HouseStyleRole; entry: LabelEntry | null },
+): { ownLevel: ProfileListLevel | null; target: ProfileRoleTarget | null } => {
+  // A party's line that carries a number is its heading line: the template
+  // may have a numbered style for it beside the one for a party's details.
+  const head =
+    role === "party" && entry !== null ? (profile.partyHead ?? null) : null;
+  const ownLevel = (head ?? profile.roles[role])?.numbering ?? null;
+  // Running text numbered like an article keeps the article's level, and
+  // with it its number, and reads as the clause it is.
+  const styleRole =
+    role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
+  const unnumbered =
+    entry === null && ownLevel !== null && NUMBERED_ONLY.has(role);
+  return {
+    ownLevel,
+    target:
+      head ?? styleTarget(context, unnumbered ? "body" : styleRole, profile),
+  };
+};
+
 const placementOf = (
   context: Context,
   block: DocxBlock,
   role: HouseStyleRole,
 ): Placement => {
-  const { index, profile, exclusions, outline } = context;
+  const { index, exclusions } = context;
   const entry = index.entryByBlockId.get(block.id) ?? null;
-  const own = profile.roles[role];
-  const ownLevel = own?.numbering ?? null;
-  // Running text numbered like an article keeps the article's level, and
-  // with it its number, and reads as the clause it is.
-  const styleRole =
-    role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
-  const target =
-    entry === null && ownLevel !== null && NUMBERED_ONLY.has(role)
-      ? styleTarget(context, "body")
-      : styleTarget(context, styleRole);
+  const { profile, outline } = settingOf(context, block, entry);
+  const { ownLevel, target } = targetsOf(context, profile, {
+    block,
+    role,
+    entry,
+  });
   const mark = (block.label ?? "").trim();
   const bulleted = entry === null && isBulleted(block);
   const placement: Placement = {
@@ -791,6 +908,46 @@ const pageHoldersBeforeTables = (context: Context): Set<string> => {
 };
 
 /**
+ * The blank paragraph that stays because the source starts a page in front
+ * of its own table of contents and the plan keeps the template's in its
+ * place: kept template blocks cannot be told to start a page, so the last
+ * blank paragraph in front of the source's contents stays and starts it.
+ * Null when the template keeps no contents, the source has none, or no page
+ * starts in front of them.
+ */
+const pageHolderBeforeContents = (context: Context): string | null => {
+  const { topLevel, index, profile } = context;
+  if (profile.regions.contents.length === 0) {
+    return null;
+  }
+  let pending = false;
+  let placedAny = false;
+  let lastBlank: string | null = null;
+  for (const block of topLevel) {
+    if (index.contentsBlockIds.has(block.id)) {
+      // The contents' first line may start the page itself.
+      return (pending || block.pageBreakBefore === true) && placedAny
+        ? lastBlank
+        : null;
+    }
+    if (
+      block.kind === "paragraph" &&
+      roleOf(context, block) === null &&
+      isBlankParagraph(block)
+    ) {
+      pending ||= breaksPage(block);
+      lastBlank = block.id;
+    } else {
+      pending = false;
+      placedAny = true;
+      lastBlank = null;
+    }
+    pending ||= endsPage(context, block);
+  }
+  return null;
+};
+
+/**
  * The blocks in front of which the source starts a page, by its facts
  * alone and before anything is placed: a page break in a blank paragraph
  * or in a line of the source's contents passes to the block after it, as
@@ -955,6 +1112,7 @@ const pageStartsOf = (
   context: Context,
   placed: Placed,
   holders: ReadonlySet<string>,
+  contentsHolder: string | null,
 ): Set<string> => {
   const starts = new Set<string>();
   /** A page start waits for the next block that is placed. */
@@ -981,7 +1139,7 @@ const pageStartsOf = (
       held = false;
       continue;
     }
-    if (holders.has(block.id)) {
+    if (holders.has(block.id) || block.id === contentsHolder) {
       // It was kept because the page starts in front of the table, by a
       // break before it, behind it or in the section it closes. With a
       // break of its own among its runs it needs no telling.
@@ -990,7 +1148,9 @@ const pageStartsOf = (
       }
       pending = false;
       placedAny = true;
-      held = true;
+      // The one in front of the contents starts their page only: a page
+      // the source starts behind its contents starts behind the kept ones.
+      held = block.id !== contentsHolder;
       continue;
     }
     if (placed.omitted.has(block.id)) {
@@ -1469,6 +1629,79 @@ const indentContinuations = (context: Context, placed: Placed): void => {
   }
 };
 
+/**
+ * Whether the source brings an unnumbered line back to the margin behind a
+ * provision whose text it indents: the line starts at the margin, the
+ * provision's text does not.
+ */
+const standsAtMargin = (line: Placement, item: Placement): boolean => {
+  // A manifest that reports the provision's indent reports every indent:
+  // a line without one has none.
+  const own = line.block.indent ?? { left: 0, firstLine: 0 };
+  const above = item.block.indent;
+  return (
+    above !== undefined &&
+    above.left > UNDER_ITEM_TOLERANCE &&
+    own.left <= UNDER_ITEM_TOLERANCE &&
+    own.left + own.firstLine <= UNDER_ITEM_TOLERANCE
+  );
+};
+
+/**
+ * Sets at the margin the unnumbered lines the source sets there behind an
+ * indented provision: the sentence that closes a part, a date, a line that
+ * opens what follows. The template's style for unnumbered text is made for
+ * text under a clause and indents it; a line the source brings back to the
+ * margin is no part of the clause above it and takes the style of plain
+ * text.
+ *
+ * Only in a document that sets most of its unnumbered lines under their
+ * provision's text: there the margin is a choice. One that sets them all
+ * at the margin makes none, and its lines stay under their clauses.
+ */
+const setMarginLines = (context: Context, placed: Placed): void => {
+  const plain = context.profile.roles.body?.styleId;
+  const atMargin: Placement[] = [];
+  let under = 0;
+  let item: Placement | null = null;
+  /** Whether the line placed last is one of `atMargin`. */
+  let opensList = false;
+  for (const block of context.topLevel) {
+    const placement =
+      block.kind === "table" ? undefined : placed.placementById.get(block.id);
+    if (placement === undefined) {
+      // A list behind a table is not opened by the line in front of it.
+      opensList &&= block.kind !== "table";
+      continue;
+    }
+    if (showsLabel(placement)) {
+      // A list of bullets hangs from the line that opens it: that line
+      // stays where the bullets expect it.
+      if (placement.pattern?.numFmt === "bullet" && opensList) {
+        atMargin.pop();
+      }
+      item = placement;
+      opensList = false;
+      continue;
+    }
+    opensList = false;
+    if (item !== null && placement.role === "continuation") {
+      if (standsAtMargin(placement, item)) {
+        atMargin.push(placement);
+        opensList = true;
+      } else if (standsUnder(placement, item)) {
+        under += 1;
+      }
+    }
+  }
+  if (plain === undefined || under <= atMargin.length) {
+    return;
+  }
+  for (const placement of atMargin) {
+    placement.styleId = plain;
+  }
+};
+
 /** The longest line that keeps the alignment the source sets it in. */
 const SET_LINE_MAX = 160;
 
@@ -1667,14 +1900,42 @@ const keepClosingTogether = (context: Context, placed: Placed): void => {
   }
 };
 
+/**
+ * The paragraph kept to start the contents' page, once the paragraphs are
+ * placed: it has no page to start where the contents are not kept after
+ * all and would leave one empty, so there it is left out like any blank
+ * paragraph.
+ */
+const settledContentsHolder = (
+  context: Context,
+  placed: Placed,
+  holder: string | null,
+  tableHolders: ReadonlySet<string>,
+): string | null => {
+  if (holder === null || keepsContents(context, placed)) {
+    return holder;
+  }
+  // Kept for a table as well, it stays for the table.
+  if (tableHolders.has(holder)) {
+    return null;
+  }
+  placed.placements = placed.placements.filter(
+    ({ block }) => block.id !== holder,
+  );
+  placed.omitted.set(holder, "empty");
+  return null;
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
   const pageHolders = pageHoldersBeforeTables(context);
+  const contentsHolder = pageHolderBeforeContents(context);
   // A blank paragraph that ends a section which stays one carries it.
   const kept = new Set([
     ...tableSeparators(context, pageHolders),
     ...pageHolders,
+    ...(contentsHolder === null ? [] : [contentsHolder]),
     ...context.keptSections.ends.keys(),
   ]);
   const startsPage = pageStartsInSource(context);
@@ -1768,16 +2029,28 @@ const placeParagraphs = (context: Context): Placed => {
     placed.placements.push(placement);
     lastPlaced = block.id;
   }
+  const holder = settledContentsHolder(
+    context,
+    placed,
+    contentsHolder,
+    pageHolders,
+  );
   for (const placement of placed.placements) {
     placed.placementById.set(placement.block.id, placement);
   }
-  placed.pageStarts = pageStartsOf(context, placed, pageHolders);
+  placed.pageStarts = pageStartsOf(context, placed, pageHolders, holder);
   keepHeadingsWithBody(context, placed);
-  dropLoosePageStarts(context, placed, pageHolders);
+  // The paragraph that holds the contents' page start is no loose one.
+  dropLoosePageStarts(
+    context,
+    placed,
+    holder === null ? pageHolders : new Set([...pageHolders, holder]),
+  );
   keepLinesWithBody(context, placed);
   keepClosingTogether(context, placed);
   alignPartyLines(context, placed);
   indentContinuations(context, placed);
+  setMarginLines(context, placed);
   alignFrontLines(context, placed);
   return placed;
 };
@@ -2038,6 +2311,21 @@ const cellStyleOf = (
 ): string | null =>
   role === "party" ? (profile.roles.body?.styleId ?? styleId) : styleId;
 
+/**
+ * The sides a cell paragraph sets tight by hand: no space in front of it,
+ * none behind it, or neither. Only a side it states as none is kept; any
+ * other measure is the template's to give.
+ */
+const setTightOf = ({
+  spacing,
+}: DocxBlock): TemplatePlanSpacing | undefined => {
+  const tight: TemplatePlanSpacing = {
+    ...(spacing?.before === 0 ? { before: 0 } : {}),
+    ...(spacing?.after === 0 ? { after: 0 } : {}),
+  };
+  return Object.keys(tight).length === 0 ? undefined : tight;
+};
+
 /** The roles of cell paragraphs that are lines of text laid out by their
  *  table: where the source centres one or sets it at the right, it stays. */
 const CELL_TEXT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
@@ -2065,6 +2353,9 @@ const tableItem = (
         CELL_TEXT_ROLES.has(placement.role) && inner.text.trim() !== ""
           ? setApartOf(inner)
           : undefined;
+      const spacing = CELL_TEXT_ROLES.has(placement.role)
+        ? setTightOf(inner)
+        : undefined;
       nested.push({
         blockId: inner.id,
         ...(styleId === null ? {} : { styleId }),
@@ -2072,6 +2363,7 @@ const tableItem = (
         ...stripOf(placement),
         ...asTextOf(inner, numbering),
         ...(alignment === undefined ? {} : { alignment }),
+        ...(spacing === undefined ? {} : { spacing }),
         ...(context.pageMarks.has(inner.id) ? { dropPageShapes: true } : {}),
       });
     } else if (inner.kind === "paragraph") {
@@ -2084,11 +2376,16 @@ const tableItem = (
       const labelled = shownLabelOf(inner) !== null;
       const alignment =
         inner.text.trim() === "" ? undefined : setApartOf(inner);
+      // So is how close its rows stand: a row set tight by hand (a swatch
+      // of a legend, a line of a dense table) would grow by the spacing of
+      // the template's text style.
+      const spacing = setTightOf(inner);
       const marked = context.pageMarks.has(inner.id);
       if (
         styleId !== undefined ||
         labelled ||
         alignment !== undefined ||
+        spacing !== undefined ||
         marked
       ) {
         nested.push({
@@ -2096,6 +2393,7 @@ const tableItem = (
           ...(styleId === undefined ? {} : { styleId }),
           ...(labelled ? { numbering: null, labelAsText: true } : {}),
           ...(alignment === undefined ? {} : { alignment }),
+          ...(spacing === undefined ? {} : { spacing }),
           ...(marked ? { dropPageShapes: true } : {}),
         });
       }
@@ -2200,6 +2498,44 @@ type Body = {
   contentsKept: boolean;
 };
 
+/**
+ * Whether the template's contents field would list a heading of the
+ * document: a paragraph with text is placed in a style the field collects
+ * from. True when the profile does not say what the field collects.
+ */
+const contentsCollect = (
+  { contentsStyles }: TemplateProfile,
+  { placements }: Placed,
+): boolean =>
+  contentsStyles === undefined ||
+  placements.some(
+    ({ styleId, block }) =>
+      styleId !== null &&
+      contentsStyles.includes(styleId) &&
+      block.text.trim() !== "",
+  );
+
+/** Whether the plan keeps the template's contents: the template has them,
+ *  the document has an article to stand in front of, and their field
+ *  would list one of its headings. */
+const keepsContents = (context: Context, placed: Placed): boolean =>
+  wantsContents(context, placed) && contentsCollect(context.profile, placed);
+
+/** Whether the template has contents and the document an article of its
+ *  own (not one inside a table) for them to stand in front of. */
+const wantsContents = (
+  { profile, topLevel }: Context,
+  { placements }: Placed,
+): boolean => {
+  const own = new Set(topLevel.map(({ id }) => id));
+  return (
+    profile.regions.contents.length > 0 &&
+    placements.some(
+      ({ role, block }) => role === "articleHeading" && own.has(block.id),
+    )
+  );
+};
+
 const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
   const { topLevel, profile, items } = context;
   const { placementById, titleOf, mergedInto, omitted } = placed;
@@ -2212,6 +2548,13 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       region: "keepBefore",
       blockIds: keepBefore,
     });
+    for (const slot of context.headerFill?.slots ?? NO_SLOTS) {
+      body.push({ kind: "slot", ...slot });
+    }
+    if (context.headerFill !== null) {
+      const { filled, left } = context.headerFill;
+      items.push({ kind: "letterheadFilled", filled, left });
+    }
   }
   // A heading without a number heads what follows it: the preamble's
   // heading opens the body with its recitals.
@@ -2222,9 +2565,11 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     CLAUSE_ROLES.some((clause) => clause === role);
   // The table of contents stands where the template has it: after the
   // front matter, in front of the first recital or article.
-  let contentsPending =
-    contents.length > 0 &&
-    topLevel.some(({ id }) => placementById.get(id)?.role === "articleHeading");
+  const wanted = wantsContents(context, placed);
+  let contentsPending = wanted && contentsCollect(profile, placed);
+  if (wanted && !contentsPending) {
+    items.push({ kind: "contentsNotKept", reason: "noHeadingCollected" });
+  }
   let contentsKept = false;
   let placedCount = 0;
   for (const block of topLevel) {
@@ -2271,6 +2616,93 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
   }
   return { body, placedCount, contentsKept };
 };
+
+type HeaderField = "addressee" | "date" | "reference";
+
+const NO_SLOTS: HeaderFill["slots"] = [];
+const NO_LINES: readonly string[] = [];
+
+type HeaderFill = {
+  slots: { templateBlockId: string; sourceBlockIds: string[] }[];
+  /** Sample lines of the addressee the letter has no line for. */
+  emptied: string[];
+  filled: HeaderField[];
+  /** Cells of the letterhead the letter states nothing for: they keep the
+   *  template's sample text. */
+  left: HeaderField[];
+};
+
+/**
+ * Puts the head of a letter into the letterhead the template keeps: each
+ * line of the addressee into a sample line, further lines into the last
+ * one, the date and the reference into their paragraphs. Sample lines of
+ * the addressee the letter does not need are emptied. A cell the letter
+ * states nothing for keeps the template's sample and is named in the note.
+ * Null when the template keeps no letterhead or the document is no letter.
+ */
+const fillHeader = ({ profile, topLevel }: Context): HeaderFill | null => {
+  const { header } = profile;
+  if (header === undefined) {
+    return null;
+  }
+  const head = readLetterHead(topLevel);
+  const fill: HeaderFill = { slots: [], emptied: [], filled: [], left: [] };
+  const cells = header.addressee;
+  const lines = head?.addressee ?? NO_LINES;
+  if (cells.length > 0 && lines.length > 0) {
+    for (const [position, templateBlockId] of cells.entries()) {
+      const last = position === cells.length - 1;
+      const sourceBlockIds = last
+        ? lines.slice(position)
+        : lines.slice(position, position + 1);
+      if (sourceBlockIds.length === 0) {
+        fill.emptied.push(templateBlockId);
+      } else {
+        fill.slots.push({ templateBlockId, sourceBlockIds });
+      }
+    }
+    fill.filled.push("addressee");
+  } else if (cells.length > 0) {
+    fill.left.push("addressee");
+  }
+  for (const field of ["date", "reference"] as const) {
+    const templateBlockId = header[field];
+    const line = head?.[field] ?? null;
+    if (templateBlockId === null) {
+      continue;
+    }
+    if (line === null) {
+      fill.left.push(field);
+    } else {
+      fill.slots.push({ templateBlockId, sourceBlockIds: [line] });
+      fill.filled.push(field);
+    }
+  }
+  return fill;
+};
+
+/**
+ * A letter's own head goes into the template's letterhead; its lines are
+ * then no paragraphs of the body.
+ */
+const takeHeaderLines = (context: Context): void => {
+  context.headerFill = fillHeader(context);
+  if (context.headerFill === null) {
+    return;
+  }
+  const slotted = new Set(
+    context.headerFill.slots.flatMap(({ sourceBlockIds }) => sourceBlockIds),
+  );
+  context.topLevel = context.topLevel.filter(({ id }) => !slotted.has(id));
+};
+
+/** The plan option that empties sample lines of the letterhead. */
+const emptiedOf = ({
+  headerFill,
+}: Context): Pick<TemplatePlan, "emptyTemplateBlockIds"> =>
+  headerFill === null || headerFill.emptied.length === 0
+    ? {}
+    : { emptyTemplateBlockIds: headerFill.emptied };
 
 const JUSTIFIED: ReadonlySet<string> = new Set(["both", "distribute"]);
 
@@ -2337,9 +2769,11 @@ const keepsLineBreakSpacing = (
     JUSTIFIED.has(
       (styleId === undefined
         ? profile.defaultAlignment
-        : Object.values(profile.roles).find(
-            (target) => target?.styleId === styleId,
-          )?.alignment) ?? "",
+        : [
+            ...Object.values(profile.roles),
+            ...Object.values(profile.annexRoles ?? NO_ANNEX_ROLES),
+            profile.partyHead,
+          ].find((target) => target?.styleId === styleId)?.alignment) ?? "",
     );
   let blocks = 0;
   let alreadyStretched = 0;
@@ -2386,6 +2820,8 @@ type MarkOptions = {
 
 type Designator = DetectedReference["designators"][number];
 
+type CrossReference = NonNullable<DocxBlock["crossReferences"]>[number];
+
 type Field = Pick<TemplatePlanReference, "instruction" | "expectedText"> & {
   /** Where the field starts when it covers more than the designator. */
   start?: number;
@@ -2430,6 +2866,67 @@ const labelFieldOf = (
   return reason === "designator-mismatch"
     ? "designatorMismatch"
     : "punctuatedLevelWords";
+};
+
+/** What the general format switch may name for a carried field: that an
+ *  update keeps the look of the result before it. */
+const KEPT_LOOK = /^(?:mergeformat|charformat)$/iu;
+
+/**
+ * The switches a source's `REF` field is carried with: `\h` and a format
+ * that keeps the result's look, each at most once. A number switch shows a
+ * number the plan may change and a position switch shows words, so a
+ * field with either, or with any other format, stays its text.
+ */
+const carriedSwitchesOf = (instruction: string): string | null => {
+  const head = /^\s*REF\s+\S+/iu.exec(instruction);
+  if (head === null) {
+    return null;
+  }
+  const parts = instruction.slice(head[0].length).trim().split(/\s+/u);
+  const carried: string[] = [];
+  for (const [index, part] of parts.entries()) {
+    const format = parts[index - 1] === "\\*" ? part : null;
+    if (part === "" || format !== null) {
+      continue;
+    }
+    const next = parts[index + 1] ?? "";
+    let kept: string | null = null;
+    if (part === "\\*" && KEPT_LOOK.test(next)) {
+      kept = `\\* ${next.toUpperCase()}`;
+    } else if (/^\\h$/iu.test(part)) {
+      kept = String.raw`\h`;
+    }
+    if (kept === null || carried.includes(kept)) {
+      return null;
+    }
+    carried.push(kept);
+  }
+  return carried.join(" ");
+};
+
+/** A number a field counts: digits, or a roman or letter count. */
+const COUNTED_NUMBER = /^(?:\d+|\p{L}+)/u;
+
+/**
+ * Whether a field's result is `block`'s text as it reads: where the block
+ * holds a number a field counts, the result shows a number in its place.
+ */
+const showsTextOf = (result: string, block: DocxBlock): boolean => {
+  let rest = result;
+  let from = 0;
+  for (const at of block.selfNumbers ?? []) {
+    const piece = block.text.slice(from, at);
+    const number = rest.startsWith(piece)
+      ? COUNTED_NUMBER.exec(rest.slice(piece.length))?.[0]
+      : undefined;
+    if (number === undefined) {
+      return false;
+    }
+    rest = rest.slice(piece.length + number.length);
+    from = at;
+  }
+  return rest === block.text.slice(from);
 };
 
 /** Whether a reference's target is an annex that keeps its typed number. */
@@ -2509,6 +3006,89 @@ const targetOf = (
       return panic("Unhandled resolution");
     }
   }
+};
+
+type CarryOptions = {
+  context: Context;
+  placed: Placed;
+  /** Takes a span for a mark; false where it cannot carry one. */
+  claim: (blockId: string, start: number, end: number) => boolean;
+  /** How much of a placed paragraph's text its stripped label takes. */
+  strippedLength: (blockId: string) => number;
+};
+
+/**
+ * The fields of the source that show a placed paragraph's text, kept as
+ * fields where the plan writes that paragraph as it reads: the plan's own
+ * bookmark on the paragraph holds what the source's did, and the field
+ * follows the number a field of the paragraph counts (an annex heading's)
+ * as it did. With the spans they take, by block.
+ */
+const carryCrossReferences = ({
+  context: { blocks, exclusions, tableOf },
+  placed: { placementById, mergedInto, titleOf },
+  claim,
+  strippedLength,
+}: CarryOptions): {
+  references: TemplatePlanReference[];
+  spans: Map<string, { start: number; end: number }[]>;
+} => {
+  const paragraphOf = (blockId: string): string =>
+    mergedInto.get(blockId) ?? blockId;
+  // A number a field counts reads as in the source only where every
+  // paragraph that counts one is placed.
+  const countsKept = blocks.every(
+    ({ id, selfNumbers }) =>
+      selfNumbers === undefined ||
+      placementById.has(id) ||
+      mergedInto.has(id) ||
+      tableOf.has(id),
+  );
+  const references: TemplatePlanReference[] = [];
+  const spans = new Map<string, { start: number; end: number }[]>();
+  const carry = (
+    block: DocxBlock,
+    { start, end, instruction, targetBlockId, targetWhole }: CrossReference,
+  ): void => {
+    const target =
+      targetBlockId === null ? undefined : placementById.get(targetBlockId);
+    const switches = carriedSwitchesOf(instruction);
+    const expectedText = block.text.slice(start, end);
+    if (
+      targetBlockId === null ||
+      target === undefined ||
+      switches === null ||
+      !targetWhole ||
+      (target.block.selfNumbers !== undefined && !countsKept) ||
+      exclusions.targets.has(targetBlockId) ||
+      paragraphOf(block.id) === paragraphOf(targetBlockId) ||
+      // The paragraph reads as in the source: no label of its own goes or
+      // is written as text, and no other paragraph joins it.
+      strippedLength(targetBlockId) > 0 ||
+      (shownLabelOf(target.block) !== null && !target.numbered) ||
+      mergedInto.has(targetBlockId) ||
+      titleOf.has(targetBlockId) ||
+      !showsTextOf(expectedText, target.block) ||
+      !claim(block.id, start, end)
+    ) {
+      return;
+    }
+    spans.set(block.id, [...(spans.get(block.id) ?? []), { start, end }]);
+    references.push({
+      blockId: block.id,
+      start,
+      end,
+      targetBlockId,
+      instruction: switches,
+      expectedText,
+    });
+  };
+  for (const block of blocks) {
+    for (const crossReference of block.crossReferences ?? []) {
+      carry(block, crossReference);
+    }
+  }
+  return { references, spans };
 };
 
 /** References as fields where a field shows what the source prints, and
@@ -2608,6 +3188,20 @@ const markReferences = ({
       ...(targetRenumbered ? { targetRenumbered } : {}),
     });
   };
+  const paragraphOf = (blockId: string): string =>
+    mergedInto.get(blockId) ?? blockId;
+  const carried = carryCrossReferences({
+    context,
+    placed,
+    claim,
+    strippedLength,
+  });
+  marks.references.push(...carried.references);
+  /** Whether a designator lies in a field the plan carries. */
+  const inCarried = (blockId: string, { start, end }: Designator): boolean =>
+    carried.spans
+      .get(blockId)
+      ?.some((span) => start < span.end && end > span.start) === true;
   /** Why the designator cannot be a field to `targetBlockId`, or the field. */
   const link = (
     reference: DetectedReference,
@@ -2623,8 +3217,6 @@ const markReferences = ({
     ) {
       return typedAnnex(target) ? "annexTyped" : "targetNotNumbered";
     }
-    const paragraphOf = (blockId: string): string =>
-      mergedInto.get(blockId) ?? blockId;
     if (paragraphOf(reference.blockId) === paragraphOf(targetBlockId)) {
       return "sameParagraph";
     }
@@ -2658,6 +3250,9 @@ const markReferences = ({
       continue;
     }
     for (const [position, designator] of reference.designators.entries()) {
+      if (inCarried(reference.blockId, designator)) {
+        continue;
+      }
       if (scope === "unknown") {
         unlinked(reference, designator, "undecidedScope");
         continue;
@@ -2946,6 +3541,17 @@ const noteParagraphOptions = (
   if (aligned > 0) {
     items.push({ kind: "alignmentsKept", blocks: aligned });
   }
+  let tight = 0;
+  for (const item of body) {
+    if (item.kind === "source") {
+      tight += (item.nested ?? NO_NESTED).filter(
+        (nested) => nested.spacing !== undefined,
+      ).length;
+    }
+  }
+  if (tight > 0) {
+    items.push({ kind: "cellSpacingKept", blocks: tight });
+  }
   const closed = body.filter(
     (item) =>
       item.kind === "source" &&
@@ -3000,15 +3606,13 @@ export const buildTemplatePlan = ({
     exclusions,
     decisions,
     proposalById: new Map(roles.map((role) => [role.blockId, role])),
-    outline: {
-      article: profile.roles.articleHeading?.numbering ?? null,
-      clauses: CLAUSE_ROLES.map(
-        (role) => profile.roles[role]?.numbering ?? null,
-      ),
-    },
+    outline: outlineOf(profile),
+    annex: annexOf(profile),
     stylelessRoles: new Map(),
     items: [],
+    headerFill: null,
   };
+  takeHeaderLines(context);
 
   context.keptSections = sectionsToKeep(context);
   context.pageMarks = pageMarksToDrop(context);
@@ -3096,6 +3700,7 @@ export const buildTemplatePlan = ({
       : { trackedChanges: manifest.trackedChangesResolved.view }),
     body,
     omit: [...placed.omitted].map(([blockId, reason]) => ({ blockId, reason })),
+    ...emptiedOf(context),
     ...(patches.length === 0 ? {} : { numberingPatches: patches }),
     ...(marks.references.length === 0 ? {} : { references: marks.references }),
     ...(marks.highlights.length === 0 ? {} : { highlights: marks.highlights }),

@@ -16,6 +16,19 @@ const ENTRY_POINTS = [
   "apps/web/e2e/playwright.config.ts",
   // Playwright loads this by configuration string, rather than an import.
   "apps/web/e2e/global-teardown.ts",
+  // Executed by setup-e2e-stack or dev routes during route-smoke; other
+  // maintenance scripts under apps/api/scripts/ stay out of scope.
+  "scripts/prepare-mcp-apps.ts",
+  "apps/api/scripts/generate-capability-runtime.ts",
+  "apps/api/scripts/seed-test-user.ts",
+  "apps/api/scripts/seed-e2e-feature-access.ts",
+  "apps/api/scripts/seed-dev.ts",
+  "apps/api/scripts/seed-firm-knowledge.ts",
+  // Subprocess generator entry points invoked by prepare-mcp-apps; kept in
+  // sync with GENERATORS in scripts/generated-files.ts by a contract test.
+  "apps/api/scripts/generate-mcp-app-contracts.ts",
+  "apps/api/scripts/lib/mcp-app-inputs.ts",
+  "scripts/generated-artifacts.ts",
 ] as const;
 // Each extension parses with its own grammar: TSX would reject valid `.ts`
 // syntax such as generic arrows (`<T = unknown>(value: T) => value`).
@@ -44,6 +57,8 @@ const RUNTIME_FILES = new Set([
   "docker-compose.yml",
   "scripts/retry.sh",
   "apps/web/e2e/network-baseline.json",
+  // Read from disk by apps/web/e2e/helpers/document.ts (imported by route-smoke).
+  "apps/api/src/lib/search/__fixtures__/mixed-3pages.pdf",
 ]);
 const RUNTIME_PREFIXES = [
   "apps/api/",
@@ -71,12 +86,62 @@ const RUNTIME_PREFIXES = [
 const normalizePath = (file: string): string =>
   path.posix.normalize(file.replaceAll("\\", "/")).replace(/^\.\//u, "");
 
-const runtimePath = (file: string): boolean =>
-  RUNTIME_FILES.has(file) ||
-  RUNTIME_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
-  // Web build/runtime configuration lives beside src, outside the import graph.
-  (file.startsWith("apps/web/") &&
-    !file.slice("apps/web/".length).includes("/"));
+const SOURCE_TREE_PREFIXES = [
+  "apps/api/",
+  "apps/web/src/",
+  "packages/",
+] as const;
+// Unit/DB/property tests, Storybook stories, and test-only directories under
+// runtime source trees never ship into the production web or API runtime.
+const NON_RUNTIME_SOURCE_FILE =
+  /\.(?:test|spec|stories)\.[cm]?[jt]sx?$|(?:^|\/)(?:__tests__|__fixtures__|__mocks__|__snapshots__)\//u;
+const NON_RUNTIME_DOC_FILE =
+  /(?:^|\/)(?:README|AGENTS|CLAUDE|GEMINI|TERMINOLOGY|CHANGELOG)\.md$|\.research\.md$|(?:^|\/)docs\/.*\.mdx?$/u;
+const E2E_API_FIXTURE_FILES = new Set([
+  // Read from disk by apps/web/e2e/helpers/document.ts (imported by route-smoke).
+  "apps/api/src/lib/search/__fixtures__/mixed-3pages.pdf",
+]);
+const NON_RUNTIME_API_PREFIXES = [
+  "apps/api/src/tests/",
+  "apps/api/evals/",
+  "apps/api/e2e/",
+  "apps/api/typecheck-required/",
+] as const;
+export const isNonRuntimeSourceFile = (file: string): boolean => {
+  if (E2E_API_FIXTURE_FILES.has(file)) {
+    return false;
+  }
+  if (!SOURCE_TREE_PREFIXES.some((prefix) => file.startsWith(prefix))) {
+    return false;
+  }
+  if (NON_RUNTIME_SOURCE_FILE.test(file)) {
+    return true;
+  }
+  if (NON_RUNTIME_API_PREFIXES.some((prefix) => file.startsWith(prefix))) {
+    return true;
+  }
+  // Only exclude known documentation Markdown files (not bundled runtime
+  // prompts/assets such as report prompt templates or template-pack READMEs).
+  if (file.startsWith("packages/template-packs/")) {
+    return false;
+  }
+  return NON_RUNTIME_DOC_FILE.test(file);
+};
+
+const runtimePath = (file: string): boolean => {
+  if (RUNTIME_FILES.has(file)) {
+    return true;
+  }
+  if (isNonRuntimeSourceFile(file) || file.startsWith("apps/api/scripts/")) {
+    return false;
+  }
+  return (
+    RUNTIME_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+    // Web build/runtime configuration lives beside src, outside the import graph.
+    (file.startsWith("apps/web/") &&
+      !file.slice("apps/web/".length).includes("/"))
+  );
+};
 
 // Keep every resolution candidate in the closure, even if it is now deleted.
 // Reading only existing modules would miss a removed helper still imported by

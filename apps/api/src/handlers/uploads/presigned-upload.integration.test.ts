@@ -19,6 +19,7 @@ import { UNSCANNED_CONTENT_WARNING } from "@stll/api-contract/file-scan-warnings
 import { ZipArchive } from "@stll/docx-core/zip";
 import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { rejectionOf, settledWithin, WaitTimeoutError } from "@stll/test-kit";
 
 import {
   documentProcessingRuns,
@@ -560,7 +561,14 @@ describe("presigned upload mutation flow", () => {
         });
 
       try {
-        await Bun.sleep(200);
+        expect(
+          await rejectionOf(
+            settledWithin(finalizing, {
+              description: "finalizeUpload to bypass held admission gate",
+              timeoutMs: 200, // timeout: bounded window asserting finalize stays blocked on admission gate
+            }),
+          ),
+        ).toBeInstanceOf(WaitTimeoutError);
         expect(finalizeSettled).toBe(false);
         expect(
           recording.records.filter(

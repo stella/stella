@@ -1,3 +1,5 @@
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 import { panic } from "better-result";
 
 import type {
@@ -81,6 +83,13 @@ import {
   type ParagraphRole,
   plainTextOf,
 } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
+import {
+  type ContinuingJoin,
+  LINE_JOINS,
+  printedLine,
+  readHardWrap,
+} from "@stll/legal-ast/hard-wrapped-lines";
 // parser-output-unchanged: mapInlineText moved unchanged to the shared inline-line module.
 import {
   mapInlineText,
@@ -88,11 +97,21 @@ import {
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
 import {
+  readInlineLetterSpacing,
+  withAttestedLetterSpacing,
+} from "@stll/legal-ast/letter-spacing";
+import {
   DOT_PARAGRAPH_MARKER_RE,
   ITEM_OPENING_RE,
 } from "@stll/legal-ast/printed-paragraph-labels";
+import {
+  type OpinionHeadingKind,
+  separateOpinionAuthorLine,
+  type SeparateOpinionHeading,
+  separateOpinionHeading,
+  separateOpinionHeadingNamesAuthor,
+} from "@stll/legal-ast/separate-opinion-heading";
 
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
@@ -100,25 +119,8 @@ import {
   createParagraphLineReader,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
-import {
-  type ContinuingJoin,
-  LINE_JOINS,
-  printedLine,
-  readHardWrap,
-} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
-import {
-  readInlineLetterSpacing,
-  withAttestedLetterSpacing,
-} from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import {
-  type OpinionHeadingKind,
-  separateOpinionAuthorLine,
-  type SeparateOpinionHeading,
-  separateOpinionHeading,
-  separateOpinionHeadingNamesAuthor,
-} from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 

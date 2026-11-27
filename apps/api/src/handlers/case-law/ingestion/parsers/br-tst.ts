@@ -1,3 +1,5 @@
+// parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 /**
  * The Tribunal Superior do Trabalho's decision texts, as its search API
  * serves them, read into the canonical document.
@@ -41,15 +43,15 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 
 import {
   isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 
 const SOURCE_SYSTEM = "jurisprudencia.tst.jus.br";
 

@@ -1,3 +1,4 @@
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 import { panic, Result } from "better-result";
 import * as slimdom from "slimdom";
 
@@ -8,12 +9,12 @@ import type {
   Inline,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { parsePlainDate } from "@stll/time";
 
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 const AKN = "http://docs.oasis-open.org/legaldocml/ns/akn/3.0";

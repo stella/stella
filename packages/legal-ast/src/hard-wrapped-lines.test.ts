@@ -10,7 +10,7 @@ import {
   type PdfPrintedLine,
   readPdfLineJoins,
   reflowPrintedText,
-} from "./hard-wrapped-lines";
+} from "./hard-wrapped-lines.js";
 
 const MARGIN = 66;
 const INDENT = "     ";

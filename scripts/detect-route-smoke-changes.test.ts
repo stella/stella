@@ -8,6 +8,7 @@ import {
   routeSmokeAffected,
   routeSmokeImportClosure,
 } from "./detect-route-smoke-changes";
+import { GENERATORS } from "./generated-files";
 
 const routeSmokePlanned = (file: string, root: string) =>
   computeChangedFileScope(
@@ -55,6 +56,14 @@ describe("route traffic changes require the route smoke", () => {
     ".github/actions/prepare-network-baseline/prepare.sh",
     "apps/api/src/routes/contacts.ts",
     "apps/api/scripts/seed-test-user.ts",
+    "apps/api/scripts/seed-utils.ts",
+    "apps/api/scripts/seed-e2e-feature-access.ts",
+    "apps/api/scripts/generate-capability-runtime.ts",
+    "apps/api/scripts/export-capability-catalog.ts",
+    "apps/api/scripts/seed-dev.ts",
+    "scripts/prepare-mcp-apps.ts",
+    "apps/api/scripts/generate-mcp-app-contracts.ts",
+    "apps/api/scripts/lib/mcp-app-inputs.ts",
     "packages/ui/src/new-component.tsx",
     "packages/api-contract/src/schema.ts",
     ".github/actions/setup-e2e-stack/action.yml",
@@ -74,6 +83,9 @@ describe("route traffic changes require the route smoke", () => {
     "scripts/retry.sh",
     "patches/dependency.patch",
     "apps/web/e2e/fixtures/simple.docx",
+    "apps/api/src/lib/search/__fixtures__/mixed-3pages.pdf",
+    "packages/template-packs/src/content/packs/default/templates/advisor-agreement/README.md",
+    "apps/api/src/handlers/reports/builtin/table-report/prompts/exec-summary.md",
   ])("plans a smoke for %s", (file) => {
     expect(routeSmokeAffected([file])).toBe(true);
   });
@@ -103,8 +115,52 @@ describe("route traffic changes require the route smoke", () => {
     "apps/web/e2e/specs/unrelated.spec.ts",
     "apps/web/e2e/marketing/landing.spec.ts",
     "scripts/unrelated.ts",
+    "apps/api/src/routes/contacts.test.ts",
+    "apps/api/src/db/queries.db.test.ts",
+    "apps/api/src/db/rls.postgres.test.ts",
+    "apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sample.html",
+    "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.research.md",
+    "apps/api/src/tests/helpers/chat-oracles.ts",
+    "apps/api/evals/chat-eval.ts",
+    "apps/api/e2e/smoke.spec.ts",
+    "apps/api/typecheck-required/tests.json",
+    "apps/api/AGENTS.md",
+    "apps/api/scripts/seed-test-user.test.ts",
+    "apps/api/scripts/record-eu-ecj-fixtures.ts",
+    "apps/api/scripts/chat-mutation-matrix.ts",
+    "apps/api/scripts/test-peak-rss.json",
+    "apps/web/src/routes/index.test.tsx",
+    "apps/web/src/components/button.stories.tsx",
+    "apps/web/src/__fixtures__/route-shell/fixture.tsx",
+    "apps/web/src/i18n/TERMINOLOGY.md",
+    "packages/ui/src/button.test.tsx",
+    "packages/ui/src/__tests__/button.spec.ts",
+    "packages/api-contract/src/__fixtures__/sample.json",
+    "packages/ui/README.md",
   ])("does not plan a smoke for %s", (file) => {
     expect(routeSmokeAffected([file])).toBe(false);
+  });
+
+  test("covers every script input of setup-e2e-stack subprocess generators", () => {
+    const closure = routeSmokeImportClosure();
+    for (const id of [
+      "mcp-app-contracts",
+      "mcp-app-bundles",
+      "capability-runtime",
+    ]) {
+      const generator = GENERATORS.find((entry) => entry.id === id);
+      expect(generator, id).toBeDefined();
+      for (const input of generator?.inputs ?? []) {
+        if (
+          !input.includes("*") &&
+          (input.startsWith("apps/api/scripts/") ||
+            input.startsWith("scripts/"))
+        ) {
+          expect(closure.has(input), `${id}: ${input}`).toBe(true);
+          expect(routeSmokeAffected([input]), `${id}: ${input}`).toBe(true);
+        }
+      }
+    }
   });
 
   test("empty changes do not plan a smoke", () => {

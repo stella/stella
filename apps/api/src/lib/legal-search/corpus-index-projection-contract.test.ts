@@ -2,9 +2,13 @@ import { expect, test } from "bun:test";
 
 import {
   canTransitionCorpusIndexIntent,
+  CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
+  CORPUS_INDEX_DELETING_INTENT_STATUSES,
+  CORPUS_INDEX_INTENT_APPEND_GATE,
   CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION,
   CORPUS_INDEX_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_TRANSITIONS,
+  CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
   type CorpusIndexDesiredProjection,
   type CorpusIndexIntentStatus,
   corpusIndexIntentStatusAfterUnknownAppend,
@@ -193,4 +197,42 @@ test("an erased entity converges without an index revision", () => {
       outstandingIntentCount: 0,
     }),
   ).toBe(false);
+});
+
+// A stored-revision append may run beside exactly the revisions being deleted:
+// never beside one that can still create or expose a copy, and never past a
+// stall an operator owns.
+test("the append gate lets a new revision pass only a delete in flight", () => {
+  expect(CORPUS_INDEX_INTENT_APPEND_GATE).toEqual({
+    reserved: "holds",
+    append_started: "holds",
+    append_committed: "holds",
+    applied: "holds",
+    cleanup_pending: "deleting",
+    cleanup_started: "deleting",
+    cleanup_committed: "deleting",
+    cleanup_stalled: "holds",
+    settled: "quiescent",
+    cancelled: "quiescent",
+    withdrawn: "quiescent",
+  });
+  expect(CORPUS_INDEX_DELETING_INTENT_STATUSES).toEqual([
+    "cleanup_pending",
+    "cleanup_started",
+    "cleanup_committed",
+  ]);
+  const gated = (disposition: string) =>
+    CORPUS_INDEX_INTENT_STATUSES.filter(
+      (status) => CORPUS_INDEX_INTENT_APPEND_GATE[status] === disposition,
+    ).toSorted();
+  expect(gated("quiescent")).toEqual(
+    [...CORPUS_INDEX_QUIESCENT_INTENT_STATUSES].toSorted(),
+  );
+  for (const status of CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES) {
+    expect(CORPUS_INDEX_INTENT_APPEND_GATE[status]).toBe("holds");
+  }
+  // The launch probe is unchanged: a delete in flight still blocks a launch.
+  for (const status of CORPUS_INDEX_DELETING_INTENT_STATUSES) {
+    expect(CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION[status]).toBe("blocking");
+  }
 });

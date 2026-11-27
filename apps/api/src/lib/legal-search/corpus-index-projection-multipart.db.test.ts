@@ -315,7 +315,12 @@ test("a later part failure leaves the whole revision pending cleanup", async () 
         return doc;
       }),
     );
-    await Bun.sleep(10);
+    const backdated = new Date(start.getTime() - 10_000);
+    partStarts[0] = backdated;
+    await db
+      .update(corpusIndexProjectionIntents)
+      .set({ appendStartedAt: backdated })
+      .where(eq(corpusIndexProjectionIntents.entityId, nextId));
     return Result.ok();
   });
 

@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { union } from "drizzle-orm/pg-core";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -28,7 +29,6 @@ import {
   setCorpusBackfillStatementTimeout,
   withDedicatedCorpusBackfillDb,
 } from "@/api/lib/legal-search/backfill-statement-timeout";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";

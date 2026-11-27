@@ -52,6 +52,7 @@ import type { SQL } from "drizzle-orm";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
@@ -75,10 +76,6 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-reads";
 import { TRIMMED_CORPUS_PAYLOAD_COLUMNS } from "@/api/lib/legal-search/corpus-storage";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { corpusS3ObjectExists, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";

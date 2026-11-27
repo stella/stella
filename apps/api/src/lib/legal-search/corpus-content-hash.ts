@@ -1,12 +1,8 @@
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 import { createSha256 } from "@stll/sha256/bun";
-
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 
 export type CorpusPayload = {
   text: string | null;

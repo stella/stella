@@ -197,6 +197,90 @@ describe("proposeBlockRoles", () => {
     expect(roles["Beta a.s., se sídlem Krátká "]).toBe("party");
   });
 
+  test("numbered lines that head the parties are parties, and the provisions begin behind them", () => {
+    const numberedParties = manifestOf([
+      "KUPNÍ SMLOUVA",
+      "mezi:",
+      numbered("1.", "Alfa s.r.o.", 5),
+      "se sídlem Dlouhá 1, Praha",
+      "IČO: 00000001",
+      "- dále jen „Prodávající“ -",
+      "a",
+      numbered("2.", "Beta a.s.", 5),
+      "se sídlem Krátká 2, Brno",
+      "- dále jen „Kupující“ -",
+      "Článek I.\nPředmět",
+      numbered("1.", "Prodávající dodá zboží.", 10),
+      numbered("2.", "Kupující zaplatí cenu.", 10),
+    ]);
+    const roles = rolesOf(numberedParties);
+    expect(roles["Alfa s.r.o."]).toBe("party");
+    expect(roles["Beta a.s."]).toBe("party");
+    expect(roles["se sídlem Dlouhá 1, Praha"]).toBe("party");
+    expect(roles["- dále jen „Kupující“ -"]).toBe("party");
+    expect(roles["a"]).toBe("body");
+    expect(roles["Prodávající dodá zboží."]).toBe("clause1");
+    expect(roles["Kupující zaplatí cenu."]).toBe("clause1");
+
+    // Letters head them as numbers do, and the second party may have no
+    // details of its own behind the word that joins the two.
+    const lettered = rolesOf(
+      manifestOf([
+        "SUPPORT CONTRACT",
+        "a) Alpha Ltd, registered office 1 Long Street, London",
+        "of the one part and",
+        "b) [full official name]",
+        "have agreed as follows:",
+        "Article 1\nSubject",
+        "1.1\tThe supplier delivers the goods.",
+      ]),
+    );
+    expect(lettered["a) Alpha Ltd, registered off"]).toBe("party");
+    expect(lettered["b) [full official name]"]).toBe("party");
+    expect(lettered["1.1\tThe supplier delivers the goods.".slice(0, 28)]).toBe(
+      "clause1",
+    );
+
+    // Behind parties without numbers and the sentence that opens the
+    // operative part, numbered lines are provisions, whatever they speak
+    // of.
+    const operative = rolesOf(
+      manifestOf([
+        "SUPPLY AGREEMENT",
+        "Alpha Ltd, registered office 1 Long Street, London",
+        "and",
+        "Beta Ltd, registered office 2 Short Street, Leeds",
+        "have agreed as follows:",
+        "1. Notices shall be delivered to the registered office.",
+        "2. Each party shall notify changes to its company number.",
+      ]),
+    );
+    expect(
+      operative[
+        "1. Notices shall be delivered to the registered office.".slice(0, 28)
+      ],
+    ).toBe("clause1");
+    expect(
+      operative[
+        "2. Each party shall notify changes to its company number.".slice(0, 28)
+      ],
+    ).toBe("clause1");
+
+    // Numbered provisions that name no party stay provisions, also where
+    // a later one speaks of a registered office.
+    const provisions = rolesOf(
+      manifestOf([
+        "SMLOUVA",
+        numbered("1.", "Prodávající dodá zboží.", 10),
+        numbered("2.", "Kupující, se sídlem v Brně, zaplatí cenu.", 10),
+      ]),
+    );
+    expect(provisions["Prodávající dodá zboží."]).toBe("clause1");
+    expect(
+      provisions["Kupující, se sídlem v Brně, zaplatí cenu.".slice(0, 28)],
+    ).toBe("clause1");
+  });
+
   test("the line that announces the parties is no line of the title, centred or in capitals", () => {
     const lines = (intro: string) => [
       "PURCHASE AGREEMENT",
@@ -415,6 +499,26 @@ describe("proposeBlockRoles", () => {
     ).toEqual(["p0", "p4", "p5"]);
     const cells = inColumns(2, ["položka", "cena"]);
     expect(proposeBlockRoles({ manifest: cells })).toEqual([]);
+  });
+
+  test("a number with no words in a table cell counts the rows and is no provision", () => {
+    // A list numbers the rows of a table: the first cell of each row holds
+    // the number and nothing else.
+    const counted = inColumns(2, [
+      numbered("1.", "", 7),
+      "nález",
+      numbered("2.", "", 7),
+      "doporučení",
+    ]);
+    expect(proposeBlockRoles({ manifest: counted })).toEqual([]);
+    // With words behind it, a number in a cell is a provision.
+    const provisions = inColumns(2, [
+      numbered("1.", "Dodavatel dodá zboží.", 7),
+      "The supplier delivers the goods.",
+    ]);
+    expect(
+      proposeBlockRoles({ manifest: provisions }).map(({ blockId }) => blockId),
+    ).toContain("p0");
   });
 
   test("a paragraph that holds only a picture is read, a bulleted one is a bullet", () => {

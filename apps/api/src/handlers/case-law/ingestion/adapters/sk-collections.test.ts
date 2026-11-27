@@ -10,6 +10,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
 import {
+  readAbsent,
+  readPresent,
+  readUnavailable,
+} from "@/api/lib/errors/read-outcome";
+import {
   SK_COLLECTION_PARSER_VERSION,
   SK_COLLECTION_SERIES,
   type SkCollectionIssueCache,
@@ -215,8 +220,8 @@ describe("publisher collection enrichment", () => {
       status: "enabled",
       request: async ({ url }) =>
         url.endsWith("/robots.txt")
-          ? new Response(null, { status: 404 })
-          : new Response(bytes),
+          ? readAbsent("http-404")
+          : readPresent(new Response(bytes)),
     });
     const result = (
       await connector.readIssue({ issue: NS_ISSUE, cache: null })
@@ -279,11 +284,11 @@ describe("publisher collection enrichment", () => {
           "https://github.com/stella/stella",
         );
         if (url.endsWith("/robots.txt")) {
-          return new Response(null, { status: 404 });
+          return readAbsent("http-404");
         }
         expect(method).toBe("HEAD");
         expect(headers.get("if-none-match")).toBe(cache.etag);
-        return new Response(null, { status: 304 });
+        return readUnavailable({ kind: "status", status: 304 });
       },
     });
     expect(
@@ -302,7 +307,7 @@ describe("publisher collection enrichment", () => {
         status: "enabled",
         request: async ({ url }) => {
           expect(url.endsWith("/robots.txt")).toBe(true);
-          return new Response(robots);
+          return readPresent(new Response(robots));
         },
       });
       expect(
@@ -318,8 +323,10 @@ describe("publisher collection enrichment", () => {
       extract: async () => Result.ok(samplePages(0)),
       request: async ({ url }) =>
         url.endsWith("/robots.txt")
-          ? new Response("User-agent: *\nAllow: /")
-          : new Response("%PDF-transient", { headers: { etag: '"sample"' } }),
+          ? readPresent(new Response("User-agent: *\nAllow: /"))
+          : readPresent(
+              new Response("%PDF-transient", { headers: { etag: '"sample"' } }),
+            ),
     });
     const outcome = (
       await connector.readIssue({ issue: NS_ISSUE, cache: null })
@@ -375,7 +382,7 @@ describe("publisher collection enrichment", () => {
   test("surfaces upstream failure explicitly", async () => {
     const connector = createSkCollectionConnector({
       status: "enabled",
-      request: async () => new Response(null, { status: 503 }),
+      request: async () => readUnavailable({ kind: "status", status: 503 }),
     });
     const result = await connector.readIssue({ issue: NS_ISSUE, cache: null });
     expect(result.isErr()).toBe(true);
@@ -501,12 +508,13 @@ describe("publisher collection enrichment", () => {
         request: async ({ url, method, headers }) => {
           calls.push(method);
           if (url.endsWith("/robots.txt")) {
-            return new Response(
-              "User-agent: *\nDisallow: /\nAllow: /data/att/",
+            return readPresent(
+              new Response("User-agent: *\nDisallow: /\nAllow: /data/att/"),
             );
           }
           expect(headers.get("if-none-match")).toBe(cache.etag);
-          return new Response(null, {
+          return readUnavailable({
+            kind: "status",
             status: method === "HEAD" ? status : 304,
           });
         },
@@ -535,13 +543,15 @@ describe("publisher collection enrichment", () => {
       },
       request: async ({ url, method }) => {
         if (url.endsWith("/robots.txt")) {
-          return new Response(null, { status: 404 });
+          return readAbsent("http-404");
         }
         if (method === "HEAD") {
-          return new Response(null, { status: 405 });
+          return readUnavailable({ kind: "status", status: 405 });
         }
         downloads++;
-        return new Response("%PDF-transient", { headers: { etag: '"new"' } });
+        return readPresent(
+          new Response("%PDF-transient", { headers: { etag: '"new"' } }),
+        );
       },
     });
     expect(
@@ -565,8 +575,8 @@ describe("publisher collection enrichment", () => {
         expect(method).toBe("GET");
         expect(headers.has("if-none-match")).toBe(false);
         return url.endsWith("/robots.txt")
-          ? new Response(null, { status: 404 })
-          : new Response("%PDF-transient");
+          ? readAbsent("http-404")
+          : readPresent(new Response("%PDF-transient"));
       },
     });
     const result = (
@@ -596,8 +606,8 @@ describe("publisher collection enrichment", () => {
       },
       request: async ({ url }) =>
         url.endsWith("/robots.txt")
-          ? new Response(null, { status: 404 })
-          : new Response("%PDF-transient"),
+          ? readAbsent("http-404")
+          : readPresent(new Response("%PDF-transient")),
     });
     const result = (
       await connector.readIssue({ issue: NS_ISSUE, cache })
@@ -615,8 +625,8 @@ describe("publisher collection enrichment", () => {
         status: "enabled",
         request: async ({ url }) =>
           url.endsWith("/robots.txt")
-            ? new Response(null, { status: 404 })
-            : new Response(body),
+            ? readAbsent("http-404")
+            : readPresent(new Response(body)),
       });
       const result = await connector.readIssue({
         issue: NS_ISSUE,
@@ -642,8 +652,8 @@ describe("publisher collection enrichment", () => {
         ),
       request: async ({ url }) =>
         url.endsWith("/robots.txt")
-          ? new Response(null, { status: 404 })
-          : new Response("%PDF-transient"),
+          ? readAbsent("http-404")
+          : readPresent(new Response("%PDF-transient")),
     });
     const result = await connector.readIssue({ issue: NS_ISSUE, cache: null });
     expect(result.isErr()).toBe(true);
