@@ -2780,6 +2780,38 @@ describe("buildTemplatePlan, lines the source brings back to the margin", () => 
     expect(styleOf(manifest, "Dodavatel dále zajistí:")).toBe("Indent");
   });
 
+  test("a list of bullets behind a table is not opened by the line in front of the table", () => {
+    const manifest = contract({
+      2: HANGING,
+      3: UNDER,
+      4: HANGING,
+      5: UNDER,
+      6: UNDER,
+    });
+    // Without a table the line opens the bullets and stays.
+    expect(styleOf(manifest, "Dodavatel dále zajistí:")).toBe("Indent");
+    // A table stands between the line and the bullets.
+    const at = manifest.blocks.findIndex(({ text }) =>
+      text.startsWith("Dodavatel dále zajistí:"),
+    );
+    const cell = { ...manifest.blocks[0], id: "c1", text: "položka" };
+    const table = {
+      ...manifest.blocks[0],
+      id: "t1",
+      kind: "table" as const,
+      text: "",
+      cells: [{ row: 0, col: 0, blockIds: ["c1"] }],
+    };
+    const blocks = [
+      ...manifest.blocks.slice(0, at + 1),
+      table,
+      cell,
+      ...manifest.blocks.slice(at + 1),
+    ].flatMap((block) => (block === undefined ? [] : [block]));
+    const withTable = { ...manifest, blocks };
+    expect(styleOf(withTable, "Dodavatel dále zajistí:")).toBe("Body");
+  });
+
   test("a document that sets every such line at the margin keeps them under their clauses", () => {
     const flat = contract({ 2: HANGING, 4: HANGING });
     expect(styleOf(flat, "Zboží je popsáno")).toBe("Indent");

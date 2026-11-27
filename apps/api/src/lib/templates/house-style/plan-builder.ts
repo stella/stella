@@ -1489,6 +1489,8 @@ const setMarginLines = (context: Context, placed: Placed): void => {
     const placement =
       block.kind === "table" ? undefined : placed.placementById.get(block.id);
     if (placement === undefined) {
+      // A list behind a table is not opened by the line in front of it.
+      opensList &&= block.kind !== "table";
       continue;
     }
     if (showsLabel(placement)) {
