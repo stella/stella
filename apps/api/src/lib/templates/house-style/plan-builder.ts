@@ -2467,28 +2467,41 @@ const labelFieldOf = (
     : "punctuatedLevelWords";
 };
 
-/** A format switch that keeps a field's look when it updates: the field
- *  is written with its result's look, so the switch can go. */
-const KEPT_LOOK_SWITCH = /\\\*\s*(?:mergeformat|charformat)\b/giu;
+/** What the general format switch may name for a carried field: that an
+ *  update keeps the look of the result before it. */
+const KEPT_LOOK = /^(?:mergeformat|charformat)$/iu;
 
 /**
- * The switches a source's `REF` field is carried with: `\h` or none. A
- * number switch shows a number the plan may change and a position switch
- * shows words, so a field with either stays its text.
+ * The switches a source's `REF` field is carried with: `\h` and a format
+ * that keeps the result's look, each at most once. A number switch shows a
+ * number the plan may change and a position switch shows words, so a
+ * field with either, or with any other format, stays its text.
  */
 const carriedSwitchesOf = (instruction: string): string | null => {
   const head = /^\s*REF\s+\S+/iu.exec(instruction);
   if (head === null) {
     return null;
   }
-  const rest = instruction
-    .slice(head[0].length)
-    .replaceAll(KEPT_LOOK_SWITCH, "")
-    .trim();
-  if (rest === "") {
-    return "";
+  const parts = instruction.slice(head[0].length).trim().split(/\s+/u);
+  const carried: string[] = [];
+  for (const [index, part] of parts.entries()) {
+    const format = parts[index - 1] === "\\*" ? part : null;
+    if (part === "" || format !== null) {
+      continue;
+    }
+    const next = parts[index + 1] ?? "";
+    let kept: string | null = null;
+    if (part === "\\*" && KEPT_LOOK.test(next)) {
+      kept = `\\* ${next.toUpperCase()}`;
+    } else if (/^\\h$/iu.test(part)) {
+      kept = String.raw`\h`;
+    }
+    if (kept === null || carried.includes(kept)) {
+      return null;
+    }
+    carried.push(kept);
   }
-  return /^\\h$/iu.test(rest) ? String.raw`\h` : null;
+  return carried.join(" ");
 };
 
 /** A number a field counts: digits, or a roman or letter count. */

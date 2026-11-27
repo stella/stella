@@ -512,7 +512,7 @@ describe("buildTemplatePlan, annexes a field numbers", () => {
         start,
         end: start + "Příloha č. 1 Ceník".length,
         targetBlockId: heading.id,
-        instruction: String.raw`\h`,
+        instruction: String.raw`\h \* MERGEFORMAT`,
         expectedText: "Příloha č. 1 Ceník",
       },
     ]);
