@@ -5,7 +5,7 @@ export default {
   capability:
     "Reading a court's printed lines back as paragraphs: which line ends continue a paragraph, which hyphen the margin added, and where a printed label opens a paragraph",
   owner: [
-    "apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts",
+    "packages/legal-ast/src/hard-wrapped-lines.ts",
     "packages/legal-ast/src/printed-paragraph-labels.ts",
   ],
   summary:

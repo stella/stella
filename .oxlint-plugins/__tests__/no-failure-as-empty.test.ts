@@ -69,9 +69,7 @@ describe.serial("failed reads stay distinct from empty results", () => {
     ).toEqual([]);
   });
 
-  test("baselined sites are only exempt by their exact key", async () => {
-    // The census option ignores the baseline; the key names the function,
-    // the shape and its ordinal there, never a line number.
+  test("reports failure-as-empty sites in API handlers", async () => {
     expect(
       await lintSingleRule(
         RULE,
@@ -82,7 +80,6 @@ describe.serial("failed reads stay distinct from empty results", () => {
         ].join("\n"),
         {
           sourcePath: "apps/api/src/handlers/example.ts",
-          ruleOptions: { census: true },
         },
       ),
     ).toEqual([2]);

@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: a failed validateAst verdict still fails the parse; only the logging moved to the pipeline.
 /**
@@ -37,11 +38,11 @@ import type {
   ParagraphListDepth,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 import { isPlRecitalLine } from "@stll/legal-ast/polish-document-roles";
 
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
-import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   buildValidationHtml,
   validateAst,

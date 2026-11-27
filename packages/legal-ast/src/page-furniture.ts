@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: the page-break list item test moved unchanged into the printed-label grammar.
 /**
  * Page furniture of Czech court decisions, and the sentences page breaks cut.

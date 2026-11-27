@@ -226,6 +226,22 @@
     "./separate-opinion-heading": {
       "types": "./src/separate-opinion-heading.ts",
       "import": "./src/separate-opinion-heading.ts"
+    },
+    "./block-anchors": {
+      "types": "./src/block-anchors.ts",
+      "import": "./src/block-anchors.ts"
+    },
+    "./hard-wrapped-lines": {
+      "types": "./src/hard-wrapped-lines.ts",
+      "import": "./src/hard-wrapped-lines.ts"
+    },
+    "./letter-spacing": {
+      "types": "./src/letter-spacing.ts",
+      "import": "./src/letter-spacing.ts"
+    },
+    "./page-furniture": {
+      "types": "./src/page-furniture.ts",
+      "import": "./src/page-furniture.ts"
     }
   },
   "scripts": {

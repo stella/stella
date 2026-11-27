@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The case DOM is shared for one assembly and cleanup happens on one owned clone; stored fields, HTML and AST output are unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own retention self-check changes no stored field or AST.
@@ -30,6 +31,7 @@ import type {
   ParagraphBlock,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { readInlineLetterSpacing } from "@stll/legal-ast/letter-spacing";
 
 import {
   EXCLUDED_HTML_SELECTOR,
@@ -40,7 +42,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
-import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   type MetadataUrlDefect,
   type SafeHref,

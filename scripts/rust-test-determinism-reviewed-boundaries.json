@@ -28,5 +28,30 @@
     "file": "apps/desktop/src-tauri/src/dictation_learned.rs",
     "line": "assert!(FILES.try_lock().is_err()); // kit-allow: asserts the lookup runs under the process-global files lock",
     "reason": "the test checks that a change looks up its account while the process-global learned-fixes lock is held, so a disconnect cannot erase between lookup and write; the global lock is the subject of the test"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/desktop_crash.rs",
+    "line": "let status = std::process::Command::new(std::env::current_exe().unwrap())",
+    "reason": "std::panic::set_hook is process-global, so the test runs install_panic_hook in an isolated child process to avoid interfering with sibling Rust tests"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/test_child_processes.rs",
+    "line": "let guard = CHILD_PROCESSES.read();",
+    "reason": "process-global RwLock coordinating flock tests with child-process spawns across the test binary so inherited file descriptors do not keep locks held"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/test_child_processes.rs",
+    "line": "let guard = CHILD_PROCESSES.write();",
+    "reason": "process-global RwLock coordinating child-process spawns with flock tests across the test binary so inherited file descriptors do not keep locks held"
+  },
+  {
+    "file": "apps/desktop/src-tauri/tests/tray_api_guard.rs",
+    "line": "let compiler_target = Command::new(\"rustc\")",
+    "reason": "queries the host target triple from rustc so offline cargo metadata resolves the pinned tauri dependency source path"
+  },
+  {
+    "file": "apps/desktop/src-tauri/tests/tray_api_guard.rs",
+    "line": "let output = Command::new(\"cargo\")",
+    "reason": "queries offline cargo metadata for the lockfile-pinned tauri crate source path; the cargo metadata boundary is the subject of the API census guard"
   }
 ]

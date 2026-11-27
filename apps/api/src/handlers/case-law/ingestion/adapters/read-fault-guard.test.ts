@@ -16,13 +16,8 @@
 // failure). Failing untyped or building unchanged does not count; a typed
 // marker is surfaced, not degraded.
 //
-// Rows in read-fault-guard-baseline.json are the current exceptions: an
-// adapter whose fixture drives no publisher read (`<adapter>::undriven`), a
-// stage × fault that degrades the decision, or a stage × refusal the build
-// does not state typed. New rows fail; rows that no longer
-// occur must be removed. scripts/failure-as-empty-baseline.ts rejects added
-// rows against the base revision. Regenerate (drops fixed rows only):
-//   READ_FAULT_BASELINE=write bun run test <this file>
+// Every registered adapter must drive at least one publisher read and never
+// degrade a decision on a read fault or leave a refusal untyped.
 import { panic } from "better-result";
 import {
   afterAll,
@@ -34,10 +29,7 @@ import {
   test,
 } from "bun:test";
 
-import { writeRegeneratedFile } from "@stll/test-kit";
-
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json";
 import {
   isStoredReadAbsence,
   isStoredReadUnavailable,
@@ -141,17 +133,6 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.CZ_ISIR]: czIsirFixture,
 } as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
 
-const UNDRIVEN_REASON =
-  "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.";
-
-const BASELINE_FILE = new URL(
-  "read-fault-guard-baseline.json",
-  import.meta.url,
-);
-const recorded: Readonly<Record<string, string>> = baseline.rows;
-const writing = process.env["READ_FAULT_BASELINE"] === "write";
-const observedRows = new Map<string, string>();
-
 beforeAll(() => {
   // Retry backoff and publisher pacing would only slow the faulted builds.
   spyOn(Bun, "sleep").mockImplementation(async () => {
@@ -163,19 +144,6 @@ afterEach(() => {
 });
 afterAll(() => {
   mock.restore();
-  if (writing) {
-    const rows = Object.fromEntries(
-      [...observedRows.keys()]
-        .toSorted()
-        .map((key) => [key, recorded[key] ?? observedRows.get(key)]),
-    );
-    writeRegeneratedFile({
-      flag: "READ_FAULT_BASELINE",
-      value: "write",
-      file: BASELINE_FILE,
-      contents: `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
-    });
-  }
 });
 
 const coverage = new Map<string, () => EnrolledAdapterFixture>(
@@ -183,34 +151,6 @@ const coverage = new Map<string, () => EnrolledAdapterFixture>(
 );
 const coverageFor = (key: string) =>
   coverage.get(key) ?? panic(`Missing read-fault fixture for ${key}`);
-
-const rowsRecordedFor = (key: string) =>
-  Object.keys(recorded)
-    .filter((row) => row.startsWith(`${key}::`))
-    .toSorted();
-
-const refusalDetail = (
-  outcome: Extract<RefusalOutcome, { type: "untyped" }>,
-): string => {
-  switch (outcome.how) {
-    case "failed":
-      return "the build fails without a typed refusal";
-    case "unchanged":
-      return "the build stores the decision unchanged";
-    case "changed":
-      return `the build stores a different decision: ${outcome.changed.slice(0, 3).join(", ")}`;
-    case "main-text-failed":
-      return `a part refusal hides a failed main text: ${outcome.changed.slice(0, 3).join(", ")}`;
-    default:
-      outcome.how satisfies never;
-      return panic(`Unhandled refusal outcome: ${String(outcome.how)}`);
-  }
-};
-
-const observe = (row: string, reason: string) => {
-  observedRows.set(row, reason);
-  return row;
-};
 
 test("every registered adapter has a read-fault fixture", () => {
   expect(listAdapters().map(({ key }) => key)).toEqual(
@@ -229,7 +169,7 @@ for (const adapter of listAdapters()) {
     const control = await recordFetchStages(build);
     const rows: string[] = [];
     if (control.stages.length === 0) {
-      rows.push(observe(`${adapter.key}::undriven`, UNDRIVEN_REASON));
+      rows.push(`${adapter.key}::undriven`);
     } else {
       // Paths two unfaulted builds disagree on (timestamps) say nothing about a fault.
       const repeat = await recordFetchStages(build);
@@ -244,12 +184,7 @@ for (const adapter of listAdapters()) {
             volatile,
           });
           if (outcome.type === "degraded") {
-            rows.push(
-              observe(
-                `${adapter.key}::${stage}::${fault}`,
-                `A failed read builds a different decision (${outcome.changed.slice(0, 3).join(", ")}); pending migration to readPublisher.`,
-              ),
-            );
+            rows.push(`${adapter.key}::${stage}::${fault}`);
           }
         }
         for (const fault of READ_REFUSALS) {
@@ -260,31 +195,17 @@ for (const adapter of listAdapters()) {
             volatile,
           });
           if (outcome.type === "untyped") {
-            rows.push(
-              observe(
-                `${adapter.key}::${stage}::${fault}`,
-                `A refused read is not stated as a typed refusal (${refusalDetail(outcome)}); pending migration to readPublisher's refused outcome.`,
-              ),
-            );
+            rows.push(`${adapter.key}::${stage}::${fault}`);
           }
         }
       }
     }
-    if (!writing) {
-      expect(
-        rows.toSorted(),
-        "New rows fail: surface the failed read (ReadOutcome / readPublisher). Rows that no longer occur must be removed from the baseline.",
-      ).toEqual(rowsRecordedFor(adapter.key));
-    }
+    expect(
+      rows.toSorted(),
+      "Failed or refused publisher reads must be surfaced via ReadOutcome / readPublisher.",
+    ).toEqual([]);
   }, 120_000);
 }
-
-test("a removed adapter cannot leave a stale row", () => {
-  const keys = new Set<string>(listAdapters().map(({ key }) => key));
-  for (const row of Object.keys(recorded)) {
-    expect(keys.has(row.split("::").at(0) ?? "")).toBe(true);
-  }
-});
 
 // ── Self-tests: the oracle must catch the class it guards ──
 

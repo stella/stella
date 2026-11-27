@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: [pl-kis] imports the shared PDF reader from its new owner, pdf-bands.ts, under its new names; the default reading is the same code.
 /**
  * Polish tax interpretations and rulings (EUREKA) document reader.
@@ -26,6 +27,7 @@ import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst, ParagraphRole } from "@stll/legal-ast/document-ast";
+import { continuesAcrossPageBreak } from "@stll/legal-ast/page-furniture";
 import { statesPlAuthorityRuling } from "@stll/legal-ast/polish-document-roles";
 import {
   PRINTED_LABEL_KIND,
@@ -44,7 +46,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
-import { continuesAcrossPageBreak } from "@/api/lib/legal-search/parsers/page-furniture";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_KIS_SOURCE_SYSTEM = "eureka.mf.gov.pl";

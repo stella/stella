@@ -1,3 +1,4 @@
+// parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 // parser-output-unchanged: AST validation reuses the unmodified parsed document; diagnostics and stored parser output remain unchanged.
@@ -53,7 +54,18 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
+import { withAttestedLetterSpacing } from "@stll/legal-ast/letter-spacing";
+import {
+  continuesAcrossPageBreak,
+  CZ_RUNNING_HEADER_SOURCE,
+  withoutSoftHyphens,
+} from "@stll/legal-ast/page-furniture";
 import { BRACKET_PARAGRAPH_MARKER_RE } from "@stll/legal-ast/printed-paragraph-labels";
+import {
+  type OpinionHeadingKind,
+  separateOpinionHeading,
+  separateOpinionHeadingEndsAsSentence,
+} from "@stll/legal-ast/separate-opinion-heading";
 import {
   collapseLetterSpacing,
   isLetterSpacedEmphasis,
@@ -65,17 +77,6 @@ import {
   inlineStyleValue,
 } from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
-import {
-  continuesAcrossPageBreak,
-  CZ_RUNNING_HEADER_SOURCE,
-  withoutSoftHyphens,
-} from "@/api/lib/legal-search/parsers/page-furniture";
-import {
-  type OpinionHeadingKind,
-  separateOpinionHeading,
-  separateOpinionHeadingEndsAsSentence,
-} from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 
 import {
   inlinesToPlainText,
