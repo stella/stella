@@ -77,7 +77,6 @@ const MCP_TOOL_COVERAGE_EXEMPTIONS: Record<string, McpToolExemptionReason> = {
   fetch: MCP_TOOL_EXEMPTION_REASON.trackedPreExistingGap,
   search_across_matters: MCP_TOOL_EXEMPTION_REASON.trackedPreExistingGap,
   read_content_across_matters: MCP_TOOL_EXEMPTION_REASON.trackedPreExistingGap,
-  read_contact: MCP_TOOL_EXEMPTION_REASON.trackedPreExistingGap,
   delete_matter: MCP_TOOL_EXEMPTION_REASON.trackedPreExistingGap,
   list_templates: MCP_TOOL_EXEMPTION_REASON.trackedPreExistingGap,
   fill_template: MCP_TOOL_EXEMPTION_REASON.trackedPreExistingGap,

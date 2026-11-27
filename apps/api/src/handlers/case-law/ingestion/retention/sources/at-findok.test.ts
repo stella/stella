@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -9,7 +10,6 @@ import {
 import { atFindokRetention } from "@/api/handlers/case-law/ingestion/retention/sources/at-findok";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { atFindokFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 

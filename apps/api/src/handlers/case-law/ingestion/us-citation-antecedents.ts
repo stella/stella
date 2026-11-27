@@ -12,6 +12,14 @@ import { panic, Result } from "better-result";
  * times costs a lookup no more than one cited once.
  */
 
+import { chargeWork } from "@stll/case-law-parsers/us-citation-scanner";
+import type {
+  CitationWorkBudget,
+  FullToken,
+  ReporterBase,
+  ShortToken,
+  VolumeShortToken,
+} from "@stll/case-law-parsers/us-citation-scanner";
 import type { CitationUnresolvedReason } from "@stll/legal-ast/inline";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -19,14 +27,6 @@ import type {
   BundleGraph,
   UsCitationBundleOverflowError,
 } from "@/api/handlers/case-law/ingestion/us-citation-bundles";
-import { chargeWork } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
-import type {
-  CitationWorkBudget,
-  FullToken,
-  ReporterBase,
-  ShortToken,
-  VolumeShortToken,
-} from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 
 /** Filed entries one lookup inspects before abstaining as ambiguous. */
 const US_CITATION_ANTECEDENT_INSPECTION_LIMIT = 64;

@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import {
+  CITATION_SCOPE_METADATA_KEY,
+  preserveCitationScopeEnvelope,
+} from "@stll/case-law-parsers/citation-scopes";
 import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 
 import {
@@ -17,10 +21,6 @@ import {
   reopenCitationsResolvedTo,
   settleReopenedCitations,
 } from "@/api/handlers/case-law/citation-resolution";
-import {
-  CITATION_SCOPE_METADATA_KEY,
-  preserveCitationScopeEnvelope,
-} from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import {
   payloadChangedSql,

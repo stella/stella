@@ -1,24 +1,26 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: [cz-nss] imports the shared PDF reader from its new owner, pdf-bands.ts, under its new names; the default reading is the same code.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { Result } from "better-result";
 
+import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import type { ParseNssDecisionInput } from "@stll/case-law-parsers/cz-nss";
+import {
+  assemblePdfParagraphs,
+  extractPdfLines,
+  pdfParagraphsToHtml,
+} from "@stll/case-law-parsers/pdf-bands";
+import {
+  ownTableRows,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { PublisherTargetError } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import {
-  assemblePdfParagraphs,
-  extractPdfLines,
-  pdfParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import {
-  ownTableRows,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 const NSS_REGISTRY_ORIGIN = "https://www.nssoud.cz";
 const ANONYMISED_DECISION_PATH =

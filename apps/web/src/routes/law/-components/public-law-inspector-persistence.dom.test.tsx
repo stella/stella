@@ -86,8 +86,8 @@ const inspectorScope = {
 
 let uninstallStorage: (() => void) | undefined;
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  await act(async () => cleanup());
   uninstallStorage?.();
   uninstallStorage = undefined;
   releaseUserStorage();
@@ -149,7 +149,9 @@ const renderMemberInspector = (client: QueryClient) =>
         <RouterContextProvider router={router}>
           <SidebarProvider defaultOpen>
             <AuthenticatedUserProvider user={MEMBER}>
-              <PublicLawInspector />
+              {/* Keep the lazy chat/editor chunk out of this persistence test
+                  so an unawaited Suspense import cannot race with cleanup(). */}
+              <PublicLawInspector sessionInspector={null} />
             </AuthenticatedUserProvider>
           </SidebarProvider>
         </RouterContextProvider>

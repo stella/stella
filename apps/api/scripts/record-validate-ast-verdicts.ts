@@ -18,7 +18,7 @@ await mock.module("@/api/lib/observability/logger", () => ({
 
 const [{ buildValidateAstInputs }, { validateAst }] = await Promise.all([
   import("@/api/tests/helpers/validate-ast-inputs"),
-  import("@/api/lib/legal-search/parsers/validate-ast"),
+  import("@stll/case-law-parsers/validate-ast"),
 ]);
 const verdicts = [];
 for (const input of await buildValidateAstInputs()) {

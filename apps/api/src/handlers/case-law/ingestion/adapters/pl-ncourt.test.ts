@@ -21,6 +21,17 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
+import { PL_NCOURT_COURT_NAMES } from "@stll/case-law-parsers/pl-ncourt-courts";
+import {
+  AST_BOUNDARY_WHITESPACE,
+  AST_CONTENT_LOST,
+  AST_STRUCTURE_DEGRADED,
+  validateAndLog,
+  validateAst,
+} from "@stll/case-law-parsers/validate-ast";
 
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
@@ -50,9 +61,6 @@ import type {
   PlNcourtBuild,
   PlNcourtComponent,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
-import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
-import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
@@ -64,20 +72,12 @@ import {
   decodeSourceRawEnvelope,
   PUBLISHER_REQUEST,
 } from "@/api/lib/legal-search/ingestion-types";
-import {
-  AST_BOUNDARY_WHITESPACE,
-  AST_CONTENT_LOST,
-  AST_STRUCTURE_DEGRADED,
-  validateAndLog,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import {
   resetLogSinkForTesting,
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

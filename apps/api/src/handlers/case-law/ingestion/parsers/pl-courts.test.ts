@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import {
+  parsePlDecisionContent as uncheckedParsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@stll/case-law-parsers/pl-courts";
 import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
 import {
@@ -12,11 +17,6 @@ import {
   PL_KIO_HTML_BUDGET,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
-import {
-  parsePlDecisionContent as uncheckedParsePlDecisionContent,
-  PL_DECISION_MARKUP,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 

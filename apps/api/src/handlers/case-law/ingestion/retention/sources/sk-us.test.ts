@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -14,7 +15,6 @@ import {
   encodeSourceRawEnvelope,
   type IngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

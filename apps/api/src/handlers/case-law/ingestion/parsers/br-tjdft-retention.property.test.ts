@@ -1,17 +1,16 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
-
-import { brTjdftCompletenessIssues } from "@/api/tests/helpers/br-tjdft-completeness";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
-
-import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "./br-tjdft";
+import { parseBrTjdftDocument as uncheckedParseBrTjdftDocument } from "@stll/case-law-parsers/br-tjdft";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
-} from "./marker-injection.test-helper";
+} from "@stll/case-law-parsers/marker-injection.test-helper";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+
+import { brTjdftCompletenessIssues } from "@/api/tests/helpers/br-tjdft-completeness";
 
 const parseBrTjdftDocument = guardParser(uncheckedParseBrTjdftDocument);
 

@@ -55,6 +55,9 @@ export type DocxBlock = {
   /** Offsets in `text` at which the paragraph holds a field that numbers
    *  itself: the number it prints is in no text. Absent without one. */
   selfNumbers?: number[];
+  /** The tracked changes the paragraph holds, in a manifest read with the
+   *  changes kept: where each sits in `text`. Absent without one. */
+  revisions?: DocxBlockRevision[];
   /** The paragraph's cross-reference fields, in the order they stand.
    *  Absent without one, and from an engine that does not report them. */
   crossReferences?: DocxBlockCrossReference[];
@@ -78,6 +81,19 @@ export type DocxBlock = {
    *  from a manifest read before it was reported. */
   indent?: { left: number; firstLine: number };
   cells?: { row: number; col: number; blockIds: string[] }[];
+};
+
+/** A tracked change inside a paragraph. An insertion spans the text it
+ *  added; a deletion takes no place in the text read with the changes
+ *  accepted, so its `start` and `end` are the one offset it was made at. */
+type DocxBlockRevision = {
+  kind: "insertion" | "deletion";
+  start: number;
+  end: number;
+  author: string;
+  date: string | null;
+  /** The change is of a paragraph mark, not of text. */
+  paragraphMark?: true;
 };
 
 /** A `REF` field of a paragraph: without a number switch it shows the
@@ -367,7 +383,16 @@ export type TemplatePlanSourceItem = {
 type TemplatePlanItem =
   | { kind: "template"; templateBlockIds: string[] }
   | TemplatePlanSourceItem
-  | { kind: "slot"; templateBlockId: string; sourceBlockIds: string[] };
+  | {
+      kind: "slot";
+      templateBlockId: string;
+      sourceBlockIds: string[];
+      /** A lead of the first source block the slot does not take: the name
+       *  of a field that the kept template paragraph named here shows. The
+       *  rest is placed word for word. An engine that does not know the
+       *  option places the block whole. */
+      dropLead?: { text: string; shownByTemplateBlockId: string };
+    };
 
 type TemplatePlanOmitReason =
   "empty" | "sourceToc" | "pageArtifact" | "duplicateLabel";
@@ -619,6 +644,18 @@ const blockSchema = v.strictObject({
   pageBreaks: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   selfNumbers: v.exactOptional(
     v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  ),
+  revisions: v.exactOptional(
+    v.array(
+      v.strictObject({
+        kind: v.picklist(["insertion", "deletion"]),
+        start: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        end: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        author: v.string(),
+        date: v.nullable(v.string()),
+        paragraphMark: v.exactOptional(v.literal(true)),
+      }),
+    ),
   ),
   crossReferences: v.exactOptional(
     v.array(

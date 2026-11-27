@@ -1,5 +1,22 @@
 import { describe, expect, test } from "bun:test";
 
+import { indexCitationScopes } from "@stll/case-law-parsers/citation-scopes";
+import {
+  composeCourtListenerText,
+  type CourtListenerTextOpinion,
+  type CourtListenerTextOutcome,
+} from "@stll/case-law-parsers/courtlistener/compose";
+import {
+  COURTLISTENER_TEXT_LIMITS,
+  createTextBudget,
+} from "@stll/case-law-parsers/courtlistener/outcome";
+import {
+  COURTLISTENER_TEXT_FORMATS,
+  selectOpinionText,
+  type TextStructure,
+  textStructureOf,
+} from "@stll/case-law-parsers/courtlistener/select";
+import { isOpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
 import {
   type Block,
   type DocumentAst,
@@ -11,22 +28,8 @@ import {
   opinionRow,
   recordedClusters,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-import { isOpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { indexCitationScopes } from "@/api/handlers/case-law/ingestion/citation-scopes";
 
-import {
-  composeCourtListenerText,
-  type CourtListenerTextOpinion,
-  type CourtListenerTextOutcome,
-} from "./compose";
-import { COURTLISTENER_TEXT_LIMITS, createTextBudget } from "./outcome";
-import {
-  COURTLISTENER_TEXT_FORMATS,
-  selectOpinionText,
-  type TextStructure,
-  textStructureOf,
-} from "./select";
 import {
   parsedWords,
   recordedOpinionClusters,

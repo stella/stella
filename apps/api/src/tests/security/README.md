@@ -74,6 +74,27 @@ Validates that the `SafeId<T>` branded type system enforces:
   interchangeable, preventing cross-tenant data access through
   type confusion.
 
+### `presigned-download-contract.test.ts`
+
+Verifies the presigned S3 download URL TTL and prefix-scoping contract:
+
+- **Revocation-lag ceiling (`<= 900s` / 15 minutes):** Presigned S3 `GetObject`
+  URLs (used for user-file content/thumbnails, exports, templates, and desktop
+  edit downloads) are bearer credentials that S3 honors until `X-Amz-Expires`
+  elapses; revoking a member's session or workspace access cannot invalidate an
+  already-signed URL at S3 before expiry. `presignDownloadUrl` enforces
+  `1 <= expiresIn <= MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS` (900s), and all
+  shared download TTL constants (`FILE_READ_URL_EXPIRY_SECONDS`,
+  `DATA_EXPORT_DOWNLOAD_URL_TTL_SECONDS`, `STYLE_SET_DOWNLOAD_TTL_SECONDS`)
+  must remain at or below 900s. (Matter-file reads additionally route through
+  Stella `/v1/file-content/<grant>` URLs that recheck version liveness on
+  redemption, and synthetic-principal downloads are further capped at 60s /
+  remaining session lifetime.)
+- **Prefix scoping (`org/workspace/`):** Under scoped STS signing,
+  `isS3KeyInSigningScope` and `presignDownloadUrl` bind signatures to the
+  caller's `org/workspace/` (or `org/` / `exports/org/...`) key prefix and
+  reject sibling organizations, sibling workspaces, and prefix-collision IDs.
+
 ### `sse-auth-invariants.test.ts`
 
 Static analysis test that verifies SSE connections do not carry

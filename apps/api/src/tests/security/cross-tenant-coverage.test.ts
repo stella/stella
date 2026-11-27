@@ -84,17 +84,20 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // and device key the upgrade proved. The binding and the refusal of another
   // device's proof are covered by `lib/desktop-runner/gateway.db.test.ts`.
   "desktop-runner": WAIVER_REASON.isolatedOutsideRlsHarness,
-  "ai-autocomplete": WAIVER_REASON.preExistingGap,
-  "ai-config": WAIVER_REASON.preExistingGap,
-  catalogue: WAIVER_REASON.preExistingGap,
+  // Local-development-gated inline completion stream that answers from the
+  // cursor text in the request body using the caller's own active-organization
+  // AI config and reads no stored tenant record.
+  "ai-autocomplete": WAIVER_REASON.noTenantReadSurface,
+  // Probes a caller-supplied AI provider API key against the external vendor
+  // after verifying the caller's own session membership; reads no stored
+  // tenant record.
+  "ai-config": WAIVER_REASON.noTenantReadSurface,
   // Caller-supplied audio is transient; optional matter access is authorized
   // through MemberCaller and covered by dictation/transcribe.test.ts.
   dictation: WAIVER_REASON.noTenantReadSurface,
   // The Outlook add-in's email helpers answer from the email text in the
   // request body and read no stored record.
   ai: WAIVER_REASON.noTenantReadSurface,
-  legislation: WAIVER_REASON.preExistingGap,
-  me: WAIVER_REASON.preExistingGap,
   // The pack catalogue itself is deployment content, not tenant data; the
   // only tenant-scoped read is which of a pack's templates the organization
   // has already installed, and that is empty until the content submodule is
@@ -344,5 +347,12 @@ describe("cross-tenant matrix coverage guard", () => {
       (domain) => !handlerDomains.includes(domain),
     );
     expect(unknownCovered).toEqual([]);
+  });
+
+  test("no domain carries a preExistingGap waiver", () => {
+    const remainingGaps = Object.entries(CROSS_TENANT_WAIVERS)
+      .filter(([, reason]) => reason === WAIVER_REASON.preExistingGap)
+      .map(([domain]) => domain);
+    expect(remainingGaps).toEqual([]);
   });
 });

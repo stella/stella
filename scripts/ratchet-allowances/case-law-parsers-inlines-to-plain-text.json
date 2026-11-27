@@ -1,0 +1,5 @@
+{
+  "metric": "cross-workspace-duplicate-export-names",
+  "delta": 1,
+  "reason": "Moving shared-inlines.ts from apps/api into @stll/case-law-parsers exposes its existing inlinesToPlainText helper alongside the pre-existing alias in @stll/decision-reader."
+}

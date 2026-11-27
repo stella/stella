@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { plSnAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
@@ -14,7 +15,6 @@ import type {
   IngestionResult,
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   decodeSourceRawEnvelope,

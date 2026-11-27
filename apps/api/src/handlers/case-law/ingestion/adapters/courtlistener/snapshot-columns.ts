@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: source-fields-courtlistener: Snapshot column retention declarations leave imported decision projections unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: [us-courtlistener] canonical ID helpers and OpinionRow moved to parser modules; output is identical.
@@ -12,15 +13,16 @@
  * the source inventory; it is never classified as an exclusion.
  */
 
-import { compareCanonicalIds } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
-import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
+import { compareCanonicalIds } from "@stll/case-law-parsers/courtlistener/canonical-id-order";
+import type { OpinionRow } from "@stll/case-law-parsers/courtlistener/opinion-row";
+
 import type { SourceFieldDisposition } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 export {
   compareBytewise,
   compareCanonicalIds,
-} from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
+} from "@stll/case-law-parsers/courtlistener/canonical-id-order";
 
 type StoredSourceField = Extract<
   SourceFieldDisposition,
@@ -508,7 +510,7 @@ export const PERSON_FIELDS = {
 /** One CSV row: every pinned column, as the decoder produced its text. */
 export type CsvRow<TColumn extends string> = Readonly<Record<TColumn, string>>;
 
-export type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
+export type { OpinionRow } from "@stll/case-law-parsers/courtlistener/opinion-row";
 export type CitationRow = CsvRow<(typeof CITATION_COLUMNS)[number]>;
 export type PersonRow = CsvRow<(typeof PERSON_COLUMNS)[number]>;
 

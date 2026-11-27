@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -24,7 +25,6 @@ import type {
   IngestionResult,
   StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

@@ -6,8 +6,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
 
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 

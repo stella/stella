@@ -1,0 +1,136 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
+// parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
+// parser-output-unchanged: front matter is validated against its source paragraphs, the text its validation markup held.
+import type { Block } from "@stll/legal-ast/document-ast";
+
+import { parseHeadmatter } from "./html";
+import type { TextBudget } from "./outcome";
+import {
+  type PublishedTextDefect,
+  publishedTextDefects,
+} from "./source-defects";
+import { courtListenerValidationPolicy } from "./validation-policy";
+
+export type CourtListenerFrontMatter = {
+  readonly headmatter?: string;
+  readonly headnotes?: string;
+  readonly syllabus?: string;
+  readonly summary?: string;
+};
+
+type FrontMatterOutcome =
+  | {
+      status: "parsed";
+      blocks: Block[];
+      sourceDefects: PublishedTextDefect[];
+      textFields: { headnotes: string; syllabus: string; summary: string };
+    }
+  | {
+      status: "held";
+      reason: "over-limit" | "requires-assets" | "no-usable-text";
+    };
+
+const APPARATUS = ["headnotes", "syllabus", "summary"] as const;
+
+/** Semantic runs only: matching body words never suppress publisher apparatus. */
+const semanticTexts = (blocks: readonly Block[], role: string): Set<string> => {
+  const texts = new Set<string>();
+  let run: string[] = [];
+  const flush = () => {
+    if (run.length > 0) {
+      texts.add(run.join("\n\n"));
+    }
+    run = [];
+  };
+  for (const block of blocks) {
+    if (block.type === "paragraph" && block.role === role) {
+      run.push(block.plainText);
+    } else {
+      flush();
+    }
+  }
+  flush();
+  return texts;
+};
+
+export const composeFrontMatter = ({
+  budget,
+  existing,
+  source,
+}: {
+  readonly budget: TextBudget;
+  readonly existing: readonly Block[];
+  readonly source: CourtListenerFrontMatter;
+}): FrontMatterOutcome => {
+  const blocks: Block[] = [];
+  const sourceDefects: PublishedTextDefect[] = [];
+  const textFields = { headnotes: "", syllabus: "", summary: "" };
+  for (const field of ["headmatter", ...APPARATUS] as const) {
+    const value = source[field] ?? "";
+    if (value.trim() === "") {
+      continue;
+    }
+    // The snapshot mixes plain and HTML apparatus within each column.
+    const text =
+      field === "headmatter"
+        ? value
+        : `<${field}>${/<[a-z][^>]*>/iu.test(value) ? value : Bun.escapeHTML(value)}</${field}>`;
+    const parsed = parseHeadmatter({
+      text,
+      prefix: `cl-${field}`,
+      rowType: "010combined",
+      budget,
+    });
+    if (parsed.status !== "parsed") {
+      let reason: "over-limit" | "requires-assets" | "no-usable-text";
+      if (parsed.status === "over-limit") {
+        reason = "over-limit";
+      } else if (parsed.status === "requires-assets") {
+        reason = "requires-assets";
+      } else {
+        reason = "no-usable-text";
+      }
+      return {
+        status: "held",
+        reason,
+      };
+    }
+    const added = parsed.text.units.flatMap((unit) => [...unit.blocks]);
+    // Measured, not logged: the verdict decides whether this field is held,
+    // and the pipeline reports retention for the document it stores.
+    const validation = validateAst(
+      { type: "paragraphs", paragraphs: parsed.text.validationParagraphs },
+      added,
+      {
+        sourcePolicy: courtListenerValidationPolicy,
+      },
+    );
+    const defects = publishedTextDefects(parsed.text, validation);
+    if (defects === null) {
+      return { status: "held", reason: "no-usable-text" };
+    }
+    if (field !== "headmatter") {
+      const visible = added.map((block) => block.plainText).join("\n\n");
+      switch (field) {
+        case "headnotes":
+          textFields.headnotes = visible;
+          break;
+        case "syllabus":
+          textFields.syllabus = visible;
+          break;
+        case "summary":
+          textFields.summary = visible;
+          break;
+      }
+      if (semanticTexts([...blocks, ...existing], field).has(visible)) {
+        continue;
+      }
+    }
+    sourceDefects.push(...defects);
+    blocks.push(...added);
+    budget.blocks += added.length;
+  }
+  return { status: "parsed", blocks, textFields, sourceDefects };
+};

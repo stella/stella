@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
@@ -47,7 +48,6 @@ import {
   rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

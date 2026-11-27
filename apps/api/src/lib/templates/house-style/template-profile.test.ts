@@ -342,6 +342,103 @@ describe("inferTemplateProfile", () => {
     expect(inferTemplateProfile(contractTemplate()).header).toBeUndefined();
   });
 
+  test("reads the fields a kept header names beside an empty cell", () => {
+    const rows = [
+      ["From:", ""],
+      ["To:", ""],
+      ["Subject:", ""],
+      // No field of the set, a field named twice, a cell that is not empty.
+      ["File number:", ""],
+      ["Date:", ""],
+      ["Date:", ""],
+      ["Cc:", "Records"],
+    ];
+    const ids = rows.map((_, row) => [
+      `p${String(100 + row * 2)}`,
+      `p${String(101 + row * 2)}`,
+    ]);
+    const template = contractTemplate({
+      front: [
+        { id: "t90", cells: ids.flat() },
+        ...rows.flatMap(([name, value], row) => [
+          { id: ids[row]?.[0] ?? "", text: name ?? "", styleId: "Normal" },
+          { id: ids[row]?.[1] ?? "", text: value ?? "", styleId: "Normal" },
+        ]),
+      ],
+    });
+    const blocks = template.blocks.map((block) =>
+      block.id === "t90"
+        ? {
+            ...block,
+            cells: ids.flatMap(([name, value], row) => [
+              { row, col: 0, blockIds: [name ?? ""] },
+              { row, col: 1, blockIds: [value ?? ""] },
+            ]),
+          }
+        : block,
+    );
+    const profile = inferTemplateProfile({ ...template, blocks });
+    // A value cell that holds a picture is no empty cell.
+    const pictured = inferTemplateProfile({
+      ...template,
+      blocks: blocks.map((block) =>
+        block.id === "p101" ? { ...block, inlineObjects: 1 } : block,
+      ),
+    });
+    expect(pictured.headerFields?.map(({ field }) => field)).toEqual([
+      "to",
+      "subject",
+    ]);
+    expect(profile.regions.keepBefore).toContain("t90");
+    expect(profile.headerFields).toEqual([
+      {
+        field: "from",
+        name: "From",
+        labelBlockId: "p100",
+        valueBlockId: "p101",
+      },
+      { field: "to", name: "To", labelBlockId: "p102", valueBlockId: "p103" },
+      {
+        field: "subject",
+        name: "Subject",
+        labelBlockId: "p104",
+        valueBlockId: "p105",
+      },
+    ]);
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    // The table that holds the fields' cells has to be kept, or the lines
+    // the document states for them would be placed nowhere.
+    const inspection = { ...template, blocks };
+    expect(
+      validateTemplateProfile(profile, inspection).filter(
+        ({ code }) => code === "headerFieldNotKept",
+      ),
+    ).toEqual([]);
+    expect(
+      validateTemplateProfile(
+        {
+          ...profile,
+          regions: {
+            ...profile.regions,
+            keepBefore: profile.regions.keepBefore.filter((id) => id !== "t90"),
+          },
+        },
+        inspection,
+      ).filter(({ code }) => code === "headerFieldNotKept"),
+    ).toEqual(
+      ["p101", "p103", "p105"].map((blockId) => ({
+        severity: "error",
+        code: "headerFieldNotKept",
+        blockId,
+      })),
+    );
+    expect(
+      inferTemplateProfile(contractTemplate()).headerFields,
+    ).toBeUndefined();
+  });
+
   test("reads the style of a heading without a number: named for the preamble, in no list", () => {
     const template = contractTemplate();
     // The fixture's only style of that name numbers its recitals.

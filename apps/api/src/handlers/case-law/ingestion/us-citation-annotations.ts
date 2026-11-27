@@ -21,6 +21,14 @@
 
 import { panic, Result } from "better-result";
 
+import {
+  chargeWork,
+  workBudgetExhausted,
+} from "@stll/case-law-parsers/us-citation-scanner";
+import type {
+  CitationWorkBudget,
+  UsCitationWorkBudgetError,
+} from "@stll/case-law-parsers/us-citation-scanner";
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 import type {
   Block,
@@ -31,14 +39,6 @@ import type {
 import type { InlineCitation } from "@stll/legal-ast/inline";
 
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import {
-  chargeWork,
-  workBudgetExhausted,
-} from "@/api/handlers/case-law/ingestion/us-citation-scanner";
-import type {
-  CitationWorkBudget,
-  UsCitationWorkBudgetError,
-} from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 
 type Span = {
   start: number;

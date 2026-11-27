@@ -2,6 +2,7 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -13,7 +14,6 @@ import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 const PARSER_FIXTURES = new URL(
   "../../parsers/__fixtures__/eu-ecj/",

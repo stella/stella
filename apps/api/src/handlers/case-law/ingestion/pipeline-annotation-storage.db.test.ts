@@ -3,6 +3,13 @@ import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  CITATION_SCOPE_METADATA_KEY,
+  citationScopeAstHash,
+  citationScopeEnvelope,
+  CitationScopesRejectedError,
+  validatedCitationScopes,
+} from "@stll/case-law-parsers/citation-scopes";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { withStableBlockAnchors } from "@stll/legal-ast/stable-block-anchors";
@@ -17,13 +24,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import {
-  CITATION_SCOPE_METADATA_KEY,
-  citationScopeAstHash,
-  citationScopeEnvelope,
-  CitationScopesRejectedError,
-  validatedCitationScopes,
-} from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";

@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { conservesText } from "@stll/case-law-parsers/courtlistener/blocks";
+import { composeCourtListenerText } from "@stll/case-law-parsers/courtlistener/compose";
+import { parseHarvardXml } from "@stll/case-law-parsers/courtlistener/harvard-xml";
+import {
+  createTextBudget,
+  type FormatParse,
+  type TextUnit,
+} from "@stll/case-law-parsers/courtlistener/outcome";
+import type { OpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
 import {
   type Block,
   type Inline,
@@ -7,12 +16,7 @@ import {
 } from "@stll/legal-ast/document-ast";
 
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 
-import { conservesText } from "./blocks";
-import { composeCourtListenerText } from "./compose";
-import { parseHarvardXml } from "./harvard-xml";
-import { createTextBudget, type FormatParse, type TextUnit } from "./outcome";
 import {
   recordedOpinionClusters,
   sourceWords,

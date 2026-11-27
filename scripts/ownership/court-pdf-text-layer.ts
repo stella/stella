@@ -3,7 +3,7 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 export default {
   id: "court-pdf-text-layer",
   capability: "Reading a court PDF's text layer: lines, fonts and positions",
-  owner: ["apps/api/src/lib/legal-search/parsers/libpdf-utils.ts"],
+  owner: ["packages/case-law-parsers/src/libpdf-utils.ts"],
   summary:
     "A parser that reads a PDF's text layer itself also has to rebuild " +
     "paragraphs, drop page furniture and lift superscripts itself, and every " +

@@ -65,6 +65,8 @@ export const effectiveGeneratorInputs = (generator: Generator) => [
 
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
+    "packages/case-law-parsers/src/parser-logger.ts",
+    "packages/case-law-parsers/src/sanitize-url.ts",
     "apps/api/src/lib/db/sealed-text.ts",
     "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
@@ -306,8 +308,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/source-kind.ts",
     "apps/api/src/lib/lists/source-locator.ts",
     "apps/api/src/lib/lists/verification/*",
-    "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts",
     "packages/case-law-parsers/src/*",
+    "packages/case-law-parsers/src/**/*",
     "apps/api/src/lib/load/request-latency-budget.ts",
     "apps/api/src/lib/load/work-admission.ts",
     "apps/api/src/lib/load/work-budget.ts",
@@ -827,6 +829,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-source-hash.ts",
   ],
   "status-tables": [
+    "packages/case-law-parsers/src/parser-logger.ts",
+    "packages/case-law-parsers/src/sanitize-url.ts",
     "apps/api/src/lib/db/sealed-text.ts",
     "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
@@ -947,6 +951,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/oxlint-presets/*",
   ],
   "transition-triggers": [
+    "packages/case-law-parsers/src/parser-logger.ts",
+    "packages/case-law-parsers/src/sanitize-url.ts",
     "apps/api/src/lib/db/sealed-text.ts",
     "apps/api/src/lib/db/sso-provider-config.ts",
     "apps/api/src/lib/imports/external-ref-limits.ts",
@@ -3060,7 +3066,7 @@ export const GUARD_A_EXCLUSIONS = [
   },
   { glob: "**/glossary.json", reason: "Hand-written source data" },
   {
-    glob: "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts",
+    glob: "packages/case-law-parsers/src/eu-ecj-formex.ts",
     reason: "Hand-written parser documentation",
   },
   {

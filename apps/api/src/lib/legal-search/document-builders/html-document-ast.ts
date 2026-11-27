@@ -13,6 +13,13 @@
 
 import { panic, Result } from "better-result";
 
+import { collapseHtmlWhitespace } from "@stll/case-law-parsers/html-whitespace";
+import { sanitizeUrl } from "@stll/case-law-parsers/sanitize-url";
+import {
+  isExcludedHtmlTag,
+  ownTableRows,
+  walkInlines,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -32,14 +39,6 @@ import type {
   ParagraphListDepth,
   TableCell,
 } from "@stll/legal-ast/document-ast";
-
-import {
-  isExcludedHtmlTag,
-  ownTableRows,
-  walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import type { BlockKey, KeyedBlock } from "./block-ids";
 import {

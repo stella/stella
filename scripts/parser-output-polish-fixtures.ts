@@ -3,6 +3,12 @@ import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
 import {
+  parsePlTkPage,
+  readPlTkCasePage,
+  readPlTkRuling,
+} from "@stll/case-law-parsers/pl-tk";
+
+import {
   buildPlDecision,
   normalizeSaosDumpItem,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-courts";
@@ -46,11 +52,6 @@ import {
   PL_UOKIK_LABEL,
   plUokikRawPartsOf,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik";
-import {
-  parsePlTkPage,
-  readPlTkCasePage,
-  readPlTkRuling,
-} from "../apps/api/src/handlers/case-law/ingestion/parsers/pl-tk";
 import type {
   DecisionSupplement,
   IngestionResult,

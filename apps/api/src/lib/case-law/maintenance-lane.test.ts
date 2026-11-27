@@ -72,6 +72,20 @@ const CONTROL_PLANE_SCRIPTS = {
   { reason: string; methods: readonly (keyof EuCompletionStore)[] }
 >;
 
+/**
+ * The scheduled entries that take the lane as a periodic tick. A tick skips a
+ * held lane and the next one catches up; anything an operator starts waits in
+ * the queue (`bounded`) instead, so a skip never silently drops its work.
+ */
+const PERIODIC_LANE_TAKERS = {
+  "eu-completion-tick.ts":
+    "Bounded EU completion ticks; the next tick resumes.",
+  "replay-tick-command.ts":
+    "The background replay tick behind replay-tick.ts, run every five minutes.",
+} as const satisfies Record<string, string>;
+
+const PERIODIC_MODE = /\bmode:\s*"periodic"/u;
+
 /** How far the resolver follows imports when looking for database reach. */
 const IMPORT_DEPTH_LIMIT = 6;
 
@@ -194,6 +208,8 @@ describe("case-law maintenance lane", () => {
       try: async () =>
         await enterCaseLawMaintenanceLane({
           mode: "bounded",
+          laneWaitMs: 5000,
+          workTimeoutMs: 10_000,
           signal: controller.signal,
           statementTimeout: 5000,
           lockTimeout: 5000,
@@ -296,6 +312,15 @@ describe("case-law maintenance lane", () => {
     expect(doorsOpened("backfill-cz-us-judges.ts")).toContain(
       "enterCaseLawMaintenanceLane",
     );
+  });
+
+  // The mode is chosen at each call site; this keeps the periodic one to the
+  // entries that really run on a schedule.
+  test("only declared scheduled ticks take the lane as periodic", () => {
+    const periodic = scriptFiles().filter((name) =>
+      PERIODIC_MODE.test(readSource(name)),
+    );
+    expect(periodic).toEqual(Object.keys(PERIODIC_LANE_TAKERS).toSorted());
   });
 
   test("the lane key names its domain and lane apart from the graph lock", () => {

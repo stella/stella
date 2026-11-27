@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import {
+  AST_CONTENT_LOST,
+  buildValidationHtml,
+} from "@stll/case-law-parsers/validate-ast";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -25,10 +29,6 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  AST_CONTENT_LOST,
-  buildValidationHtml,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   type LogRecord,

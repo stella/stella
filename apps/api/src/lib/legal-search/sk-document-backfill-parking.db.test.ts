@@ -17,6 +17,7 @@ import { Panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { isUnreadablePdfError } from "@stll/case-law-parsers/sk-courts";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
@@ -29,7 +30,6 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
-import { isUnreadablePdfError } from "@/api/lib/legal-search/parsers/sk-courts";
 import {
   claimDocumentFetch,
   countParkedDocuments,

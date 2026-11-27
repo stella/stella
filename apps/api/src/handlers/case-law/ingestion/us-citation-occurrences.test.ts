@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { parseUsReporterReference } from "@stll/api-contract/us-reporter-citation";
+import { CitationScopesRejectedError } from "@stll/case-law-parsers/citation-scopes";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import type {
   Block,
@@ -21,7 +22,6 @@ import type {
   DecisionCitationExtraction,
   ExtractedCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { CitationScopesRejectedError } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import {
   countUnresolvedTargets,
   US_CITATION_OCCURRENCE_LIMIT,

@@ -1,6 +1,7 @@
-// parser-output-unchanged: Release attribution adds a service.version attribute to telemetry records; parsed ingestion records are unchanged.
 import { Result } from "better-result";
 
+// parser-output-unchanged: Release attribution adds a service.version attribute to telemetry records; parsed ingestion records are unchanged.
+import { setParserLogger } from "@stll/case-law-parsers/parser-logger";
 import type { FailureGrade, FailureReason } from "@stll/errors";
 import {
   FAILURE_GRADES,
@@ -419,3 +420,5 @@ export const logger = {
     }),
   request: (options: RequestLogOptions) => emitRequest(options),
 };
+
+setParserLogger(logger);

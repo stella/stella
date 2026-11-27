@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
-import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 
 const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
 

@@ -12,12 +12,13 @@ import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import type { CzIsirParagraph } from "@stll/case-law-parsers/cz-isir";
+
 import {
   czIsirFetchPage,
   encodeCzIsirCursor,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-isir";
 import { CZ_ISIR_FEED_URL } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-feed";
-import type { CzIsirParagraph } from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";

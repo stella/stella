@@ -1943,6 +1943,10 @@
     "@stll/html#test": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/src/**"]
     },
+    "@stll/case-law-parsers#test": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/AGENTS.md"]
+    },
     // The path-grammar test pins api-contract's browser copy of the pattern.
     "@stll/skills#test": {
       "dependsOn": ["transit"],

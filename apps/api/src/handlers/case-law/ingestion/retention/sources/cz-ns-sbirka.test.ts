@@ -1,13 +1,13 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { buildCzNsSbirkaDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { czNsSbirkaRetention } from "@/api/handlers/case-law/ingestion/retention/sources/cz-ns-sbirka";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import {
   CZ_NS_SBIRKA_RECORDINGS,

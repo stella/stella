@@ -853,6 +853,19 @@
     },
     "showPane": "Rodyti polangį",
     "swapViews": "Sukeisti pagrindinį rodinį ir šoninį skydelį",
-    "title": "Inspektorius"
+    "title": "Inspektorius",
+    "transcribe": {
+      "action": "Transkribuoti",
+      "failed": {
+        "changed": "Įrašas pasikeitė transkribuojant. Bandykite dar kartą.",
+        "generic": "Įrašo nepavyko transkribuoti. Bandykite dar kartą.",
+        "noSpeech": "Šiame įraše kalbos nerasta.",
+        "provider": "Jūsų organizacijai nėra prieinamo transkribavimo modelio. Paprašykite administratoriaus jį nustatyti DI nustatymuose.",
+        "tooLong": "Šis įrašas per ilgas transkribuoti.",
+        "unsupported": "Šio įrašo formato negalima transkribuoti."
+      },
+      "progress": "Transkribuojama… {percent, number} %",
+      "saved": "Transkripcija išsaugota kaip {fileName}"
+    }
   }
 }

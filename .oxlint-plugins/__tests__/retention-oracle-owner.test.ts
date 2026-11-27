@@ -3,10 +3,10 @@ import { expect, test } from "bun:test";
 import { lintSingleRule } from "./lint-single-rule";
 
 const LOGGING_ORACLE_IMPORTS = [
-  'import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";',
-  'import { validateAndLog as report } from "../../../../lib/legal-search/parsers/validate-ast";',
-  'import * as oracle from "@/api/lib/legal-search/parsers/validate-ast"; oracle.validateAndLog({ parser: "p" }, "", []);',
-  'export { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";',
+  'import { validateAndLog } from "@stll/case-law-parsers/validate-ast";',
+  'import { validateAndLog as report } from "../../../../../../../packages/case-law-parsers/src/validate-ast";',
+  'import * as oracle from "@stll/case-law-parsers/validate-ast"; oracle.validateAndLog({ parser: "p" }, "", []);',
+  'export { validateAndLog } from "@stll/case-law-parsers/validate-ast";',
 ].join("\n");
 
 test("a parser may not log the retention signal, however it reaches it", async () => {
@@ -23,7 +23,7 @@ test("the logging oracle reached through a constant module name is reported", as
     await lintSingleRule(
       "retention-oracle-owner",
       [
-        'const ORACLE = "@/api/lib/legal-search/parsers/validate-ast";',
+        'const ORACLE = "@stll/case-law-parsers/validate-ast";',
         "const oracle = await import(ORACLE);",
         'oracle.validateAndLog({ parser: "p", caseNumber: "c" }, "", []);',
         'export const verdict = (await import(ORACLE)).validateAst("", []);',
@@ -41,7 +41,7 @@ test("the retention check owns the logging oracle", async () => {
   expect(
     await lintSingleRule(
       "retention-oracle-owner",
-      'import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";',
+      'import { validateAndLog } from "@stll/case-law-parsers/validate-ast";',
       {
         cwd: "scratch",
         sourcePath:
@@ -56,9 +56,9 @@ test("a parser may measure with validateAst to choose between parses", async () 
     await lintSingleRule(
       "retention-oracle-owner",
       [
-        'import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";',
-        'import { validateAst as measure } from "../../../../lib/legal-search/parsers/validate-ast";',
-        'import * as oracle from "@/api/lib/legal-search/parsers/validate-ast"; oracle.validateAst("", []);',
+        'import { validateAst } from "@stll/case-law-parsers/validate-ast";',
+        'import { validateAst as measure } from "../../../../../../../packages/case-law-parsers/src/validate-ast";',
+        'import * as oracle from "@stll/case-law-parsers/validate-ast"; oracle.validateAst("", []);',
       ].join("\n"),
       {
         cwd: "scratch",
@@ -74,8 +74,8 @@ test("types and the oracle's other helpers stay importable", async () => {
     await lintSingleRule(
       "retention-oracle-owner",
       [
-        'import type { ValidationSource, validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";',
-        'import { buildValidationHtml, storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";',
+        'import type { ValidationSource, validateAndLog } from "@stll/case-law-parsers/validate-ast";',
+        'import { buildValidationHtml, storedDecisionSignal } from "@stll/case-law-parsers/validate-ast";',
       ].join("\n"),
       {
         cwd: "scratch",

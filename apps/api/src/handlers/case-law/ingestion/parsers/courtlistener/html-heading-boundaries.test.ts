@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { createTextBudget } from "@stll/case-law-parsers/courtlistener/outcome";
+import { selectOpinionText } from "@stll/case-law-parsers/courtlistener/select";
+
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 
-import { createTextBudget } from "./outcome";
-import { selectOpinionText } from "./select";
 import { parsedWords, sourceWords } from "./test-oracle";
 
 // Adjacent heading excerpts pin the independent source walk's word boundaries.

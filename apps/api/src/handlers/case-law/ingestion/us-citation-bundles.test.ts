@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ReporterBase } from "@stll/case-law-parsers/us-citation-scanner";
+
 import {
   createBundleGraph,
   US_CITATION_BUNDLE_LIMIT,
 } from "@/api/handlers/case-law/ingestion/us-citation-bundles";
-import type { ReporterBase } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 
 /** A base in its own reporter family, so any number of them may be parallel. */
 const baseIn = (family: number, page = 1): ReporterBase => {

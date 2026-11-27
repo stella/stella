@@ -11,11 +11,11 @@ import { Result } from "better-result";
  * is written anywhere, and a fetch that fails leaves the stored document.
  */
 
+import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { envBase } from "@/api/env-base";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";

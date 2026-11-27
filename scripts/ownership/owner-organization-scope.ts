@@ -47,6 +47,41 @@ export default {
         path: "apps/api/scripts/seed-dev.ts",
         reason: "Writes the development seed organization's contacts.",
       },
+      {
+        path: "apps/api/src/lib/business-registries/desktop/issuance.ts",
+        reason:
+          "Mints a desktop account credential inside the organization the connection request authorized.",
+      },
+      {
+        path: "apps/api/src/lib/business-registries/desktop/renewal.ts",
+        reason:
+          "Rotates and probes a desktop account credential inside the credential's verified organization.",
+      },
+      {
+        path: "apps/api/src/lib/business-registries/desktop/revocation.ts",
+        reason:
+          "Revokes a desktop account credential and releases its runners inside the credential's organization.",
+      },
+      {
+        path: "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts",
+        reason:
+          "Loads enabled file-upload flow definitions inside the uploaded entity's organization.",
+      },
+      {
+        path: "apps/api/src/lib/machine-api-key-queries.ts",
+        reason:
+          "Reads machine API keys on the owner connection inside the caller's validated organization.",
+      },
+      {
+        path: "apps/api/src/lib/search/pg-fts-provider.ts",
+        reason:
+          "Enumerates workspaces and entities for full-text index rebuild inside the target organization.",
+      },
+      {
+        path: "apps/api/src/lib/sharepoint-disable-purge.ts",
+        reason:
+          "Disables SharePoint policy and purges stored connections inside the target organization.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

@@ -1,8 +1,7 @@
 import { Glob } from "bun";
 
+import type { ValidationSource } from "@stll/case-law-parsers/validate-ast";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-
-import type { ValidationSource } from "@/api/lib/legal-search/parsers/validate-ast";
 
 const ROOT = new URL("../../handlers/case-law/ingestion/", import.meta.url);
 const PARSER_FIXTURES = new URL("parsers/__fixtures__/", ROOT);
@@ -45,15 +44,14 @@ export const buildValidateAstFixtures = async (): Promise<
   ValidateAstFixture[]
 > => {
   const { parseNssDecisionHtml } =
-    await import("@/api/handlers/case-law/ingestion/parsers/cz-nss");
+    await import("@stll/case-law-parsers/cz-nss");
   const { parseEcjDecisionHtml } =
-    await import("@/api/handlers/case-law/ingestion/parsers/eu-ecj");
-  const { parseUsDecisionHtml } =
-    await import("@/api/handlers/case-law/ingestion/parsers/cz-us");
+    await import("@stll/case-law-parsers/eu-ecj");
+  const { parseUsDecisionHtml } = await import("@stll/case-law-parsers/cz-us");
   const { parsePlTkPage, parsePlTkText, readPlTkCasePage, readPlTkRuling } =
-    await import("@/api/handlers/case-law/ingestion/parsers/pl-tk");
+    await import("@stll/case-law-parsers/pl-tk");
   const { parsePlUodoDecisionXml } =
-    await import("@/api/handlers/case-law/ingestion/parsers/pl-uodo");
+    await import("@stll/case-law-parsers/pl-uodo");
   const fixtures: ValidateAstFixture[] = [];
 
   for (const name of await fixtureNames(PARSER_FIXTURES, "cz-nss-*.html.gz")) {

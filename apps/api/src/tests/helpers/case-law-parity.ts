@@ -1,5 +1,9 @@
 import { panic, Result } from "better-result";
 
+import {
+  assertReaderAcceptsAst,
+  guardParser,
+} from "@stll/case-law-parsers/parser-reader-guard";
 import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -17,10 +21,6 @@ import {
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import type { EnrolledAdapterFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
-import {
-  assertReaderAcceptsAst,
-  guardParser,
-} from "@/api/tests/helpers/parser-reader-guard";
 
 const INGESTION_ROOT = new URL(
   "../../handlers/case-law/ingestion/",

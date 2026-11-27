@@ -8,19 +8,18 @@
 import { describe, expect, test } from "bun:test";
 import { gunzipSync } from "node:zlib";
 
-import { load } from "@stll/html";
-import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
-
-import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlDecisionContent as uncheckedParsePlDecisionContent,
   PL_DECISION_MARKUP,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
-import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
-import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
-import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+} from "@stll/case-law-parsers/pl-courts";
+import { readPlKioLayout } from "@stll/case-law-parsers/pl-kio-layout";
+import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
+import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
+import { load } from "@stll/html";
+import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);

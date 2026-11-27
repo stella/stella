@@ -131,6 +131,8 @@ export const readReplayGate = async ({
 
 const CLEANUP_TIMEOUT_MS = 30_000;
 const REPLAY_QUERY_TIMEOUT_MS = 5000;
+/** What a dry-run reset keeps of the run's hard budget after its lane wait. */
+const RESET_WORK_BUDGET_MS = 60_000;
 
 const loadReplayCleanupHandles = async () =>
   await createCaseLawMaintenanceCleanupHandles({
@@ -562,7 +564,7 @@ const runReplayTickWithOptions = async (
   const runtime = await loadReplayTickRuntime();
   signal.throwIfAborted();
   const report = await enterCaseLawMaintenanceLane({
-    mode: "bounded",
+    mode: "periodic",
     statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
     lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
     signal,
@@ -589,10 +591,11 @@ const runReplayTickWithOptions = async (
       );
     },
   });
-  if (report === null) {
+  if (report.status === "busy") {
     log({ event: "case_law.replay.tick", status: "maintenance-held" });
+    return null;
   }
-  return report;
+  return report.value;
 };
 
 export const runEnabledReplayTick = async (
@@ -630,8 +633,12 @@ const resetReplayDryRun = async ({
     await import("@/api/handlers/case-law/ingestion/background-replay-store");
   const { caseLawSources } = await import("@/api/db/schema");
   signal.throwIfAborted();
+  // An operator command: it queues behind a running tick and keeps a minute
+  // of the run's hard budget for the reset itself.
   const reset = await enterCaseLawMaintenanceLane({
     mode: "bounded",
+    laneWaitMs: BACKGROUND_REPLAY_LIMITS.hardDurationMs - RESET_WORK_BUDGET_MS,
+    workTimeoutMs: RESET_WORK_BUDGET_MS,
     statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
     lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
     signal,
@@ -678,7 +685,7 @@ const resetReplayDryRun = async ({
       return true;
     },
   });
-  return reset ?? false;
+  return reset.status === "ran" ? reset.value : false;
 };
 
 const parseReplayTickCommand = (args: readonly string[]) => {

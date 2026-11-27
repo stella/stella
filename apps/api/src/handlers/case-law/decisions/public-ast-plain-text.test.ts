@@ -25,6 +25,11 @@ import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
+import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@stll/case-law-parsers/eu-ecj";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   isDocumentAst,
@@ -36,10 +41,6 @@ import {
   projectionPieces,
 } from "@stll/legal-ast/projection-digest";
 
-import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
-import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
-import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -48,7 +49,6 @@ import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);

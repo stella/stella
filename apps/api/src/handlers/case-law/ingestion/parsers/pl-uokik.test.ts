@@ -11,35 +11,35 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, spyOn, test } from "bun:test";
 
-import type { Block, Inline } from "@stll/legal-ast/document-ast";
-
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   extractPdfBodyAndNotes,
   PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
-import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+} from "@stll/case-law-parsers/pdf-bands";
+import type { PdfLine } from "@stll/case-law-parsers/pdf-bands";
 import {
   parsePlUokikDocument as uncheckedParsePlUokikDocument,
   PL_UOKIK_RULING_UNREAD,
   plUokikDocumentLines,
   readPlUokikRulingHeader,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
-import type { ParsePlUokikDocumentInput } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+} from "@stll/case-law-parsers/pl-uokik";
+import type { ParsePlUokikDocumentInput } from "@stll/case-law-parsers/pl-uokik";
+import {
+  AST_STRUCTURE_DEGRADED,
+  buildValidationHtml,
+  validateAst,
+} from "@stll/case-law-parsers/validate-ast";
+import type { Block, Inline } from "@stll/legal-ast/document-ast";
+
 import { checkDecisionRetention } from "@/api/handlers/case-law/ingestion/retention/retention-check";
 import { plUokikRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uokik";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import {
-  AST_STRUCTURE_DEGRADED,
-  buildValidationHtml,
-  validateAst,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { logger } from "@/api/lib/observability/logger";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlUokikDocument = guardParser(uncheckedParsePlUokikDocument);
 
