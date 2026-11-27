@@ -62,6 +62,7 @@ import exportDocumentReviewRun from "@/api/handlers/document-reviews/export-run"
 import listDocumentReviewRuns from "@/api/handlers/document-reviews/list-runs";
 import readDocumentReviewRun from "@/api/handlers/document-reviews/read-run";
 import readEntityById from "@/api/handlers/entities/get";
+import moveEntity from "@/api/handlers/entities/move";
 import readVersionById from "@/api/handlers/entities/versions/get";
 import updateVersionLabel from "@/api/handlers/entities/versions/label/update";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -157,6 +158,7 @@ type Actor = {
 
 type MatterBundle = {
   workspaceId: SafeId<"workspace">;
+  folderId: SafeId<"entity">;
   docId: SafeId<"entity">;
   docVersionId: SafeId<"entityVersion">;
   fileFieldId: SafeId<"field">;
@@ -515,7 +517,8 @@ const seedMatterBundle = async ({
     createdAt: FIXED_CREATED_AT,
   });
 
-  // Matter document + version + file field + properties
+  // Matter folder + document + version + file field + properties
+  const folderId = createSafeId<"entity">();
   const docId = createSafeId<"entity">();
   const docVersionId = createSafeId<"entityVersion">();
   const propId = createSafeId<"property">();
@@ -553,15 +556,26 @@ const seedMatterBundle = async ({
     },
   ]);
 
-  await testDb.insert(entities).values({
-    id: docId,
-    workspaceId,
-    name: `${label} Agreement.docx`,
-    kind: "document",
-    createdBy: owner.userId,
-    createdAt: FIXED_CREATED_AT,
-    updatedAt: FIXED_CREATED_AT,
-  });
+  await testDb.insert(entities).values([
+    {
+      id: folderId,
+      workspaceId,
+      name: `${label} Folder`,
+      kind: "folder",
+      createdBy: owner.userId,
+      createdAt: FIXED_CREATED_AT,
+      updatedAt: FIXED_CREATED_AT,
+    },
+    {
+      id: docId,
+      workspaceId,
+      name: `${label} Agreement.docx`,
+      kind: "document",
+      createdBy: owner.userId,
+      createdAt: FIXED_CREATED_AT,
+      updatedAt: FIXED_CREATED_AT,
+    },
+  ]);
 
   await testDb.insert(entityVersions).values({
     id: docVersionId,
@@ -813,6 +827,7 @@ const seedMatterBundle = async ({
 
   return {
     workspaceId,
+    folderId,
     docId,
     docVersionId,
     fileFieldId,
@@ -1028,6 +1043,67 @@ describe("document review, matter documents & workflow adversarial runtime isola
   describe("1. Cross-tenant isolation (Org A owner -> Org B resources)", () => {
     test("Org A owner is denied all Org B list, verification, review, document, and flow endpoints at route gate", async () => {
       const b = fx.matterB;
+
+      // Positive authorized controls: Org B owner genuinely receives Org B data
+      const ownerBLists = await invokeWorkspaceHandler(
+        fx.ownerB,
+        readLists,
+        b.workspaceId,
+      );
+      expectOk(ownerBLists, "authorized control: ownerB readLists");
+      expect(JSON.stringify(ownerBLists)).toContain("Beta-Secret");
+
+      const ownerBVerif = await invokeWorkspaceHandler(
+        fx.ownerB,
+        readVerification,
+        b.workspaceId,
+        { params: { runId: b.verifRunId } },
+      );
+      expectOk(ownerBVerif, "authorized control: ownerB readVerification");
+      expect(JSON.stringify(ownerBVerif)).toContain("Beta-Secret");
+
+      const ownerBReview = await invokeWorkspaceHandler(
+        fx.ownerB,
+        readDocumentReviewRun,
+        b.workspaceId,
+        { params: { runId: b.reviewRunId } },
+      );
+      expectOk(
+        ownerBReview,
+        "authorized control: ownerB readDocumentReviewRun",
+      );
+      expect(JSON.stringify(ownerBReview)).toContain(b.findingId);
+
+      const ownerBDoc = await invokeWorkspaceHandler(
+        fx.ownerB,
+        readEntityById,
+        b.workspaceId,
+        { params: { entityId: b.docId } },
+      );
+      expectOk(ownerBDoc, "authorized control: ownerB readEntityById");
+      expect(JSON.stringify(ownerBDoc)).toContain("Beta-Secret");
+
+      const ownerBFlowRuns = await invokeWorkspaceHandler(
+        fx.ownerB,
+        listFlowRuns,
+        b.workspaceId,
+        {},
+      );
+      expectOk(ownerBFlowRuns, "authorized control: ownerB listFlowRuns");
+      expect(JSON.stringify(ownerBFlowRuns)).toContain(b.flowRunId);
+
+      expectOk(
+        await invokeOrgHandler(fx.ownerB, getFlowDefinition, {
+          params: { flowId: fx.flowDefB },
+        }),
+        "authorized control: ownerB getFlowDefinition",
+      );
+      expectOk(
+        await invokeOrgHandler(fx.ownerB, getTemplate, {
+          params: { templateId: fx.templateB },
+        }),
+        "authorized control: ownerB getTemplate",
+      );
       const cases: readonly [string, () => Promise<unknown>][] = [
         [
           "readLists",
@@ -1622,6 +1698,40 @@ describe("document review, matter documents & workflow adversarial runtime isola
       const open = fx.matterA_accessible;
       const secret = fx.matterA_restricted;
 
+      // Positive authorized controls: ownerA genuinely receives restricted matter data
+      const ownerRestrictedLists = await invokeWorkspaceHandler(
+        fx.ownerA,
+        readLists,
+        secret.workspaceId,
+      );
+      expectOk(
+        ownerRestrictedLists,
+        "authorized control: ownerA restricted readLists",
+      );
+      expect(JSON.stringify(ownerRestrictedLists)).toContain(
+        "Alpha-Restricted",
+      );
+
+      const ownerRestrictedLatest = await invokeWorkspaceHandler(
+        fx.ownerA,
+        readLatestVerifications,
+        secret.workspaceId,
+        {
+          body: {
+            documents: [
+              { entityId: secret.docId, fileFieldId: secret.fileFieldId },
+            ],
+          },
+        },
+      );
+      expectOk(
+        ownerRestrictedLatest,
+        "authorized control: ownerA restricted readLatestVerifications",
+      );
+      expect(JSON.stringify(ownerRestrictedLatest)).toContain(
+        secret.verifRunId,
+      );
+
       // Positive control on assigned matter
       expectOk(
         await invokeWorkspaceHandler(
@@ -1993,6 +2103,20 @@ describe("document review, matter documents & workflow adversarial runtime isola
                   body: { label: "Cross-matter label" },
                 },
               ),
+          ],
+          [
+            "(m1, docFromM2) moveEntity",
+            async () =>
+              await invokeWorkspaceHandler(actor, moveEntity, m1.workspaceId, {
+                body: { entityId: m2.docId, parentId: m1.folderId },
+              }),
+          ],
+          [
+            "(m1, docInM1, folderFromM2) moveEntity",
+            async () =>
+              await invokeWorkspaceHandler(actor, moveEntity, m1.workspaceId, {
+                body: { entityId: m1.docId, parentId: m2.folderId },
+              }),
           ],
           [
             "(m1, docInM1, versionFromM2) readVersionById",
@@ -2565,6 +2689,18 @@ describe("document review, matter documents & workflow adversarial runtime isola
               {
                 params: { findingId: open.findingId },
                 body: { decision: "accepted" },
+              },
+            ),
+        ],
+        [
+          "moveEntity",
+          async () =>
+            await invokeWorkspaceHandler(
+              fx.collabA,
+              moveEntity,
+              open.workspaceId,
+              {
+                body: { entityId: open.docId, parentId: open.folderId },
               },
             ),
         ],
