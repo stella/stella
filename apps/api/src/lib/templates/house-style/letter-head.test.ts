@@ -47,6 +47,22 @@ describe("readLetterHead", () => {
     });
   });
 
+  test("a second reference line is no line of the address", () => {
+    const { blocks } = manifestOf([
+      "Your ref: XY/2026",
+      "Our ref: AB/2026",
+      "Beta Holdings Ltd",
+      "1 Long Street",
+      "London SW1A 1AA",
+      "Dear Sirs,",
+      "We write further to your letter.",
+    ]);
+    expect(readLetterHead(blocks)).toMatchObject({
+      addressee: ["p2", "p3", "p4"],
+      reference: "p0",
+    });
+  });
+
   test("an English and a German head", () => {
     expect(
       readLetterHead(

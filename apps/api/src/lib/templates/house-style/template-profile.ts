@@ -846,7 +846,11 @@ const collectedStyles = (
       if (type !== "paragraph") {
         return false;
       }
-      const level = BUILT_IN_HEADING.exec(name ?? "")?.groups?.["level"];
+      // A built-in heading by its name, any other style by the outline
+      // level it states (counted from zero).
+      const level =
+        BUILT_IN_HEADING.exec(name ?? "")?.groups?.["level"] ??
+        (outlineLvl === null ? undefined : String(outlineLvl + 1));
       return (
         names.has((name ?? "").toLowerCase()) ||
         (headings !== null &&

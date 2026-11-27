@@ -119,6 +119,23 @@ describe("inferTemplateProfile", () => {
     ]);
     // The built-in headings of a range: this template has none.
     expect(withCode(String.raw`TOC \o "1-3" \h`)).toEqual([]);
+    // A style of the template's own with an outline level in the range
+    // is collected as a built-in heading of that level is.
+    const outlined = contractTemplate({ contents: "empty" });
+    for (const field of outlined.fields) {
+      if (field.kind === "TOC") {
+        field.instruction = String.raw`TOC \o "1-3" \h`;
+      }
+    }
+    for (const style of outlined.styles) {
+      if (style.styleId === "Article") {
+        style.outlineLvl = 0;
+      }
+      if (style.styleId === "Roman") {
+        style.outlineLvl = 4;
+      }
+    }
+    expect(inferTemplateProfile(outlined).contentsStyles).toEqual(["Article"]);
     // A field whose code is not known says nothing.
     expect(withCode(undefined)).toBeUndefined();
 

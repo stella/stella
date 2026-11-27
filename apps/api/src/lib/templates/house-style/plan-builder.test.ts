@@ -2155,6 +2155,20 @@ describe("buildTemplatePlan, tables and omissions", () => {
     }).plan;
     expect(dropped.body.some(({ kind }) => kind === "template")).toBe(false);
     expect(dropped.omit.map(({ blockId }) => blockId)).toContain("p4");
+    // The first line of the source's contents may start the page itself:
+    // the blank paragraph in front of it is told to.
+    const byLine = paged([6]);
+    const told = around({
+      ...byLine,
+      blocks: byLine.blocks.map((block) =>
+        block.id === "p5" ? { ...block, pageBreakBefore: true } : block,
+      ),
+    });
+    expect(told.before).toMatchObject({
+      kind: "source",
+      blockId: "p4",
+      pageBreakBefore: true,
+    });
     // Only behind them: nothing is kept in front.
     const back = around(paged([6]));
     expect(back.omitted).toContain("p4");

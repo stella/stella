@@ -71,7 +71,9 @@ export const readLetterHead = (
       DATE.test(textOf(block)),
   );
   const plain = (block: DocxBlock): boolean =>
-    block !== reference &&
+    // Every line of a reference, not only the one taken: a second one
+    // (`Your ref`, then `Our ref`) is no line of an address.
+    !REFERENCE.test(textOf(block)) &&
     block !== date &&
     !SUBJECT.test(textOf(block)) &&
     !textOf(block).endsWith(":") &&
