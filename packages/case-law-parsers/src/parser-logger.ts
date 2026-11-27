@@ -1,3 +1,4 @@
+// parser-output-unchanged: structured parser logging sink is an output-independent side effect.
 /**
  * Structured logging sink for case-law parser diagnostics.
  *
