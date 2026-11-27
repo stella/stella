@@ -422,6 +422,9 @@ describe("folioTemplatePlanEngine", () => {
       text.startsWith("The supplier"),
     );
     expect(clause).toMatchObject({ inlineObjects: 1, pageShapes: 1 });
+    if (clause === undefined) {
+      throw new Error("the source has no supplier clause");
+    }
     const formatted = (
       await formatOntoTemplate({
         engine: folioTemplatePlanEngine,
@@ -433,7 +436,7 @@ describe("folioTemplatePlanEngine", () => {
     ).unwrap();
     expect(formatted.note.items).toContainEqual({
       kind: "pageMarksDropped",
-      blockId: clause?.id,
+      blockId: clause.id,
       marks: 1,
     });
     const output = (
