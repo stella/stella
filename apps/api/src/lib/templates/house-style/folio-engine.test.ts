@@ -282,6 +282,60 @@ describe("folioTemplatePlanEngine", () => {
     });
   });
 
+  test("a memo's own lines fill the header of fields the template keeps", async () => {
+    const cell = (text: string): string =>
+      `<w:tc><w:p>${text === "" ? "" : `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`}</w:p></w:tc>`;
+    const row = (name: string): string =>
+      `<w:tr>${cell(name)}${cell("")}</w:tr>`;
+    const memoTemplate = await docx({
+      body: [
+        paragraph("MEMORANDUM", styled("Title")),
+        `<w:tbl>${["From:", "To:", "Date:", "Subject:"].map(row).join("")}</w:tbl>`,
+        paragraph("Text of the memo goes here.", styled("Body")),
+      ].join(""),
+      styles: [
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+        style("Title", "Title"),
+        style("Body", "Body Text"),
+      ].join(""),
+      numbering: "",
+    });
+    const memo = await docx({
+      body: [
+        paragraph("MEMORANDUM"),
+        paragraph("To: Jane Roe"),
+        paragraph("From: Peter Lang"),
+        paragraph("Re: Lease of the warehouse"),
+        paragraph("The lease ends in June."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: "",
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: memo,
+        template: memoTemplate,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.note.items).toContainEqual(
+      expect.objectContaining({ kind: "headerFieldsFilled" }),
+    );
+    const texts = (await folioTemplatePlanEngine.analyze(formatted.docx))
+      .unwrap()
+      .blocks.map(({ text }) => text);
+    // The values stand in the cells, word for word, without their own
+    // names; the cell without a line stays empty.
+    expect(texts).toContain("Jane Roe");
+    expect(texts).toContain("Peter Lang");
+    expect(texts).toContain("Lease of the warehouse");
+    expect(texts).not.toContain("To: Jane Roe");
+    expect(texts).toContain("The lease ends in June.");
+  });
+
   test("a cell paragraph the source sets tight stays tight in the output", async () => {
     const TIGHT = '<w:spacing w:before="0" w:after="0"/>';
     const cell = (text: string, properties = ""): string =>

@@ -22,6 +22,7 @@ import {
   buildTemplatePlan,
   NO_EXCLUSIONS,
 } from "@/api/lib/templates/house-style/plan-builder";
+import type { FormattingNoteItem } from "@/api/lib/templates/house-style/plan-builder";
 import type { NumberingMode } from "@/api/lib/templates/house-style/plan-numbering";
 import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
 import { findTopicSuspicions } from "@/api/lib/templates/house-style/reference-suspicions";
@@ -2681,6 +2682,202 @@ describe("buildTemplatePlan, a template in another language than the document", 
     expect(note.items.map(({ kind }) => kind)).not.toContain(
       "templateLanguageDiffers",
     );
+  });
+});
+
+describe("buildTemplatePlan, a memo on a template with a header of fields", () => {
+  const memoHeader: typeof PROFILE = {
+    ...PROFILE,
+    regions: { ...PROFILE.regions, keepBefore: ["t90"] },
+    headerFields: [
+      { field: "from", name: "From", labelBlockId: "h1", valueBlockId: "h2" },
+      { field: "to", name: "To", labelBlockId: "h3", valueBlockId: "h4" },
+      { field: "date", name: "Date", labelBlockId: "h5", valueBlockId: "h6" },
+      {
+        field: "subject",
+        name: "Subject",
+        labelBlockId: "h7",
+        valueBlockId: "h8",
+      },
+    ],
+  };
+  const memo = (...head: string[]) =>
+    manifestOf([
+      "MEMORANDUM",
+      ...head,
+      "We have reviewed the draft and set out our comments below.",
+      "The draft follows the earlier version in all main points.",
+    ]);
+  const slotsOf = (plan: TemplatePlan) =>
+    plan.body.flatMap((item) => (item.kind === "slot" ? [item] : []));
+  const fieldsNote = (note: { items: readonly FormattingNoteItem[] }) =>
+    note.items.find(({ kind }) => kind === "headerFieldsFilled");
+
+  test("a line that states a field gives its value to the cell beside the template's name of it", () => {
+    // The last line ends in a line break, as a form's line may.
+    const manifest = memo(
+      "To:\tJane Roe",
+      "From: Peter Lang",
+      "Věc: Posouzení návrhu\n",
+    );
+    const { plan, note } = build(manifest, "keepSource", {
+      profile: memoHeader,
+    });
+    // Each value into its cell, the line's own name of the field dropped
+    // for the one the template shows; another word of the same field, in
+    // another language, names it all the same.
+    expect(slotsOf(plan)).toEqual([
+      {
+        kind: "slot",
+        templateBlockId: "h2",
+        sourceBlockIds: [blockIdOf(manifest, "From:")],
+        dropLead: { text: "From:", shownByTemplateBlockId: "h1" },
+      },
+      {
+        kind: "slot",
+        templateBlockId: "h4",
+        sourceBlockIds: [blockIdOf(manifest, "To:")],
+        dropLead: { text: "To:", shownByTemplateBlockId: "h3" },
+      },
+      {
+        kind: "slot",
+        templateBlockId: "h8",
+        sourceBlockIds: [blockIdOf(manifest, "Věc:")],
+        dropLead: { text: "Věc:", shownByTemplateBlockId: "h7" },
+      },
+    ]);
+    // The lines are no paragraphs of the body any more.
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual([
+      "p0",
+      "p4",
+      "p5",
+    ]);
+    // The note names every name that went, by field, and the cell the
+    // document has no line for: that one stays as the template has it.
+    expect(fieldsNote(note)).toEqual({
+      kind: "headerFieldsFilled",
+      filled: [
+        { field: "from", from: "From", to: "From" },
+        { field: "to", from: "To", to: "To" },
+        { field: "subject", from: "Věc", to: "Subject" },
+      ],
+      left: ["date"],
+    });
+    expect(plan.emptyTemplateBlockIds).toBeUndefined();
+  });
+
+  test("a name outside the set keeps its line in the body", () => {
+    const manifest = memo("Attention: Jane Roe", "Regarding: the draft");
+    const { plan, note } = build(manifest, "keepSource", {
+      profile: memoHeader,
+    });
+    expect(slotsOf(plan)).toEqual([]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual(
+      manifest.blocks.map(({ id }) => id),
+    );
+    expect(fieldsNote(note)).toMatchObject({
+      filled: [],
+      left: ["from", "to", "date", "subject"],
+    });
+  });
+
+  test("a line that names two fields keeps its place in the body", () => {
+    const manifest = memo("To: Jane Roe\tFrom: Peter Lang", "Date: 3 May 2026");
+    const { plan } = build(manifest, "keepSource", { profile: memoHeader });
+    expect(slotsOf(plan).map(({ templateBlockId }) => templateBlockId)).toEqual(
+      ["h6"],
+    );
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toContain(
+      blockIdOf(manifest, "To: Jane Roe"),
+    );
+  });
+
+  test("a second field's name behind a separator keeps the line in the body", () => {
+    const manifest = memo("To: Jane Roe;From: Peter Lang", "Date: 3 May 2026");
+    const { plan } = build(manifest, "keepSource", { profile: memoHeader });
+    expect(slotsOf(plan).map(({ templateBlockId }) => templateBlockId)).toEqual(
+      ["h6"],
+    );
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toContain(
+      blockIdOf(manifest, "To: Jane Roe;"),
+    );
+  });
+
+  test("a field a line of two fields names too is taken from neither line", () => {
+    const manifest = memo(
+      "To: Jane Roe",
+      "To: Richard Miles\tFrom: Peter Lang",
+      "From: Anna Berg",
+      "Re: the draft",
+    );
+    const { plan } = build(manifest, "keepSource", { profile: memoHeader });
+    expect(slotsOf(plan).map(({ templateBlockId }) => templateBlockId)).toEqual(
+      ["h8"],
+    );
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual(
+      expect.arrayContaining([
+        blockIdOf(manifest, "To: Jane Roe"),
+        blockIdOf(manifest, "From: Anna Berg"),
+      ]),
+    );
+  });
+
+  test("a field two lines state is taken from neither", () => {
+    const manifest = memo("To: Jane Roe", "To: Richard Miles", "Re: the draft");
+    const { plan, note } = build(manifest, "keepSource", {
+      profile: memoHeader,
+    });
+    expect(slotsOf(plan).map(({ templateBlockId }) => templateBlockId)).toEqual(
+      ["h8"],
+    );
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual(
+      expect.arrayContaining([
+        blockIdOf(manifest, "To: Jane Roe"),
+        blockIdOf(manifest, "To: Richard Miles"),
+      ]),
+    );
+    expect(fieldsNote(note)).toMatchObject({
+      filled: [{ field: "subject", from: "Re", to: "Subject" }],
+      left: ["from", "to", "date"],
+    });
+  });
+
+  test("a field's name with nothing behind it, and a line deep in the text, are left alone", () => {
+    const filler = Array.from(
+      { length: 12 },
+      (_, index) => `Paragraph ${String(index + 1)} of the note's text.`,
+    );
+    const manifest = manifestOf([
+      "MEMORANDUM",
+      "To:",
+      ...filler,
+      "Date: 3 May 2026",
+    ]);
+    const { plan } = build(manifest, "keepSource", { profile: memoHeader });
+    expect(slotsOf(plan)).toEqual([]);
+  });
+
+  test("a line a kept tracked change reaches into keeps its place in the body", () => {
+    const manifest = memo("To: Jane Roe", "From: Peter Lang");
+    const by = { author: "First Author", date: "2026-01-05T10:00:00Z" };
+    const to = manifest.blocks[1];
+    const from = manifest.blocks[2];
+    if (to === undefined || from === undefined) {
+      throw new Error("fixture");
+    }
+    // A change in the name of the field, and a tracked paragraph mark.
+    to.revisions = [{ kind: "insertion", start: 0, end: 2, ...by }];
+    from.revisions = [
+      {
+        kind: "insertion",
+        start: from.text.length,
+        end: from.text.length,
+        paragraphMark: true,
+        ...by,
+      },
+    ];
+    const { plan } = build(manifest, "keepSource", { profile: memoHeader });
+    expect(slotsOf(plan)).toEqual([]);
   });
 });
 
