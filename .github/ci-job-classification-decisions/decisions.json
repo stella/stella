@@ -765,7 +765,7 @@
   },
   "candidate:.github/workflows/release-npm-catch-up.yml/publish-cli": {
     "kind": "priority",
-    "qualifier": "Dispatches the stable CLI publication for a final release tag once its release pull request lands, when npm does not serve that version yet."
+    "qualifier": "Dispatches the stable CLI publication for a final release tag when the release's own publication refused before its release pull request landed and npm does not serve that version yet."
   },
   "candidate:.github/workflows/release-pr.yml/version": {
     "kind": "priority",

@@ -233,10 +233,14 @@ by the RC run.
    so a rerun after a partial publish resumes with what is left.
    Stable CLI publication accepts the release commit only once the release
    pull request has merged into `main` from its release branch, with a head
-   that is that commit or descends from it. When the pull request lands after
-   the final run, `release-npm-catch-up.yml` dispatches the CLI publication
-   for the final tag if npm does not serve the tag's CLI version yet; the next
-   cut's npm-publish-lag gate catches anything still missing.
+   that is that commit or descends from it. When that publication refused at
+   its source check because the pull request had not merged yet,
+   `release-npm-catch-up.yml` dispatches the CLI publication for the final tag
+   once the pull request lands, if npm does not serve the tag's CLI version
+   yet. It decides on the merge and on each publication's completion, and
+   stays out while the final run or its publication is still going, so only
+   one path publishes; the next cut's npm-publish-lag gate catches anything
+   still missing.
    Package versions remain Changesets-owned. Desktop reruns
    resume the build or carry-forward path and its publication steps. GitHub
    Latest advances only after the desktop assets are ready.

@@ -36,6 +36,7 @@ const WORKFLOW_RUN_WORKFLOWS = [
   "cla.yml",
   "publish-npm.yml",
   "release-desktop.yml",
+  "release-npm-catch-up.yml",
   "release-tag.yml",
   "scheduled-run-alerts.yml",
 ] as const;
@@ -1029,6 +1030,29 @@ const followersOf = (
   return followers;
 };
 
+/** Whether every job of a follower is off for a run started by a dispatch. */
+const ignoresDispatchedRuns = (workflow: unknown): boolean => {
+  const jobs =
+    isRecord(workflow) && isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+  const entries = Object.values(jobs);
+  return (
+    entries.length > 0 &&
+    entries.every((job) => {
+      const condition = isRecord(job) ? conditionOf(job) : "";
+      return (
+        condition.trim() !== "" &&
+        definitelyFalse(condition, {
+          values: {
+            "github.event_name": "workflow_run",
+            [`${RUN}.event`]: "workflow_dispatch",
+          },
+          status: { always: true, success: true },
+        })
+      );
+    })
+  );
+};
+
 const tokenDispatchesOfFollowed = (
   workflows: { file: string; workflow: unknown }[],
 ): DispatchSite[] => {
@@ -1093,6 +1117,9 @@ describe("a followed run is never started with GITHUB_TOKEN", () => {
       sites.map(({ site }) => site).toSorted(),
     );
     const followers = followersOf(workflows);
+    const workflowOf = new Map(
+      workflows.map(({ file, workflow }) => [file, workflow]),
+    );
     for (const { site, targets, computed } of sites) {
       const declared = ALERT_ONLY_TOKEN_DISPATCHES[site] ?? [];
       // A file name built at run time cannot be read here; the entry
@@ -1101,11 +1128,47 @@ describe("a followed run is never started with GITHUB_TOKEN", () => {
         expect(declared, site).toEqual(targets);
       }
       for (const target of declared) {
-        expect(followers.get(target), `${site} -> ${target}`).toEqual([
-          ALERTING_WORKFLOW,
-        ]);
+        const following = followers.get(target) ?? [];
+        expect(following, `${site} -> ${target}`).toContain(ALERTING_WORKFLOW);
+        // Any other follower must never act on a dispatched run, so the
+        // runs GitHub does not deliver to it are runs it would skip anyway.
+        expect(
+          following.filter(
+            (file) =>
+              file !== ALERTING_WORKFLOW &&
+              !ignoresDispatchedRuns(workflowOf.get(file)),
+          ),
+          `${site} -> ${target}`,
+        ).toEqual([]);
       }
     }
+  });
+
+  test("a follower counts as ignoring dispatched runs only when every job is off for them", () => {
+    const follower = (condition: string) => ({
+      on: { workflow_run: { workflows: ["Build"] } },
+      jobs: { act: { if: condition } },
+    });
+    expect(
+      ignoresDispatchedRuns(
+        follower(
+          "github.event_name == 'workflow_run' && github.event.workflow_run.event == 'workflow_run'",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      ignoresDispatchedRuns(
+        follower(
+          "github.event_name == 'workflow_run' && github.event.workflow_run.event != 'push'",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      ignoresDispatchedRuns({
+        on: { workflow_run: { workflows: ["Build"] } },
+        jobs: { act: {} },
+      }),
+    ).toBe(false);
   });
 
   const fixture = (step: Record<string, unknown>) => [
