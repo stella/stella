@@ -402,7 +402,7 @@ test("a generation whose desired epoch trails the canonical one is current to ev
             indexId,
             leaseToken: LEASE_TOKEN,
             leaseExpiresAt,
-            appendMode: "batchable",
+            appendRequestCap: 512,
           },
         ],
       }),

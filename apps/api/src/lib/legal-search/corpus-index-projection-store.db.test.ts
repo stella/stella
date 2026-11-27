@@ -42,6 +42,7 @@ import { CORPUS_INDEX_APPEND_CANCEL_REASON } from "@/api/lib/legal-search/corpus
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   corpusIndexAppendPublishDelayMs,
+  corpusProjectionAppendStartMarginMs,
   corpusProjectionRevisionsQuery,
   proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -72,6 +73,13 @@ import {
 } from "@/api/tests/pglite-test-db";
 
 /** The metastore instant a delete task receipt carries in these tests. */
+/**
+ * An append reservation's lease: an append starts only while its lease covers
+ * the generation's start margin, so the fixtures reserve just past it.
+ */
+const LEASE_MS =
+  corpusProjectionAppendStartMarginMs(CORPUS_INDEX_MANIFESTS.case_law_v5) +
+  15_000;
 const DELETE_TASK_CREATED_AT = Temporal.Instant.from("2026-08-25T12:00:00Z");
 const LATER_DELETE_TASK_CREATED_AT = Temporal.Instant.from(
   "2026-08-25T12:05:00Z",
@@ -434,7 +442,7 @@ test("a subject-scoped reservation cannot claim another pending decision", async
         generation: "case_law_v5",
         scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
         limit: 10,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
       }),
@@ -477,7 +485,7 @@ test("a route-scoped reservation claims only its desired physical index", async 
         generation: "case_law_v5",
         scope: { type: "route", indexId: POL_INDEX_ID },
         limit: 10,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         newIntentId: () => POL_INTENT_ID,
         newLeaseToken: () => POL_LEASE_TOKEN,
       }),
@@ -546,7 +554,7 @@ test("a reservation that loses the append-epoch election returns no lease", asyn
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
       }),
@@ -570,7 +578,7 @@ test("an unregistered route fails before reservation mutates state", async () =>
         generation: "case_law_v5",
         scope: { type: "route", indexId: "case_law_v5_rou" },
         limit: 10,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
       }),
     )
     .then(
@@ -863,7 +871,7 @@ test("retry classification defers poison work, then blocks the exhausted desired
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: startedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
@@ -910,7 +918,7 @@ test("retry classification defers poison work, then blocks the exhausted desired
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: new Date("2026-08-25T12:00:59.999Z"),
         newIntentId: () => SECOND_INTENT_ID,
         newLeaseToken: () => SECOND_LEASE_TOKEN,
@@ -925,7 +933,7 @@ test("retry classification defers poison work, then blocks the exhausted desired
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: new Date("2026-08-25T12:01:00.000Z"),
         newIntentId: () => ERASE_INTENT_ID,
         newLeaseToken: () => ERASE_LEASE_TOKEN,
@@ -976,7 +984,7 @@ test("failure classification locks projection state before its intent", async ()
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: classifiedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
@@ -1086,8 +1094,8 @@ test("unknown append cleanup starts its barrier at append start", async () => {
 
 test("expired append leases charge unknown attempts and block at the limit", async () => {
   const appendStartedAt = new Date("2026-08-25T12:00:00.000Z");
-  const expiredAt = new Date(appendStartedAt.getTime() + 60_001);
-  const lease = await reserveOneLease(appendStartedAt, 60_000);
+  const expiredAt = new Date(appendStartedAt.getTime() + LEASE_MS + 1);
+  const lease = await reserveOneLease(appendStartedAt, LEASE_MS);
   await db.transaction(async (tx) => {
     await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
       intentId: lease.intentId,
@@ -1133,7 +1141,7 @@ test("expired append leases charge unknown attempts and block at the limit", asy
     .update(corpusIndexProjectionStates)
     .set({ failureAttempts: 4, retryNotBefore: nextStartedAt })
     .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
-  const nextLease = await reserveOneLease(nextStartedAt, 60_000);
+  const nextLease = await reserveOneLease(nextStartedAt, LEASE_MS);
   await db.transaction(async (tx) => {
     await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
       intentId: nextLease.intentId,
@@ -1141,7 +1149,7 @@ test("expired append leases charge unknown attempts and block at the limit", asy
       testNow: nextStartedAt,
     });
   });
-  const nextExpiredAt = new Date(nextStartedAt.getTime() + 60_001);
+  const nextExpiredAt = new Date(nextStartedAt.getTime() + LEASE_MS + 1);
   await setDatabaseClock(nextExpiredAt);
   expect(await recover(nextExpiredAt)).toEqual([
     { intentId: nextLease.intentId, status: "append_started" },
@@ -1163,8 +1171,8 @@ test("expired append leases charge unknown attempts and block at the limit", asy
 
 test("an expired multi-revision append does not charge its members", async () => {
   const startedAt = new Date("2026-08-25T12:00:00.000Z");
-  const expiredAt = new Date(startedAt.getTime() + 60_001);
-  const lease = await reserveOneLease(startedAt, 60_000);
+  const expiredAt = new Date(startedAt.getTime() + LEASE_MS + 1);
+  const lease = await reserveOneLease(startedAt, LEASE_MS);
   await db.transaction(async (tx) => {
     await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
       leases: [lease],
@@ -1194,7 +1202,7 @@ test("an expired multi-revision append does not charge its members", async () =>
     .select({
       workStatus: corpusIndexProjectionStates.workStatus,
       failureAttempts: corpusIndexProjectionStates.failureAttempts,
-      appendMode: corpusIndexProjectionStates.appendMode,
+      appendRequestCap: corpusIndexProjectionStates.appendRequestCap,
       lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
     })
     .from(corpusIndexProjectionStates)
@@ -1202,7 +1210,7 @@ test("an expired multi-revision append does not charge its members", async () =>
   expect(state).toEqual({
     workStatus: "retry_scheduled",
     failureAttempts: 0,
-    appendMode: "single",
+    appendRequestCap: 1,
     lastFailureKind: "append_unknown",
   });
 });
@@ -1225,7 +1233,7 @@ test("unknown append failures block after five consecutive attempts", async () =
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: attemptedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
@@ -1362,7 +1370,7 @@ test("definite append rejections block after two consecutive attempts", async ()
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: attemptedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
@@ -1408,7 +1416,7 @@ test("transient engine failures preserve revision attempts", async () => {
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: attemptedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
@@ -1487,7 +1495,7 @@ test("transient engine failures preserve revision attempts", async () => {
 test("batch rejection keeps retries singleton until a single rejection blocks", async () => {
   const attemptedAt = new Date("2026-08-25T12:00:00.000Z");
   const lease = await reserveOneLease(attemptedAt);
-  expect(lease.appendMode).toBe("batchable");
+  expect(lease.appendRequestCap).toBe(512);
   await db.transaction(async (tx) => {
     await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
       leases: [lease],
@@ -1523,7 +1531,7 @@ test("batch rejection keeps retries singleton until a single rejection blocks", 
   const singleLease = await reserveOneLease(
     new Date(attemptedAt.getTime() + 5000),
   );
-  expect(singleLease.appendMode).toBe("single");
+  expect(singleLease.appendRequestCap).toBe(1);
   await db.transaction(async (tx) => {
     await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
       intentId: singleLease.intentId,
@@ -1552,7 +1560,7 @@ test("batch rejection keeps retries singleton until a single rejection blocks", 
   await clearDecisionIntents();
   const secondSingleAt = new Date(attemptedAt.getTime() + 10_000);
   const secondSingleLease = await reserveOneLease(secondSingleAt);
-  expect(secondSingleLease.appendMode).toBe("single");
+  expect(secondSingleLease.appendRequestCap).toBe(1);
   await db.transaction(async (tx) => {
     await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
       intentId: secondSingleLease.intentId,
@@ -1587,7 +1595,7 @@ test("operator unpark resets one blocked revision after cleanup", async () => {
     .update(corpusIndexProjectionStates)
     .set({
       workStatus: "blocked",
-      appendMode: "single",
+      appendRequestCap: 1,
       failureAttempts: 2,
       lastFailureKind: "append_rejected",
       lastFailureMessage: "rejected",
@@ -1627,7 +1635,7 @@ test("operator unpark resets one blocked revision after cleanup", async () => {
   const [state] = await db
     .select({
       workStatus: corpusIndexProjectionStates.workStatus,
-      appendMode: corpusIndexProjectionStates.appendMode,
+      appendRequestCap: corpusIndexProjectionStates.appendRequestCap,
       failureAttempts: corpusIndexProjectionStates.failureAttempts,
       lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
     })
@@ -1635,7 +1643,7 @@ test("operator unpark resets one blocked revision after cleanup", async () => {
     .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
   expect(state).toEqual({
     workStatus: "eligible",
-    appendMode: "single",
+    appendRequestCap: 1,
     failureAttempts: 0,
     lastFailureKind: null,
   });
@@ -1658,7 +1666,7 @@ test("operator unpark waits while an intent remains outstanding", async () => {
     .update(corpusIndexProjectionStates)
     .set({
       workStatus: "blocked",
-      appendMode: "single",
+      appendRequestCap: 1,
       failureAttempts: 2,
       lastFailureKind: "append_rejected",
       lastFailureMessage: "rejected",
@@ -1698,7 +1706,7 @@ test("a changed desired epoch is not blocked by an old append failure", async ()
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: attemptedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
@@ -1715,7 +1723,7 @@ test("a changed desired epoch is not blocked by an old append failure", async ()
     });
     await tx
       .update(corpusIndexProjectionStates)
-      .set({ appendMode: "single" })
+      .set({ appendRequestCap: 1 })
       .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
   });
   await db.transaction(async (tx) => {
@@ -1740,7 +1748,7 @@ test("a changed desired epoch is not blocked by an old append failure", async ()
     .select({
       desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
       workStatus: corpusIndexProjectionStates.workStatus,
-      appendMode: corpusIndexProjectionStates.appendMode,
+      appendRequestCap: corpusIndexProjectionStates.appendRequestCap,
       failureAttempts: corpusIndexProjectionStates.failureAttempts,
       lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
     })
@@ -1749,7 +1757,7 @@ test("a changed desired epoch is not blocked by an old append failure", async ()
   expect(state).toEqual({
     desiredEpoch: 2n,
     workStatus: "eligible",
-    appendMode: "batchable",
+    appendRequestCap: 512,
     failureAttempts: 0,
     lastFailureKind: null,
   });
@@ -1763,7 +1771,7 @@ test("append abandonment locks projection state before its intent", async () => 
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: attemptedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
@@ -1973,7 +1981,7 @@ test("one append request receives one post-lock database timestamp", async () =>
         family: "case_law",
         generation: "case_law_v5",
         limit: 2,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: reservedAt,
         newIntentId: () =>
           intentIds.at(intentIndex++) ?? panic("Lost test intent id"),
@@ -2002,7 +2010,7 @@ test("one append request receives one post-lock database timestamp", async () =>
   ]);
 });
 
-const reserveOneLease = async (reservedAt: Date, leaseMs = 60_000) => {
+const reserveOneLease = async (reservedAt: Date, leaseMs = LEASE_MS) => {
   const leases = await db.transaction(
     async (tx) =>
       await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
@@ -2032,7 +2040,9 @@ test("an append start past the lease deadline records the expiry, not drift", as
       async (tx) =>
         await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
           leases: [lease],
-          testNow: new Date("2026-08-25T12:02:00.000Z"),
+          testNow: new Date(
+            Date.parse("2026-08-25T12:00:00.000Z") + LEASE_MS + 1,
+          ),
         }),
     ),
   ).toEqual([{ intentId: lease.intentId, status: "stale_cancelled" }]);
@@ -2079,7 +2089,9 @@ test("a single append start past the lease deadline records the expiry", async (
         await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
           intentId: lease.intentId,
           leaseToken: lease.leaseToken,
-          testNow: new Date("2026-08-25T12:02:00.000Z"),
+          testNow: new Date(
+            Date.parse("2026-08-25T12:00:00.000Z") + LEASE_MS + 1,
+          ),
         }),
     ),
   ).toBe("stale_cancelled");
@@ -2145,14 +2157,14 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
       }),
   );
   const lease = reservation.at(0) ?? panic("Expected projection reservation");
   expect(lease.leaseExpiresAt).toEqual(
-    new Date(databaseNow.getTime() + 60_000),
+    new Date(databaseNow.getTime() + LEASE_MS),
   );
   expect(
     await withDatabaseClock(
@@ -2383,7 +2395,7 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: appendStartedAt,
         newIntentId: () => FIRST_INTENT_ID,
         newLeaseToken: () => FIRST_LEASE_TOKEN,
@@ -2454,7 +2466,7 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
         family: "case_law",
         generation: "case_law_v5",
         limit: 1,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         newIntentId: () => SECOND_INTENT_ID,
         newLeaseToken: () => SECOND_LEASE_TOKEN,
       }),
@@ -2533,7 +2545,7 @@ test("erasure fences an unknown append and applies only after cleanup settlement
         family: "case_law",
         generation: "case_law_v5",
         limit: 10,
-        leaseMs: 60_000,
+        leaseMs: LEASE_MS,
         testNow: startedAt,
         newIntentId: () =>
           intentIds.next().value ?? panic("Unexpected projection candidate"),
@@ -2544,7 +2556,9 @@ test("erasure fences an unknown append and applies only after cleanup settlement
   const lease =
     leases.find(({ entityId }) => entityId === ERASE_DECISION_ID) ??
     panic("Expected erasure projection lease");
-  expect(lease.leaseExpiresAt).toEqual(new Date(startedAt.getTime() + 60_000));
+  expect(lease.leaseExpiresAt).toEqual(
+    new Date(startedAt.getTime() + LEASE_MS),
+  );
   expect(
     await db.transaction(
       async (tx) =>
@@ -3731,7 +3745,7 @@ test("an orphaned erasure applies only after its applied upsert settles", async 
             family: "case_law",
             generation: "case_law_v5",
             limit: 10,
-            leaseMs: 60_000,
+            leaseMs: LEASE_MS,
             newIntentId: () => FIRST_INTENT_ID,
             newLeaseToken: () => FIRST_LEASE_TOKEN,
           }),
