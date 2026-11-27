@@ -134,6 +134,12 @@ export type TemplateProfile = {
    *  (title, parties) and its first article. Absent when the sample has no
    *  article, and from a profile made before this was read. */
   frontMatterEndsPage?: boolean;
+  /** The styles the template sets the provisions of an annex in, where it
+   *  has a list of their own for them (a heading and its clauses, named
+   *  for annexes): what stands under an annex heading is placed in these
+   *  and counted in that list. Absent when the template has no such list,
+   *  and from a profile made before this was read. */
+  annexRoles?: AnnexRoles;
   /** The style the template writes the text of its tables in. Absent when
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
@@ -378,12 +384,21 @@ const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
   );
 };
 
+const OUTLINE_ROLES = [
+  "articleHeading",
+  "clause1",
+  "clause2",
+  "clause3",
+  "letter",
+  "roman",
+] as const satisfies readonly HouseStyleRole[];
+
 type OutlineRoles = Partial<
-  Record<
-    "articleHeading" | "clause1" | "clause2" | "clause3" | "letter" | "roman",
-    ProfileRoleTarget
-  >
+  Record<(typeof OUTLINE_ROLES)[number], ProfileRoleTarget>
 >;
+
+/** The roles of an outline, as an annex's own list fills them. */
+export type AnnexRoles = OutlineRoles;
 
 /**
  * The clause depths among counted levels: levels in a row, the first one
@@ -500,6 +515,68 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
   }
   return roles;
 };
+
+/**
+ * The outline the template keeps for its annexes: another list than the
+ * main one, with styles on two levels or more that are all named for
+ * annexes, and a level that heads articles. Among several, the one with
+ * more levels. Undefined when the template has none.
+ */
+const inferAnnexRoles = (
+  facts: readonly StyleFacts[],
+  roles: TemplateProfile["roles"],
+): AnnexRoles | undefined => {
+  const main = roles.articleHeading?.numbering?.abstractNumId;
+  const lists = Map.groupBy(
+    facts.filter(({ level }) => level !== null),
+    ({ level }) => level?.abstractNumId ?? -1,
+  );
+  let best: AnnexRoles | undefined;
+  let bestLevels = 0;
+  for (const [abstractNumId, group] of lists) {
+    const levels = new Set(group.map(({ level }) => level?.ilvl)).size;
+    if (
+      main === undefined ||
+      abstractNumId === main ||
+      levels < 2 ||
+      levels <= bestLevels ||
+      !group.every((fact) => ANNEX_STYLE.test(nameOf(fact)))
+    ) {
+      continue;
+    }
+    const read = readOutline(
+      group.toSorted(
+        (left, right) => (left.level?.ilvl ?? 0) - (right.level?.ilvl ?? 0),
+      ),
+    );
+    if (read.articleHeading !== undefined) {
+      best = inOneList(read, read.articleHeading);
+      bestLevels = levels;
+    }
+  }
+  return best;
+};
+
+/**
+ * The roles of an outline with every level in the list its heading is in.
+ * Styles of one outline may name different lists of the same definition;
+ * paragraphs that count together are numbered in one.
+ */
+const inOneList = (
+  roles: OutlineRoles,
+  { numbering: heading }: ProfileRoleTarget,
+): OutlineRoles =>
+  Object.fromEntries(
+    Object.entries(roles).map(([role, placed]) => [
+      role,
+      heading === null || placed.numbering === null
+        ? placed
+        : {
+            ...placed,
+            numbering: { ...placed.numbering, numId: heading.numId },
+          },
+    ]),
+  );
 
 const byName = (
   facts: readonly StyleFacts[],
@@ -1144,6 +1221,7 @@ export const inferTemplateProfile = (
   const facts = collectStyleFacts(inspection);
   const structure = readStructure(inspection.blocks);
   const roles = inferRoles(facts, structure.topLevel);
+  const annexRoles = inferAnnexRoles(facts, roles);
   const samplesOf = (role: ProfileRoleTarget | null): readonly DocxBlock[] =>
     facts.find(({ style }) => style.styleId === role?.styleId)?.samples ??
     NO_BLOCKS;
@@ -1245,6 +1323,7 @@ export const inferTemplateProfile = (
     ...(pageBeforeArticle === undefined
       ? {}
       : { frontMatterEndsPage: pageBeforeArticle }),
+    ...(annexRoles === undefined ? {} : { annexRoles }),
     ...(tableText === undefined ? {} : { tableText }),
     fields: {
       freezeKinds: kinds
@@ -1467,20 +1546,19 @@ const listLevelSchema = v.strictObject({
 
 const confidenceSchema = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 
-const roleTargetSchema = v.nullable(
-  v.strictObject({
-    styleId: idSchema,
-    alignment: v.nullable(textSchema),
-    numbering: v.nullable(listLevelSchema),
-    indentLeft: v.exactOptional(twipsSchema),
-    size: v.exactOptional(v.nullable(v.pipe(v.number(), v.minValue(1)))),
-    confidence: confidenceSchema,
-    evidence: v.pipe(
-      v.array(v.picklist(ROLE_EVIDENCE)),
-      v.maxLength(ROLE_EVIDENCE.length),
-    ),
-  }),
-);
+const roleTargetObjectSchema = v.strictObject({
+  styleId: idSchema,
+  alignment: v.nullable(textSchema),
+  numbering: v.nullable(listLevelSchema),
+  indentLeft: v.exactOptional(twipsSchema),
+  size: v.exactOptional(v.nullable(v.pipe(v.number(), v.minValue(1)))),
+  confidence: confidenceSchema,
+  evidence: v.pipe(
+    v.array(v.picklist(ROLE_EVIDENCE)),
+    v.maxLength(ROLE_EVIDENCE.length),
+  ),
+});
+const roleTargetSchema = v.nullable(roleTargetObjectSchema);
 
 const blockIdsSchema = v.pipe(v.array(idSchema), v.maxLength(BLOCKS_MAX));
 const slotSchema = v.nullable(v.strictObject({ blockIds: blockIdsSchema }));
@@ -1531,6 +1609,16 @@ const profileSchema = v.strictObject({
   slots: v.strictObject({ party: slotSchema, signature: slotSchema }),
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
   frontMatterEndsPage: v.exactOptional(v.boolean()),
+  annexRoles: v.exactOptional(
+    v.strictObject({
+      articleHeading: v.exactOptional(roleTargetObjectSchema),
+      clause1: v.exactOptional(roleTargetObjectSchema),
+      clause2: v.exactOptional(roleTargetObjectSchema),
+      clause3: v.exactOptional(roleTargetObjectSchema),
+      letter: v.exactOptional(roleTargetObjectSchema),
+      roman: v.exactOptional(roleTargetObjectSchema),
+    }),
+  ),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
   fields: v.strictObject({
     freezeKinds: fieldKindsSchema,

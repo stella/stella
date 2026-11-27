@@ -210,6 +210,44 @@ export const contractTemplate = ({
   };
 };
 
+export const ANNEX_LIST = 40;
+const ANNEX_DEFINITION = 77;
+
+/**
+ * The contract template with an outline of its own for annexes: a heading
+ * and a clause style named for annexes, in a list of their own. The clause
+ * style names another list of the same definition, as templates grown by
+ * hand do.
+ */
+export const templateWithAnnexOutline = (): TemplateInspection => {
+  const template = contractTemplate();
+  return {
+    ...template,
+    styles: [
+      ...template.styles,
+      style(["AnnexArticle", "Annex article", [ANNEX_LIST, 0]]),
+      style(["AnnexClause", "Annex clause 1.1", [ANNEX_LIST + 1, 1]]),
+    ],
+    numbering: {
+      abstractNums: [
+        ...template.numbering.abstractNums,
+        {
+          abstractNumId: ANNEX_DEFINITION,
+          levels: [
+            level(0, "decimal", "%1.", "AnnexArticle"),
+            level(1, "decimal", "%1.%2.", "AnnexClause"),
+          ],
+        },
+      ],
+      nums: [
+        ...template.numbering.nums,
+        { numId: ANNEX_LIST, abstractNumId: ANNEX_DEFINITION },
+        { numId: ANNEX_LIST + 1, abstractNumId: ANNEX_DEFINITION },
+      ],
+    },
+  };
+};
+
 /** A letterhead: a table of sender details in front of the sample. */
 export const LETTERHEAD: BlockSpec[] = [
   { id: "t90", cells: ["p91", "p92"] },

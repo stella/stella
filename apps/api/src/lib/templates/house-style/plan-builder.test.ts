@@ -31,8 +31,10 @@ import {
 } from "@/api/lib/templates/house-style/role-proposer";
 import { inferTemplateProfile } from "@/api/lib/templates/house-style/template-profile";
 import {
+  ANNEX_LIST,
   contractTemplate,
   OUTLINE_LIST,
+  templateWithAnnexOutline,
 } from "@/api/lib/templates/house-style/template.test-helpers";
 
 const PROFILE = inferTemplateProfile(contractTemplate());
@@ -218,6 +220,54 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
         reason: "annexTyped",
       }),
     );
+  });
+});
+
+describe("buildTemplatePlan, a template with an outline of its own for annexes", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    numbered("1.", "Předmět smlouvy", 10),
+    numbered("1.1", "Dodavatel dodá zboží.", 10),
+    "Příloha č. 1\nPodmínky",
+    numbered("1.", "Rozsah", 20),
+    numbered("1.1", "Podmínky platí pro každou dodávku.", 20),
+    numbered("2.", "Odpovědnost", 20),
+    numbered("2.1", "Dodavatel odpovídá za vady.", 20),
+  ]);
+
+  test("what stands under an annex heading is set in the annexes' styles and counted in their list", () => {
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const { plan } = build(manifest, "keepSource", { profile });
+    const placed = (start: string) => {
+      const item = itemOf(plan, manifest, start);
+      return [item?.styleId, item?.numbering?.numId, item?.numbering?.ilvl];
+    };
+    // The body keeps the main outline.
+    expect(placed("Předmět smlouvy")).toEqual(["Article", OUTLINE_LIST, 0]);
+    expect(placed("Dodavatel dodá zboží.")).toEqual([
+      "Clause1",
+      OUTLINE_LIST,
+      1,
+    ]);
+    // The annex has its own: heading and clause, in one list.
+    expect(placed("Rozsah")).toEqual(["AnnexArticle", ANNEX_LIST, 0]);
+    expect(placed("Podmínky platí")).toEqual(["AnnexClause", ANNEX_LIST, 1]);
+    expect(placed("Odpovědnost")).toEqual(["AnnexArticle", ANNEX_LIST, 0]);
+    expect(placed("Dodavatel odpovídá")).toEqual([
+      "AnnexClause",
+      ANNEX_LIST,
+      1,
+    ]);
+  });
+
+  test("a template without one sets an annex's provisions as it sets the body's", () => {
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "Rozsah")).toMatchObject({
+      styleId: "Article",
+    });
+    expect(itemOf(plan, manifest, "Podmínky platí")).toMatchObject({
+      styleId: "Clause1",
+    });
   });
 });
 

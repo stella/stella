@@ -418,6 +418,9 @@ type Context = {
   decisions: ReadonlyMap<string, string>;
   proposalById: ReadonlyMap<string, RoleProposal>;
   outline: OutlineLevels;
+  /** The profile and its outline as they hold under an annex heading,
+   *  when the template has an outline of its own for annexes. */
+  annex: { profile: TemplateProfile; outline: OutlineLevels } | null;
   /** Blocks placed under a role the template has no style for. */
   stylelessRoles: Map<HouseStyleRole, number>;
   items: FormattingNoteItem[];
@@ -477,11 +480,46 @@ const evenedStyle = (
   };
 };
 
+const outlineOf = ({ roles }: TemplateProfile): OutlineLevels => ({
+  article: roles.articleHeading?.numbering ?? null,
+  clauses: CLAUSE_ROLES.map((role) => roles[role]?.numbering ?? null),
+});
+
+/**
+ * The profile as it holds under an annex heading: the roles of the
+ * template's outline for annexes stand in for the main outline's, level by
+ * level. Null when the template has no such outline.
+ */
+const annexOf = (profile: TemplateProfile): Context["annex"] => {
+  if (profile.annexRoles === undefined) {
+    return null;
+  }
+  const under: TemplateProfile = {
+    ...profile,
+    roles: { ...profile.roles, ...profile.annexRoles },
+  };
+  return { profile: under, outline: outlineOf(under) };
+};
+
+/**
+ * The profile and outline a labelled paragraph is set by. What stands
+ * under an annex heading is set as the template sets the provisions of its
+ * annexes, where it has a list of their own for them.
+ */
+const settingOf = (
+  context: Context,
+  entry: LabelEntry | null,
+): { profile: TemplateProfile; outline: OutlineLevels } =>
+  context.annex !== null && entry !== null && entry.annexBlockId !== null
+    ? context.annex
+    : context;
+
 const styleTarget = (
   context: Context,
   role: HouseStyleRole,
+  profile: TemplateProfile = context.profile,
 ): ProfileRoleTarget | null => {
-  const { profile, stylelessRoles } = context;
+  const { stylelessRoles } = context;
   const own = profile.roles[role];
   if (own !== null) {
     return evenedStyle(context, role, own);
@@ -538,8 +576,9 @@ const placementOf = (
   block: DocxBlock,
   role: HouseStyleRole,
 ): Placement => {
-  const { index, profile, exclusions, outline } = context;
+  const { index, exclusions } = context;
   const entry = index.entryByBlockId.get(block.id) ?? null;
+  const { profile, outline } = settingOf(context, entry);
   const own = profile.roles[role];
   const ownLevel = own?.numbering ?? null;
   // Running text numbered like an article keeps the article's level, and
@@ -548,8 +587,8 @@ const placementOf = (
     role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
   const target =
     entry === null && ownLevel !== null && NUMBERED_ONLY.has(role)
-      ? styleTarget(context, "body")
-      : styleTarget(context, styleRole);
+      ? styleTarget(context, "body", profile)
+      : styleTarget(context, styleRole, profile);
   const mark = (block.label ?? "").trim();
   const bulleted = entry === null && isBulleted(block);
   const placement: Placement = {
@@ -2861,12 +2900,8 @@ export const buildTemplatePlan = ({
     exclusions,
     decisions,
     proposalById: new Map(roles.map((role) => [role.blockId, role])),
-    outline: {
-      article: profile.roles.articleHeading?.numbering ?? null,
-      clauses: CLAUSE_ROLES.map(
-        (role) => profile.roles[role]?.numbering ?? null,
-      ),
-    },
+    outline: outlineOf(profile),
+    annex: annexOf(profile),
     stylelessRoles: new Map(),
     items: [],
   };
