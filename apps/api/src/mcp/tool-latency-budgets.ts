@@ -65,6 +65,7 @@ type LongByDesignTool = Extract<
   | "prepare_file_comparison_from_links"
   | "upload_document_version"
   | "save_filled_template"
+  | "reformat_into_template"
   | "compare_documents"
 >;
 
@@ -135,6 +136,11 @@ export const MCP_TOOL_LATENCY_BUDGET_OVERRIDES = {
     budgetMs: 330_000,
     reason:
       "Renders the filled document, capped at five minutes, then persists it; the CLI leaf grants the same.",
+  },
+  reformat_into_template: {
+    budgetMs: 90_000,
+    reason:
+      "Reads two stored DOCX files, applies the template within a minute, retries included, then scans and stores the output.",
   },
   compare_documents: {
     budgetMs: 600_000,

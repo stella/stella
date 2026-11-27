@@ -36,7 +36,8 @@ describe("proposeBlockRoles", () => {
       "SMLOUVA O DODÁVCE": "title",
       "Dodavatel: Horák Stavby s.r.": "party",
       "(dále jen „dodavatel“)": "party",
-      a: "party",
+      // The word between two parties is text of the page.
+      a: "body",
       "uzavírají tuto smlouvu:": "recital",
       "Článek I.": "articleHeading",
       "Úvodní ustanovení": "articleHeading",
@@ -114,6 +115,194 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a short line without a number that the source centres or sets as a heading heads a part", () => {
+    const manifest = manifestOf([
+      "SMLOUVA O DÍLO",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Beta a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+      "Preambule a účel smlouvy",
+      "Strany uzavírají tuto smlouvu.",
+      "Článek I.\nPředmět",
+      "1.1\tZhotovitel provede dílo.",
+      "Zvláštní ujednání",
+      "Strany se dohodly na dalších podmínkách.",
+      "(dále jen „Podmínky“)",
+      "Dílo bude předáno do konce roku.",
+      "Bez čísla a bez zarovnání",
+    ]);
+    const centred = new Set([
+      "Preambule a účel smlouvy",
+      "Zvláštní ujednání",
+      "(dále jen „Podmínky“)",
+      "Dílo bude předáno do konce roku.",
+    ]);
+    for (const block of manifest.blocks) {
+      if (centred.has(block.text)) {
+        block.alignment = "center";
+      }
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["Preambule a účel smlouvy"]).toBe("heading");
+    expect(roles["Zvláštní ujednání"]).toBe("heading");
+    // A line in brackets, a sentence, a line the source does not set apart.
+    expect(roles["(dále jen „Podmínky“)"]).toBe("continuation");
+    expect(roles["Dílo bude předáno do konce r"]).toBe("continuation");
+    expect(roles["Bez čísla a bez zarovnání"]).toBe("continuation");
+  });
+
+  test("a heading right above the sentence that opens the preamble heads it; a centred heading further down the outline stays text", () => {
+    const manifest = manifestOf([
+      "PURCHASE AGREEMENT",
+      "Alfa Ltd, with its registered office at 1 Long Street, London, company number 00000001",
+      "and",
+      "Beta Ltd, with its registered office at 2 Short Street, Leeds, company number 00000002",
+      "Purpose",
+      "",
+      "The parties have agreed as follows.",
+      "Article 1\nSubject",
+      "1.1\tThe seller delivers the goods.",
+      "Delivery terms",
+      "The goods are delivered to the buyer's seat.",
+    ]);
+    for (const block of manifest.blocks) {
+      if (block.text === "Purpose" || block.text === "Delivery terms") {
+        block.alignment = "center";
+      }
+      if (block.text === "Delivery terms") {
+        block.outlineLevel = 1;
+      }
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["Purpose"]).toBe("heading");
+    expect(roles["and"]).toBe("body");
+    expect(roles["Beta Ltd, with its registere"]).toBe("party");
+    expect(roles["Delivery terms"]).not.toBe("heading");
+  });
+
+  test("the line that announces the parties and the word between them are no party's lines", () => {
+    const roles = rolesOf(
+      manifestOf([
+        "KUPNÍ SMLOUVA",
+        "uzavřená mezi:",
+        "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+        "a",
+        "Beta a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+        "Článek I.\nPředmět",
+        "1.1\tProdávající dodá zboží.",
+      ]),
+    );
+    expect(roles["uzavřená mezi:"]).toBe("body");
+    expect(roles["a"]).toBe("body");
+    expect(roles["Alfa s.r.o., se sídlem Dlouh"]).toBe("party");
+    expect(roles["Beta a.s., se sídlem Krátká "]).toBe("party");
+  });
+
+  test("numbered lines that head the parties are parties, and the provisions begin behind them", () => {
+    const numberedParties = manifestOf([
+      "KUPNÍ SMLOUVA",
+      "mezi:",
+      numbered("1.", "Alfa s.r.o.", 5),
+      "se sídlem Dlouhá 1, Praha",
+      "IČO: 00000001",
+      "- dále jen „Prodávající“ -",
+      "a",
+      numbered("2.", "Beta a.s.", 5),
+      "se sídlem Krátká 2, Brno",
+      "- dále jen „Kupující“ -",
+      "Článek I.\nPředmět",
+      numbered("1.", "Prodávající dodá zboží.", 10),
+      numbered("2.", "Kupující zaplatí cenu.", 10),
+    ]);
+    const roles = rolesOf(numberedParties);
+    expect(roles["Alfa s.r.o."]).toBe("party");
+    expect(roles["Beta a.s."]).toBe("party");
+    expect(roles["se sídlem Dlouhá 1, Praha"]).toBe("party");
+    expect(roles["- dále jen „Kupující“ -"]).toBe("party");
+    expect(roles["a"]).toBe("body");
+    expect(roles["Prodávající dodá zboží."]).toBe("clause1");
+    expect(roles["Kupující zaplatí cenu."]).toBe("clause1");
+
+    // Letters head them as numbers do, and the second party may have no
+    // details of its own behind the word that joins the two.
+    const lettered = rolesOf(
+      manifestOf([
+        "SUPPORT CONTRACT",
+        "a) Alpha Ltd, registered office 1 Long Street, London",
+        "of the one part and",
+        "b) [full official name]",
+        "have agreed as follows:",
+        "Article 1\nSubject",
+        "1.1\tThe supplier delivers the goods.",
+      ]),
+    );
+    expect(lettered["a) Alpha Ltd, registered off"]).toBe("party");
+    expect(lettered["b) [full official name]"]).toBe("party");
+    expect(lettered["1.1\tThe supplier delivers the goods.".slice(0, 28)]).toBe(
+      "clause1",
+    );
+
+    // Behind parties without numbers and the sentence that opens the
+    // operative part, numbered lines are provisions, whatever they speak
+    // of.
+    const operative = rolesOf(
+      manifestOf([
+        "SUPPLY AGREEMENT",
+        "Alpha Ltd, registered office 1 Long Street, London",
+        "and",
+        "Beta Ltd, registered office 2 Short Street, Leeds",
+        "have agreed as follows:",
+        "1. Notices shall be delivered to the registered office.",
+        "2. Each party shall notify changes to its company number.",
+      ]),
+    );
+    expect(
+      operative[
+        "1. Notices shall be delivered to the registered office.".slice(0, 28)
+      ],
+    ).toBe("clause1");
+    expect(
+      operative[
+        "2. Each party shall notify changes to its company number.".slice(0, 28)
+      ],
+    ).toBe("clause1");
+
+    // Numbered provisions that name no party stay provisions, also where
+    // a later one speaks of a registered office.
+    const provisions = rolesOf(
+      manifestOf([
+        "SMLOUVA",
+        numbered("1.", "Prodávající dodá zboží.", 10),
+        numbered("2.", "Kupující, se sídlem v Brně, zaplatí cenu.", 10),
+      ]),
+    );
+    expect(provisions["Prodávající dodá zboží."]).toBe("clause1");
+    expect(
+      provisions["Kupující, se sídlem v Brně, zaplatí cenu.".slice(0, 28)],
+    ).toBe("clause1");
+  });
+
+  test("the line that announces the parties is no line of the title, centred or in capitals", () => {
+    const lines = (intro: string) => [
+      "PURCHASE AGREEMENT",
+      intro,
+      "Alfa Ltd, with its registered office at 1 Long Street, London, company number 00000001",
+      "and",
+      "Beta Ltd, with its registered office at 2 Short Street, Leeds, company number 00000002",
+      "Article 1\nSubject",
+      "1.1\tThe seller delivers the goods.",
+    ];
+    const centred = manifestOf(lines("between:"));
+    for (const block of centred.blocks) {
+      if (block.text === "between:") {
+        block.alignment = "center";
+      }
+    }
+    expect(rolesOf(centred)["between:"]).toBe("body");
+    expect(rolesOf(manifestOf(lines("BY AND BETWEEN")))["BY AND BETWEEN"]).toBe(
+      "body",
+    );
+  });
+
   test("a bullet whose mark is a letter is a bullet", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -162,7 +351,7 @@ describe("proposeBlockRoles", () => {
         ?.confidence;
     expect(confidenceOf("SMLOUVA O DODÁVCE")).toBe(0.85);
     expect(confidenceOf("Dodavatel:")).toBe(0.85);
-    expect(confidenceOf("a")).toBe(0.6);
+    expect(confidenceOf("a")).toBe(0.5);
     expect(confidenceOf("Článek II.")).toBe(0.95);
     expect(confidenceOf("První ujednání, oddíl II.")).toBe(0.9);
     expect(confidenceOf("V Praze dne")).toBe(0.85);
@@ -223,6 +412,53 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a centred marking right above the title does not take the title's place", () => {
+    const manifest = manifestOf([
+      "Confidential",
+      "AGREEMENT IN PRINCIPLE",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Článek I.\nPředmět",
+      "1.1\tProdávající dodá zboží.",
+    ]);
+    const [marking] = manifest.blocks;
+    if (marking !== undefined) {
+      marking.alignment = "center";
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["AGREEMENT IN PRINCIPLE"]).toBe("title");
+    expect(roles["Confidential"]).toBe("body");
+    // A centred title in ordinary case stays the title when no line shaped
+    // as one stands under it.
+    const plain = manifestOf([
+      "Smlouva o dílo",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Článek I.\nPředmět",
+      "1.1\tProdávající dodá zboží.",
+    ]);
+    const [title] = plain.blocks;
+    if (title !== undefined) {
+      title.alignment = "center";
+    }
+    expect(rolesOf(plain)["Smlouva o dílo"]).toBe("title");
+  });
+
+  test("in a letter or a memo a line that is merely centred does not take the title's place", () => {
+    const manifest = manifestOf([
+      "Confidential",
+      "AGREEMENT IN PRINCIPLE",
+      "We set out below what was agreed at the meeting.",
+    ]);
+    const [marking] = manifest.blocks;
+    if (marking !== undefined) {
+      marking.alignment = "center";
+    }
+    expect(rolesOf(manifest)).toEqual({
+      Confidential: "body",
+      "AGREEMENT IN PRINCIPLE": "title",
+      "We set out below what was ag": "body",
+    });
+  });
+
   test("a capital letter labels a recital only in front of the operative part", () => {
     const manifest = manifestOf([
       "SMLOUVA O DÍLO",
@@ -263,6 +499,26 @@ describe("proposeBlockRoles", () => {
     ).toEqual(["p0", "p4", "p5"]);
     const cells = inColumns(2, ["položka", "cena"]);
     expect(proposeBlockRoles({ manifest: cells })).toEqual([]);
+  });
+
+  test("a number with no words in a table cell counts the rows and is no provision", () => {
+    // A list numbers the rows of a table: the first cell of each row holds
+    // the number and nothing else.
+    const counted = inColumns(2, [
+      numbered("1.", "", 7),
+      "nález",
+      numbered("2.", "", 7),
+      "doporučení",
+    ]);
+    expect(proposeBlockRoles({ manifest: counted })).toEqual([]);
+    // With words behind it, a number in a cell is a provision.
+    const provisions = inColumns(2, [
+      numbered("1.", "Dodavatel dodá zboží.", 7),
+      "The supplier delivers the goods.",
+    ]);
+    expect(
+      proposeBlockRoles({ manifest: provisions }).map(({ blockId }) => blockId),
+    ).toContain("p0");
   });
 
   test("a paragraph that holds only a picture is read, a bulleted one is a bullet", () => {

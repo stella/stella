@@ -8,16 +8,16 @@ import {
 } from "@stll/api-contract/legislation-expression";
 import { statuteChangeCountsSchema } from "@stll/api-contract/statute-version-changes";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import {
+  DECISION_SECTION_TYPES,
+  emptyAstSchema,
+} from "@stll/legal-ast/document-types";
 import { GOVERNING_WORDING_POSITIONS } from "@stll/legal-ast/provision-preview";
 import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
 
 import { PROVISION_WORDING_CHANGES } from "@/api/handlers/legislation/provision-wording-change";
 import type { provisionPreviewOutput } from "@/api/lib/chat/decision-reader-projections";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import {
-  DECISION_SECTION_TYPES,
-  emptyAstSchema,
-} from "@/api/lib/legal-search/document-types";
 import {
   type LegislationAmendmentEffect,
   legislationAmendmentEffectSchema,

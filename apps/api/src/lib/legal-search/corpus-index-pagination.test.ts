@@ -967,6 +967,53 @@ describe("document paging survives the passage fan-out", () => {
   });
 });
 
+describe("a copy whose delete is still in flight is never read", () => {
+  test("only the applied revision's passages place and count a document", async () => {
+    // A new revision appended beside an older one whose exact delete waits on
+    // a split to mature: the engine still returns both copies' passages.
+    const deleting = "0b6f3a52-1d7e-4f0a-9c2b-5e8d7a6f4c32";
+    engineHits = [
+      // doc-a matches only through the copy being deleted.
+      {
+        document_id: "doc-a",
+        anchor_id: "a-old",
+        projection_revision: deleting,
+      },
+      {
+        document_id: "doc-b",
+        anchor_id: "b-old",
+        projection_revision: deleting,
+      },
+      { document_id: "doc-b", anchor_id: "b-new-1" },
+      { document_id: "doc-c", anchor_id: "c-new" },
+      { document_id: "doc-b", anchor_id: "b-new-2" },
+      {
+        document_id: "doc-a",
+        anchor_id: "a-old-2",
+        projection_revision: deleting,
+      },
+    ];
+
+    const page = await readPage();
+
+    expect(page.pageRanked.map((hit) => hit.id)).toEqual(["doc-b", "doc-c"]);
+    expect(page.passageCountById.get("doc-b")).toBe(2);
+    expect(page.passageCountById.get("doc-c")).toBe(1);
+    // The highlight round asks for the applied copy alone.
+    const highlights = requestBodies
+      .filter((body) => body["snippet_fields"] !== undefined)
+      .map((body) => String(body["query"]));
+    expect(highlights.join("\n")).not.toContain(deleting);
+    expect(
+      highlights.some((query) =>
+        query.includes(
+          `document_id:"doc-b" AND projection_revision:"${testRevisionOf("doc-b")}"`,
+        ),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("split legislation stays one hit across cursor pages", () => {
   test("each act appears once even when several passages match", async () => {
     const acts = ["act-a", "act-b", "act-c", "act-d"];

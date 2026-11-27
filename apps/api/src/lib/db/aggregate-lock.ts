@@ -86,10 +86,11 @@ import {
   DOCUMENT_REVIEW_RUN_EXECUTOR,
 } from "@/api/lib/document-review/run-contract";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  corpusIndexProjectionAppendGateIsClear,
   corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionCleanupIsDue,
-  corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionNeedsWork,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -4454,18 +4455,78 @@ const appendIsUnblocked = corpusIndexProjectionAppendIsUnblocked(
   corpusIndexProjectionStates,
 );
 
-const noOutstandingIntent = sql`NOT EXISTS (
+/**
+ * No other revision of the state's entity holds its append back
+ * (`corpusIndexProjectionAppendGateIsClear`), correlated to
+ * `corpus_index_projection_states`.
+ */
+export const corpusProjectionAppendGateIsClear = (
+  retrieval: CorpusRevisionRetrieval,
+): SQL =>
+  corpusIndexProjectionAppendGateIsClear({
+    retrieval,
+    others: (condition) => sql`
       SELECT 1
       FROM ${corpusIndexProjectionIntents} outstanding
       WHERE outstanding.family = ${corpusIndexProjectionStates.family}
         AND outstanding.generation = ${corpusIndexProjectionStates.generation}
         AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
-        AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
-    )`;
+        AND ${condition(sql`outstanding.status`)}`,
+  });
+
+/**
+ * A state the append walk takes once its queue instant comes: an upsert that
+ * needs work, names no live copy, and has nothing holding its append back.
+ * The walk's own predicate; the deferred-state wake reads the same one.
+ */
+const appendWalkTakes = (retrieval: CorpusRevisionRetrieval) =>
+  and(
+    eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+    inArray(corpusIndexProjectionStates.workStatus, [
+      "eligible",
+      "retry_scheduled",
+      "repair_scheduled",
+    ]),
+    pendingDesiredState,
+    appendIsUnblocked,
+    corpusProjectionAppendGateIsClear(retrieval),
+  );
+
+/**
+ * States of an active generation (building or serving, as the walk reads)
+ * that the walk would take but that a settlement bound queued for later:
+ * no failure backoff, `updated_at` after the transaction's `now()`. Only a
+ * caller that knows the generation stores its revision may wake them.
+ */
+export const corpusProjectionDeferredAppendStates = ({
+  family,
+  generation,
+  retrieval,
+}: {
+  family: CorpusFamily;
+  generation: string;
+  retrieval: CorpusRevisionRetrieval;
+}): SQL =>
+  and(
+    eq(corpusIndexProjectionStates.family, family),
+    eq(corpusIndexProjectionStates.generation, generation),
+    sql`EXISTS (
+      SELECT 1
+      FROM ${corpusIndexGenerations} registered
+      WHERE registered.family = ${corpusIndexProjectionStates.family}
+        AND registered.generation = ${corpusIndexProjectionStates.generation}
+        AND registered.status IN ('building', 'serving')
+    )`,
+    isNull(corpusIndexProjectionStates.retryNotBefore),
+    sql`${corpusIndexProjectionStates.updatedAt} > now()`,
+    appendWalkTakes(retrieval),
+  ) ?? panic("The deferred-state predicate is empty");
 
 type CorpusProjectionReservationQueueOptions = {
   family: CorpusFamily;
   generation: string;
+  /** The generation's `corpusIndexRevisionRetrieval`, from its manifest. */
+  revisionRetrieval: CorpusRevisionRetrieval;
   limit: number;
   eligibilityAt: Date;
   scopedEntityIds: readonly string[] | null;
@@ -4503,6 +4564,7 @@ export const corpusProjectionReservationQueue = (
   {
     family,
     generation,
+    revisionRetrieval,
     limit,
     eligibilityAt,
     scopedEntityIds,
@@ -4556,12 +4618,6 @@ export const corpusProjectionReservationQueue = (
           : notInArray(corpusIndexProjectionStates.desiredIndexId, [
               ...excludedIndexIds,
             ]),
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        inArray(corpusIndexProjectionStates.workStatus, [
-          "eligible",
-          "retry_scheduled",
-          "repair_scheduled",
-        ]),
         skipEntityIds.length === 0
           ? undefined
           : notInArray(corpusIndexProjectionStates.entityId, [
@@ -4575,9 +4631,7 @@ export const corpusProjectionReservationQueue = (
           : sql`(${runnableAt}, ${corpusIndexProjectionStates.entityId}) > (${after.runnableAt}::timestamptz, ${after.entityId})`,
         lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
-        pendingDesiredState,
-        appendIsUnblocked,
-        noOutstandingIntent,
+        appendWalkTakes(revisionRetrieval),
       ),
     )
     .orderBy(asc(runnableAt), asc(corpusIndexProjectionStates.entityId))
@@ -4587,6 +4641,39 @@ export const corpusProjectionReservationQueue = (
       skipLocked: true,
     });
 };
+
+/**
+ * Requeue at the present the next `limit` projection states `where` selects:
+ * rows taken in key order, a row another transaction holds left for a later
+ * batch, so the statement never waits on a writer. Only `updated_at` is
+ * written. Returns one row per state woken.
+ */
+export const wakeCorpusProjectionStatesQuery = ({
+  where,
+  limit,
+}: {
+  where: SQL;
+  limit: number;
+}): SQL => sql`
+  WITH due AS (
+    SELECT ${corpusIndexProjectionStates.family} AS family,
+      ${corpusIndexProjectionStates.generation} AS generation,
+      ${corpusIndexProjectionStates.entityId} AS entity_id
+    FROM ${corpusIndexProjectionStates}
+    WHERE ${where}
+    ORDER BY ${corpusIndexProjectionStates.family},
+      ${corpusIndexProjectionStates.generation},
+      ${corpusIndexProjectionStates.entityId}
+    LIMIT ${limit}
+    FOR UPDATE OF ${corpusIndexProjectionStates} SKIP LOCKED
+  )
+  UPDATE ${corpusIndexProjectionStates}
+  SET updated_at = now()
+  FROM due
+  WHERE ${corpusIndexProjectionStates.family} = due.family
+    AND ${corpusIndexProjectionStates.generation} = due.generation
+    AND ${corpusIndexProjectionStates.entityId} = due.entity_id
+  RETURNING ${corpusIndexProjectionStates.entityId}`;
 
 type CorpusIndexGenerationKey = { family: CorpusFamily; generation: string };
 

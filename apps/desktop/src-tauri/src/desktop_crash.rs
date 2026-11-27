@@ -250,12 +250,24 @@ impl DesktopCrashMonitor {
 
   fn acquire_with_retry(&self, policy: &RetryPolicy) -> io::Result<Acquisition> {
     let started = Instant::now();
+    self.acquire_with_retry_with(policy, |delay| {
+      std::thread::sleep(delay);
+      started.elapsed()
+    })
+  }
+
+  fn acquire_with_retry_with(
+    &self,
+    policy: &RetryPolicy,
+    mut wait: impl FnMut(Duration) -> Duration,
+  ) -> io::Result<Acquisition> {
+    let mut elapsed = Duration::ZERO;
     let mut delay = policy.initial_delay;
     loop {
       if let result @ Acquisition::Complete(_) = self.try_acquire()? {
         return Ok(result);
       }
-      let remaining = policy.timeout.saturating_sub(started.elapsed());
+      let remaining = policy.timeout.saturating_sub(elapsed);
       if remaining.is_zero() {
         let mut state = self.state.lock().map_err(|poisoned| {
           io::Error::other(format!("crash marker lock unavailable: {poisoned}"))
@@ -266,7 +278,7 @@ impl DesktopCrashMonitor {
         drop(state);
         return Ok(Acquisition::Contended);
       }
-      std::thread::sleep(delay.min(remaining));
+      elapsed = wait(delay.min(remaining));
       delay = delay.saturating_mul(2).min(policy.maximum_delay);
     }
   }
@@ -617,16 +629,18 @@ mod tests {
       ));
       drop(state);
     }
-    let release = std::thread::spawn(move || {
-      std::thread::sleep(Duration::from_millis(20));
-      drop(previous);
-    });
-    let Acquisition::Complete(Some(previous)) =
-      replacement.acquire_with_retry(&TEST_RETRY_POLICY).unwrap()
+    let mut previous = Some(previous);
+    let mut waited = Duration::ZERO;
+    let Acquisition::Complete(Some(previous)) = replacement
+      .acquire_with_retry_with(&TEST_RETRY_POLICY, |delay| {
+        waited += delay;
+        previous.take();
+        waited
+      })
+      .unwrap()
     else {
       panic!("expected recovered ownership")
     };
-    release.join().unwrap();
     assert_eq!(previous.pid, 41);
     let current = read_marker(&path).unwrap().unwrap();
     assert_eq!(current.pid, 42);
@@ -888,6 +902,7 @@ mod tests {
   fn panic_hook_records_location_before_unwinding() {
     let _children = crate::test_child_processes::exclusive();
     let path = path();
+    // kit-allow: tests the process-global panic hook in an isolated child process
     let status = std::process::Command::new(std::env::current_exe().unwrap())
       .args([
         "--exact",

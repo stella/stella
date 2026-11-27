@@ -95,6 +95,8 @@ export const WRITE_TOOL_SCOPES = {
   set_practice_jurisdictions: organization,
   fill_template: organization,
   save_filled_template: matter,
+  // The new document is saved beside its source, inside the source's matter.
+  reformat_into_template: matter,
   create_template: organization,
   configure_template_fields: organization,
   // Each catalog capability enforces its own workspace access.

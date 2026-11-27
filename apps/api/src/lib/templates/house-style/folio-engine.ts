@@ -28,7 +28,7 @@ import type {
  *  or report by name, or `other`. Total over the engine's codes, so a code a
  *  later release adds does not compile until it is placed. */
 const REFUSALS = {
-  "archive-unreadable": "other",
+  "archive-unreadable": "archive-unreadable",
   "part-missing": "other",
   "xml-unreadable": "other",
   "plan-invalid": "other",
@@ -47,7 +47,7 @@ const REFUSALS = {
   "style-unknown": "other",
   "tracked-changes": "tracked-changes",
   "unsupported-content": "unsupported-content",
-  "verification-failed": "other",
+  "verification-failed": "verification-failed",
 } as const satisfies Record<TemplatePlanError["code"], TemplateEngineRefusal>;
 
 const refused = ({
@@ -117,8 +117,14 @@ const readHighlightColors = async (docx: Uint8Array): Promise<string[]> => {
  * page counts are measured where a font-carrying layout is set up.
  */
 export const folioTemplatePlanEngine: TemplatePlanEngine = {
-  analyze: async (docx) => {
-    const analyzed = await analyzeDocxBlocks(docx);
+  analyze: async (docx, options) => {
+    // One view of a document with tracked changes, when the caller names
+    // it; without one the engine reads the document as it stands.
+    const view = options?.trackedChanges;
+    const analyzed = await analyzeDocxBlocks(
+      docx,
+      view === undefined ? {} : { trackedChanges: view },
+    );
     return analyzed.isErr()
       ? Result.err(refused(analyzed.error))
       : Result.ok({

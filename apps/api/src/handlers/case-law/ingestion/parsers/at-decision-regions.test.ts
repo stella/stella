@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {

@@ -148,14 +148,15 @@ describe("spawnWorker", () => {
   // the signal fires.
   test("classifies caller cancellation and kills the subprocess promptly", async () => {
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), 250);
-    const result = await spawnWorker({
+    const pending = spawnWorker({
       workerPath: SLEEP_WORKER,
       stdin: new Blob([""]),
       timeoutMs: 600_000,
       signal: abort.signal,
     });
-    clearTimeout(timer);
+    const cancelHandle = setImmediate(() => abort.abort());
+    const result = await pending;
+    clearImmediate(cancelHandle);
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {

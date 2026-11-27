@@ -4,6 +4,7 @@ import { mkdir } from "node:fs/promises";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 import { caseLawCitations, publishedCaseLawDecisions } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -20,7 +21,6 @@ import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-rea
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   decisionConfidenceFloor,

@@ -311,6 +311,12 @@ type RunChecksOptions = {
   concurrency: number;
   /** Without it, only `concurrency` bounds the pool. */
   memory?: MemoryAdmission;
+  /**
+   * Optional dispatch priority (higher values start first, e.g. measured p95
+   * duration for longest-processing-time-first scheduling). Ties preserve
+   * registry order, and results/logs always report in registry order.
+   */
+  priority?: (check: PoolCheck) => number;
   launch: (
     index: number,
     check: PoolCheck,
@@ -324,16 +330,20 @@ type RunChecksOptions = {
 };
 
 /**
- * Run selected checks with at most `concurrency` in flight, in registry
- * order. With memory admission, a check starts only while the measured peaks
- * of the checks in flight plus its own fit the budget; the first queued check
- * that fits starts, and a check above the whole budget runs alone. A failure
- * never stops other checks; results come back in order.
+ * Run selected checks with at most `concurrency` in flight. When `priority`
+ * is provided, higher-priority checks dispatch first (longest-processing-time
+ * first), with ties broken by registry order; otherwise checks dispatch in
+ * registry order. With memory admission, a check starts only while the
+ * measured peaks of the checks in flight plus its own fit the budget; the
+ * first queued check that fits starts, and a check above the whole budget runs
+ * alone. A failure never stops other checks; results always come back in
+ * registry order.
  */
 export const runChecks = async ({
   planned,
   concurrency,
   memory,
+  priority,
   launch,
   report,
   finished = () => undefined,
@@ -429,6 +439,16 @@ export const runChecks = async ({
       finished(item.index, result);
       settle(item.index, result);
     }
+  }
+  if (priority !== undefined) {
+    const priorities = new Map<number, number>(
+      queue.map((item) => [item.index, Math.max(0, priority(item.check))]),
+    );
+    queue.sort(
+      (left, right) =>
+        (priorities.get(right.index) ?? 0) -
+          (priorities.get(left.index) ?? 0) || left.index - right.index,
+    );
   }
   const peak = (item: Queued) => weights.get(item.index) ?? 0;
   await new Promise<void>((resolve, reject) => {
@@ -1518,6 +1538,7 @@ const main = async () => {
     planned,
     concurrency,
     memory,
+    priority: (check) => checkBudgetP95Seconds(budgets, job, check.name),
     launch: async (index, check, env) => {
       const entry: UnreportedCheck = {
         name: check.name,

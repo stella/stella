@@ -1,3 +1,5 @@
+// parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored document; the parse itself is unchanged.
 import { panic } from "better-result";
 /**
@@ -50,19 +52,19 @@ import type {
   TableBlock,
   TableCell,
 } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 // parser-output-unchanged: the inline-line helpers moved unchanged to their package owner.
 import {
   normalizeInlineLine,
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 import { restoreHungarianLetters } from "@stll/text-normalize/hungarian-letters";
 import { parsePlainDate } from "@stll/time";
 
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import {
   type BodyDocumentLine,

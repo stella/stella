@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { createBlockAnchorAllocator } from "./block-anchors";
+import { createBlockAnchorAllocator } from "./block-anchors.js";
 
 test("any preferred anchor sequence receives unique document anchors", () => {
   assertProperty(

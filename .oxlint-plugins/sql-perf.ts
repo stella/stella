@@ -1,22 +1,16 @@
-// Guard reviewable SQL scan shapes. Existing unsuppressed hits are held by a
-// per-file shrink-only baseline; a new hit reports every unsuppressed site in
-// that file. A nearby sql-perf-allow comment must give a concrete bound.
-// Per-source counts require single-source equality; grouped source facets are not covered.
+// Guard reviewable SQL scan shapes. A nearby sql-perf-allow comment must give
+// a concrete bound. Per-source counts require single-source equality; grouped
+// source facets are not covered.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import {
-  analyzeSqlPerf,
-  isBaselinedSqlPerfKind,
-} from "../scripts/sql-perf-detector.ts";
-import baselineCounts from "./sql-perf-baseline.json" with { type: "json" };
+import { analyzeSqlPerf } from "../scripts/sql-perf-detector.ts";
 import { filenameForContext } from "./utils.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const baseline = new Map<string, number>(Object.entries(baselineCounts));
 
 const message = (shape: string) =>
   `${shape} can scan rows before output is bounded. Use // sql-perf-allow: ` +
@@ -58,15 +52,7 @@ export default eslintCompatPlugin({
                 data: { reason: error.message },
               });
             }
-            const legacyHits = hits.filter((hit) =>
-              isBaselinedSqlPerfKind(hit.kind),
-            );
-            const legacyOverBaseline =
-              legacyHits.length > (baseline.get(relative) ?? 0);
             for (const hit of hits) {
-              if (isBaselinedSqlPerfKind(hit.kind) && !legacyOverBaseline) {
-                continue;
-              }
               context.report({
                 loc: { line: hit.line, column: hit.column },
                 messageId: hit.kind,

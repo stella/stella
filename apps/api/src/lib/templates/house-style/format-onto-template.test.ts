@@ -247,6 +247,118 @@ describe("formatOntoTemplate", () => {
     ).toEqual([]);
   });
 
+  test("numbers a typed label on a paragraph whose own list prints nothing", async () => {
+    // A heading style bound to a list for its outline only: the engine
+    // reports an empty label for the paragraph and the typed one is
+    // stripped onto the template's list.
+    const silent = {
+      ...manifest,
+      blocks: manifest.blocks.map((block) =>
+        block.id === article
+          ? {
+              ...block,
+              label: "",
+              numbering: { numId: 9, ilvl: 0, abstractNumId: 9 },
+            }
+          : block,
+      ),
+    };
+    const engine = fakeEngine(silent, []);
+    const formatted = (
+      await formatOntoTemplate({
+        engine,
+        source: SOURCE,
+        template: TEMPLATE,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.outcome).toMatchObject({ attempts: 1, repairs: [] });
+    expect(numberingOf(engine.plans.at(0), article)).toMatchObject({
+      stripLabel: expect.stringContaining("II"),
+    });
+  });
+
+  test("formats one view of a document with tracked changes and says which", async () => {
+    const tracked = {
+      insertions: 3,
+      deletions: 1,
+      moves: 0,
+      paragraphMarks: 1,
+      tableRows: 0,
+      formattingChanges: 2,
+      authors: ["First Author", "Second Author"],
+      first: "2026-01-05T10:00:00Z",
+      last: "2026-02-07T09:30:00Z",
+    };
+    const views: (string | undefined)[] = [];
+    const viewing = (): FakeEngine => {
+      const engine = fakeEngine(manifest, []);
+      return {
+        ...engine,
+        analyze: async (_docx, options) => {
+          views.push(options?.trackedChanges);
+          return await Promise.resolve(
+            Result.ok(
+              options?.trackedChanges === undefined
+                ? { ...manifest, trackedChanges: 5, revisions: tracked }
+                : {
+                    ...manifest,
+                    trackedChangesResolved: {
+                      view: options.trackedChanges,
+                      ...tracked,
+                    },
+                  },
+            ),
+          );
+        },
+      };
+    };
+    // Nobody chose: every change is accepted, and the note leads with it.
+    const byDefault = viewing();
+    const accepted = (await format(byDefault)).unwrap();
+    expect(views).toEqual([undefined, "accept"]);
+    expect(accepted.plan.trackedChanges).toBe("accept");
+    // The result carries the source as it was formatted: that view.
+    expect(accepted.manifest.trackedChangesResolved?.view).toBe("accept");
+    expect(accepted.note.items.at(0)).toEqual({
+      kind: "trackedChangesResolved",
+      view: "accept",
+      stated: false,
+      ...tracked,
+    });
+    // The caller's choice stands.
+    const rejected = (
+      await formatOntoTemplate({
+        engine: viewing(),
+        source: SOURCE,
+        template: TEMPLATE,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+        trackedChanges: "reject",
+      })
+    ).unwrap();
+    expect(rejected.plan.trackedChanges).toBe("reject");
+    expect(rejected.note.items.at(0)).toMatchObject({
+      view: "reject",
+      stated: true,
+    });
+    // A document that tracks nothing is read once and its plan names no view.
+    views.length = 0;
+    const plain = fakeEngine(manifest, []);
+    const untracked = (
+      await format({
+        ...plain,
+        analyze: async (_docx, options) => {
+          views.push(options?.trackedChanges);
+          return await Promise.resolve(Result.ok(manifest));
+        },
+      })
+    ).unwrap();
+    expect(views).toEqual([undefined]);
+    expect(untracked.plan.trackedChanges).toBeUndefined();
+  });
+
   test("a bullet whose mark reads as another character in the output is still kept", async () => {
     // The same bullet is another glyph in another font: the engine reports
     // the output's mark as it renders it.
@@ -281,38 +393,6 @@ describe("formatOntoTemplate", () => {
     expect(formatted.outcome).toMatchObject({ attempts: 1, repairs: [] });
     expect(numberingOf(engine.plans.at(0), bulletId)).toMatchObject({
       numbering: expect.objectContaining({ ilvl: expect.any(Number) }),
-    });
-  });
-
-  test("numbers a typed label on a paragraph whose own list prints nothing", async () => {
-    // A heading style bound to a list for its outline only: the engine
-    // reports an empty label for the paragraph and the typed one is
-    // stripped onto the template's list.
-    const silent = {
-      ...manifest,
-      blocks: manifest.blocks.map((block) =>
-        block.id === article
-          ? {
-              ...block,
-              label: "",
-              numbering: { numId: 9, ilvl: 0, abstractNumId: 9 },
-            }
-          : block,
-      ),
-    };
-    const engine = fakeEngine(silent, []);
-    const formatted = (
-      await formatOntoTemplate({
-        engine,
-        source: SOURCE,
-        template: TEMPLATE,
-        mode: "keepSource",
-        resolveAmbiguities: resolveAmbiguitiesByRule,
-      })
-    ).unwrap();
-    expect(formatted.outcome).toMatchObject({ attempts: 1, repairs: [] });
-    expect(numberingOf(engine.plans.at(0), article)).toMatchObject({
-      stripLabel: expect.stringContaining("II"),
     });
   });
 

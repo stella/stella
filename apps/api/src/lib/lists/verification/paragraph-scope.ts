@@ -23,6 +23,8 @@ import {
   opensWithCourtParagraphMarker,
 } from "@stll/legal-ast/court-paragraph-numbers";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { readPdfLineJoins } from "@stll/legal-ast/hard-wrapped-lines";
+import type { PdfPrintedLine } from "@stll/legal-ast/hard-wrapped-lines";
 import {
   LINE_CONTINUATION_SEPARATOR,
   LINE_JOIN,
@@ -30,8 +32,6 @@ import {
 import type { ParagraphRange } from "@stll/legal-ast/paragraph-range";
 import { readPrintedLabel } from "@stll/legal-ast/printed-paragraph-labels";
 
-import { readPdfLineJoins } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
-import type { PdfPrintedLine } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import type {
   ClaimAnchor,
   ParagraphNumbering,

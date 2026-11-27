@@ -3,9 +3,11 @@
 // parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+// parser-output-unchanged: typed publisher reads classify HTTP and body failures without changing parsed decision output.
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import type * as cheerio from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
 import {
@@ -28,7 +30,11 @@ import {
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
@@ -41,6 +47,11 @@ import {
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import {
+  type ReadOutcome,
+  readPresent,
+  readUnavailable,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -1266,8 +1277,6 @@ const publisherError = (
     ...(httpStatus === undefined ? {} : { httpStatus }),
   });
 
-type Requested = { status: number; body: string; url: string };
-
 type RequestOptions = {
   fetchStage: DocumentFetchStage;
   cursor: string;
@@ -1278,8 +1287,8 @@ type RequestOptions = {
   timeoutMs: number;
 };
 
-/** A response read up to the cap; `bytes` is null past it. */
-type Received = { status: number; bytes: Uint8Array | null; url: string };
+/** A response read up to the cap, typed by what the publisher established. */
+type Received = { outcome: ReadOutcome<Uint8Array>; url: string };
 
 const receive = async ({
   cursor,
@@ -1297,51 +1306,77 @@ const receive = async ({
   if (target === null) {
     return panic(`uzp request escaped the publisher origin: ${cursor}`);
   }
-  const response = await fetchWithRetry(
-    target.toString(),
-    {
-      method: form === undefined ? "GET" : "POST",
-      body: form?.toString(),
-      headers:
-        form === undefined
-          ? {}
-          : {
-              "Content-Type":
-                "application/x-www-form-urlencoded; charset=UTF-8",
-            },
-      redirect: "error",
-    },
-    {
-      fetchStage,
-      adapterKey: ADAPTER_KEYS.PL_KIO,
-      signal,
-      timeoutMs,
-    },
-  );
-  const bytes =
-    response.body === null
-      ? new Uint8Array()
-      : await readCappedBytes(
-          response.body,
-          PL_KIO_RESPONSE_BYTE_CAP[responseKind],
-        );
-  return { status: response.status, bytes, url: target.toString() };
+  const url = target.toString();
+  const responseOutcome = await readPublisher(url, {
+    method: form === undefined ? "GET" : "POST",
+    ...(form === undefined ? {} : { body: form.toString() }),
+    headers:
+      form === undefined
+        ? {}
+        : {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          },
+    redirect: "error",
+    fetchStage,
+    refusalScope: fetchStage === "listing" ? "source" : "document",
+    adapterKey: ADAPTER_KEYS.PL_KIO,
+    retryPolicy: "publisher-backoff",
+    signal,
+    timeoutMs,
+  });
+  if (responseOutcome.type !== "present") {
+    return { outcome: responseOutcome, url };
+  }
+  const { body, status } = responseOutcome.value;
+  if (body === null) {
+    return {
+      outcome: readUnavailable({ kind: "empty-body", status }),
+      url,
+    };
+  }
+  const cap = PL_KIO_RESPONSE_BYTE_CAP[responseKind];
+  const read = await Result.tryPromise({
+    try: async () => await readCappedBytes(body, cap),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(read)) {
+    rethrowCycleStop(read.error, signal);
+    if (BodyByteLimitError.is(read.error)) {
+      return {
+        outcome: readUnavailable({
+          kind: "too-large",
+          maxBytes: read.error.limit,
+        }),
+        url,
+      };
+    }
+    return {
+      outcome: readUnavailable({ kind: "thrown", error: read.error }),
+      url,
+    };
+  }
+  if (read.value === null) {
+    return {
+      outcome: readUnavailable({ kind: "too-large", maxBytes: cap }),
+      url,
+    };
+  }
+  if (read.value.length === 0) {
+    return {
+      outcome: readUnavailable({ kind: "empty-body", status }),
+      url,
+    };
+  }
+  return { outcome: readPresent(read.value), url };
 };
 
 const request = async (
   options: RequestOptions,
-): Promise<Result<Requested, AdapterFetchError>> => {
-  const { status, bytes, url } = await receive(options);
-  if (bytes === null) {
-    return Result.err(
-      publisherError(
-        options.cursor,
-        `${options.path} answered more than ${PL_KIO_RESPONSE_BYTE_CAP[options.responseKind]} bytes`,
-        status,
-      ),
-    );
-  }
-  return Result.ok({ status, body: new TextDecoder().decode(bytes), url });
+): Promise<{ outcome: ReadOutcome<string>; url: string }> => {
+  const { outcome, url } = await receive(options);
+  return outcome.type === "present"
+    ? { outcome: readPresent(new TextDecoder().decode(outcome.value)), url }
+    : { outcome, url };
 };
 
 type ListOptions = {
@@ -1399,20 +1434,17 @@ const listPage = async ({
     signal,
     timeoutMs: ADAPTER_TIMEOUT.LIST,
   });
-  if (Result.isError(requested)) {
-    return requested;
-  }
-  const answered = requested.value;
-  if (answered.status !== 200) {
+  if (requested.outcome.type !== "present") {
     return Result.err(
-      publisherError(
+      unreadPublisherError({
+        outcome: requested.outcome,
+        message: "orzeczenia.uzp.gov.pl: listing failed",
+        adapterKey: ADAPTER_KEYS.PL_KIO,
         cursor,
-        `listing answered ${answered.status}`,
-        answered.status,
-      ),
+      }),
     );
   }
-  const listing = readPlKioListing(answered.body);
+  const listing = readPlKioListing(requested.outcome.value);
   if (listing === null) {
     return Result.err(
       publisherError(cursor, "listing answered a page with no result count"),
@@ -1433,7 +1465,7 @@ const listPage = async ({
   return Result.ok({
     ...listing,
     total,
-    url: answered.url,
+    url: requested.url,
     form: form.toString(),
   });
 };
@@ -1460,7 +1492,7 @@ type FetchRulingOptions = {
  * refused request is the item's failure, never its absence; only the
  * database's own "no such page" is read as a record that is gone.
  */
-const fetchPlKioDecision = async ({
+export const fetchPlKioDecision = async ({
   cursor,
   item,
   signal,
@@ -1486,11 +1518,7 @@ const fetchPlKioDecision = async ({
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
-  if (Result.isError(detailRequested)) {
-    return detailRequested;
-  }
-  const detail = detailRequested.value;
-  if (detail.status === 404 || detail.status === 410) {
+  if (detailRequested.outcome.type === "absent") {
     return Result.ok(
       assemblePlKioDecision({
         item,
@@ -1499,14 +1527,21 @@ const fetchPlKioDecision = async ({
       }),
     );
   }
-  const record = detail.status === 200 ? readPlKioDetail(detail.body) : null;
+  if (detailRequested.outcome.type !== "present") {
+    return Result.err(
+      unreadPublisherError({
+        outcome: detailRequested.outcome,
+        message: `orzeczenia.uzp.gov.pl: record ${id} failed`,
+        adapterKey: ADAPTER_KEYS.PL_KIO,
+        cursor,
+      }),
+    );
+  }
+  const detailBody = detailRequested.outcome.value;
+  const record = readPlKioDetail(detailBody);
   if (record === null) {
     return Result.err(
-      publisherError(
-        cursor,
-        `record ${id} answered ${detail.status}`,
-        detail.status,
-      ),
+      publisherError(cursor, `record ${id} answered unreadable detail`, 200),
     );
   }
   const content = await receive({
@@ -1517,38 +1552,47 @@ const fetchPlKioDecision = async ({
     signal,
     timeoutMs: ADAPTER_TIMEOUT.PAGE,
   });
-  if (
-    content.status === 404 ||
-    content.status === 410 ||
-    (content.status === 200 && content.bytes === null)
-  ) {
-    // A missing document remains retryable. A response beyond the parser's
-    // resource budget is retained with an explicit exclusion for reconciliation.
+  if (content.outcome.type === "absent") {
     return Result.ok(
       assemblePlKioDecision({
         item,
-        detailHtml: detail.body,
-        document:
-          content.status === 200
-            ? { type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED }
-            : { type: "unavailable" },
+        detailHtml: detailBody,
+        document: { type: "unavailable" },
       }),
     );
   }
-  if (content.status !== 200 || content.bytes === null) {
+  if (
+    content.outcome.type === "unavailable" &&
+    content.outcome.cause.kind === "too-large"
+  ) {
+    // A response beyond the parser's resource budget is retained with an
+    // explicit exclusion for reconciliation.
+    return Result.ok(
+      assemblePlKioDecision({
+        item,
+        detailHtml: detailBody,
+        document: { type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED },
+      }),
+    );
+  }
+  if (content.outcome.type !== "present") {
     return Result.err(
-      publisherError(
+      unreadPublisherError({
+        outcome: content.outcome,
+        message: `orzeczenia.uzp.gov.pl: document ${id} failed`,
+        adapterKey: ADAPTER_KEYS.PL_KIO,
         cursor,
-        `document ${id} answered ${content.status}`,
-        content.status,
-      ),
+      }),
     );
   }
   return Result.ok(
     assemblePlKioDecision({
       item,
-      detailHtml: detail.body,
-      document: { type: "read", html: new TextDecoder().decode(content.bytes) },
+      detailHtml: detailBody,
+      document: {
+        type: "read",
+        html: new TextDecoder().decode(content.outcome.value),
+      },
     }),
   );
 };

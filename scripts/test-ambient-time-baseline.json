@@ -15,7 +15,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/db/backfill-runtime-load-reader.db.test.ts": {
-    "count": 5,
+    "count": 3,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

@@ -14123,6 +14123,7 @@ const OUTPUT_CHECK_PENDING: readonly string[] = [
   "read_case_law_decision_blocks",
   "read_contact",
   "read_guidance",
+  "reformat_into_template",
   "remove_matter_member",
   "resolve_case_law_decision",
   "resolve_law_citation",

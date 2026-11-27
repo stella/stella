@@ -23,6 +23,7 @@ import {
 import type { Transaction } from "@/api/db/types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
+  corpusProjectionAppendGateIsClear,
   corpusProjectionReservationQueue,
   type CorpusProjectionReservationQueueKey,
   lockCorpusProjectionAcceptedRows,
@@ -34,6 +35,7 @@ import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-clien
 import { unattestedCorpusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import {
   type CorpusIndexManifest,
+  corpusIndexRevisionRetrieval,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -73,10 +75,7 @@ import {
   entityIdsForCorpusProjectionWorkScope,
   indexIdForCorpusProjectionWorkScope,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
-import {
-  corpusIndexProjectionIntentIsOutstanding,
-  corpusIndexProjectionProducesAppend,
-} from "@/api/lib/legal-search/corpus-index-projection-sql";
+import { corpusIndexProjectionProducesAppend } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE =
@@ -153,11 +152,13 @@ const readPostgresClock = async (tx: Transaction): Promise<Date> => {
 };
 
 /**
- * Reserve exact append attempts only after every earlier revision for the
- * entity is terminal. The revision a state serves is not terminal, so a
- * replacement waits here, served at its current revision; nothing queues a
- * served revision for cleanup to make room. The operator controls how often
- * and how broadly this bounded primitive runs.
+ * Reserve exact append attempts only once no earlier revision of the entity
+ * holds the append back (`CORPUS_INDEX_INTENT_APPEND_GATE`): every one is
+ * terminal, or, in a generation whose hits carry their revision, is being
+ * deleted exactly. The revision a state serves holds it, so a replacement
+ * waits here, served at its current revision; nothing queues a served
+ * revision for cleanup to make room. The operator controls how often and how
+ * broadly this bounded primitive runs.
  */
 export const reserveCorpusProjectionIntentsTx = async <
   Family extends CorpusFamily,
@@ -283,6 +284,7 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
   const candidates = await corpusProjectionReservationQueue(tx, {
     family,
     generation,
+    revisionRetrieval: corpusIndexRevisionRetrieval(manifest),
     limit,
     eligibilityAt,
     scopedEntityIds,
@@ -887,8 +889,10 @@ const corpusProjectionOfflineRequestCap = (
  * failed on its documents, and those retired from a request killed at its
  * deadline, and the number each one's request actually delivered. Those
  * rows are history, so the cap survives
- * any crash, and the lease is the entity's only outstanding revision, so it
- * cannot shrink while the lease is held.
+ * any crash, and while the lease is held no other revision of its entity can
+ * enter them: a revision enters them only from an append in flight, and one
+ * in flight holds the reservation back (`CORPUS_INDEX_INTENT_APPEND_GATE`),
+ * so the cap cannot shrink.
  */
 export const readCorpusProjectionOfflineRequestCapsTx = async (
   tx: Transaction,
@@ -1580,7 +1584,11 @@ export type UnparkCorpusProjectionAppendOptions = {
 export type CorpusProjectionAppendUnparkResult =
   "unparked" | "not_blocked" | "cleanup_pending";
 
-/** Unpark one blocked entity after cleanup settles; retain singleton retry. */
+/**
+ * Unpark one blocked entity once no other revision holds its append back
+ * (`corpusProjectionAppendGateIsClear`, the reservation queue's own gate);
+ * retain singleton retry.
+ */
 export const unparkCorpusProjectionAppendTx = async (
   tx: Transaction,
   { family, generation, entityId, reason }: UnparkCorpusProjectionAppendOptions,
@@ -1592,7 +1600,7 @@ export const unparkCorpusProjectionAppendTx = async (
     );
   }
   await lockCorpusIndexProjectionMutationsTx(tx, [{ family, generation }]);
-  await lockRegisteredCorpusProjectionManifestForMutation(
+  const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     family,
     generation,
@@ -1612,21 +1620,21 @@ export const unparkCorpusProjectionAppendTx = async (
   if (state?.workStatus !== "blocked") {
     return "not_blocked";
   }
-  const outstanding = await tx
-    .select({ id: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
+  const clear = await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
     .where(
       and(
-        eq(corpusIndexProjectionIntents.family, family),
-        eq(corpusIndexProjectionIntents.generation, generation),
-        eq(corpusIndexProjectionIntents.entityId, entityId),
-        corpusIndexProjectionIntentIsOutstanding(
-          corpusIndexProjectionIntents.status,
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, entityId),
+        corpusProjectionAppendGateIsClear(
+          corpusIndexRevisionRetrieval(manifest),
         ),
       ),
     )
     .limit(1);
-  if (outstanding.length > 0) {
+  if (clear.length === 0) {
     return "cleanup_pending";
   }
   await tx

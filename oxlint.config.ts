@@ -5701,8 +5701,7 @@ const config = defineConfig({
       rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
     },
     {
-      // A failed read must not come back as an empty value; existing sites
-      // are held to the shrink-only baseline the rule reads.
+      // A failed read must not come back as an empty value.
       files: ["apps/api/src/**/*.ts", "packages/*/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "**/*.{test,spec}.{ts,tsx}",

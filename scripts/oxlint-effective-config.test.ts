@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  checkBaseline,
   compareSeverities,
   declaredBaseRules,
   effectiveBaseRules,
@@ -366,50 +365,5 @@ describe("compareSeverities", () => {
         skip: new Set(["eslint/complexity"]),
       }),
     ).toEqual([]);
-  });
-});
-
-describe("checkBaseline", () => {
-  const finding = {
-    rule: "jsdoc/require-param",
-    from: SEVERITY.error,
-    to: SEVERITY.off,
-    detail: "declared by preset",
-  };
-
-  test("accepts a recorded finding", () => {
-    expect(
-      checkBaseline([finding], {
-        "jsdoc/require-param": {
-          from: SEVERITY.error,
-          to: SEVERITY.off,
-          reason: "fixture",
-        },
-      }),
-    ).toEqual({ unexpected: [], stale: [] });
-  });
-
-  test("rejects a finding recorded with other severities", () => {
-    expect(
-      checkBaseline([finding], {
-        "jsdoc/require-param": {
-          from: SEVERITY.error,
-          to: SEVERITY.warn,
-          reason: "fixture",
-        },
-      }),
-    ).toEqual({ unexpected: [finding], stale: ["jsdoc/require-param"] });
-  });
-
-  test("reports an entry that no longer matches a finding", () => {
-    expect(
-      checkBaseline([], {
-        "oxc/no-map-spread": {
-          from: SEVERITY.off,
-          to: SEVERITY.error,
-          reason: "fixture",
-        },
-      }),
-    ).toEqual({ unexpected: [], stale: ["oxc/no-map-spread"] });
   });
 });

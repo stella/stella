@@ -1,6 +1,6 @@
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type {
   BodyDocumentLine,
   DocumentLine,

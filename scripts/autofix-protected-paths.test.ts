@@ -212,7 +212,7 @@ test.each(workflowCases)(
       rmSync(path.join(root, added));
 
       // A shrink-only baseline may lose stale entries, never gain one.
-      const baseline = BASELINE_PATHS.sqlPerf;
+      const baseline = BASELINE_PATHS.designLint;
       write(baseline, '{\n  "a.ts": 1,\n  "b.ts": 2\n}\n');
       write("changed.ts", "original\n");
       head = commit();

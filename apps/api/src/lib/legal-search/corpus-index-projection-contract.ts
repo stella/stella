@@ -108,6 +108,58 @@ export const CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES =
   );
 
 /**
+ * What another revision of an entity in each status does to a new append of
+ * that entity.
+ *
+ * - `holds`: it can still create or expose an append (reserved through
+ *   applied; an `applied` revision the walk can meet is one its state does
+ *   not name, so a census still has to decide it), or it waits for an
+ *   operator (`cleanup_stalled`). The new append waits.
+ * - `deleting`: an exact delete of that revision is queued, issued or
+ *   awaiting settlement; at most `CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS`
+ *   of them at once. The delete names its revision
+ *   (`corpusProjectionRevisionsQuery`), so it never reaches another one. A
+ *   generation whose hits carry their revision
+ *   (`corpusIndexRevisionRetrieval` is `stored`) shows readers only the copy
+ *   PostgreSQL names as applied, so a new revision may be appended beside the
+ *   one being deleted. A `query_only` generation cannot tell the copies apart
+ *   and waits for the delete to settle.
+ * - `quiescent`: nothing of that revision remains to act on.
+ *
+ * Erasure never reads this: it applies only once every revision is
+ * quiescent (`advanceCorpusProjectionErasuresTx`).
+ */
+export const CORPUS_INDEX_INTENT_APPEND_GATE = {
+  reserved: "holds",
+  append_started: "holds",
+  append_committed: "holds",
+  applied: "holds",
+  cleanup_pending: "deleting",
+  cleanup_started: "deleting",
+  cleanup_committed: "deleting",
+  cleanup_stalled: "holds",
+  settled: "quiescent",
+  cancelled: "quiescent",
+  withdrawn: "quiescent",
+} as const satisfies Record<
+  CorpusIndexIntentStatus,
+  "holds" | "deleting" | "quiescent"
+>;
+
+/**
+ * How many revisions being deleted a stored-revision append may run beside:
+ * one, so the index never holds two older copies of an entity beside the one
+ * readers are given. A second one waiting holds the append back as before.
+ */
+export const CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS = 1;
+
+/** Revisions whose exact delete a stored-revision append may run beside. */
+export const CORPUS_INDEX_DELETING_INTENT_STATUSES =
+  CORPUS_INDEX_INTENT_STATUSES.filter(
+    (status) => CORPUS_INDEX_INTENT_APPEND_GATE[status] === "deleting",
+  );
+
+/**
  * Why a reserved revision was cancelled instead of starting its append. The
  * start predicate rejects on the lease deadline or on the desired state, and
  * the two mean opposite things: a run of expiries says a cycle is slower than
@@ -239,7 +291,9 @@ export const CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES = [
 /**
  * Legal intent transitions. A response lost after an append never returns to
  * `reserved`: its revision is assumed written and must pass through exact
- * cleanup before the same desired epoch can be attempted again.
+ * cleanup. The same desired epoch is attempted again only as a new revision:
+ * after that cleanup settles, or, where hits carry their revision, beside it
+ * (`CORPUS_INDEX_INTENT_APPEND_GATE`).
  */
 export const CORPUS_INDEX_INTENT_TRANSITIONS = {
   reserved: ["append_started", "cancelled"],

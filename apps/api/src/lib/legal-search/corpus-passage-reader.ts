@@ -16,6 +16,7 @@ import { inArray } from "drizzle-orm";
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
@@ -28,7 +29,6 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import { prefetchCorpusTombstones } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 /** Where one decision's payload lives, as the row stores it. */

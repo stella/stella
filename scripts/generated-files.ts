@@ -484,6 +484,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/template-binding/binding-sources.ts",
     "apps/api/src/lib/template-binding/build-binding-context.ts",
     "apps/api/src/lib/templates/*",
+    "apps/api/src/lib/templates/house-style/*",
     "apps/api/src/lib/uploads/entity-create.ts",
     "apps/api/src/lib/uploads/exact-duplicates.ts",
     "apps/api/src/lib/uploads/reserve-presigned-upload.ts",

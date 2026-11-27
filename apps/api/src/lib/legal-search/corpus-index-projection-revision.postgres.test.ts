@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
+import { settledWithin, WaitTimeoutError } from "@stll/test-kit";
+
 import {
   caseLawDecisions,
   caseLawSources,
@@ -246,10 +248,18 @@ if (!databaseUrl || !runPostgresTests) {
           });
           await secondFenceAttempted.promise;
 
-          const acquiredWhileFirstHeld = await Promise.race([
+          const acquiredWhileFirstHeld = await settledWithin(
             secondFenceAcquired.promise.then(() => true),
-            Bun.sleep(100).then(() => false),
-          ]);
+            {
+              description: "second fence to acquire while first is held",
+              timeoutMs: 5000,
+            },
+          ).catch((error: unknown) => {
+            if (error instanceof WaitTimeoutError) {
+              return false;
+            }
+            throw error;
+          });
           expect(acquiredWhileFirstHeld).toBe(true);
 
           releaseFirstFence.resolve(undefined);
@@ -350,10 +360,18 @@ if (!databaseUrl || !runPostgresTests) {
           });
           await promotionAttempted.promise;
 
-          const overtookWriter = await Promise.race([
+          const overtookWriter = await settledWithin(
             promotionLocked.promise.then(() => true),
-            Bun.sleep(100).then(() => false),
-          ]);
+            {
+              description: "promotion lock to overtake writer",
+              timeoutMs: 100, // timeout: bounded window asserting competing transaction stays blocked on lock
+            },
+          ).catch((error: unknown) => {
+            if (error instanceof WaitTimeoutError) {
+              return false;
+            }
+            throw error;
+          });
           expect(overtookWriter).toBe(false);
 
           releaseWriter.resolve(undefined);
@@ -496,10 +514,18 @@ if (!databaseUrl || !runPostgresTests) {
           await proofLocked.promise;
           allowOlderMutation.resolve(undefined);
           await olderMutationAttempted.promise;
-          const mutationOvertookProof = await Promise.race([
+          const mutationOvertookProof = await settledWithin(
             olderMutationFinished.promise.then(() => true),
-            Bun.sleep(100).then(() => false),
-          ]);
+            {
+              description: "older mutation to overtake proof lock",
+              timeoutMs: 100, // timeout: bounded window asserting competing transaction stays blocked on lock
+            },
+          ).catch((error: unknown) => {
+            if (error instanceof WaitTimeoutError) {
+              return false;
+            }
+            throw error;
+          });
           expect(mutationOvertookProof).toBe(false);
 
           releaseProof.resolve(undefined);
@@ -617,10 +643,18 @@ if (!databaseUrl || !runPostgresTests) {
           });
           await activationAttempted.promise;
 
-          const activatedWhileWriterHeld = await Promise.race([
+          const activatedWhileWriterHeld = await settledWithin(
             activation.then(() => true),
-            Bun.sleep(100).then(() => false),
-          ]);
+            {
+              description: "activation to bypass held writer",
+              timeoutMs: 100, // timeout: bounded window asserting competing transaction stays blocked on lock
+            },
+          ).catch((error: unknown) => {
+            if (error instanceof WaitTimeoutError) {
+              return false;
+            }
+            throw error;
+          });
           expect(activatedWhileWriterHeld).toBe(false);
 
           releaseWriter.resolve(undefined);

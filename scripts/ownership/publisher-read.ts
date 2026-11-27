@@ -1,15 +1,4 @@
 import type { OwnershipEntry } from "../ownership-types.ts";
-// Case-law modules that still call the raw publisher fetch. Each migrates to
-// `readPublisher` and leaves this list; nothing is added to it.
-const UNMIGRATED_PUBLISHER_READERS = [
-  "handlers/case-law/ingestion/adapters/pagination.ts",
-  "handlers/case-law/ingestion/adapters/pl-kio.ts",
-  "handlers/case-law/ingestion/adapters/pl-kis.ts",
-  "handlers/case-law/ingestion/adapters/pl-ncourt.ts",
-  "handlers/case-law/ingestion/adapters/pl-tk.ts",
-  "handlers/case-law/ingestion/adapters/pl-uokik.ts",
-  "handlers/case-law/ingestion/adapters/sk-collections.ts",
-] as const;
 
 export default {
   id: "publisher-read",
@@ -23,18 +12,12 @@ export default {
     "readPublisher sends the gated publisher request and returns a ReadOutcome: " +
     "the response, an absence only the publisher stated (404 or 410), or a " +
     "failure to read, so no helper can return a failed read as an empty " +
-    "result. Raw fetchPublisher and fetchWithRetry callers are the adapters " +
-    "not yet migrated; the list only shrinks. The read-fault guard drives " +
-    "every enrolled adapter's reads with failures.",
+    "result. All case-law adapters now read through readPublisher. The " +
+    "read-fault guard drives every enrolled adapter's reads with failures.",
   enforcement: {
     kind: "import",
     specifiers: ["@/api/handlers/case-law/ingestion/adapters/retry"],
     names: ["fetchPublisher", "fetchWithRetry"],
-    allowed: [
-      ...UNMIGRATED_PUBLISHER_READERS.map((file) => ({
-        path: `apps/api/src/${file}`,
-        reason: "Reads its publisher raw; pending migration to readPublisher.",
-      })),
-    ],
+    allowed: [],
   },
 } as const satisfies OwnershipEntry;

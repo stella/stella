@@ -25,11 +25,16 @@ import {
 import type { NumberingMode } from "@/api/lib/templates/house-style/plan-numbering";
 import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
 import { findTopicSuspicions } from "@/api/lib/templates/house-style/reference-suspicions";
-import { proposeBlockRoles } from "@/api/lib/templates/house-style/role-proposer";
+import {
+  HOUSE_STYLE_ROLES,
+  proposeBlockRoles,
+} from "@/api/lib/templates/house-style/role-proposer";
 import { inferTemplateProfile } from "@/api/lib/templates/house-style/template-profile";
 import {
+  ANNEX_LIST,
   contractTemplate,
   OUTLINE_LIST,
+  templateWithAnnexOutline,
 } from "@/api/lib/templates/house-style/template.test-helpers";
 
 const PROFILE = inferTemplateProfile(contractTemplate());
@@ -73,14 +78,29 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
   const { plan, note } = build(manifest);
 
   test("patches the template's levels to print the source's designators", () => {
+    // The template sets number and title on one line, and the template
+    // wins: the level stays as it is but for what it prints.
     expect(plan.numberingPatches).toContainEqual({
       abstractNumId: 4,
       ilvl: 0,
       numFmt: "upperRoman",
       lvlText: "Článek %1.",
-      // The document breaks its headings after the number: a space follows
-      // the number, and the centred heading's level loses the indent that
-      // would move its second line off the number's centre.
+    });
+    // A template that leaves the break to the document: the document
+    // breaks its headings after the number, so a space follows the number,
+    // and the centred heading's level loses the indent that would move its
+    // second line off the number's centre.
+    const broken = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        headings: { ...PROFILE.headings, article: "lineBreak" },
+      },
+    });
+    expect(broken.plan.numberingPatches).toContainEqual({
+      abstractNumId: 4,
+      ilvl: 0,
+      numFmt: "upperRoman",
+      lvlText: "Článek %1.",
       suff: "space",
       indent: { left: 0, hanging: 0 },
     });
@@ -109,7 +129,8 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
       styleId: "Article",
       numbering: { numId: OUTLINE_LIST, ilvl: 0 },
       stripLabel: "Článek I.",
-      mergeNext: "lineBreak",
+      // On one line, as the template's sample heading reads.
+      mergeNext: "none",
     });
     // The joined title is a bare item right after its heading.
     const items = sourceItems(plan);
@@ -179,6 +200,348 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
       [],
     );
   });
+
+  test("a reference to an annex whose number is typed stays text, under a reason of its own", () => {
+    const typed = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "1.1\tCeny jsou uvedeny v příloze č. 2 této smlouvy.",
+      "Příloha č. 1\nSpecifikace",
+      "Popis plnění.",
+      "Příloha č. 2\nCeník",
+      "Položky ceníku.",
+    ]);
+    const built = build(typed);
+    expect(built.plan.references ?? []).toEqual([]);
+    expect(built.note.items).toContainEqual(
+      expect.objectContaining({
+        kind: "referenceUnlinked",
+        blockId: blockIdOf(typed, "1.1\t"),
+        reason: "annexTyped",
+      }),
+    );
+  });
+});
+
+describe("buildTemplatePlan, parties headed by a number", () => {
+  const manifest = manifestOf([
+    "KUPNÍ SMLOUVA",
+    "mezi:",
+    numbered("1.", "Alfa s.r.o.", 5),
+    "se sídlem Dlouhá 1, Praha",
+    "a",
+    numbered("2.", "Beta a.s.", 5),
+    "se sídlem Krátká 2, Brno",
+    "Článek I.\nPředmět",
+    numbered("1.", "Prodávající dodá zboží.", 10),
+  ]);
+
+  test("the numbered line takes the template's style for a party's heading and counts in its list", () => {
+    const { plan } = build(manifest);
+    const head = PROFILE.partyHead;
+    expect(head?.styleId).toBe("Party");
+    for (const name of ["Alfa s.r.o.", "Beta a.s."]) {
+      expect(itemOf(plan, manifest, name)).toMatchObject({
+        styleId: "Party",
+        numbering: { numId: head?.numbering?.numId, ilvl: 0 },
+      });
+    }
+    // The details under it are set as a party's details are, and the word
+    // between the parties as text.
+    expect(itemOf(plan, manifest, "se sídlem Dlouhá")).toMatchObject({
+      styleId: PROFILE.roles.party?.styleId,
+    });
+    expect(
+      itemOf(plan, manifest, "se sídlem Dlouhá")?.numbering ?? null,
+    ).toBeNull();
+    expect(itemOf(plan, manifest, "a")?.styleId).toBe(
+      PROFILE.roles.body?.styleId,
+    );
+  });
+
+  test("a template without such a style sets the line as a party's line and keeps its number", () => {
+    const { partyHead: _none, ...plain } = PROFILE;
+    const { plan } = build(manifest, "keepSource", { profile: plain });
+    const item = itemOf(plan, manifest, "Alfa s.r.o.");
+    expect(item?.styleId).toBe(PROFILE.roles.party?.styleId);
+    // By a list level or as text: the number is not lost.
+    expect(
+      (item?.numbering ?? null) !== null || item?.labelAsText === true,
+    ).toBe(true);
+  });
+});
+
+describe("buildTemplatePlan, a template with an outline of its own for annexes", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    numbered("1.", "Předmět smlouvy", 10),
+    numbered("1.1", "Dodavatel dodá zboží.", 10),
+    "Příloha č. 1\nPodmínky",
+    numbered("1.", "Rozsah", 20),
+    numbered("1.1", "Podmínky platí pro každou dodávku.", 20),
+    numbered("2.", "Odpovědnost", 20),
+    numbered("2.1", "Dodavatel odpovídá za vady.", 20),
+  ]);
+
+  test("what stands under an annex heading is set in the annexes' styles and counted in their list", () => {
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const { plan } = build(manifest, "keepSource", { profile });
+    const placed = (start: string) => {
+      const item = itemOf(plan, manifest, start);
+      return [item?.styleId, item?.numbering?.numId, item?.numbering?.ilvl];
+    };
+    // The body keeps the main outline.
+    expect(placed("Předmět smlouvy")).toEqual(["Article", OUTLINE_LIST, 0]);
+    expect(placed("Dodavatel dodá zboží.")).toEqual([
+      "Clause1",
+      OUTLINE_LIST,
+      1,
+    ]);
+    // The annex has its own: heading and clause, in one list.
+    expect(placed("Rozsah")).toEqual(["AnnexArticle", ANNEX_LIST, 0]);
+    expect(placed("Podmínky platí")).toEqual(["AnnexClause", ANNEX_LIST, 1]);
+    expect(placed("Odpovědnost")).toEqual(["AnnexArticle", ANNEX_LIST, 0]);
+    expect(placed("Dodavatel odpovídá")).toEqual([
+      "AnnexClause",
+      ANNEX_LIST,
+      1,
+    ]);
+  });
+
+  test("an outline for annexes that lacks a level the main outline numbers is not used", () => {
+    // Its clauses would count in the main list under a heading of the
+    // annexes' list.
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const { clause1: _dropped, ...partial } = profile.annexRoles ?? {};
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...profile, annexRoles: partial },
+    });
+    expect(itemOf(plan, manifest, "Rozsah")).toMatchObject({
+      styleId: "Article",
+    });
+    expect(itemOf(plan, manifest, "Podmínky platí")).toMatchObject({
+      styleId: "Clause1",
+    });
+  });
+
+  test("a heading's title that stays a paragraph of its own is set as its heading is", () => {
+    const profile = inferTemplateProfile(templateWithAnnexOutline());
+    const split = manifestOf([
+      "SMLOUVA",
+      numbered("1.", "Předmět smlouvy", 10),
+      numbered("1.1", "Dodavatel dodá zboží.", 10),
+      "Příloha č. 1\nPodmínky",
+      "Článek 1",
+      "Rozsah",
+      numbered("1.1", "Podmínky platí pro každou dodávku.", 20),
+    ]);
+    // The title is kept from joining its heading, as after a refusal.
+    const { plan } = build(split, "keepSource", {
+      profile,
+      exclusions: {
+        ...NO_EXCLUSIONS,
+        merges: new Set([blockIdOf(split, "Článek 1")]),
+      },
+    });
+    expect(itemOf(plan, split, "Článek 1")?.styleId).toBe("AnnexArticle");
+    expect(itemOf(plan, split, "Rozsah")?.styleId).toBe("AnnexArticle");
+  });
+
+  test("a template without one sets an annex's provisions as it sets the body's", () => {
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "Rozsah")).toMatchObject({
+      styleId: "Article",
+    });
+    expect(itemOf(plan, manifest, "Podmínky platí")).toMatchObject({
+      styleId: "Clause1",
+    });
+  });
+});
+
+describe("buildTemplatePlan, a number typed with a blank between its parts", () => {
+  test("the paragraph joins the list, which prints the number closed up", () => {
+    const spaced = manifestOf([
+      "SMLOUVA",
+      "1. Předmět smlouvy",
+      "1. 1. Prodávající prodává zboží.",
+      "1. 2. Kupující zboží kupuje podle odst. 1.1.",
+    ]);
+    const built = build(spaced);
+    const first = itemOf(built.plan, spaced, "1. 1. ");
+    expect(first).toMatchObject({ stripLabel: "1. 1." });
+    expect(first?.numbering).not.toBeNull();
+    expect(built.labelsNotKept).toEqual([]);
+    expect(built.note.items).toContainEqual({
+      kind: "numberPartsClosed",
+      blocks: 2,
+    });
+    // The level is restated to print the number closed up: there is a
+    // patch, and no level text of one holds a blank.
+    const patches = built.plan.numberingPatches ?? [];
+    expect(patches.length).toBeGreaterThan(0);
+    expect(patches.some(({ lvlText }) => lvlText?.includes(" "))).toBe(false);
+  });
+});
+
+describe("buildTemplatePlan, a letter on a template with a letterhead", () => {
+  const letterhead = {
+    ...PROFILE,
+    regions: { ...PROFILE.regions, keepBefore: ["t90"] },
+    header: {
+      addressee: ["h1", "h2", "h3", "h4"],
+      date: "h5",
+      reference: "h6",
+    },
+  };
+  const slotsOf = (plan: TemplatePlan) =>
+    plan.body.flatMap((item) =>
+      item.kind === "slot"
+        ? [[item.templateBlockId, item.sourceBlockIds] as const]
+        : [],
+    );
+
+  test("the addressee, the date and the reference go into the letterhead's cells", () => {
+    const letter = manifestOf([
+      "Alfa Dodávky s.r.o.",
+      "Dlouhá 12",
+      "110 00 Praha 1",
+      "V Brně dne 6. 1. 2026",
+      "Vážená paní,",
+      "obracíme se na Vás ve věci neuhrazené faktury.",
+    ]);
+    const { plan, note } = build(letter, "keepSource", { profile: letterhead });
+    // Three lines for four sample lines: the fourth is emptied. No
+    // reference in the letter: that cell keeps the template's sample.
+    expect(slotsOf(plan)).toEqual([
+      ["h1", ["p0"]],
+      ["h2", ["p1"]],
+      ["h3", ["p2"]],
+      ["h5", ["p3"]],
+    ]);
+    expect(plan.emptyTemplateBlockIds).toEqual(["h4"]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual([
+      "p4",
+      "p5",
+    ]);
+    expect(note.items).toContainEqual({
+      kind: "letterheadFilled",
+      filled: ["addressee", "date"],
+      left: ["reference"],
+    });
+  });
+
+  test("more lines than sample lines end up in the last one; a document that is no letter leaves every cell", () => {
+    const long = manifestOf([
+      "Beta Holdings Ltd",
+      "Legal Department",
+      "Attn. Ms Helen Marsh",
+      "Tower House",
+      "1 Long Street",
+      "London SW1A 1AA",
+      "Dear Ms Marsh,",
+      "We write further to your letter.",
+    ]);
+    expect(
+      slotsOf(build(long, "keepSource", { profile: letterhead }).plan),
+    ).toEqual([
+      ["h1", ["p0"]],
+      ["h2", ["p1"]],
+      ["h3", ["p2"]],
+      ["h4", ["p3", "p4", "p5"]],
+    ]);
+    const memo = manifestOf(["Shrnutí", "Text bez oslovení a bez adresy."]);
+    const built = build(memo, "keepSource", { profile: letterhead });
+    expect(slotsOf(built.plan)).toEqual([]);
+    expect(built.plan).not.toHaveProperty("emptyTemplateBlockIds");
+    expect(built.note.items).toContainEqual({
+      kind: "letterheadFilled",
+      filled: [],
+      left: ["addressee", "date", "reference"],
+    });
+  });
+});
+
+describe("buildTemplatePlan, headings without a number", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Článek I.\nPrvní",
+    "1.1\tText ustanovení.",
+    "Zvláštní ujednání",
+    "Strany se dohodly na dalších podmínkách plnění.",
+  ]);
+  const heading = manifest.blocks.find(({ text }) =>
+    text.startsWith("Zvláštní"),
+  );
+  if (heading !== undefined) {
+    heading.alignment = "center";
+  }
+
+  test("take the template's style for them", () => {
+    const body = PROFILE.roles.body;
+    if (body === null) {
+      throw new Error("fixture");
+    }
+    const { plan } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, heading: { ...body, styleId: "Preamble" } },
+      },
+    });
+    expect(itemOf(plan, manifest, "Zvláštní")).toMatchObject({
+      styleId: "Preamble",
+      numbering: null,
+      keepNext: true,
+    });
+  });
+
+  test("are text kept with what they head where the template has no such style", () => {
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "Zvláštní")).toMatchObject({
+      styleId: "Indent",
+      keepNext: true,
+    });
+  });
+});
+
+describe("buildTemplatePlan, annexes a field numbers", () => {
+  test("the heading keeps its text and its field, in the annex style and in no list", () => {
+    const fielded = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "1.1\tCeny jsou uvedeny v příloze č. 1 této smlouvy.",
+      "Příloha č.  Ceník",
+      "Položky ceníku.",
+    ]);
+    const heading = fielded.blocks.find(({ text }) =>
+      text.startsWith("Příloha"),
+    );
+    if (heading === undefined) {
+      throw new Error("fixture");
+    }
+    heading.selfNumbers = [11];
+    const built = build(fielded);
+    const item = itemOf(built.plan, fielded, "Příloha č.  Ceník");
+    expect(item).toMatchObject({ styleId: "Annex", numbering: null });
+    expect(item).not.toHaveProperty("stripLabel");
+    expect(item).not.toHaveProperty("labelAsText");
+    expect(
+      built.note.items.filter(
+        (noted) =>
+          noted.kind.startsWith("label") &&
+          "blockId" in noted &&
+          noted.blockId === heading.id,
+      ),
+    ).toEqual([]);
+    // No field can cite a number that a field of the text counts.
+    expect(built.plan.references ?? []).toEqual([]);
+    expect(built.note.items).toContainEqual(
+      expect.objectContaining({
+        kind: "referenceUnlinked",
+        blockId: blockIdOf(fielded, "1.1\t"),
+        reason: "annexTyped",
+      }),
+    );
+  });
 });
 
 describe("buildTemplatePlan, annexes a field can cite", () => {
@@ -241,7 +604,7 @@ describe("buildTemplatePlan, list instances", () => {
     ]);
   });
 
-  test("one heading with a break is enough to take the centred level's indent away", () => {
+  test("a heading broken behind its number is set on one line, as the template sets its headings", () => {
     const manifest = manifestOf([
       "SMLOUVA",
       "Článek I. První",
@@ -251,15 +614,44 @@ describe("buildTemplatePlan, list instances", () => {
       "Článek III.\nTřetí, jako jediný zalomený",
       numbered("1.", "Odstavec.", 3),
     ]);
-    const { plan } = build(manifest);
-    // Most headings run on one line: the tab after the number stays.
+    const { plan, note } = build(manifest);
+    // The break goes with the typed number: nothing is left to move a
+    // second line off the centre, so the level keeps its indent.
+    expect(itemOf(plan, manifest, "Článek III.")).toMatchObject({
+      stripLabel: "Článek III.",
+      stripLabelBreak: true,
+    });
+    expect(itemOf(plan, manifest, "Článek I.")).not.toHaveProperty(
+      "stripLabelBreak",
+    );
     expect(plan.numberingPatches).toContainEqual({
+      abstractNumId: 4,
+      ilvl: 0,
+      numFmt: "upperRoman",
+      lvlText: "Článek %1.",
+    });
+    expect(note.items).toContainEqual({
+      kind: "headingBreaksDropped",
+      blocks: 1,
+    });
+    // Where the template leaves the break to the document, one heading
+    // with a break is enough to take the centred level's indent away.
+    const kept = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        headings: { ...PROFILE.headings, article: "lineBreak" },
+      },
+    });
+    expect(kept.plan.numberingPatches).toContainEqual({
       abstractNumId: 4,
       ilvl: 0,
       numFmt: "upperRoman",
       lvlText: "Článek %1.",
       indent: { left: 0, hanging: 0 },
     });
+    expect(itemOf(kept.plan, manifest, "Článek III.")).not.toHaveProperty(
+      "stripLabelBreak",
+    );
   });
 
   test("a spare level takes a first-line indent of the level it stands in for", () => {
@@ -336,6 +728,48 @@ describe("buildTemplatePlan, list instances", () => {
       hanging: step,
     });
     expect(levelOf("druhá odrážka")).toBe(levelOf("odrážka pod odstavcem"));
+  });
+
+  test("a bullet takes a level outside the outline list where the template has one", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec:", 1),
+      numbered("•", "odrážka", 4),
+      numbered("(a)", "případ psaný jinak;", 3),
+    ]);
+    const markLevel = {
+      numId: 20,
+      ilvl: 1,
+      abstractNumId: 3,
+      numFmt: "decimal",
+      lvlText: "%2.",
+      start: 1,
+      indent: { left: 720, hanging: 360, firstLine: null },
+    };
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...PROFILE, markLevels: [markLevel] },
+    });
+    expect(itemOf(plan, manifest, "odrážka")?.numbering).toMatchObject({
+      numId: 20,
+      ilvl: 1,
+    });
+    expect(plan.numberingPatches).toContainEqual(
+      expect.objectContaining({
+        abstractNumId: 3,
+        ilvl: 1,
+        numFmt: "bullet",
+        lvlText: "•",
+      }),
+    );
+    // No level of the outline list is patched for the bullet.
+    expect(
+      plan.numberingPatches?.some(({ numFmt }) => numFmt === "bullet") &&
+        plan.numberingPatches.every(
+          ({ abstractNumId, numFmt }) =>
+            numFmt !== "bullet" || abstractNumId === 3,
+        ),
+    ).toBe(true);
   });
 
   test("a second format of one level and a bullet take spare levels", () => {
@@ -607,6 +1041,168 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(starts(plan)).toEqual(["p2"]);
   });
 
+  test("a page the source cut short is measured from the source's own start, also when the start moved in front of a heading", () => {
+    // The start in front of 2.1 moves in front of the heading of its
+    // article. The page that follows is short by its own text; the heading
+    // the start moved to is no part of it.
+    const { plan } = build(
+      withFacts(
+        [
+          "SMLOUVA",
+          "Článek I.\nPrvní",
+          `1.1\t${"Strany se dohodly na dalších podmínkách. ".repeat(40)}`,
+          `Článek II.\n${"Druhý článek s velmi dlouhým názvem ".repeat(4)}`,
+          `2.1\t${"Krátká strana. ".repeat(72)}`,
+          "2.2\tOdstavec za stranou, kterou zdroj ukončil dříve.",
+        ],
+        { 4: { pageBreakBefore: true }, 5: { pageBreakBefore: true } },
+      ),
+    );
+    expect(starts(plan)).toContain("p5");
+  });
+
+  test("a page starts only where a part of the document begins", () => {
+    // A page of text, so that the break behind it is the source's
+    // pagination and no page cut short on purpose.
+    const page = (opening: string): string =>
+      `${opening} ${"Strany se dohodly na dalších podmínkách. ".repeat(40)}`;
+    const { plan, note } = build(
+      withFacts(
+        [
+          "SMLOUVA",
+          "Strana první, se sídlem v Praze",
+          "Článek I.\nPrvní",
+          page("1.1\tOdstavec prvního článku."),
+          "1.2\tDruhý odstavec prvního článku.",
+          "Článek II.\nDruhý",
+          page("2.1\tOdstavec druhého článku."),
+          "Příloha č. 1",
+          page("Seznam."),
+          "Další položky seznamu.",
+          "Podpisová strana",
+          "Dodatek k seznamu.",
+        ],
+        {
+          2: { pageBreakBefore: true },
+          4: { pageBreakBefore: true },
+          5: { pageBreakBefore: true },
+          7: { pageBreakBefore: true },
+          9: { pageBreakBefore: true },
+          10: { pageBreakBefore: true },
+          11: { pageBreakBefore: true },
+        },
+      ),
+    );
+    // In front of an article and of an annex, and behind a page cut
+    // short; not in the middle of an article, nor in the middle of an
+    // annex. Between the title page and the first article the template
+    // decides: its own sample runs on, so the document does.
+    expect(starts(plan)).toEqual(["p5", "p7", "p10", "p11"]);
+    expect(
+      note.items.filter(({ kind }) => kind === "pageStartDropped"),
+    ).toEqual([
+      { kind: "pageStartDropped", blockId: "p2", reason: "templateFlowsOn" },
+      { kind: "pageStartDropped", blockId: "p4", reason: "opensNoPart" },
+      { kind: "pageStartDropped", blockId: "p9", reason: "opensNoPart" },
+    ]);
+    // A template whose sample starts a page there keeps the document's.
+    const paged = build(
+      withFacts(["SMLOUVA", "Strana první", "Článek I.\nPrvní", "Text."], {
+        2: { pageBreakBefore: true },
+      }),
+      "keepSource",
+      { profile: { ...PROFILE, frontMatterEndsPage: true } },
+    );
+    expect(starts(paged.plan)).toEqual(["p2"]);
+  });
+
+  test("short lines in front of the first article and the text of cells keep the alignment the source sets them in", () => {
+    const table = inColumns(2, ["Položka", "Cena", "První", "100"]);
+    const [cells, ...inner] = table.blocks;
+    const front = withFacts(
+      [
+        "SMLOUVA",
+        "(dále jen „Smlouva“)",
+        "mezi:",
+        "- dále jen „Strana 1“ -",
+        "Článek I.\nPrvní",
+        "Text ustanovení.",
+        "Zarovnáno vpravo za článkem.",
+      ],
+      {
+        0: { alignment: "center" },
+        1: { alignment: "center" },
+        3: { alignment: "right" },
+        6: { alignment: "right" },
+      },
+    );
+    if (cells === undefined) {
+      throw new Error("fixture");
+    }
+    const amount = inner.at(3);
+    if (amount !== undefined) {
+      amount.alignment = "right";
+    }
+    const shifted = [cells, ...inner].map((block) => ({
+      ...block,
+      id: `c${block.id}`,
+      index: block.index + 100,
+      ...(block.cells === undefined
+        ? {}
+        : {
+            cells: block.cells.map((cell) => ({
+              ...cell,
+              blockIds: cell.blockIds.map((id) => `c${id}`),
+            })),
+          }),
+    }));
+    const { plan, note } = build({
+      ...front,
+      blocks: [...front.blocks, ...shifted],
+    });
+    const aligned = sourceItems(plan).flatMap((item) => [
+      ...(item.alignment === undefined ? [] : [[item.blockId, item.alignment]]),
+      ...(item.nested ?? []).flatMap((nested) =>
+        nested.alignment === undefined
+          ? []
+          : [[nested.blockId, nested.alignment]],
+      ),
+    ]);
+    // The title is centred by its style; a line behind the first article
+    // takes its style's alignment.
+    expect(aligned).toEqual([
+      ["p1", "center"],
+      ["p3", "right"],
+      ["cp3", "right"],
+    ]);
+    expect(itemOf(plan, front, "(dále jen")).not.toMatchObject({
+      styleId: "Title",
+    });
+    expect(note.items).toContainEqual({ kind: "alignmentsKept", blocks: 3 });
+  });
+
+  test("the text of a table takes the style the template writes its tables in", () => {
+    const table = inColumns(2, ["Položka", "Cena", "1. První", "100"]);
+    const plain = build(table);
+    const styled = build(table, "keepSource", {
+      profile: { ...PROFILE, tableText: { styleId: "TableText" } },
+    });
+    const nestedOf = ({ plan }: typeof plain) =>
+      sourceItems(plan).find(({ blockId }) => blockId === "t0")?.nested ?? [];
+    // Without such a style a cell paragraph is placed as its table has it.
+    expect(nestedOf(plain).every(({ styleId }) => styleId === undefined)).toBe(
+      true,
+    );
+    expect(
+      nestedOf(styled).map(({ blockId, styleId }) => [blockId, styleId]),
+    ).toEqual([
+      ["p0", "TableText"],
+      ["p1", "TableText"],
+      ["p2", "TableText"],
+      ["p3", "TableText"],
+    ]);
+  });
+
   test("in front of a table the blank paragraph stays with its break", () => {
     const cells = inColumns(1, ["položka"]).blocks.map((block) => ({
       ...block,
@@ -861,8 +1457,12 @@ describe("buildTemplatePlan, pages the source starts", () => {
         section(0, "nextPage"),
         section(1, "nextPage"),
       ]);
-      // The article's heading and its title start the page together.
-      const { plan, note } = build(manifest, "keepSource", { roles });
+      // The article's heading and its title start the page together, on
+      // a template whose own first article starts a page.
+      const { plan, note } = build(manifest, "keepSource", {
+        roles,
+        profile: { ...PROFILE, frontMatterEndsPage: true },
+      });
       expect(itemOf(plan, manifest, "Článek I.")?.mergeNext).toBe("none");
       expect(starts(plan)).toEqual(["p1"]);
       expect(
@@ -911,7 +1511,10 @@ describe("buildTemplatePlan, pages the source starts", () => {
     const beforeTable = build(
       { ...headed, blocks: [...headed.blocks, ...cells] },
       "keepSource",
-      { roles: roles.slice(0, 3) },
+      {
+        roles: roles.slice(0, 3),
+        profile: { ...PROFILE, frontMatterEndsPage: true },
+      },
     );
     expect(starts(beforeTable.plan)).toEqual(["p1"]);
     expect(notes(beforeTable.note, "pageStartNotKept")).toEqual([]);
@@ -1421,15 +2024,8 @@ describe("buildTemplatePlan, the house scheme", () => {
   test("numbers by the template's levels and lets fields show the new numbers", () => {
     const manifest = czechContract("Viz čl. II odst. 2 této smlouvy.");
     const { plan, note } = build(manifest, "houseScheme");
-    // The template's formats stay; only the broken headings are settled.
-    expect(plan.numberingPatches).toEqual([
-      {
-        abstractNumId: 4,
-        ilvl: 0,
-        suff: "space",
-        indent: { left: 0, hanging: 0 },
-      },
-    ]);
+    // The template's formats stay, and its headings stand on one line.
+    expect(plan.numberingPatches).toBeUndefined();
     expect(itemOf(plan, manifest, "Článek II.")).toMatchObject({
       numbering: { numId: OUTLINE_LIST, ilvl: 0 },
       stripLabel: "Článek II.",
@@ -1583,6 +2179,138 @@ describe("buildTemplatePlan, tables and omissions", () => {
       blockIds: ["p4", "p5", "p6", "p7"],
     });
   });
+
+  test("the template's contents stand in front of the heading that opens the preamble, not under it", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = manifestOf([
+      "SMLOUVA O DODÁVCE",
+      "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "a",
+      "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+      { text: "Preambule", styleName: "heading 1", outlineLevel: 0 },
+      "Strany uzavírají tuto smlouvu s ohledem na svou dlouhodobou spolupráci.",
+      "Článek I.\nPředmět",
+      numbered("1.", "Dodavatel dodá zboží.", 10),
+    ]);
+    const { plan } = build(manifest, "keepSource", { profile });
+    const preamble = plan.body.findIndex(
+      (item) =>
+        item.kind === "source" &&
+        item.blockId === blockIdOf(manifest, "Preambule"),
+    );
+    expect(plan.body[preamble - 1]).toEqual({
+      kind: "template",
+      templateBlockIds: ["p4", "p5", "p6", "p7"],
+    });
+    // Once: the recital under the heading does not bring them again.
+    expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
+  });
+
+  test("contents whose field would list none of the document's headings are left out, and the note says so", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = czechContract("Text.");
+    const kept = (contentsStyles: string[] | undefined) => {
+      const { plan, note } = build(manifest, "keepSource", {
+        profile:
+          contentsStyles === undefined
+            ? profile
+            : { ...profile, contentsStyles },
+      });
+      return {
+        contents: plan.body.filter(({ kind }) => kind === "template").length,
+        notes: note.items.filter(({ kind }) => kind === "contentsNotKept"),
+        updates: plan.fields?.updateOnOpen ?? false,
+      };
+    };
+    // The field collects the style the articles are placed in.
+    expect(kept(["Article"])).toMatchObject({ contents: 1, notes: [] });
+    // It collects the built-in headings, and no heading is placed in one.
+    expect(kept([])).toEqual({
+      contents: 0,
+      notes: [{ kind: "contentsNotKept", reason: "noHeadingCollected" }],
+      updates: false,
+    });
+    expect(kept(["TOC1"]).contents).toBe(0);
+    // A profile that does not say what the field collects keeps them.
+    expect(kept(undefined)).toMatchObject({ contents: 1, notes: [] });
+  });
+
+  test("the page the source starts in front of its own contents starts in front of the kept ones", () => {
+    // A template whose sample starts a page in front of its first article:
+    // the document's own page start there is kept.
+    const profile = {
+      ...inferTemplateProfile(contractTemplate({ contents: "empty" })),
+      frontMatterEndsPage: true,
+    };
+    const paged = (breaks: readonly number[]): DocxBlockManifest => {
+      const manifest = manifestOf([
+        "SMLOUVA O DODÁVCE",
+        "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+        "a",
+        "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+        "",
+        { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+        "",
+        "Článek I.\nPředmět",
+        numbered("1.", "Dodavatel dodá zboží.", 10),
+      ]);
+      return {
+        ...manifest,
+        blocks: manifest.blocks.map((block, position) =>
+          breaks.includes(position) ? { ...block, pageBreaks: 1 } : block,
+        ),
+      };
+    };
+    const around = (manifest: DocxBlockManifest) => {
+      const { plan } = build(manifest, "keepSource", { profile });
+      const contents = plan.body.findIndex(({ kind }) => kind === "template");
+      return {
+        before: plan.body[contents - 1],
+        behind: plan.body[contents + 1],
+        omitted: plan.omit.map(({ blockId }) => blockId),
+      };
+    };
+    // A page of their own, as in the source: the blank paragraph with the
+    // break stays in front of the kept contents, and the heading behind
+    // them starts the next page.
+    const own = around(paged([4, 6]));
+    expect(own.before).toMatchObject({ kind: "source", blockId: "p4" });
+    expect(own.omitted).not.toContain("p4");
+    expect(own.behind).toMatchObject({ blockId: "p7", pageBreakBefore: true });
+    // Only in front of them: the text runs on behind the kept contents.
+    const front = around(paged([4]));
+    expect(front.before).toMatchObject({ kind: "source", blockId: "p4" });
+    expect(front.behind).not.toHaveProperty("pageBreakBefore");
+    // Contents that are not kept need no page: the paragraph goes, and
+    // the heading starts the one page the two breaks leave.
+    const dropped = build(paged([4, 6]), "keepSource", {
+      profile: { ...profile, contentsStyles: [] },
+    }).plan;
+    expect(dropped.body.some(({ kind }) => kind === "template")).toBe(false);
+    expect(dropped.omit.map(({ blockId }) => blockId)).toContain("p4");
+    // The first line of the source's contents may start the page itself:
+    // the blank paragraph in front of it is told to.
+    const byLine = paged([6]);
+    const told = around({
+      ...byLine,
+      blocks: byLine.blocks.map((block) =>
+        block.id === "p5" ? { ...block, pageBreakBefore: true } : block,
+      ),
+    });
+    expect(told.before).toMatchObject({
+      kind: "source",
+      blockId: "p4",
+      pageBreakBefore: true,
+    });
+    // Only behind them: nothing is kept in front.
+    const back = around(paged([6]));
+    expect(back.omitted).toContain("p4");
+    expect(back.behind).toMatchObject({ blockId: "p7", pageBreakBefore: true });
+  });
 });
 
 describe("buildTemplatePlan invariants", () => {
@@ -1652,4 +2380,809 @@ describe("buildTemplatePlan invariants", () => {
       });
     }
   }
+});
+
+describe("buildTemplatePlan, what a paragraph states for itself", () => {
+  test("a provision that is only a title stays with the provisions under it", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "1.\tPlán plnění",
+      "1.1\tZhotovitel předloží plán do deseti dnů.",
+      "1.2\tObjednatel se k plánu vyjádří.",
+      "2.\tZhotovitel odpovídá za škodu, kterou způsobí porušením svých povinností podle této smlouvy, v plném rozsahu.",
+      "2.1\tOdpovědnost se neomezuje.",
+    ]);
+    const { plan, note } = build(manifest);
+    const kept = sourceItems(plan)
+      .filter(({ keepNext }) => keepNext === true)
+      .map(({ blockId }) => blockId);
+    // Not the heading, whose style keeps it; not a sentence of its own.
+    expect(kept).toEqual([blockIdOf(manifest, "1.\tPlán")]);
+    expect(note.items).toContainEqual({ kind: "linesKeptWithNext", blocks: 1 });
+  });
+
+  test("a letter's closing stays together with the end of its text", () => {
+    const letter = [
+      "Reply to your enquiry",
+      "Dear Sir or Madam,",
+      "We refer to your letter and confirm that the works were handed over on time and without defects.",
+      "Please do not hesitate to contact us with any further question.",
+      "Yours faithfully,",
+      "Jane Example",
+      "Head of Contracts",
+    ];
+    const manifest = manifestOf(letter);
+    const { plan, note } = build(manifest);
+    const kept = sourceItems(plan)
+      .filter(({ keepNext }) => keepNext === true)
+      .map(({ blockId }) => blockId);
+    // The end of the text, the closing line and the name; the last line has
+    // nothing to stay with.
+    expect(kept).toEqual([
+      blockIdOf(manifest, "Please do not"),
+      blockIdOf(manifest, "Yours faithfully"),
+      blockIdOf(manifest, "Jane Example"),
+    ]);
+    expect(note.items).toContainEqual({
+      kind: "closingKeptTogether",
+      blocks: 3,
+    });
+    // A table in front of the closing parts it from the text before: that
+    // paragraph is not kept with the table.
+    const fees = inColumns(2, ["Item", "Fee"]);
+    const tabled = {
+      ...manifest,
+      blocks: [
+        ...manifest.blocks.slice(0, 4),
+        ...fees.blocks.map((block) => ({ ...block, id: `fee-${block.id}` })),
+        ...manifest.blocks.slice(4),
+      ].map((block) =>
+        block.cells === undefined
+          ? block
+          : {
+              ...block,
+              cells: block.cells.map((cell) => ({
+                ...cell,
+                blockIds: cell.blockIds.map((id) => `fee-${id}`),
+              })),
+            },
+      ),
+    };
+    expect(
+      sourceItems(build(tabled).plan)
+        .filter(({ keepNext }) => keepNext === true)
+        .map(({ blockId }) => blockId),
+    ).toEqual([
+      blockIdOf(manifest, "Yours faithfully"),
+      blockIdOf(manifest, "Jane Example"),
+    ]);
+    // A closing line with text of the letter under it closes nothing.
+    const quoted = manifestOf([
+      ...letter.slice(0, 5),
+      "That is how your letter of last week ended, and the next three paragraphs answer it point by point.",
+      "Jane Example",
+    ]);
+    expect(
+      sourceItems(build(quoted).plan).filter(
+        ({ keepNext }) => keepNext === true,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a long heading without a number stays with what it heads, whatever its first letter", () => {
+    const long =
+      "podmínky, za kterých se smluvní strany dohodly na dalším postupu při plnění celého díla";
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "1.1\tZhotovitel provede dílo.",
+      { text: long, styleName: "heading 1", outlineLevel: 0 },
+      "Strany postupují podle harmonogramu.",
+    ]);
+    expect(long.length).toBeGreaterThan(80);
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "podmínky, za kterých")).toMatchObject({
+      keepNext: true,
+    });
+  });
+
+  test("a heading of the source placed as text stays with what it heads", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "1.1\tPrvní odstavec článku.",
+      { text: "Zvláštní ujednání", styleName: "heading 3", outlineLevel: 2 },
+      "Strany se dohodly na dalších podmínkách plnění.",
+    ]);
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "Zvláštní")).toMatchObject({
+      keepNext: true,
+    });
+    expect(itemOf(plan, manifest, "1.1\t")).not.toHaveProperty("keepNext");
+  });
+
+  test("a number that stays text hangs like the numbers of its level", () => {
+    // Dotted paragraphs under roman articles: the level would print II.1.
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "1.1\tOdstavec prvního článku.",
+      "Pokračování odstavce bez čísla.",
+    ]);
+    const { plan, note } = build(manifest);
+    const level = PROFILE.roles.clause1?.numbering?.indent;
+    expect(level?.hanging ?? 0).toBeGreaterThan(0);
+    expect(itemOf(plan, manifest, "1.1\t")).toMatchObject({
+      numbering: null,
+      indent: { left: level?.left, hanging: level?.hanging },
+    });
+    // Text without a number has nothing to hang.
+    expect(itemOf(plan, manifest, "Pokračování")).not.toHaveProperty("indent");
+    expect(itemOf(plan, manifest, "Článek I.")).not.toHaveProperty("indent");
+    expect(note.items).toContainEqual({ kind: "textLabelsHung", blocks: 1 });
+  });
+
+  test("a bullet that is a letter of a text face takes the face with it", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s výčtem:", 1),
+      numbered("o", "první bod výčtu", 5),
+      numbered("•", "bod jiného výčtu", 6),
+    ]);
+    const circle = manifest.blocks.at(3);
+    const dot = manifest.blocks.at(4);
+    if (circle?.numbering) {
+      circle.numbering = {
+        ...circle.numbering,
+        bullet: true,
+        bulletFont: "Courier New",
+      };
+    }
+    if (dot?.numbering) {
+      dot.numbering = { ...dot.numbering, bullet: true };
+    }
+    const { plan } = build(manifest);
+    const patches = (plan.numberingPatches ?? []).filter(
+      ({ numFmt }) => numFmt === "bullet",
+    );
+    expect(patches.map(({ lvlText, font }) => [lvlText, font])).toEqual([
+      ["o", "Courier New"],
+      ["•", undefined],
+    ]);
+  });
+});
+
+describe("buildTemplatePlan, a template in another language than the document", () => {
+  // The fixture's template prints its articles the English way.
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Článek I.\nPrvní",
+    numbered("1.", "První odstavec článku.", 1),
+    "Článek II.\nDruhý",
+    numbered("1.", "První odstavec druhého článku.", 2),
+  ]);
+  const languages = { document: "cs", template: ["en"] };
+
+  test("the house scheme prints the article word in the document's language", () => {
+    const own = PROFILE.roles.articleHeading?.numbering;
+    expect(own?.lvlText).toBe("Art. %1");
+    const { plan, note } = build(manifest, "houseScheme", { languages });
+    expect(plan.numberingPatches).toContainEqual(
+      expect.objectContaining({
+        abstractNumId: own?.abstractNumId,
+        ilvl: own?.ilvl,
+        lvlText: "Čl. %1",
+      }),
+    );
+    expect(note.items).toContainEqual({
+      kind: "templateLanguageDiffers",
+      document: "cs",
+      template: ["en"],
+      labelLevels: 1,
+    });
+    // German puts a full stop after the number, as the firm's templates do.
+    const german = build(manifest, "houseScheme", {
+      languages: { document: "de", template: ["en"] },
+    });
+    expect(german.plan.numberingPatches).toContainEqual(
+      expect.objectContaining({ lvlText: "Art. %1." }),
+    );
+  });
+
+  test("a document that keeps its numbers keeps its words, and the note names the languages", () => {
+    const { plan, note } = build(manifest, "keepSource", { languages });
+    expect(
+      (plan.numberingPatches ?? []).some(({ lvlText }) =>
+        lvlText?.startsWith("Čl."),
+      ),
+    ).toBe(false);
+    expect(note.items).toContainEqual({
+      kind: "templateLanguageDiffers",
+      document: "cs",
+      template: ["en"],
+      labelLevels: 0,
+    });
+  });
+
+  test("a template in the document's language changes nothing", () => {
+    const same = { document: "en", template: ["en"] };
+    const { plan, note } = build(manifest, "houseScheme", { languages: same });
+    expect(build(manifest, "houseScheme").plan).toEqual(plan);
+    expect(note.items.map(({ kind }) => kind)).not.toContain(
+      "templateLanguageDiffers",
+    );
+  });
+});
+
+describe("buildTemplatePlan, the lines of the parties", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Univerzita Příkladná",
+    "se sídlem:\tOvocný trh 1, Praha 1",
+    "IČO:\t\t00000001",
+    "bankovní spojení:\t1/0100",
+    "(dále jen „Objednatel“)",
+    "Článek I.\nPrvní",
+    numbered("1.", "Odstavec.", 1),
+  ]);
+  const party = PROFILE.roles.party;
+  const measured = {
+    ...PROFILE,
+    roles: {
+      ...PROFILE.roles,
+      party: party === null ? null : { ...party, indentLeft: 851, size: 22 },
+    },
+  };
+
+  test("values of one block start at one tab stop behind its widest label", () => {
+    const { plan, note } = build(manifest, "keepSource", { profile: measured });
+    // The widest label has 17 characters of 11 pt text behind the style's
+    // indent. Every line's last tab ends there, so the values start at one
+    // position; the line typed with two tabs has a stop a point in front
+    // of it for its first.
+    const shared = 851 + 2057 + 170;
+    for (const start of ["se sídlem", "IČO", "bankovní"]) {
+      expect(itemOf(plan, manifest, start)?.tabStops?.at(-1)).toBe(shared);
+    }
+    expect(itemOf(plan, manifest, "se sídlem")?.tabStops).toEqual([shared]);
+    expect(itemOf(plan, manifest, "IČO")?.tabStops).toEqual([
+      shared - 20,
+      shared,
+    ]);
+    // A source that tabbed its values into place over default stops types
+    // more tabs on a short label: each line still ends its last one there.
+    const tabbed = manifestOf([
+      "SMLOUVA",
+      "Univerzita Příkladná",
+      "se sídlem:\t\t\t\tOvocný trh 1, Praha 1",
+      "IČO:\t\t\t\t\t00000001",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    const lines = build(tabbed, "keepSource", { profile: measured }).plan;
+    const seat = itemOf(lines, tabbed, "se sídlem")?.tabStops ?? [];
+    const number = itemOf(lines, tabbed, "IČO")?.tabStops ?? [];
+    expect([seat.length, number.length]).toEqual([4, 5]);
+    expect(seat.at(-1)).toBe(number.at(-1));
+    // A line without a label and a tab has nothing to align.
+    expect(itemOf(plan, manifest, "(dále jen")).not.toHaveProperty("tabStops");
+    expect(itemOf(plan, manifest, "Univerzita")).not.toHaveProperty("tabStops");
+    expect(note.items).toContainEqual({ kind: "partyLinesAligned", blocks: 3 });
+  });
+
+  test("lines with a colon label align outside the parties' block too, block by block", () => {
+    const inArticle = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nSmluvní strany",
+      "Objednatel s.r.o.",
+      "se sídlem: \tOvocný trh 1, Praha 1",
+      "IČO: \t00000001",
+      "(dále jen „Objednatel“)",
+      numbered(
+        "1.",
+        "Odstavec s textem\tza tabulátorem, který není popiskou.",
+        1,
+      ),
+    ]);
+    // Every style of the template states the same indent here.
+    const roles = { ...PROFILE.roles };
+    for (const role of HOUSE_STYLE_ROLES) {
+      const own = roles[role];
+      roles[role] = own === null ? null : { ...own, indentLeft: 851, size: 22 };
+    }
+    const { plan } = build(inArticle, "keepSource", {
+      profile: { ...PROFILE, roles },
+    });
+    const stops = itemOf(plan, inArticle, "se sídlem")?.tabStops;
+    // "se sídlem: " has 11 characters of 11 pt text behind the indent.
+    expect(stops).toEqual([851 + 1331 + 170]);
+    expect(itemOf(plan, inArticle, "IČO")?.tabStops).toEqual(stops);
+    // A numbered paragraph with a tab in it is text, not a label.
+    expect(itemOf(plan, inArticle, "Odstavec s textem")).not.toHaveProperty(
+      "tabStops",
+    );
+  });
+
+  test("a party line laid out in a table takes the plain text style", () => {
+    const table = inColumns(2, [
+      "se sídlem:",
+      "Ovocný trh 1, Praha 1",
+      "IČO:",
+      "00000001",
+    ]);
+    const { plan } = build({
+      ...table,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...table.blocks,
+        ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
+          (block, position) => ({ ...block, id: `after${String(position)}` }),
+        ),
+      ],
+    });
+    const nested = sourceItems(plan).flatMap((item) => item.nested ?? []);
+    expect(nested.length).toBeGreaterThan(0);
+    // The indent the template gives a party line on the page would only
+    // narrow the column.
+    for (const cell of nested) {
+      expect(cell.styleId).toBe(PROFILE.roles.body?.styleId);
+    }
+    // Where the source sets such a line at the right of its cell, it stays
+    // there, read as a party's line or not.
+    const amounts = {
+      ...table,
+      blocks: table.blocks.map((block) =>
+        block.text === "00000001" ? { ...block, alignment: "right" } : block,
+      ),
+    };
+    const aligned = build({
+      ...amounts,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...amounts.blocks,
+        ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
+          (block, position) => ({ ...block, id: `after${String(position)}` }),
+        ),
+      ],
+    });
+    const number = sourceItems(aligned.plan)
+      .flatMap((item) => item.nested ?? [])
+      .find(
+        ({ blockId }) =>
+          blockId ===
+          amounts.blocks.find(({ text }) => text === "00000001")?.id,
+      );
+    expect(number).toMatchObject({
+      styleId: PROFILE.roles.body?.styleId,
+      alignment: "right",
+    });
+  });
+
+  test("a cell paragraph the source sets tight by hand stays tight", () => {
+    const table = inColumns(2, ["Risk", "", "Low", ""]);
+    const spaced = [
+      undefined,
+      // A swatch: no text, no space around it.
+      { before: 0, after: 0 },
+      // One side tight, the other a measure of the source's own.
+      { before: 0, after: 120 },
+      // A measure on both sides: the template's style decides.
+      { before: 60, after: 60 },
+    ];
+    const cells = table.blocks.filter(({ kind }) => kind === "paragraph");
+    for (const [position, spacing] of spaced.entries()) {
+      const cell = cells[position];
+      if (cell !== undefined && spacing !== undefined) {
+        cell.spacing = spacing;
+      }
+    }
+    const { plan, note } = build({
+      ...table,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...table.blocks,
+        ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
+          (block, position) => ({ ...block, id: `after${String(position)}` }),
+        ),
+      ],
+    });
+    const nested = sourceItems(plan).flatMap((item) => item.nested ?? []);
+    const spacingOf = (position: number) =>
+      nested.find(({ blockId }) => blockId === cells[position]?.id)?.spacing;
+    expect(spacingOf(0)).toBeUndefined();
+    expect(spacingOf(1)).toEqual({ before: 0, after: 0 });
+    expect(spacingOf(2)).toEqual({ before: 0 });
+    expect(spacingOf(3)).toBeUndefined();
+    expect(note.items).toContainEqual({ kind: "cellSpacingKept", blocks: 2 });
+  });
+
+  test("a template whose style indent is not known leaves the lines as they are", () => {
+    const { plan, note } = build(manifest);
+    expect(
+      sourceItems(plan).some(({ tabStops }) => tabStops !== undefined),
+    ).toBe(false);
+    expect(note.items.map(({ kind }) => kind)).not.toContain(
+      "partyLinesAligned",
+    );
+  });
+});
+
+describe("buildTemplatePlan, lines that continue a numbered item", () => {
+  const texts = [
+    "SMLOUVA",
+    "Článek I.\nPrvní",
+    "Předmětem díla jsou tyto budovy:",
+    "hlavní budova na nábřeží,",
+    "k.ú. Malá Strana:",
+    "budova včetně nádvoří",
+    "Další odstavec článku u okraje.",
+  ];
+  const reading = (
+    blockId: string,
+    role: "title" | "articleHeading" | "clause1" | "roman" | "continuation",
+  ) => ({
+    blockId,
+    role,
+    confidence: 0.9,
+    alternatives: [],
+    mergedIntoBlockId: null,
+  });
+  const roles = [
+    reading("p0", "title"),
+    reading("p1", "articleHeading"),
+    reading("p2", "clause1"),
+    reading("p3", "roman"),
+    reading("p4", "continuation"),
+    reading("p5", "continuation"),
+    reading("p6", "continuation"),
+  ];
+  const withIndents = (
+    indents: Readonly<Record<number, { left: number; firstLine: number }>>,
+  ): DocxBlockManifest => {
+    const manifest = manifestOf(texts);
+    return {
+      ...manifest,
+      blocks: manifest.blocks.map((block, position) => ({
+        ...block,
+        ...(position === 2 ? { label: "1.", hash: "c" } : {}),
+        ...(position === 3 ? { label: "i.", hash: "i" } : {}),
+        ...(indents[position] === undefined
+          ? {}
+          : { indent: indents[position] }),
+      })),
+    };
+  };
+
+  test("a line the source sets under an item's text stands under it in the output", () => {
+    const manifest = withIndents({
+      2: { left: 567, firstLine: -567 },
+      3: { left: 1506, firstLine: -360 },
+      // The first line starts where the item's text does, or further in.
+      4: { left: 786, firstLine: 774 },
+      5: { left: 1506, firstLine: 0 },
+      // Back at the clause's text: no part of the item any more.
+      6: { left: 567, firstLine: 0 },
+    });
+    const { plan, note } = build(manifest, "keepSource", { roles });
+    const under = PROFILE.roles.roman?.numbering?.indent.left ?? 0;
+    expect(under).toBeGreaterThan(0);
+    expect(itemOf(plan, manifest, "k.ú.")?.indent).toEqual({ left: under });
+    expect(itemOf(plan, manifest, "budova včetně")?.indent).toEqual({
+      left: under,
+    });
+    expect(itemOf(plan, manifest, "Další odstavec")).not.toHaveProperty(
+      "indent",
+    );
+    expect(note.items).toContainEqual({
+      kind: "continuationsIndented",
+      blocks: 2,
+    });
+    expect(note.items.map(({ kind }) => kind)).not.toContain("textLabelsHung");
+  });
+
+  test("without the source's indents nothing is moved", () => {
+    const manifest = withIndents({});
+    const { plan, note } = build(manifest, "keepSource", { roles });
+    expect(itemOf(plan, manifest, "k.ú.")).not.toHaveProperty("indent");
+    expect(note.items.map(({ kind }) => kind)).not.toContain(
+      "continuationsIndented",
+    );
+  });
+});
+
+describe("buildTemplatePlan, a heading's title over two paragraphs", () => {
+  test("the second line of the title is set as the heading is, not as text", () => {
+    const manifest = manifestOf([
+      "VERTRAG",
+      "§ 1",
+      {
+        text: "Rechte an den Ergebnissen sowie",
+        styleName: "heading 2",
+        outlineLevel: 1,
+      },
+      {
+        text: "an entstehenden Schutzrechten",
+        styleName: "heading 2",
+        outlineLevel: 1,
+      },
+      numbered("(1)", "Die Parteien vereinbaren Folgendes.", 1),
+      "§ 2",
+      { text: "Vergütung", styleName: "heading 2", outlineLevel: 1 },
+      numbered("(1)", "Die Vergütung ist fällig.", 2),
+    ]);
+    const { plan } = build(manifest);
+    const head = itemOf(plan, manifest, "§ 1");
+    const second = itemOf(plan, manifest, "an entstehenden");
+    // The first line joins the number; the second is a heading line of its
+    // own, without a number, in the heading's style.
+    expect(head?.mergeNext).toBeDefined();
+    expect(second).toMatchObject({ styleId: head?.styleId, numbering: null });
+    expect(second).not.toHaveProperty("mergeNext");
+    // Text behind a one-line title stays text.
+    expect(itemOf(plan, manifest, "Die Vergütung")?.styleId).not.toBe(
+      head?.styleId,
+    );
+  });
+});
+
+describe("buildTemplatePlan, a typed article behind the document's numbered ones", () => {
+  test("a mention in front of the numbered articles does not take a later typed article with it", () => {
+    const article = (label: string, text: string) => ({
+      ...numbered(label, text, 1),
+      styleName: "heading 1",
+      outlineLevel: 0,
+    });
+    const manifest = manifestOf([
+      "AGREEMENT",
+      // A summary names the second article.
+      { text: "Article 2 Term", styleName: "heading 5", outlineLevel: 4 },
+      "The term is summarised here.",
+      article("1.", "Definitions"),
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      article("2.", "Term"),
+      numbered("2.1", "The agreement runs for one year.", 1),
+      // The third article is typed, and is the document's own.
+      { text: "Article 3 Notices", styleName: "heading 1", outlineLevel: 0 },
+      "Notices are given in writing.",
+    ]);
+    const index = buildLabelIndex(manifest);
+    expect(
+      index.entryByBlockId.get(blockIdOf(manifest, "Article 3 Notices")),
+    ).toMatchObject({ level: "article", origin: "manual" });
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Term")),
+    ).toBe(false);
+  });
+});
+
+describe("buildTemplatePlan, a number two typed articles have", () => {
+  test("a heading that counts on stays in the index where the document has a typed article of that number", () => {
+    const manifest = manifestOf([
+      "AGREEMENT",
+      // A typed article of the document's own, out of the numbered run.
+      { text: "Article 3 Notices", styleName: "heading 1", outlineLevel: 0 },
+      "Notices are given in writing.",
+      {
+        ...numbered("1.", "Definitions", 1),
+        styleName: "heading 1",
+        outlineLevel: 0,
+      },
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      // A part that counts its own articles, up to the same number.
+      { text: "Article 1 Subject", styleName: "heading 5", outlineLevel: 4 },
+      "This contract implements the agreement.",
+      { text: "Article 2 Price", styleName: "heading 5", outlineLevel: 4 },
+      "The price is fixed.",
+      { text: "Article 3 Term", styleName: "heading 5", outlineLevel: 4 },
+      "The term is one year as stated in Article 3.",
+    ]);
+    const index = buildLabelIndex(manifest);
+    // Both articles of that number are in the index, so a citation of it
+    // has two places it may mean.
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 3 Notices")),
+    ).toBe(true);
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 3 Term")),
+    ).toBe(true);
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Price")),
+    ).toBe(false);
+    // And the citation is linked to neither.
+    const { plan } = build(manifest);
+    expect(
+      (plan.references ?? []).filter(
+        ({ blockId }) => blockId === blockIdOf(manifest, "The term is one"),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("buildTemplatePlan, an article heading the index does not count", () => {
+  test("a heading that opens with an article's name is set as a heading and keeps its typed label", () => {
+    const article = (label: string, text: string) => ({
+      ...numbered(label, text, 1),
+      styleName: "heading 1",
+      outlineLevel: 0,
+    });
+    const manifest = manifestOf([
+      "AGREEMENT",
+      article("1.", "Definitions"),
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      article("2.", "Term"),
+      numbered("2.1", "The agreement runs for one year.", 1),
+      // A model contract behind the agreement counts its articles again.
+      {
+        text: "Article 1 Subject matter",
+        styleName: "heading 5",
+        outlineLevel: 4,
+      },
+      "This specific contract implements the agreement.",
+    ]);
+    const { plan } = build(manifest);
+    const typed = itemOf(plan, manifest, "Article 1 Subject");
+    expect(typed).toMatchObject({
+      styleId: PROFILE.roles.articleHeading?.styleId,
+      numbering: null,
+    });
+    expect(typed).not.toHaveProperty("stripLabel");
+    // The numbered articles keep their numbers.
+    expect(itemOf(plan, manifest, "Definitions")?.numbering).not.toBeNull();
+  });
+
+  test("the articles of a part that counts its own are set alike, also past the document's last number", () => {
+    const article = (label: string, text: string) => ({
+      ...numbered(label, text, 1),
+      styleName: "heading 1",
+      outlineLevel: 0,
+    });
+    const own = (text: string) => ({
+      text,
+      styleName: "heading 5",
+      outlineLevel: 4,
+    });
+    const manifest = manifestOf([
+      "AGREEMENT",
+      article("1.", "Definitions"),
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      article("2.", "Term"),
+      numbered("2.1", "The agreement runs for one year.", 1),
+      // The model contract has more articles than the agreement.
+      own("Article 1 Subject matter"),
+      "This specific contract implements the agreement.",
+      own("Article 2 Price"),
+      "The price is fixed.",
+      own("Article 3 Communication details"),
+      "Notices go to the addresses below.",
+      own("Article 4 Guarantee"),
+      "A guarantee is provided on request.",
+    ]);
+    const { plan } = build(manifest);
+    for (const start of [
+      "Article 1 Subject",
+      "Article 2 Price",
+      "Article 3 Communication",
+      "Article 4 Guarantee",
+    ]) {
+      const typed = itemOf(plan, manifest, start);
+      expect(typed).toMatchObject({
+        styleId: PROFILE.roles.articleHeading?.styleId,
+        numbering: null,
+      });
+      expect(typed).not.toHaveProperty("stripLabel");
+    }
+    // The label of a heading that counts on is the heading's own name: it
+    // is read as no citation.
+    const { note } = build(manifest);
+    for (const start of ["Article 3 Communication", "Article 4 Guarantee"]) {
+      expect(
+        note.items.filter(
+          (item) =>
+            item.kind === "referenceUnlinked" &&
+            item.blockId === blockIdOf(manifest, start),
+        ),
+      ).toEqual([]);
+    }
+  });
+});
+
+describe("buildTemplatePlan, lines the source brings back to the margin", () => {
+  const HANGING = { left: 851, firstLine: -851 };
+  const UNDER = { left: 851, firstLine: 0 };
+  /** A contract whose unnumbered lines stand as `indents` says, by
+   *  position; a line without an entry has no indent. */
+  const contract = (
+    indents: Readonly<Record<number, { left: number; firstLine: number }>>,
+  ): DocxBlockManifest => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPředmět",
+      numbered("1.1", "Dodavatel dodá zboží.", 10),
+      "Zboží je popsáno v nabídce.",
+      numbered("1.2", "Objednatel zaplatí cenu.", 10),
+      "Cena je konečná.",
+      "Tolik k předmětu této smlouvy.",
+      "Dodavatel dále zajistí:",
+      numbered("•", "dopravu,", 2),
+      numbered("•", "pojištění.", 2),
+      "Článek II.\nZávěr",
+      numbered("2.1", "Smlouva nabývá účinnosti podpisem.", 10),
+    ]);
+    return {
+      ...manifest,
+      blocks: manifest.blocks.map((block, position) => {
+        const indent = indents[position];
+        return indent === undefined ? block : { ...block, indent };
+      }),
+    };
+  };
+  const styleOf = (manifest: DocxBlockManifest, start: string) =>
+    itemOf(build(manifest).plan, manifest, start)?.styleId;
+
+  test("a line at the margin behind an indented clause is plain text where the document sets such lines under their clause", () => {
+    const manifest = contract({ 2: HANGING, 3: UNDER, 4: HANGING, 5: UNDER });
+    // Under its clause: the style for text under a clause.
+    expect(styleOf(manifest, "Cena je konečná.")).toBe("Indent");
+    // Back at the margin: no part of the clause above it.
+    expect(styleOf(manifest, "Tolik k předmětu")).toBe("Body");
+    // The line that opens a list of bullets stays where they hang from.
+    expect(styleOf(manifest, "Dodavatel dále zajistí:")).toBe("Indent");
+  });
+
+  test("a list of bullets behind a table is not opened by the line in front of the table", () => {
+    const manifest = contract({
+      2: HANGING,
+      3: UNDER,
+      4: HANGING,
+      5: UNDER,
+      6: UNDER,
+    });
+    // Without a table the line opens the bullets and stays.
+    expect(styleOf(manifest, "Dodavatel dále zajistí:")).toBe("Indent");
+    // A table stands between the line and the bullets.
+    const at = manifest.blocks.findIndex(({ text }) =>
+      text.startsWith("Dodavatel dále zajistí:"),
+    );
+    const [first] = manifest.blocks;
+    if (first === undefined) {
+      throw new Error("no block to copy");
+    }
+    const cell: DocxBlock = { ...first, id: "c1", text: "položka" };
+    const table: DocxBlock = {
+      ...first,
+      id: "t1",
+      kind: "table",
+      text: "",
+      cells: [{ row: 0, col: 0, blockIds: ["c1"] }],
+    };
+    const withTable: DocxBlockManifest = {
+      ...manifest,
+      blocks: [
+        ...manifest.blocks.slice(0, at + 1),
+        table,
+        cell,
+        ...manifest.blocks.slice(at + 1),
+      ],
+    };
+    expect(styleOf(withTable, "Dodavatel dále zajistí:")).toBe("Body");
+  });
+
+  test("a document that sets every such line at the margin keeps them under their clauses", () => {
+    const flat = contract({ 2: HANGING, 4: HANGING });
+    expect(styleOf(flat, "Zboží je popsáno")).toBe("Indent");
+    expect(styleOf(flat, "Tolik k předmětu")).toBe("Indent");
+    // And one that states no indents says nothing about its lines.
+    expect(styleOf(contract({}), "Tolik k předmětu")).toBe("Indent");
+  });
 });

@@ -32,6 +32,7 @@ export const MCP_STATIC_TOOL_NAMES = [
   "list_templates",
   "fill_template",
   "save_filled_template",
+  "reformat_into_template",
   "create_template",
   "configure_template_fields",
   "preview_template_conditions",

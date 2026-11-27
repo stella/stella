@@ -1,3 +1,4 @@
+// parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: RIS publisher reads use typed ReadOutcome wrappers; served responses produce identical parsed decisions and metadata.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -7,6 +8,7 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -35,7 +37,6 @@ import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import type { RisDocumentSections } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,

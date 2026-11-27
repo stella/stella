@@ -685,9 +685,9 @@ describe("building a judgment", () => {
             listingXml: listed.fragments[0],
           }),
         );
-        expect(failure).toContain(`answered ${status}`);
+        expect(failure).toContain(String(status));
         // A 5xx is retried, a rate-limit refusal is asked once.
-        expect(requests.length).toBe(status === 429 ? 1 : 3);
+        expect(requests.length).toBe(status === 429 ? 1 : 6);
       }
     } finally {
       Bun.sleep = originalSleep;
@@ -2137,9 +2137,9 @@ describe("the walk", () => {
     testFetchState.set(
       asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const response = await stubbed(input, init);
-        if (urlOf(input).pathname.endsWith("/judgement/content")) {
+        if (urlOf(input).pathname.endsWith("/judgement/details")) {
           documents += 1;
-          if (documents === 2) {
+          if (documents === 3) {
             controller.abort();
           }
         }

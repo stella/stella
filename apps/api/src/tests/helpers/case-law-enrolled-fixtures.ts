@@ -91,12 +91,9 @@ import {
   normalizeSaosDumpItem,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
-import {
-  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
-  plKisRawPartsOf,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { fetchPlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { buildPlKisDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
+import { fetchPlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import {
   huggingFaceShardSource,
@@ -105,18 +102,19 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { buildPlSnDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import {
-  assemblePlTkDecision,
-  plTkRawPartsOf,
+  buildPlTkDecision,
+  createPlTkPageCache,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plUodoAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import {
-  assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   assemblePlUokikRuling,
+  buildPlUokikDecision,
   parsePlUokikDetail,
   PL_UOKIK_FILE_STATUS,
   PL_UOKIK_LABEL,
-  plUokikRawPartsOf,
+  plUokikDetailUrl,
+  plUokikFileUrl,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   unreadPublisherError,
@@ -150,11 +148,6 @@ import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const buildCzNssDecision = guardParser(uncheckedBuildCzNssDecision);
-const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
-const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);
-
-const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
-const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
 const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
 
 /** What a guard has to drive one adapter with. */
@@ -1120,20 +1113,49 @@ const PL_KIO_DOCUMENT = `<!DOCTYPE html><html><head><title>2845_2846_25.docx</ti
 <p>Krajowa Izba Odwoławcza - w składzie: Przewodnicząca: Ewa Sikorska</p>
 <p>orzeka: oddala odwołania.</p></body></html>`;
 
-/** Built from the three payloads directly, as the crawl hands them over. */
+/** Built through the adapter's publisher reads, serving the detail and document pages. */
 export const plKioFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    const built = assemblePlKioDecision({
-      item: { ...PL_KIO_LISTING_ROW },
-      detailHtml: PL_KIO_DETAIL_PAGE,
-      document: { type: "read", html: PL_KIO_DOCUMENT },
-    });
-    return await Promise.resolve(
-      built.type === "built"
-        ? built.decision
-        : panic("pl-kio fixture did not build"),
-    );
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (pathname === `/Home/Details/${PL_KIO_LISTING_ROW.id}`) {
+          return await Promise.resolve(
+            new Response(PL_KIO_DETAIL_PAGE, {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }),
+          );
+        }
+        if (pathname === `/Home/ContentHtml/${PL_KIO_LISTING_ROW.id}`) {
+          return await Promise.resolve(
+            new Response(PL_KIO_DOCUMENT, {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }),
+          );
+        }
+        return panic(`pl-kio fixture serves no ${pathname}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const fetched = await fetchPlKioDecision({
+          cursor: "fixture",
+          item: { ...PL_KIO_LISTING_ROW },
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(fetched)) {
+          return await Promise.reject(fetched.error);
+        }
+        return fetched.value.type === "built"
+          ? fetched.value.decision
+          : panic("pl-kio fixture did not build");
+      },
+    ),
 });
 
 // ── PL common courts (ncourt-api) fixture ────────────────
@@ -1201,24 +1223,53 @@ const PL_NCOURT_LISTING_XML = `<judgement>${Object.entries(
   .map(([name, value]) => `<${name}>${value}</${name}>`)
   .join("")}</judgement>`;
 
-/** Built from the three payloads directly, as the crawl hands them over. */
+/** Built through the adapter's publisher reads, serving the detail and content XML. */
 export const plNcourtFixture = (): EnrolledAdapterFixture => ({
   rawFieldValues: {
     excerpt: PL_NCOURT_LISTING_XML,
     "xPart@xml:space": PL_NCOURT_CONTENT,
   },
-  buildDecision: async () => {
-    const built = assemblePlNcourtDecision({
-      listingXml: PL_NCOURT_LISTING_XML,
-      detailXml: PL_NCOURT_DETAIL,
-      contentXml: PL_NCOURT_CONTENT,
-    });
-    return await Promise.resolve(
-      built.type === "built"
-        ? built.decision
-        : panic("pl-ncourt fixture did not build"),
-    );
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (pathname.endsWith("/judgement/details")) {
+          return await Promise.resolve(
+            new Response(PL_NCOURT_DETAIL, {
+              headers: { "Content-Type": "text/xml; charset=utf-8" },
+            }),
+          );
+        }
+        if (pathname.endsWith("/judgement/content")) {
+          return await Promise.resolve(
+            new Response(PL_NCOURT_CONTENT, {
+              headers: { "Content-Type": "text/xml; charset=utf-8" },
+            }),
+          );
+        }
+        return panic(`pl-ncourt fixture serves no ${pathname}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const fetched = await fetchPlNcourtDecision({
+          cursor: "fixture",
+          listingXml: PL_NCOURT_LISTING_XML,
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(fetched)) {
+          return await Promise.reject(fetched.error);
+        }
+        return fetched.value.type === "built"
+          ? fetched.value.decision
+          : panic("pl-ncourt fixture did not build");
+      },
+    ),
 });
 
 // ── CZ ÚS fixture ────────────────────────────────────────
@@ -2708,20 +2759,45 @@ const PL_TK_LISTING_ROW: PlTkListingRow = {
   defect: undefined,
 };
 
-/** Built through the adapter's own assembler, from the row and the page. */
+/** Built through the adapter's publisher reads, serving the case page. */
 export const plTkFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    const built = assemblePlTkDecision({
-      row: PL_TK_LISTING_ROW,
-      casePage: PL_TK_CASE_PAGE,
-      rawParts: plTkRawPartsOf(PL_TK_LISTING_ROW, PL_TK_CASE_PAGE),
-    });
-    return await Promise.resolve(
-      built.type === "unkeyable"
-        ? panic("pl-tk fixture did not build")
-        : built.decision,
-    );
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (pathname === "/ipo/Sprawa") {
+          return await Promise.resolve(
+            new Response(PL_TK_CASE_PAGE, {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }),
+          );
+        }
+        return panic(`pl-tk fixture serves no ${pathname}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const built = await buildPlTkDecision({
+          cursor: "fixture",
+          pageCache: createPlTkPageCache(),
+          row: PL_TK_LISTING_ROW,
+          session: { sessionId: "fixture-session" },
+          signal: undefined,
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(built)) {
+          return await Promise.reject(built.error);
+        }
+        return built.value.type === "unkeyable"
+          ? panic("pl-tk fixture did not build")
+          : built.value.decision;
+      },
+    ),
 });
 
 // ── PL NSA fixture ───────────────────────────────────────
@@ -3024,16 +3100,42 @@ export const plKisFixture = (): EnrolledAdapterFixture => ({
     "informacja/nazwa": "Zmiana wiążącej informacji stawkowej",
     "informacja/informacjaTytulDto": [],
   },
-  buildDecision: async () => {
-    const row = { ...PL_KIS_LISTING_ROW };
-    const built = await assemblePlKisDecision({
-      row,
-      rawParts: plKisRawPartsOf(row, PL_KIS_DETAIL),
-    });
-    return built.type === "built"
-      ? built.decision
-      : panic("pl-kis fixture did not build");
-  },
+  buildDecision: async () =>
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const { pathname } = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (
+          pathname.endsWith(`/informacje/${PL_KIS_LISTING_ROW.ID_INFORMACJI}`)
+        ) {
+          return await Promise.resolve(
+            new Response(PL_KIS_DETAIL, {
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+            }),
+          );
+        }
+        return panic(`pl-kis fixture serves no ${pathname}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const built = await buildPlKisDecision(
+          { ...PL_KIS_LISTING_ROW },
+          null,
+        ).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(built)) {
+          return await Promise.reject(built.error);
+        }
+        return built.value.type === "built"
+          ? built.value.decision
+          : panic("pl-kis fixture did not build");
+      },
+    ),
 });
 
 // ── PL UODO fixture ──────────────────────────────────────
@@ -3233,17 +3335,50 @@ export const plUokikFixture = (): EnrolledAdapterFixture => ({
       parsePlUokikDetail(html)
         ?.fields.find(({ label }) => label === PL_UOKIK_LABEL.DECISION_FILES)
         ?.files.at(0)?.name ?? panic("the pl-uokik page names no file");
-    const built = await assemblePlUokikDecision({
-      entry,
-      rawParts: plUokikRawPartsOf(entry, html),
-      files: [
-        {
-          name,
-          status: PL_UOKIK_FILE_STATUS.READ,
-          bytes: new Uint8Array(await Bun.file(PL_UOKIK_PDF).arrayBuffer()),
-        },
-      ],
-    });
+    const pdfBytes = new Uint8Array(await Bun.file(PL_UOKIK_PDF).arrayBuffer());
+    const detailUrl = plUokikDetailUrl(PL_UOKIK_DECISION_UNID);
+    const fileUrl =
+      plUokikFileUrl(PL_UOKIK_DECISION_UNID, name) ??
+      panic("the pl-uokik fixture file URL is unusable");
+    const built = await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const href = input instanceof Request ? input.url : String(input);
+        if (href === detailUrl) {
+          return await Promise.resolve(
+            new Response(html, {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }),
+          );
+        }
+        if (
+          href === fileUrl ||
+          href.includes(`/${PL_UOKIK_DECISION_UNID}/$FILE/`)
+        ) {
+          return await Promise.resolve(
+            new Response(pdfBytes, {
+              headers: { "Content-Type": "application/pdf" },
+            }),
+          );
+        }
+        return panic(`pl-uokik fixture serves no ${href}`);
+      }),
+      async () => {
+        const sleep = Bun.sleep;
+        Bun.sleep = async () => {
+          await Promise.resolve();
+        };
+        const observed = await buildPlUokikDecision({
+          cursor: "fixture",
+          entry,
+        }).finally(() => {
+          Bun.sleep = sleep;
+        });
+        if (Result.isError(observed)) {
+          return await Promise.reject(observed.error);
+        }
+        return observed.value.built;
+      },
+    );
     if (built.type !== "built") {
       return panic(`pl-uokik fixture did not build: ${built.type}`);
     }

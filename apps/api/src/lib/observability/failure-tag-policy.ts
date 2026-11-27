@@ -460,6 +460,7 @@ export const TAGGED_FAILURE_REASON = {
   RedisConfigurationError: "tagged_failure",
   RedisRateLimitReplyError: "tagged_failure",
   ReferenceFieldError: "tagged_failure",
+  ReformatRefusedError: "tagged_failure",
   RepeatedQueryFingerprintError: "tagged_failure",
   ReplayArgumentsError: "tagged_failure",
   ReplayStageError: "tagged_failure",

@@ -13,6 +13,7 @@ import { panic } from "better-result";
 import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation";
 
 import {
+  closeNumberParts,
   digitsValue,
   formatNumeral,
   letterOrdinal,
@@ -42,8 +43,9 @@ export type LabelKeptReason =
 
 type LevelFormat = { numFmt: string; lvlText: string };
 
-/** A label restated as a level text, its own counter still unplaced. */
-type LabelPattern = LevelFormat;
+/** A label restated as a level text, its own counter still unplaced.
+ *  `font`: the text face a bullet's mark is a character of. */
+type LabelPattern = LevelFormat & { font?: string };
 
 export type ListLevelFormat = LevelFormat & { ilvl: number; start: number };
 
@@ -198,7 +200,9 @@ export const patternOf = (
   }
   const closing = `${shape.close}${shape.period ? "." : ""}`;
   const designator = `${shape.open}${shape.core}${closing}`;
-  const words = label.slice(0, label.length - designator.length);
+  // A number typed with blanks between its parts is printed closed up.
+  const closed = closeNumberParts(label);
+  const words = closed.slice(0, closed.length - designator.length);
   const parents = entry.level === "clause" ? clauseParents(entry, outline) : [];
   if (parents === null) {
     return null;
@@ -275,6 +279,7 @@ const assignSpareLevels = (
   candidates: readonly Placement[],
   chosen: Map<string, LabelPattern>,
   spareLevels: readonly ProfileListLevel[],
+  markLevels: readonly ProfileListLevel[],
 ): Map<string, ProfileListLevel> => {
   /** The role level whose paragraphs a spare level takes over, by spare
    *  level: they keep that level's indent. */
@@ -306,13 +311,19 @@ const assignSpareLevels = (
   /** The spare level that prints a format: where the levels run out, a
    *  later group of the same format joins it rather than lose its mark. */
   const levelByFormat = new Map<string, ProfileListLevel>();
+  const marks = [...markLevels];
   for (const group of [...displaced.values()].toSorted(
     (left, right) => right.length - left.length,
   )) {
     const first = group.at(0);
     const pattern = first?.pattern ?? null;
     const format = pattern === null ? "" : formatKey(pattern);
-    const fresh = spare.shift();
+    // A bullet counts nothing: it takes a level outside the outline list
+    // while there is one, and leaves the outline's to formats that count.
+    const fresh =
+      pattern?.numFmt === "bullet"
+        ? (marks.shift() ?? spare.shift())
+        : spare.shift();
     const level = fresh ?? levelByFormat.get(format);
     if (fresh !== undefined) {
       levelByFormat.set(format, fresh);
@@ -425,7 +436,11 @@ const countLists = ({
     if (
       mode === "keepSource" &&
       (format === undefined ||
-        renderLabel(format.lvlText, next, levels) !== placement.sourceLabel)
+        // A number typed with blanks between its parts is printed closed up.
+        renderLabel(format.lvlText, next, levels) !==
+          (placement.sourceLabel === null
+            ? null
+            : closeNumberParts(placement.sourceLabel)))
     ) {
       return placement;
     }
@@ -493,6 +508,8 @@ type NumberOptions = {
   placements: readonly Placement[];
   mode: NumberingMode;
   spareLevels: readonly ProfileListLevel[];
+  /** Levels outside the outline list, for marks that count nothing. */
+  markLevels?: readonly ProfileListLevel[] | undefined;
 };
 
 /**
@@ -504,6 +521,7 @@ export const numberPlacements = ({
   placements,
   mode,
   spareLevels,
+  markLevels = [],
 }: NumberOptions): Numbered => {
   const candidates = placements.filter(({ numbered }) => numbered);
   const chosen =
@@ -523,6 +541,7 @@ export const numberPlacements = ({
         ),
     chosen,
     spareLevels,
+    markLevels,
   );
   const usedLevels = new Map<string, ProfileListLevel>();
   for (const placement of candidates) {
@@ -566,6 +585,15 @@ export const numberPlacements = ({
         placement.level !== null &&
         levelKey(placement.level) === key,
     );
+    // A mark that is a character of a text face is that shape only in
+    // that face: a level made to print it is set in it.
+    const face = placements.find(
+      (placement) =>
+        placement.numbered &&
+        placement.level !== null &&
+        levelKey(placement.level) === key &&
+        placement.pattern?.font !== undefined,
+    )?.pattern?.font;
     const indent = takenIndent(standsFor.get(key)?.indent, level.indent);
     const stated = indent !== null && Object.keys(indent).length > 0;
     // A level whose own paragraphs all kept their typed label is patched
@@ -584,9 +612,85 @@ export const numberPlacements = ({
         ...(format.lvlText === level.lvlText
           ? {}
           : { lvlText: format.lvlText }),
+        ...(face === undefined || format.lvlText === level.lvlText
+          ? {}
+          : { font: face }),
         ...(stated ? { indent } : {}),
       });
     }
   }
   return { patches, levelsByList };
+};
+
+/** The languages of a document and of the template it is formatted onto,
+ *  as the caller knows them (ISO 639-1 codes). */
+export type PlanLanguages = { document: string; template: readonly string[] };
+
+const LABEL_LANGUAGES = ["cs", "sk", "en", "de"] as const;
+
+type LabelLanguage = (typeof LABEL_LANGUAGES)[number];
+
+/** How the firm's templates print an article's label, by language: the
+ *  word in front of the number and what follows the number. */
+const ARTICLE_LABELS = {
+  cs: { word: "Čl.", after: "" },
+  sk: { word: "Čl.", after: "" },
+  en: { word: "Art.", after: "" },
+  de: { word: "Art.", after: "." },
+} as const satisfies Record<LabelLanguage, { word: string; after: string }>;
+
+const isLabelLanguage = (language: string): language is LabelLanguage =>
+  LABEL_LANGUAGES.some((known) => known === language);
+
+const ARTICLE_LEVEL =
+  /^(?<word>Čl\.|Art\.)(?<blank>[ \u00A0]+)(?<counter>%\d)(?<after>\.?)$/u;
+
+type LanguageOptions = {
+  languages: PlanLanguages;
+  patches: TemplatePlanNumberingPatch[];
+  levelsByList: Map<number, ListLevelFormat[]>;
+};
+
+/**
+ * Puts the word a level of the template prints in front of an article's
+ * number into the document's language, where the template is in another:
+ * a contract in English renumbered onto a Czech template reads `Art. 1`,
+ * not `Čl. 1`. For the template's own scheme only; a document that keeps
+ * its numbers keeps its words. Returns how many levels were changed.
+ */
+export const levelsInLanguage = ({
+  languages: { document, template },
+  patches,
+  levelsByList,
+}: LanguageOptions): number => {
+  if (!isLabelLanguage(document) || template.includes(document)) {
+    return 0;
+  }
+  const own = ARTICLE_LABELS[document];
+  let changed = 0;
+  for (const [abstractNumId, levels] of levelsByList) {
+    for (const level of levels) {
+      const parts = ARTICLE_LEVEL.exec(level.lvlText)?.groups;
+      const lvlText =
+        parts === undefined
+          ? level.lvlText
+          : `${own.word}${parts["blank"] ?? " "}${parts["counter"] ?? ""}${own.after}`;
+      if (lvlText === level.lvlText) {
+        continue;
+      }
+      level.lvlText = lvlText;
+      changed += 1;
+      const patch = patches.find(
+        (candidate) =>
+          candidate.abstractNumId === abstractNumId &&
+          candidate.ilvl === level.ilvl,
+      );
+      if (patch === undefined) {
+        patches.push({ abstractNumId, ilvl: level.ilvl, lvlText });
+      } else {
+        patch.lvlText = lvlText;
+      }
+    }
+  }
+  return changed;
 };
