@@ -5,6 +5,7 @@ import {
   MCP_APP_GENERATED_OUTPUTS,
   MODEL_CATALOG_INPUTS,
 } from "../packages/scripts/src/generated-files";
+import { MCP_APP_CONTRACT_SCRIPT_INPUTS } from "./mcp-app-generator-inputs";
 
 export {
   CI_GENERATED_OUTPUTS,
@@ -1903,13 +1904,11 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "derived",
     outputs: [...MCP_APP_GENERATED_OUTPUTS.contracts],
     inputs: [
-      "apps/api/scripts/generate-mcp-app-contracts.ts",
-      "apps/api/scripts/lib/mcp-app-inputs.ts",
+      ...MCP_APP_CONTRACT_SCRIPT_INPUTS,
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**/*-schema.ts",
       "packages/agent-input/**",
       "packages/legal-atlas/**",
-      "scripts/generated-artifacts.ts",
       "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
       "apps/api/src/mcp/app-contracts.ts",
