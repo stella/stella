@@ -33,7 +33,6 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
-import { BASELINE_PATHS } from "./baseline-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
@@ -106,7 +105,6 @@ export const rootScriptTests = (
 const KNIP_INPUT = /\.[cm]?[jt]sx?$|(?:^|\/)package\.json$/u;
 const KNIP_BUDGET_FILES = new Set([
   "knip.json",
-  BASELINE_PATHS.knipExports,
   "scripts/knip-exports-ratchet.ts",
 ]);
 

@@ -40,8 +40,6 @@ export const BASELINE_PATHS = {
   bundle: "scripts/bundle-baseline.json",
   /** scripts/dependency-audit.ts */
   dependencyAudit: "scripts/dependency-audit-baseline.json",
-  /** scripts/knip-exports-ratchet.ts */
-  knipExports: "scripts/knip-exports-baseline.json",
   /** scripts/offline-check-policy.ts */
   offlineCheckImports: "scripts/offline-check-import-allowlist.json",
   /** scripts/check-ci-network-steps.ts */
@@ -58,8 +56,6 @@ export const BASELINE_PATHS = {
   transferRead: "scripts/transfer-read-guard-baseline.json",
   /** scripts/source-fingerprint-baseline.ts */
   sourceFingerprint: "scripts/source-fingerprint-baseline.json",
-  /** scripts/sql-perf-baseline.ts */
-  sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
   /** apps/api/scripts/deployment-feature-guard.ts */
@@ -73,9 +69,6 @@ export const BASELINE_PATHS = {
   /** apps/api/scripts/processed-field-backlog-guard.ts */
   caseLawProcessedFieldBacklog:
     "apps/api/src/handlers/case-law/ingestion/adapters/processed-field-backlog-baseline.json",
-  /** apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts */
-  caseLawSilentDrop:
-    "apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json",
   /** apps/api/scripts/update-structure-fidelity-baseline.ts */
   caseLawStructureFidelity:
     "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json",

@@ -1,6 +1,7 @@
 import { Panic, Result } from "better-result";
 import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
+import { setImmediate } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
@@ -279,8 +280,8 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         },
         runtime: {
           now: Date.now,
-          sleep: async (ms: number) => {
-            await Bun.sleep(ms);
+          sleep: async () => {
+            await setImmediate();
           },
           random: () => 0.5,
         },

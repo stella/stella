@@ -319,6 +319,46 @@ describe("folioTemplatePlanEngine", () => {
     expect(texts).toContain("The lease ends in June.");
   });
 
+  test("a cell paragraph the source sets tight stays tight in the output", async () => {
+    const TIGHT = '<w:spacing w:before="0" w:after="0"/>';
+    const cell = (text: string, properties = ""): string =>
+      `<w:tc>${paragraph(text, properties)}</w:tc>`;
+    const tabled = await docx({
+      body: [
+        paragraph("SERVICES AGREEMENT"),
+        paragraph("Article 1"),
+        paragraph("Scope"),
+        paragraph("The supplier provides the services.", listed(1, 0)),
+        `<w:tbl><w:tr>${cell("Item", TIGHT)}${cell("Price")}</w:tr></w:tbl>`,
+        paragraph("A closing sentence."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: list(0, level(0, "decimal", "1.%1.")) + instance(1, 0),
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: tabled,
+        template: await template(),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.note.items).toContainEqual({
+      kind: "cellSpacingKept",
+      blocks: 1,
+    });
+    const output = (
+      await folioTemplatePlanEngine.analyze(formatted.docx)
+    ).unwrap();
+    const spacingOf = (text: string) =>
+      output.blocks.find((block) => block.text === text)?.spacing;
+    // The engine wrote the spacing the plan asked for, and no other.
+    expect(spacingOf("Item")).toEqual({ before: 0, after: 0 });
+    expect(spacingOf("Price")).toBeUndefined();
+  });
+
   test("formats one view of a document with tracked changes: accepted unless the caller asks for the rejected one", async () => {
     const tracked = await docx({
       body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,

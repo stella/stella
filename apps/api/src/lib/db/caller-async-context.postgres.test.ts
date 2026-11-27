@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { setImmediate } from "node:timers/promises";
 
 import { createDatabase } from "@/api/db/sql-client";
 import {
@@ -41,7 +42,7 @@ if (!databaseUrl || !runPostgresTests) {
           await runWithQueryCounter(async (counter) => {
             await db.transaction(async (tx) => {
               await tx.execute(sql`SELECT 1`);
-              await Bun.sleep(5);
+              await setImmediate();
               await tx.transaction(async (savepoint) => {
                 await savepoint.execute(sql`SELECT 2`);
               });

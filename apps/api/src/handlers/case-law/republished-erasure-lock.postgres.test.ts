@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { rejectionOf, settledWithin, WaitTimeoutError } from "@stll/test-kit";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionAliases,
@@ -133,7 +135,14 @@ if (!databaseUrl || !enabled) {
           scopedDb: directScopedDb,
           sweepRaw,
         });
-        await Bun.sleep(50);
+        expect(
+          await rejectionOf(
+            settledWithin(erasingAfterLink, {
+              description: "erasure to bypass held linking lock",
+              timeoutMs: 50, // timeout: bounded window asserting erasure stays blocked on linking lock
+            }),
+          ),
+        ).toBeInstanceOf(WaitTimeoutError);
         expect(await owner.db.select().from(caseLawDecisionAliases)).toEqual(
           [],
         );
@@ -202,7 +211,14 @@ if (!databaseUrl || !enabled) {
               panic("An erased pair must not be reconciled"),
             ),
         );
-        await Bun.sleep(50);
+        expect(
+          await rejectionOf(
+            settledWithin(linkingAfterErasure, {
+              description: "linking to bypass held erasure lock",
+              timeoutMs: 50, // timeout: bounded window asserting linking stays blocked on erasure lock
+            }),
+          ),
+        ).toBeInstanceOf(WaitTimeoutError);
         releaseErasure?.();
         const [erasureOutcome, linkOutcome] = await Promise.all([
           heldErasure,

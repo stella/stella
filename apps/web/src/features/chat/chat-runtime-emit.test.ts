@@ -8,11 +8,11 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { setImmediate } from "node:timers/promises";
 
 import { getChatTurnDurationMs } from "@stll/api-contract/chat-turn-duration";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
-import { sleep } from "@stll/concurrency/sleep";
 
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -113,7 +113,7 @@ const createManualScheduler = (): ManualScheduler => {
 
 const tick = async (times = 20) => {
   for (let index = 0; index < times; index += 1) {
-    await sleep(0);
+    await setImmediate();
   }
 };
 

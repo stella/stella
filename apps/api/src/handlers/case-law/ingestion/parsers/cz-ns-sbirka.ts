@@ -1,3 +1,4 @@
+// parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 /**
  * The Supreme Court's official collection (sbirka.nsoud.cz), read from an
@@ -43,6 +44,7 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { positionalBlockAnchor } from "@stll/legal-ast/stable-block-anchors";
 
 import {
@@ -51,7 +53,6 @@ import {
   visibleHtmlText,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import type { CzNsReportEdition } from "@/api/lib/legal-search/cz-ns-collection-entry";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 

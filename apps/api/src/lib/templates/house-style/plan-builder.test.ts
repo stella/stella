@@ -2933,6 +2933,47 @@ describe("buildTemplatePlan, the lines of the parties", () => {
     });
   });
 
+  test("a cell paragraph the source sets tight by hand stays tight", () => {
+    const table = inColumns(2, ["Risk", "", "Low", ""]);
+    const spaced = [
+      undefined,
+      // A swatch: no text, no space around it.
+      { before: 0, after: 0 },
+      // One side tight, the other a measure of the source's own.
+      { before: 0, after: 120 },
+      // A measure on both sides: the template's style decides.
+      { before: 60, after: 60 },
+    ];
+    const cells = table.blocks.filter(({ kind }) => kind === "paragraph");
+    for (const [position, spacing] of spaced.entries()) {
+      const cell = cells[position];
+      if (cell !== undefined && spacing !== undefined) {
+        cell.spacing = spacing;
+      }
+    }
+    const { plan, note } = build({
+      ...table,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...table.blocks,
+        ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
+          (block, position) => ({ ...block, id: `after${String(position)}` }),
+        ),
+      ],
+    });
+    const nested = sourceItems(plan).flatMap((item) => item.nested ?? []);
+    const spacingOf = (position: number) =>
+      nested.find(({ blockId }) => blockId === cells[position]?.id)?.spacing;
+    expect(spacingOf(0)).toBeUndefined();
+    expect(spacingOf(1)).toEqual({ before: 0, after: 0 });
+    expect(spacingOf(2)).toEqual({ before: 0 });
+    expect(spacingOf(3)).toBeUndefined();
+    expect(note.items).toContainEqual({ kind: "cellSpacingKept", blocks: 2 });
+  });
+
   test("a template whose style indent is not known leaves the lines as they are", () => {
     const { plan, note } = build(manifest);
     expect(
