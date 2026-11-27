@@ -1,3 +1,4 @@
+// parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [eu-ecj] bounded response body reads preserve identical payloads; only oversized responses are refused.
 // parser-output-unchanged: [eu-ecj] bounded Formex archive reads yield the same entries in the same order; only oversized archives are refused.
@@ -23,6 +24,7 @@ import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 // parser-output-unchanged: [eu-ecj] the crawl pages a date by variant and carries an unserved variant as an unread item; a built variant's parse and stored payload are unchanged.
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
@@ -82,7 +84,6 @@ import type {
   EcjNoticeFacts,
   EcjNoticeManifestation,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import { DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY } from "@/api/lib/case-law/decision-language";

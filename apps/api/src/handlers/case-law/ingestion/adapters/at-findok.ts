@@ -1,3 +1,4 @@
+// parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: [at-findok] migrated publisher transport to readAtFindok/readPublisher; served response parsing is unchanged.
 // parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -8,6 +9,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -34,7 +36,6 @@ import {
   parseFindokDecisionXml,
   parseFindokHeadnoteXml,
 } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
   absentDecisionTextFields,
   absentTextField,
