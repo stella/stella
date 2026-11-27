@@ -9,6 +9,8 @@ import {
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
@@ -45,8 +47,6 @@ import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions"
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { PAGINATION_CURSOR_MAX_CHARS } from "@/api/lib/custom-schema";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { refreshLegislationFacetCounts } from "@/api/lib/legal-search/legislation-facet-refresh";
 import type {
   LegislationReadDb,

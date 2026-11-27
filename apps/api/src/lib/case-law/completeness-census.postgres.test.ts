@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -23,7 +24,6 @@ import { CENSUS_CAPABILITIES } from "@/api/lib/case-law/completeness-census-capa
 import { countryCensusVerdict } from "@/api/lib/case-law/completeness-census-contract";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
   CensusListingIdentity,
   SourceSliceWalk,

@@ -6,6 +6,7 @@ import {
   DECISION_IDENTIFIER_TYPES,
   normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { listingCourtIdentity } from "@/api/lib/case-law/decision-court-identity";
@@ -25,7 +26,6 @@ import {
   storeDecisionIdentifiersInMetadata,
 } from "@/api/lib/legal-search/decision-identifier-metadata";
 import { caseLawCanonicalPayload } from "@/api/lib/legal-search/decision-payload";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
 import { sortDeep } from "@/api/lib/sort-deep";

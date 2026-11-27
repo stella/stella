@@ -3,16 +3,16 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { documentAstSchema, hasUsableAst } from "@stll/legal-ast/document-ast";
+import {
+  emptyAstSchema,
+  persistedDecisionSectionsSchema,
+} from "@stll/legal-ast/document-types";
 
 import { LIMITS } from "@/api/lib/limits";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 import type { CorpusPayload } from "./corpus-content-hash";
 import { payloadCarriesDocument } from "./corpus-content-hash";
-import {
-  emptyAstSchema,
-  persistedDecisionSectionsSchema,
-} from "./document-types";
 
 export const COLLECTION_DOCUMENT_EXTENT = {
   SECTION: "section",

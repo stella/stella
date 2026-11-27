@@ -1,3 +1,4 @@
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: parser primitives moved to @stll/legal-ast without behavior changes.
 import { panic } from "better-result";
 
@@ -82,6 +83,7 @@ import {
   type ParagraphRole,
   plainTextOf,
 } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 import {
   type ContinuingJoin,
   LINE_JOINS,
@@ -110,7 +112,6 @@ import {
   separateOpinionHeadingNamesAuthor,
 } from "@stll/legal-ast/separate-opinion-heading";
 
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {

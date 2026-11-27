@@ -1,3 +1,4 @@
+// parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 // parser-output-unchanged: the section-or-full-text choice and textComplete read the same validateAst verdict; only the logging moved to the pipeline.
 /**
  * Polish administrative-court decision reader for the Hugging Face dataset
@@ -21,9 +22,9 @@ import type {
   DocumentAst,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   buildValidationHtml,
   validateAst,

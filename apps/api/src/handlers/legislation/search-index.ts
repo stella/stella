@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
@@ -29,7 +30,6 @@ import {
   withDedicatedCorpusBackfillDb,
 } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";

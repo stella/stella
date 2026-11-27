@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
@@ -23,7 +24,6 @@ import {
   corpusMemberDigest,
   packKeyForMembers,
 } from "@/api/lib/legal-search/corpus-pack";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,

@@ -1,10 +1,10 @@
 import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 import { DECISION_ROW_AST_VERSION_CHANGED } from "@/api/lib/case-law/decision-row-ast-cache";
 import { createWindowReadCache } from "@/api/lib/files/window-read-cache";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 

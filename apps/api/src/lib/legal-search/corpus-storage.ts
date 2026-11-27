@@ -4,6 +4,8 @@ import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { persistedDecisionSectionsSchema } from "@stll/legal-ast/document-types";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -48,11 +50,6 @@ import type {
   CorpusTombstoneReader,
   CorpusTombstoneWriter,
 } from "@/api/lib/legal-search/corpus-tombstones";
-import { persistedDecisionSectionsSchema } from "@/api/lib/legal-search/document-types";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 import {
   reportStoredAstOutcome,
   type StoredAstReadOutcome,

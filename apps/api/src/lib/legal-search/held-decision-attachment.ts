@@ -2,15 +2,15 @@ import { panic } from "better-result";
 import type * as v from "valibot";
 
 import {
+  CZ_ISIR_METADATA_KEY,
+  czIsirDecisionMetadataSchema,
+} from "@stll/legal-ast/cz-isir-decision";
+import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifierType,
 } from "@stll/legal-ast/decision-identifier";
 
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  CZ_ISIR_METADATA_KEY,
-  czIsirDecisionMetadataSchema,
-} from "@/api/lib/legal-search/cz-isir-decision";
 import {
   CZ_NS_COLLECTION_METADATA_KEY,
   czNsCollectionDocumentPartSchema,

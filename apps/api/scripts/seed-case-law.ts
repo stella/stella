@@ -28,6 +28,7 @@ import { logErrorOutput, printError } from "@stll/errors";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -43,10 +44,6 @@ import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { planet49CaseLawFixture } from "./seed-case-law-planet49";

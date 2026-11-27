@@ -6,6 +6,7 @@ import fc from "fast-check";
 
 import { compareCodeUnit } from "@stll/collation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionSection } from "@stll/legal-ast/document-types";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -40,7 +41,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { parseCitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import { CITED_PART } from "@/api/lib/case-law/citation-vocabulary";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

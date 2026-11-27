@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type { EmptyAst } from "@stll/legal-ast/document-types";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments } from "@/api/db/schema";
@@ -20,7 +21,6 @@ import {
   readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   canonicalLegislationAstSource,
   canonicalLegislationTextSource,

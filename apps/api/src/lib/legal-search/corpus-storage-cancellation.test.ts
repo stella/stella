@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
+
 import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -9,7 +11,6 @@ import {
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombstones";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
 

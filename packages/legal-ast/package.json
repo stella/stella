@@ -242,6 +242,18 @@
     "./page-furniture": {
       "types": "./src/page-furniture.ts",
       "import": "./src/page-furniture.ts"
+    },
+    "./citation-opinion-scope": {
+      "types": "./src/citation-opinion-scope.ts",
+      "import": "./src/citation-opinion-scope.ts"
+    },
+    "./cz-isir-decision": {
+      "types": "./src/cz-isir-decision.ts",
+      "import": "./src/cz-isir-decision.ts"
+    },
+    "./document-types": {
+      "types": "./src/document-types.ts",
+      "import": "./src/document-types.ts"
     }
   },
   "scripts": {

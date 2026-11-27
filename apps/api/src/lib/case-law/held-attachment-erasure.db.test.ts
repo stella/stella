@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { propertyTestTimeout } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -18,7 +19,6 @@ import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identi
 import { parkAttachmentsOfErasedDecisionTx } from "@/api/lib/case-law/held-attachment-erasure";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import { encodeCollectionDocumentBody } from "@/api/lib/legal-search/collection-document-part";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { HELD_DECISION_MATCH_BASIS } from "@/api/lib/legal-search/held-decision-attachment-values";
 import {
   RAW_SOURCE_FAMILY,
