@@ -1543,6 +1543,79 @@ const indentContinuations = (context: Context, placed: Placed): void => {
   }
 };
 
+/**
+ * Whether the source brings an unnumbered line back to the margin behind a
+ * provision whose text it indents: the line starts at the margin, the
+ * provision's text does not.
+ */
+const standsAtMargin = (line: Placement, item: Placement): boolean => {
+  // A manifest that reports the provision's indent reports every indent:
+  // a line without one has none.
+  const own = line.block.indent ?? { left: 0, firstLine: 0 };
+  const above = item.block.indent;
+  return (
+    above !== undefined &&
+    above.left > UNDER_ITEM_TOLERANCE &&
+    own.left <= UNDER_ITEM_TOLERANCE &&
+    own.left + own.firstLine <= UNDER_ITEM_TOLERANCE
+  );
+};
+
+/**
+ * Sets at the margin the unnumbered lines the source sets there behind an
+ * indented provision: the sentence that closes a part, a date, a line that
+ * opens what follows. The template's style for unnumbered text is made for
+ * text under a clause and indents it; a line the source brings back to the
+ * margin is no part of the clause above it and takes the style of plain
+ * text.
+ *
+ * Only in a document that sets most of its unnumbered lines under their
+ * provision's text: there the margin is a choice. One that sets them all
+ * at the margin makes none, and its lines stay under their clauses.
+ */
+const setMarginLines = (context: Context, placed: Placed): void => {
+  const plain = context.profile.roles.body?.styleId;
+  const atMargin: Placement[] = [];
+  let under = 0;
+  let item: Placement | null = null;
+  /** Whether the line placed last is one of `atMargin`. */
+  let opensList = false;
+  for (const block of context.topLevel) {
+    const placement =
+      block.kind === "table" ? undefined : placed.placementById.get(block.id);
+    if (placement === undefined) {
+      // A list behind a table is not opened by the line in front of it.
+      opensList &&= block.kind !== "table";
+      continue;
+    }
+    if (showsLabel(placement)) {
+      // A list of bullets hangs from the line that opens it: that line
+      // stays where the bullets expect it.
+      if (placement.pattern?.numFmt === "bullet" && opensList) {
+        atMargin.pop();
+      }
+      item = placement;
+      opensList = false;
+      continue;
+    }
+    opensList = false;
+    if (item !== null && placement.role === "continuation") {
+      if (standsAtMargin(placement, item)) {
+        atMargin.push(placement);
+        opensList = true;
+      } else if (standsUnder(placement, item)) {
+        under += 1;
+      }
+    }
+  }
+  if (plain === undefined || under <= atMargin.length) {
+    return;
+  }
+  for (const placement of atMargin) {
+    placement.styleId = plain;
+  }
+};
+
 /** The longest line that keeps the alignment the source sets it in. */
 const SET_LINE_MAX = 160;
 
@@ -1839,6 +1912,7 @@ const placeParagraphs = (context: Context): Placed => {
   keepClosingTogether(context, placed);
   alignPartyLines(context, placed);
   indentContinuations(context, placed);
+  setMarginLines(context, placed);
   alignFrontLines(context, placed);
   return placed;
 };
