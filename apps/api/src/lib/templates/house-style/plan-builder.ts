@@ -1454,10 +1454,11 @@ const indentContinuations = (context: Context, placed: Placed): void => {
  * provision's text does not.
  */
 const standsAtMargin = (line: Placement, item: Placement): boolean => {
-  const own = line.block.indent;
+  // A manifest that reports the provision's indent reports every indent:
+  // a line without one has none.
+  const own = line.block.indent ?? { left: 0, firstLine: 0 };
   const above = item.block.indent;
   return (
-    own !== undefined &&
     above !== undefined &&
     above.left > UNDER_ITEM_TOLERANCE &&
     own.left <= UNDER_ITEM_TOLERANCE &&
