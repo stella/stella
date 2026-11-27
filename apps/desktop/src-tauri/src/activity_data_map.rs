@@ -54,7 +54,7 @@ enum Leaves {
 }
 
 /// The record kinds Activity stores.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RecordKind {
   Settings,
   Day,
