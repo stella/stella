@@ -1053,7 +1053,11 @@ const openNumbered = (
 const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
   const { shape } = row.raw;
   if (shape.keyword === "annex") {
-    return isAnnexRow(row) ? openAnnex(walk, row) : null;
+    // A line set to the right in front of the first article names the
+    // annex the whole document is (`Příloha č. 7` over `K Metodickému
+    // pokynu …`): a marking of the document, no heading of an annex in it.
+    const marking = row.block.alignment === "right" && !walk.sawArticle;
+    return isAnnexRow(row) && !marking ? openAnnex(walk, row) : null;
   }
   if (walk.partHeadings.has(row.position)) {
     return null;

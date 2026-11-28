@@ -807,3 +807,28 @@ describe("buildLabelIndex", () => {
     ]);
   });
 });
+
+test("a line set to the right in front of the first article that names an annex marks the document", () => {
+  const right = (text: string) => ({
+    ...manifestOf([text]).blocks[0]!,
+    alignment: "right" as const,
+  });
+  const manifest = manifestOf([
+    "Příloha č. 7",
+    "K Metodickému pokynu č. 1/2015",
+    "ROZHODNUTÍ",
+    "Článek I.\nPředmět",
+    "Text článku.",
+    "Příloha č. 1",
+    "Ceník",
+  ]);
+  const blocks = manifest.blocks.map((block, position) =>
+    position === 0 || position === 5
+      ? { ...right(block.text), id: block.id, index: block.index }
+      : block,
+  );
+  const index = buildLabelIndex({ ...manifest, blocks });
+  expect(index.entryByBlockId.has("p0")).toBe(false);
+  // Behind an article the same line heads an annex.
+  expect(index.entryByBlockId.get("p5")?.level).toBe("annex");
+});
