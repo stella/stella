@@ -150,6 +150,31 @@ const numFmtOf = ({ level, shape: { numeral } }: LabelEntry): string | null => {
   }
 };
 
+/**
+ * The ordinal an automatic label's own counter shows: its last letters or
+ * digits, read in the level's format. Null for a format this reader does
+ * not count in.
+ */
+export const labelOrdinalOf = (
+  label: string,
+  numFmt: string,
+): number | null => {
+  const counter = /([\p{L}\p{N}]+)[^\p{L}\p{N}]*$/u.exec(label)?.[1];
+  if (counter === undefined) {
+    return null;
+  }
+  if (numFmt === "decimal" || numFmt === "decimalZero") {
+    return /^\d+$/u.test(counter) ? Number(counter) : null;
+  }
+  if (numFmt === "lowerLetter" || numFmt === "upperLetter") {
+    return letterOrdinal(counter.toLowerCase());
+  }
+  if (numFmt === "lowerRoman" || numFmt === "upperRoman") {
+    return parseRomanNumeral(counter.toUpperCase());
+  }
+  return null;
+};
+
 /** The ordinal a level must show to print the entry's designator. */
 export const ordinalOf = (entry: LabelEntry, numFmt: string): number | null => {
   if (entry.level === "clause" || numFmt === "decimal") {

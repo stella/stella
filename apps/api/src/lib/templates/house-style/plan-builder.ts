@@ -51,6 +51,7 @@ import type {
 } from "@/api/lib/templates/house-style/label-index";
 import { readLetterHead } from "@/api/lib/templates/house-style/letter-head";
 import {
+  labelOrdinalOf,
   levelsInLanguage,
   numberPlacements,
   ordinalOf,
@@ -848,6 +849,37 @@ const chosenPattern = (
     : read;
 };
 
+/**
+ * Numbers an automatic label the index does not read (a second run of
+ * `1.`, `2.` in notes behind the text) where the paragraphs at its level of
+ * its list sit on a level of the template: on that level, through its
+ * level's text.
+ */
+const countWithSiblings = (
+  context: Context,
+  placement: Placement,
+  mark: string,
+): void => {
+  const { numbering } = placement.block;
+  const level =
+    numbering === null
+      ? null
+      : (context.sourceLevels
+          .get(numbering.abstractNumId)
+          ?.get(numbering.ilvl) ?? null);
+  const pattern = levelTextPatternOf(context, placement.block, level);
+  const ordinal =
+    pattern === null ? null : labelOrdinalOf(mark, pattern.numFmt);
+  if (level === null || pattern === null || ordinal === null || mark === "") {
+    return;
+  }
+  placement.level = level;
+  placement.pattern = pattern;
+  placement.ordinal = ordinal;
+  placement.sourceLabel = mark;
+  placement.numbered = true;
+};
+
 const placementOf = (
   context: Context,
   block: DocxBlock,
@@ -909,6 +941,8 @@ const placementAt = (
       placement.sourceLabel = mark;
       placement.pattern = bulletPatternOf(block, mark);
       placement.numbered = true;
+    } else {
+      countWithSiblings(context, placement, mark);
     }
     return placement;
   }
@@ -1543,8 +1577,12 @@ const textStartOf = (context: Context, placement: Placement): number => {
   const { profile } = context;
   const { entry, level, borrowedLevel, role, pattern } = placement;
   const numberedAt = level ?? borrowedLevel;
-  // A bullet has no entry of its own: its text starts where its level's.
-  if ((entry !== null || pattern?.numFmt === "bullet") && numberedAt !== null) {
+  // A bullet has no entry of its own: its text starts where its level's;
+  // so does a label counted with its siblings.
+  if (
+    (entry !== null || pattern?.numFmt === "bullet" || placement.numbered) &&
+    numberedAt !== null
+  ) {
     return numberedAt.indent.left ?? 0;
   }
   // A number written as text, or counted by the source's own list,
@@ -1811,9 +1849,17 @@ const showsLabel = ({ entry, block, numbered }: Placement): boolean =>
   (entry !== null && numbered) || shownLabelOf(block) !== null;
 
 /** Whether a line can have others set under its text. */
-const leadsLines = ({ role, pattern, block, entry }: Placement): boolean =>
+const leadsLines = ({
+  role,
+  pattern,
+  block,
+  entry,
+  numbered,
+}: Placement): boolean =>
   ITEM_ROLES.has(role) ||
   pattern?.numFmt === "bullet" ||
+  // A label the index does not read, counted with its siblings.
+  (entry === null && numbered) ||
   // Running text numbered like an article reads as the clause it is.
   (role === "articleHeading" && runsOn(block, entry));
 

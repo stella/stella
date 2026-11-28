@@ -4520,3 +4520,41 @@ describe("buildTemplatePlan, levels the source's headings and their clauses shar
     expect(labelsNotKept).toEqual([]);
   });
 });
+
+describe("buildTemplatePlan, automatic labels the index does not read", () => {
+  test("count with the paragraphs at their level of their list", () => {
+    const note = (label: string, text: string) =>
+      leveled(label, text, { ilvl: 0, lvlText: "%1.", numFmt: "decimal" });
+    const point = (label: string, text: string) =>
+      leveled(label, text, { ilvl: 1, lvlText: "%1.%2", numFmt: "decimal" });
+    const manifest = manifestOf([
+      "NOTES ON THE REPORT",
+      note("1.", "This form of Report is primarily intended to be used where:"),
+      point("1.1", "the transaction involves a number of properties, "),
+      point("1.2", "there is limited time available, "),
+      "The parties may, of course, agree to use it in other cases.",
+      note("2.", "The addressees of this Report should consider the notes."),
+      note(
+        "3.",
+        "The Report has been drafted on the basis of the law in force.",
+      ),
+    ]);
+    const unread = blockIdOf(manifest, "The addressees");
+    // The index leaves the paragraph out, as it does a second run of
+    // numbers in notes behind a report's text.
+    const index = buildLabelIndex(manifest);
+    index.entryByBlockId.delete(unread);
+    const { plan, note: formattingNote } = build(manifest, "keepSource", {
+      index,
+    });
+    expect(itemOf(plan, manifest, "The addressees")).not.toHaveProperty(
+      "labelAsText",
+    );
+    expect(formattingNote.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "labelConvertedToText",
+        blockId: unread,
+      }),
+    );
+  });
+});
