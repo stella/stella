@@ -1095,20 +1095,22 @@ describe("scheduled read journeys", () => {
       expect(line.length).toBeLessThanOrEqual(440);
     }
   });
-  test("identifies the failing payload check for CLI and MCP", async () => {
-    for (const mode of ["cli", "web"] as const) {
+  test.each(["cli", "web"] as const)(
+    "identifies the failing payload check in %s mode",
+    async (mode) => {
       const result = await run({ mode, scenario: { rpc: "wrong-shape" } });
       expect(result.stdout).toContain(
         `journey-detail ${mode === "cli" ? "cli" : "mcp"}_search payload shape check: .results`,
       );
-    }
-  });
-  test("contains install and command diagnostics", async () => {
-    for (const scenario of [{ installExit: "1" }, { cliExit: "1" }]) {
-      const result = await run({ scenario, mode: "cli" });
-      expect(result.exit).toBe(1);
-      expect(result.stdout).toContain("failed contract_error");
-    }
+    },
+  );
+  test.each([
+    ["install", { installExit: "1" }],
+    ["command", { cliExit: "1" }],
+  ] as const)("contains %s diagnostics", async (_name, scenario) => {
+    const result = await run({ scenario, mode: "cli" });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("failed contract_error");
   });
   test("fails a valid CLI answer served from rejected registry fallback", async () => {
     const result = await run({
@@ -1160,8 +1162,9 @@ describe("scheduled read journeys", () => {
     expect(result.exit).toBe(0);
     expect(result.stdout.match(/ passed ok/gu)).toHaveLength(3);
   });
-  test("classifies CLI credential rejection", async () => {
-    for (const cliDiagnostic of ["401", "403", "key rejected"]) {
+  test.each(["401", "403", "key rejected"])(
+    "classifies CLI credential rejection %s",
+    async (cliDiagnostic) => {
       const result = await run({
         scenario: { cliExit: "1", cliDiagnostic },
         mode: "cli",
@@ -1169,8 +1172,8 @@ describe("scheduled read journeys", () => {
       expect(result.exit).toBe(1);
       expect(result.stdout).toContain("cli_search failed auth_rejected");
       expect(result.stdout).toContain("cli_read failed auth_rejected");
-    }
-  });
+    },
+  );
   test("names authenticated CLI skips", async () => {
     const result = await run({ mode: "cli", token: "" });
     expect(result.exit).toBe(0);
@@ -1429,8 +1432,9 @@ describe("scheduled read journeys", () => {
     expect(result.counts.get("/assets/Stella-macos-universal.dmg")).toBe(2);
     expect(result.counts.get("/assets/Stella-windows-x64-setup.exe")).toBe(2);
   });
-  test("fails an installer after one retry", async () => {
-    for (const assetStatus of [404, 503]) {
+  test.each([404, 503])(
+    "fails an installer answering %d after one retry",
+    async (assetStatus) => {
       const result = await run({ scenario: { assetStatus }, mode: "desktop" });
       expect(result.exit).toBe(1);
       expect(result.stdout).not.toContain("desktop-release-policy: ok");
@@ -1438,8 +1442,8 @@ describe("scheduled read journeys", () => {
       expect(result.counts.get("/assets/Stella-windows-x64-setup.exe")).toBe(
         undefined,
       );
-    }
-  });
+    },
+  );
 });
 
 describe("case-law search probe", () => {
@@ -1489,12 +1493,16 @@ describe("case-law search probe", () => {
   });
 
   test("asks something new in every slot of a day", async () => {
+    // Independent runs, each with its own fixture server: the comparison
+    // needs all five, but none of them waits for another.
+    const results = await Promise.all(
+      ["0", "1", "20", "287", "288"].map(
+        async (probeSlot) =>
+          await run({ mode: "search-probe", scenario: { probeSlot } }),
+      ),
+    );
     const queries = new Set<string>();
-    for (const probeSlot of ["0", "1", "20", "287", "288"]) {
-      const result = await run({
-        mode: "search-probe",
-        scenario: { probeSlot },
-      });
+    for (const result of results) {
       expect(result.exit).toBe(0);
       const first = result.calls.at(0);
       expect(first).toBeDefined();
@@ -1514,28 +1522,20 @@ describe("case-law search probe", () => {
     expect(result.stdout).toContain("tool error public_read_timeout");
   });
 
-  test("counts the timeout family and tells other tool errors apart", async () => {
-    for (const code of [
-      "upstream_unavailable",
-      "search_index_unavailable",
-      "public_read_unfinished",
-      "continuation_expired",
-    ]) {
-      const result = await run({
-        mode: "search-probe",
-        scenario: { probeError: code },
-      });
-      expect(result.exit).toBe(1);
-      expect(result.stdout).toContain("journey mcp_probe_pol failed timeout");
-    }
-    const other = await run({
+  // One journey run per code, so no single test pays for several.
+  test.each([
+    ["upstream_unavailable", "timeout"],
+    ["search_index_unavailable", "timeout"],
+    ["public_read_unfinished", "timeout"],
+    ["continuation_expired", "timeout"],
+    ["internal_error", "contract_error"],
+  ])("counts tool error %s as %s", async (probeError, reason) => {
+    const result = await run({
       mode: "search-probe",
-      scenario: { probeError: "internal_error" },
+      scenario: { probeError },
     });
-    expect(other.exit).toBe(1);
-    expect(other.stdout).toContain(
-      "journey mcp_probe_pol failed contract_error",
-    );
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain(`journey mcp_probe_pol failed ${reason}`);
   });
 
   test("follows a continuation once with the same arguments", async () => {

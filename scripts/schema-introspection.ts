@@ -648,6 +648,178 @@ const openIntrospectionCompiler = async (repoRoot: string) => {
   };
 };
 
+type IntrospectionCompiler = Awaited<
+  ReturnType<typeof openIntrospectionCompiler>
+>;
+
+// What one file contributes to a walk, in source order: its own findings,
+// the local files it pulls in at runtime, and its full-schema imports. It
+// does not depend on the entry being walked, so each file is read once per
+// validation however many entries reach it.
+type FileFinding =
+  | { kind: "report"; message: string }
+  | { kind: "dependency"; file: string }
+  | { kind: "full-schema"; module: string };
+
+type AnalyzeRuntimeFileOptions = {
+  file: string;
+  repoRoot: string;
+  compiler: IntrospectionCompiler;
+};
+
+const analyzeRuntimeFile = async ({
+  file,
+  repoRoot,
+  compiler,
+}: AnalyzeRuntimeFileOptions): Promise<readonly FileFinding[]> => {
+  const findings: FileFinding[] = [];
+  const report = (message: string): void => {
+    findings.push({ kind: "report", message });
+  };
+  const absolute = path.join(repoRoot, file);
+  const source = await compiler.sourceOf(file);
+  if (source === undefined) {
+    report(`cannot parse runtime dependency: ${file}`);
+    return findings;
+  }
+  let knownNonDatabaseReceiver:
+    ReturnType<typeof nonDatabaseMethodReceiver> | undefined;
+  const dependency = async (
+    specifier: string,
+    full: boolean,
+  ): Promise<void> => {
+    const module = canonicalModuleId(specifier, file);
+    if (
+      full &&
+      (module === FULL_SCHEMA ||
+        (file === `${FULL_SCHEMA}.ts` && module.startsWith(`${FULL_SCHEMA}/`)))
+    ) {
+      findings.push({ kind: "full-schema", module });
+    }
+    if (
+      DATABASE_DRIVERS.test(module) ||
+      module === "apps/api/src/db" ||
+      /\/db\/(?:root|scoped|system|index)$/u.test(module)
+    ) {
+      report(`database handle import in ${file}: ${specifier}`);
+      return;
+    }
+    const local =
+      module.startsWith("apps/") ||
+      module.startsWith("packages/") ||
+      module.startsWith("scripts/") ||
+      specifier.startsWith(".") ||
+      specifier.startsWith("@/");
+    if (local) {
+      if (module.endsWith(".json") && existsSync(path.join(repoRoot, module))) {
+        return;
+      }
+      const target = [
+        `${module}.ts`,
+        `${module}.tsx`,
+        `${module}/index.ts`,
+      ].find((candidate) => existsSync(path.join(repoRoot, candidate)));
+      if (target === undefined) {
+        report(`unresolved runtime import in ${file}: ${specifier}`);
+        return;
+      }
+      findings.push({ kind: "dependency", file: target });
+      return;
+    }
+    if (specifier.startsWith("@stll/")) {
+      const resolved = (
+        await compiler.resolver.resolveModuleName(
+          specifier,
+          path.dirname(absolute),
+          undefined,
+          {},
+        )
+      ).resolvedModule;
+      // A published `@stll/` package installed from the registry is a
+      // dependency like any other, not workspace source to walk.
+      if (resolved?.isExternalLibraryImport === true) {
+        return;
+      }
+      if (
+        resolved === undefined ||
+        resolved.resolvedFileName.endsWith(".d.ts")
+      ) {
+        report(`unresolved workspace runtime import in ${file}: ${specifier}`);
+        return;
+      }
+      findings.push({
+        kind: "dependency",
+        file: repoRelativePath(repoRoot, resolved.resolvedFileName),
+      });
+    }
+  };
+  const inspectMember = async (node: ts.Node): Promise<void> => {
+    if (
+      !ts.isPropertyAccessExpression(node) &&
+      !ts.isElementAccessExpression(node)
+    ) {
+      return;
+    }
+    const name = memberName(node);
+    if (
+      name === undefined &&
+      ts.isCallExpression(node.parent) &&
+      node.parent.expression === node
+    ) {
+      knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);
+      if (
+        !(await knownNonDatabaseReceiver({
+          node: node.expression,
+          method: DYNAMIC_CALL,
+        }))
+      ) {
+        report(`unresolved runtime call in ${file}`);
+      }
+      return;
+    }
+    if (name === undefined || !isDatabaseOperationMethod(name)) {
+      return;
+    }
+    if (name === "query" && !(await isCalledAlias(source, node))) {
+      return;
+    }
+    if (
+      name === "select" &&
+      file.startsWith("apps/api/src/db/schema/") &&
+      (await isDrizzleViewDefinitionSelect(node, source))
+    ) {
+      return;
+    }
+    knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);
+    if (
+      !(await knownNonDatabaseReceiver({
+        node: node.expression,
+        method: name,
+      }))
+    ) {
+      report(`database operation in ${file}: ${name}`);
+    }
+  };
+  const visit = async (node: ts.Node): Promise<void> => {
+    await inspectImport({ node, source, file, dependency, report });
+    await inspectCall({ node, file, dependency, report });
+    await inspectMember(node);
+    if (
+      ts.isBindingElement(node) &&
+      node.propertyName !== undefined &&
+      ts.isObjectBindingPattern(node.parent)
+    ) {
+      const name = memberName(node.propertyName ?? node.name);
+      if (name !== undefined && isDatabaseOperationMethod(name)) {
+        report(`database operation in ${file}: ${name}`);
+      }
+    }
+    await childrenAsync(node, visit);
+  };
+  await visit(source);
+  return findings;
+};
+
 type ValidateSchemaIntrospectionOptions = {
   entries: readonly AllowedFile[];
   repoRoot: string;
@@ -662,7 +834,18 @@ export const validateSchemaIntrospection = async ({
 }: ValidateSchemaIntrospectionOptions): Promise<string[]> => {
   const problems: string[] = [];
   const compiler = await openIntrospectionCompiler(repoRoot);
-  const { resolver } = compiler;
+  // Entries share most of the schema graph: analyze each file once.
+  // Walks run one at a time, so no file is ever analyzed twice concurrently.
+  const analyses = new Map<string, readonly FileFinding[]>();
+  const findingsOf = async (file: string): Promise<readonly FileFinding[]> => {
+    const known = analyses.get(file);
+    if (known !== undefined) {
+      return known;
+    }
+    const analysis = await analyzeRuntimeFile({ file, repoRoot, compiler });
+    analyses.set(file, analysis);
+    return analysis;
+  };
   try {
     const declared = new Set<string>();
     for (const entry of entries) {
@@ -690,151 +873,15 @@ export const validateSchemaIntrospection = async ({
           return;
         }
         visited.add(file);
-        const absolute = path.join(repoRoot, file);
-        const source = await compiler.sourceOf(file);
-        if (source === undefined) {
-          report(`cannot parse runtime dependency: ${file}`);
-          return;
+        for (const finding of await findingsOf(file)) {
+          if (finding.kind === "report") {
+            report(finding.message);
+          } else if (finding.kind === "dependency") {
+            await walk(finding.file);
+          } else if (file === entry.path) {
+            fullSchemaImports.add(finding.module);
+          }
         }
-        let knownNonDatabaseReceiver:
-          ReturnType<typeof nonDatabaseMethodReceiver> | undefined;
-        const dependency = async (
-          specifier: string,
-          full: boolean,
-        ): Promise<void> => {
-          const module = canonicalModuleId(specifier, file);
-          if (
-            file === entry.path &&
-            full &&
-            (module === FULL_SCHEMA ||
-              (file === `${FULL_SCHEMA}.ts` &&
-                module.startsWith(`${FULL_SCHEMA}/`)))
-          ) {
-            fullSchemaImports.add(module);
-          }
-          if (
-            DATABASE_DRIVERS.test(module) ||
-            module === "apps/api/src/db" ||
-            /\/db\/(?:root|scoped|system|index)$/u.test(module)
-          ) {
-            report(`database handle import in ${file}: ${specifier}`);
-            return;
-          }
-          const local =
-            module.startsWith("apps/") ||
-            module.startsWith("packages/") ||
-            module.startsWith("scripts/") ||
-            specifier.startsWith(".") ||
-            specifier.startsWith("@/");
-          if (local) {
-            if (
-              module.endsWith(".json") &&
-              existsSync(path.join(repoRoot, module))
-            ) {
-              return;
-            }
-            const target = [
-              `${module}.ts`,
-              `${module}.tsx`,
-              `${module}/index.ts`,
-            ].find((candidate) => existsSync(path.join(repoRoot, candidate)));
-            if (target === undefined) {
-              report(`unresolved runtime import in ${file}: ${specifier}`);
-              return;
-            }
-            await walk(target);
-            return;
-          }
-          if (specifier.startsWith("@stll/")) {
-            const resolved = (
-              await resolver.resolveModuleName(
-                specifier,
-                path.dirname(absolute),
-                undefined,
-                {},
-              )
-            ).resolvedModule;
-            // A published `@stll/` package installed from the registry is a
-            // dependency like any other, not workspace source to walk.
-            if (resolved?.isExternalLibraryImport === true) {
-              return;
-            }
-            if (
-              resolved === undefined ||
-              resolved.resolvedFileName.endsWith(".d.ts")
-            ) {
-              report(
-                `unresolved workspace runtime import in ${file}: ${specifier}`,
-              );
-              return;
-            }
-            await walk(repoRelativePath(repoRoot, resolved.resolvedFileName));
-          }
-        };
-        const inspectMember = async (node: ts.Node): Promise<void> => {
-          if (
-            !ts.isPropertyAccessExpression(node) &&
-            !ts.isElementAccessExpression(node)
-          ) {
-            return;
-          }
-          const name = memberName(node);
-          if (
-            name === undefined &&
-            ts.isCallExpression(node.parent) &&
-            node.parent.expression === node
-          ) {
-            knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);
-            if (
-              !(await knownNonDatabaseReceiver({
-                node: node.expression,
-                method: DYNAMIC_CALL,
-              }))
-            ) {
-              report(`unresolved runtime call in ${file}`);
-            }
-            return;
-          }
-          if (name === undefined || !isDatabaseOperationMethod(name)) {
-            return;
-          }
-          if (name === "query" && !(await isCalledAlias(source, node))) {
-            return;
-          }
-          if (
-            name === "select" &&
-            file.startsWith("apps/api/src/db/schema/") &&
-            (await isDrizzleViewDefinitionSelect(node, source))
-          ) {
-            return;
-          }
-          knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);
-          if (
-            !(await knownNonDatabaseReceiver({
-              node: node.expression,
-              method: name,
-            }))
-          ) {
-            report(`database operation in ${file}: ${name}`);
-          }
-        };
-        const visit = async (node: ts.Node): Promise<void> => {
-          await inspectImport({ node, source, file, dependency, report });
-          await inspectCall({ node, file, dependency, report });
-          await inspectMember(node);
-          if (
-            ts.isBindingElement(node) &&
-            node.propertyName !== undefined &&
-            ts.isObjectBindingPattern(node.parent)
-          ) {
-            const name = memberName(node.propertyName ?? node.name);
-            if (name !== undefined && isDatabaseOperationMethod(name)) {
-              report(`database operation in ${file}: ${name}`);
-            }
-          }
-          await childrenAsync(node, visit);
-        };
-        await visit(source);
       };
       await walk(entry.path);
       if (fullSchemaImports.size === 0) {

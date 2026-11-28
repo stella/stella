@@ -77,6 +77,10 @@ export type LabelIndex = {
   usesSectionSign: boolean;
   /** Paragraph blocks of a table of contents; they repeat every heading. */
   contentsBlockIds: ReadonlySet<string>;
+  /** Those of them that belong to a table of contents behind the first: a
+   *  part's own contents (a section that lists its clauses), which no
+   *  contents of a template stands in for. */
+  localContentsBlockIds: ReadonlySet<string>;
   /** The column of each block of a document that runs in parallel columns;
    *  empty for any other document. */
   columnByBlockId: ReadonlyMap<string, number>;
@@ -156,19 +160,32 @@ const groupCaptionOf = (lines: readonly DocxBlock[]): DocxBlock | null => {
  * column heads over each (alone they head nothing) and a short caption
  * between two runs of its lines (`Schedule` over the schedules).
  */
-const contentsBlockIdsOf = (blocks: readonly DocxBlock[]): Set<string> => {
-  const ids = new Set<string>();
+const contentsBlockIdsOf = (
+  blocks: readonly DocxBlock[],
+): { all: Set<string>; local: Set<string> } => {
+  const all = new Set<string>();
+  const local = new Set<string>();
   /** The last paragraphs with text in front of the block, while they may be
    *  the caption and the column heads of the contents that follow. */
   let captions: DocxBlock[] = [];
   /** Whether the lines in `captions` follow a line of contents. */
   let inContents = false;
+  /** How many tables of contents have started. */
+  let tables = 0;
   for (const block of blocks) {
     if (block.kind === "paragraph" && isContentsBlock(block)) {
-      ids.add(block.id);
       const group = inContents ? groupCaptionOf(captions) : null;
-      for (const line of group === null ? contentsHeadsOf(captions) : [group]) {
-        ids.add(line.id);
+      const heads = group === null ? contentsHeadsOf(captions) : [group];
+      // Lines behind a caption, a part of the document or anything but the
+      // group caption of the run before start contents of their own.
+      if (!inContents || (group === null && captions.length > 0)) {
+        tables += 1;
+      }
+      for (const line of [block, ...heads]) {
+        all.add(line.id);
+        if (tables > 1) {
+          local.add(line.id);
+        }
       }
       captions = [];
       inContents = true;
@@ -180,7 +197,7 @@ const contentsBlockIdsOf = (blocks: readonly DocxBlock[]): Set<string> => {
       captions = [...captions.slice(-2), block];
     }
   }
-  return ids;
+  return { all, local };
 };
 
 /** Whether the block is a line of the source's table of contents. */
@@ -1146,7 +1163,20 @@ const openNumbered = (
 const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
   const { shape } = row.raw;
   if (shape.keyword === "annex") {
-    return isAnnexRow(row) ? openAnnex(walk, row) : null;
+    // A line set to the right in front of the first provision names the
+    // annex the whole document is (`Příloha č. 7` over `K Metodickému
+    // pokynu …`): a marking of the document, no heading of an annex in it.
+    // A line of a list of the annexes stays a listed entry.
+    const firstProvisionAhead =
+      !walk.sawArticle &&
+      walk.article === null &&
+      walk.clauses.length === 0 &&
+      walk.annex === null;
+    const marking =
+      row.block.alignment === "right" &&
+      firstProvisionAhead &&
+      !isAnnexListLine(walk.rows, row.position);
+    return isAnnexRow(row) && !marking ? openAnnex(walk, row) : null;
   }
   if (walk.partHeadings.has(row.position)) {
     return null;
@@ -1474,7 +1504,7 @@ export const buildLabelIndex = ({
 
   const entries: LabelEntry[] = [];
   const contextByBlockId = new Map<string, BlockContext>();
-  const contentsBlockIds = contentsBlockIdsOf(rows.map(({ block }) => block));
+  const contents = contentsBlockIdsOf(rows.map(({ block }) => block));
   for (const row of rows) {
     const { block } = row;
     const walk = walkOf(block);
@@ -1513,7 +1543,8 @@ export const buildLabelIndex = ({
     usesSectionSign: [...walks.values()].some(
       ({ usesSectionSign }) => usesSectionSign,
     ),
-    contentsBlockIds,
+    contentsBlockIds: contents.all,
+    localContentsBlockIds: contents.local,
     columnByBlockId,
     ownLabelLengths: new Map(
       labelled

@@ -426,6 +426,10 @@ export type TemplatePlanSourceItem = {
   /** The paragraph's own alignment, over its style's. As `keepNext`, left
    *  out by an engine that does not know it. */
   alignment?: TemplatePlanAlignment;
+  /** The paragraph's own outline level (0 for level 1), which the kept
+   *  contents list it by with `fields.contentsOutlineLevels`. An engine
+   *  that does not know it leaves it out. */
+  outlineLevel?: number;
   /** Table only: the paragraph style of its cells. */
   cellStyleId?: string;
   /** Table only: placement of single paragraphs inside it. */
@@ -454,10 +458,25 @@ export type TemplatePlanReference = {
   start: number;
   end: number;
   targetBlockId: string;
-  /** REF field switches, e.g. `\n \t \h`. */
+  /** The field's switches, e.g. `\n \t \h`. */
   instruction: string;
   expectedText: string;
+  /** The field written: `REF` (the default) or `PAGEREF`. An engine that
+   *  does not know it writes a REF. */
+  field?: "REF" | "PAGEREF";
 };
+
+/** The source's REF fields of a block: those that show the text or number
+ *  of what they point to. A manifest lists its PAGEREF fields among them
+ *  too; those show a page, or words of the drafter's, never a citation. */
+export const textFieldsOf = (
+  block: Pick<DocxBlock, "crossReferences">,
+): NonNullable<DocxBlock["crossReferences"]> =>
+  block.crossReferences === undefined
+    ? []
+    : block.crossReferences.filter(({ instruction }) =>
+        /^\s*REF\b/iu.test(instruction),
+      );
 
 export type TemplatePlanHighlight = {
   blockId: string;
@@ -493,7 +512,14 @@ export type TemplatePlan = {
   numberingPatches?: TemplatePlanNumberingPatch[];
   references?: TemplatePlanReference[];
   highlights?: TemplatePlanHighlight[];
-  fields?: { freezeKinds?: string[]; updateOnOpen?: boolean };
+  fields?: {
+    freezeKinds?: string[];
+    updateOnOpen?: boolean;
+    /** The kept contents also list paragraphs by their own outline level
+     *  (the field's `\u` switch). An engine that does not know it leaves
+     *  the field's code as it is. */
+    contentsOutlineLevels?: boolean;
+  };
   /** Compatibility settings switched on in the output's settings, which
    *  are otherwise the template's. */
   compat?: { doNotExpandShiftReturn?: boolean };
@@ -515,6 +541,27 @@ export type TemplatePlan = {
    *  same pages. An engine that does not know the option gives the
    *  template's alone. */
   sourceHeaders?: "drop" | "keep";
+  /** Whether the output carries the source's comments: each whose anchor
+   *  the output places, on the same text. An engine that does not know the
+   *  option carries none. */
+  comments?: "drop" | "keep";
+  /** Whether the source's links to a place in itself lead to the output
+   *  paragraph that stands for their target. An engine that does not know
+   *  the option writes their text. */
+  internalLinks?: "drop" | "keep";
+  /** Whether the output keeps the colours and run shading that mark part
+   *  of the source's text (a red note, a grey placeholder); the colour of
+   *  most of the text stays the template's. An engine that does not know
+   *  the option keeps none. */
+  textColors?: "drop" | "keep";
+};
+
+/** What the output carries of the source's comments. */
+export type SourceCommentsReport = {
+  kept: number;
+  /** Comments anchored where the output has no place (an omitted block, a
+   *  note, a header). */
+  leftOut: number;
 };
 
 /** What the output's headers and footers carry of the source's. */
@@ -526,13 +573,24 @@ export type SourceHeadersReport = {
     paragraphs: number;
     /** The template had none for those pages: a new part holds them. */
     created: boolean;
+    /** The output section a later section's content went to; absent for
+     *  the content every section shows. */
+    section?: number;
   }[];
   leftOut: {
     firstPageParts: number;
     evenPageParts: number;
     sharedParts: number;
     unsupportedObjects: number;
+    /** Parts of later sections of the source the output merges into
+     *  another section. Absent from an engine that carries the first
+     *  section's alone. */
+    laterSectionParts?: number;
   };
+  /** Output headers and footers that show two page numbers: the
+   *  template's and the source's. Absent from an engine that does not
+   *  count them. */
+  pageNumbersTwice?: number;
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -577,6 +635,8 @@ export type TemplatePlanReport = {
   };
   /** Present when the plan kept the source's headers and footers. */
   sourceHeaders?: SourceHeadersReport;
+  /** Present when the plan kept the source's comments. */
+  sourceComments?: SourceCommentsReport;
 };
 
 /** Why the engine refused; the codes a plan can be repaired after. Any
