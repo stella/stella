@@ -1905,11 +1905,13 @@ const verifyConstConfigDeclaration = ({
 
 const verifyAggregateMutationProperty = ({
   node,
+  configObject,
   source,
   file,
   access,
 }: {
   node: Property;
+  configObject: ObjectExpression;
   source: SourceTree;
   file: string;
   access: SourceAccess;
@@ -1917,9 +1919,7 @@ const verifyAggregateMutationProperty = ({
   if (node.computed || node.shorthand || node.method || node.kind !== "init") {
     return panic(`Invalid aggregate mutation declaration in ${file}`);
   }
-  const configObject = parentOf(node);
   if (
-    configObject?.type !== "ObjectExpression" ||
     configObject.properties.some(
       (field) => field.type === "SpreadElement" || field.computed,
     )
@@ -1986,13 +1986,18 @@ const verifyFileDeclarations = (file: string, access: SourceAccess) => {
   });
 
   const visit = (node: Node) => {
-    if (node.type === "Property" && isAggregateMutationKey(node)) {
-      verified += verifyAggregateMutationProperty({
-        node,
-        source,
-        file,
-        access,
-      });
+    if (node.type === "ObjectExpression") {
+      for (const property of node.properties) {
+        if (property.type === "Property" && isAggregateMutationKey(property)) {
+          verified += verifyAggregateMutationProperty({
+            node: property,
+            configObject: node,
+            source,
+            file,
+            access,
+          });
+        }
+      }
     }
     visitChildren(node, visit);
   };
