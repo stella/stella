@@ -132,12 +132,12 @@ const succeedSync = (cwd: string, command: readonly string[]) => {
 const gitSync = (cwd: string, ...args: string[]) =>
   succeedSync(cwd, ["git", ...args]);
 
-const run = (
+const run = async (
   cwd: string,
   command: readonly string[],
   extraEnv?: Readonly<Record<string, string | undefined>>,
 ) =>
-  withSubprocessSlot(async () => {
+  await withSubprocessSlot(async () => {
     const child = Bun.spawn([...command], {
       cwd,
       env: spawnEnv(extraEnv),
@@ -156,9 +156,10 @@ const succeed = async (cwd: string, command: readonly string[]) => {
   expect(result, result.output).toMatchObject({ code: 0 });
   return result.output.trim();
 };
-const git = (cwd: string, ...args: string[]) => succeed(cwd, ["git", ...args]);
-const ratchet = (cwd: string, ...args: string[]) =>
-  succeed(cwd, [process.execPath, "scripts/ratchet.ts", ...args]);
+const git = async (cwd: string, ...args: string[]) =>
+  await succeed(cwd, ["git", ...args]);
+const ratchet = async (cwd: string, ...args: string[]) =>
+  await succeed(cwd, [process.execPath, "scripts/ratchet.ts", ...args]);
 type WriteOptions = { root: string; relative: string; contents: string };
 const write = ({ root, relative, contents }: WriteOptions) => {
   mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
@@ -586,8 +587,8 @@ test.concurrent(
       await commit(root, "raise with a permissive checker");
       const raised = await git(root, "rev-parse", "HEAD");
       await git(root, "checkout", "--quiet", base);
-      const headCheck = (head: string) =>
-        run(root, [
+      const headCheck = async (head: string) =>
+        await run(root, [
           process.execPath,
           "scripts/ratchet.ts",
           "--check",
@@ -766,8 +767,8 @@ test.concurrent(
 const ALLOWANCE = "scripts/ratchet-allowances/fixture-increase.json";
 const fund = (root: string, allowance: unknown, relative = ALLOWANCE) =>
   write({ root, relative, contents: `${JSON.stringify(allowance)}\n` });
-const check = (root: string, ...args: string[]) =>
-  run(root, [process.execPath, "scripts/ratchet.ts", "--check", ...args]);
+const check = async (root: string, ...args: string[]) =>
+  await run(root, [process.execPath, "scripts/ratchet.ts", "--check", ...args]);
 
 for (const { name, count, delta, code, diagnostic } of [
   {

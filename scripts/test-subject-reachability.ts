@@ -120,7 +120,7 @@ const workspacePackageTarget = (
   cache?: ResolutionCache,
 ): string | undefined => {
   let exportsMap: unknown;
-  if (cache !== undefined && cache.packageExports.has(packageRoot)) {
+  if (cache?.packageExports.has(packageRoot)) {
     exportsMap = cache.packageExports.get(packageRoot);
   } else {
     const manifestPath = path.join(packageRoot, "package.json");
@@ -236,8 +236,8 @@ type ExistingSourceOptions = {
   repoRoot: string;
   testFile: string;
   specifier: string;
-  includeSupport?: boolean;
-  cache?: ResolutionCache;
+  includeSupport?: boolean | undefined;
+  cache?: ResolutionCache | undefined;
 };
 
 const existingSource = ({
@@ -387,7 +387,6 @@ const runtimeRoots = async (
       localDeclTargets.push({ name: node.name, target: node.body });
     } else if (
       ts.isVariableDeclaration(node) &&
-      node.name !== undefined &&
       ts.isIdentifier(node.name) &&
       node.initializer
     ) {
@@ -399,10 +398,7 @@ const runtimeRoots = async (
           name: node.name,
           target: node.initializer.body,
         });
-      } else if (
-        node.parent?.parent?.parent &&
-        ts.isSourceFile(node.parent.parent.parent)
-      ) {
+      } else if (ts.isSourceFile(node.parent.parent.parent)) {
         localDeclTargets.push({ name: node.name, target: node.initializer });
       }
     } else if (
@@ -414,7 +410,6 @@ const runtimeRoots = async (
       if (
         ts.isVariableDeclaration(variable) &&
         variable.initializer &&
-        variable.parent?.parent?.parent !== undefined &&
         ts.isSourceFile(variable.parent.parent.parent)
       ) {
         localDeclTargets.push({
@@ -811,7 +806,7 @@ type ImportReachabilityOptions = {
   usedSymbols: ReadonlySet<CompilerSymbol>;
   invokedSymbols: ReadonlySet<CompilerSymbol>;
   patchedPackages: ReadonlySet<string>;
-  cache?: ResolutionCache;
+  cache?: ResolutionCache | undefined;
 };
 
 // The repository owns the behaviour its committed dependency patches add, so a
