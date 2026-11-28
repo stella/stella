@@ -236,11 +236,10 @@ describe("formatOntoTemplate", () => {
         },
       },
     ]);
-    const plain = await format(quiet);
-    expect(
-      plain.isOk() &&
-        plain.value.note.items.some(({ kind }) => kind === "sourceHeaders"),
-    ).toBe(false);
+    const plain = (await format(quiet)).unwrap();
+    expect(plain.note.items.some(({ kind }) => kind === "sourceHeaders")).toBe(
+      false,
+    );
   });
 
   test("says which fields of the source the output shows as text", async () => {
