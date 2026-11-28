@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { printError } from "@stll/errors";
 import { Temporal } from "@stll/time";
@@ -21,7 +22,6 @@ import {
 } from "@/api/lib/case-law/maintenance-lane";
 import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import type {
   CzRegionalHeldIdentities,

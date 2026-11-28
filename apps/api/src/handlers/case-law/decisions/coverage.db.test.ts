@@ -9,6 +9,7 @@ import fc from "fast-check";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -47,7 +48,6 @@ import {
 } from "@/api/lib/case-law/published-decisions-sql";
 import { refreshCaseLawSourceArrivals } from "@/api/lib/case-law/source-arrivals-refresh";
 import { SOURCE_ARRIVALS_FRESHNESS_MS } from "@/api/lib/case-law/source-arrivals-window";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {

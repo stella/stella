@@ -53,6 +53,7 @@ import {
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
 
 import {
   decisionConstraints,
@@ -65,7 +66,6 @@ import {
   streamChatChunks,
   toolCallEndInputOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,

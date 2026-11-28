@@ -12,6 +12,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionJudges,
@@ -19,7 +21,6 @@ import {
   caseLawJudges,
   caseLawSources,
 } from "@/api/db/schema";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   relinkUnmatchedDecisionJudgesPage,
   replaceDecisionJudges,

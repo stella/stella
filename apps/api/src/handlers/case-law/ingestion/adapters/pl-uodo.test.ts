@@ -11,6 +11,13 @@ import { panic, Result } from "better-result";
  */
 import { afterEach, describe, expect, test } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
@@ -31,14 +38,7 @@ import {
   plUodoRawPartsOf,
   tallyPlUodoSkips,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import {
-  decodeSourceRawEnvelope,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

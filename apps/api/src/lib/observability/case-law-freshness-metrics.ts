@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import {
   caseLawSources,
   corpusIndexProjectionIntents,
@@ -15,7 +17,6 @@ import {
   readCorpusIndexProjectionQueueStatusTx,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { corpusIndexProjectionNeedsWork } from "@/api/lib/legal-search/corpus-index-projection-sql";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   buildCaseLawDecisionIdentifierPassAgeMetric,
   buildCaseLawDecisionIdentifierRepairMetric,

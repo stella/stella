@@ -23,6 +23,7 @@
 import { panic } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+import { FIXTURE_SOURCE_KEYS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { section51StatuteAst } from "@stll/legal-ast/fixtures/cz-262-2006-section-51";
 import {
@@ -55,7 +56,6 @@ import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import { writeProjectedCorpusColumnsTx } from "@/api/lib/legal-search/corpus-projectability-write";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";

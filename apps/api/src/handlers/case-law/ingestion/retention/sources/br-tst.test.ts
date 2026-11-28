@@ -1,14 +1,14 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { buildBrTstDecision } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { brTstRetention } from "@/api/handlers/case-law/ingestion/retention/sources/br-tst";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import {
   BR_TST_RECORDINGS,
   brTstRecordedRecords,

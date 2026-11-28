@@ -1,17 +1,18 @@
 import type { SQL } from "drizzle-orm";
 import { and, eq, inArray, not, or, sql } from "drizzle-orm";
 
-import { caseLawCoverageSlices } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
   BR_TST_PRECEDENTS_SLICE,
   CASE_LAW_SOURCE_ROWS_BOUND,
   CZ_NS_SBIRKA_VAZNY_SLICE,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
+import { caseLawCoverageSlices } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readBounded } from "@/api/lib/db/read-bounded";
 
 type CaseLawCoverageYear =
   | { year: number; type: "complete" }

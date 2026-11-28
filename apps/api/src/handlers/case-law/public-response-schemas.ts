@@ -10,6 +10,7 @@ import {
   CITATION_TEXT_INCOMPLETE_REASONS,
   DECISION_TEXT_WITHHELD_REASON,
 } from "@stll/api-contract/case-law-text-field";
+import { CASE_LAW_SOURCE_ROWS_BOUND } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
@@ -65,7 +66,6 @@ import {
   populationCountsReadFreshnessSchema,
 } from "@/api/lib/case-law/population-count-freshness";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
 import {
   boundedString,

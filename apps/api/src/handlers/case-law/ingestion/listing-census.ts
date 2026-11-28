@@ -39,6 +39,8 @@ import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { SourceAdapter } from "@stll/case-law-ingestion-core/ingestion-types";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
@@ -59,8 +61,6 @@ import {
   AdapterFetchError,
   ConfigurationError,
 } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";
-import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** The key under the source's `config` that holds the census checkpoint. */

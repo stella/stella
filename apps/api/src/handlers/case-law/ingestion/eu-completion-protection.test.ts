@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import type { TextField } from "@stll/api-contract/case-law-text-field";
+import {
+  type DecisionJudgeInput,
+  encodeSourceRawEnvelope,
+  type RawIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import {
@@ -16,12 +22,6 @@ import {
   presentTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import {
-  type DecisionJudgeInput,
-  encodeSourceRawEnvelope,
-  type RawIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 type ProtectOptions = Omit<

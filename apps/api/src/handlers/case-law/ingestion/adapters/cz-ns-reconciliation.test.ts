@@ -10,6 +10,11 @@ import {
   test,
 } from "bun:test";
 
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { isDecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 
 import { caseLawDecisions } from "@/api/db/schema";
@@ -30,11 +35,6 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@/api/lib/case-law/decision-text";
-import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

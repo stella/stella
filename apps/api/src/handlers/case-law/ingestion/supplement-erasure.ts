@@ -24,6 +24,10 @@ import { panic, Result } from "better-result";
  */
 import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
+import type {
+  SourceAdapter,
+  StoredRawResultReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -55,10 +59,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type {
-  SourceAdapter,
-  StoredRawResultReader,
-} from "@/api/lib/legal-search/ingestion-types";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import type { RemovalEvidence } from "@/api/lib/legal-search/removal-evidence";
 import type { RemovalRetryItem } from "@/api/lib/legal-search/removal-reconciliation-store";

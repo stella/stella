@@ -5,9 +5,9 @@ export default {
   capability:
     "Sanitizing publisher labels and metadata into branded plain text",
   owner: [
-    "apps/api/src/lib/case-law/plain-text.ts",
-    "apps/api/src/lib/legal-search/plain-text-assembly.ts",
-    "apps/api/src/lib/case-law/plain-text-markup.ts",
+    "packages/case-law-ingestion-core/src/plain-text.ts",
+    "packages/case-law-ingestion-core/src/plain-text-assembly.ts",
+    "packages/case-law-ingestion-core/src/plain-text-markup.ts",
   ],
   summary:
     "The shared sanitizer owns the private PlainText brand, markup removal, " +

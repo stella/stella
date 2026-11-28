@@ -4,6 +4,14 @@ import { and, eq, sql } from "drizzle-orm";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { DecisionSupplement } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -31,10 +39,6 @@ import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import {
   replayRawWrite,
   replayWrite,
   replayWriteOutcome,
@@ -42,10 +46,6 @@ import {
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { recordCorpusPackRefsTx } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import type { DecisionSupplement } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";

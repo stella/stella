@@ -4,6 +4,11 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import "@/api/tests/setup-env";
+import {
+  ADAPTER_KEYS,
+  IMPORT_SOURCE_KEYS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawSources,
@@ -17,10 +22,6 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import {
-  ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
-} from "@/api/lib/legal-search/ingestion-constants";
 import {
   CASE_LAW_FRESHNESS_SCAN_CAP,
   readCaseLawFreshnessReportTx,

@@ -1,7 +1,7 @@
 import type {
   AdapterKey,
   ImportSourceKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 
 export type CensusCapability =
   | {

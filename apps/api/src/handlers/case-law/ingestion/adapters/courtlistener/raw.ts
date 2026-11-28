@@ -1,6 +1,12 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 import { Result, TaggedError } from "better-result";
 
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { declareFingerprintFields } from "@stll/errors";
 /**
  * The stored raw of a CourtListener record and the hash that decides whether
@@ -15,11 +21,6 @@ import { declareFingerprintFields } from "@stll/errors";
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {

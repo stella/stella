@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 
-import { excludedSourceField } from "@/api/lib/legal-search/ingestion-types";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
+import { excludedSourceField } from "@stll/case-law-ingestion-core/ingestion-types";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 import { auditRetainedPublisherFields } from "./link-recall-field-audit";

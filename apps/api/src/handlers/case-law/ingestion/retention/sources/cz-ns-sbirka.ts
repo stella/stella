@@ -1,3 +1,4 @@
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 /**
  * What sbirka.nsoud.cz served as a collection entry's text.
  *
@@ -16,7 +17,6 @@ import {
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { htmlParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/html-paragraphs";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 /** The envelope part the adapter stores the detail page under. */
 const DETAIL_PART = "detail";

@@ -1,12 +1,12 @@
 import { open } from "node:fs/promises";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { loadDeferredDocumentSourceId } from "@/api/lib/legal-search/sk-document-backfill";
 import {
   parseEmptiedDocumentRepairArguments,

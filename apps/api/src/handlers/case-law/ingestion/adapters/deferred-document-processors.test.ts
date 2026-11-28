@@ -2,6 +2,11 @@ import { panic, Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  DEFERRED_DOCUMENT_ADAPTER_KEYS,
+  isDeferredDocumentAdapterKey,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+
+import {
   listAdapters,
   listDeferredDocumentDrains,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -10,10 +15,6 @@ import {
   DEFERRED_DOCUMENT_READERS,
 } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { toSafeId } from "@/api/lib/branded-types";
-import {
-  DEFERRED_DOCUMENT_ADAPTER_KEYS,
-  isDeferredDocumentAdapterKey,
-} from "@/api/lib/legal-search/adapter-manifest";
 
 class ProcessorDatabaseProbeError extends TaggedError(
   "ProcessorDatabaseProbeError",

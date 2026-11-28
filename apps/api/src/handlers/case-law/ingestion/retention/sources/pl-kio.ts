@@ -1,3 +1,4 @@
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 /**
  * Retention projection for the Polish procurement appeals chamber (KIO) and
  * the court rulings on complaints its database publishes.
@@ -17,7 +18,6 @@ import {
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plDecisionContentProjection } from "@/api/handlers/case-law/ingestion/retention/sources/pl-decision-content";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 const DOCUMENT_PART = "document";
 

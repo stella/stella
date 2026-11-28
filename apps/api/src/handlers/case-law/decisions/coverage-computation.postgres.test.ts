@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import { CZ_ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 import {
   caseLawCourtWeights,
@@ -21,7 +22,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "@/api/lib/decision-date-bounds-sql";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";

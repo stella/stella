@@ -2,6 +2,7 @@ import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import type { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
@@ -12,7 +13,6 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import type { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);

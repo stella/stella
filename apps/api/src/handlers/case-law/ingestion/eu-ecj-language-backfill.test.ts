@@ -1,11 +1,12 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import {
   type EcjCelexVariant,
   ecjListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 
 import {
   type EcjBackfillJournalEntry,

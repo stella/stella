@@ -159,6 +159,7 @@ const OUTPUT_SHAPING_ROOTS = [
   LEGISLATION_ADAPTER_DIRECTORY,
   ...PARSER_DIRECTORIES,
   CASE_LAW_DIRECTORY,
+  "packages/case-law-ingestion-core/",
   "packages/case-law-parsers/",
   "packages/legal-ast/",
   "packages/text-normalize/",
@@ -1063,7 +1064,7 @@ const boundaryErrors = (
     }
     if (
       file === PARSER_REGISTRY_OUTPUT ||
-      file === "apps/api/src/lib/legal-search/ingestion-constants.ts" ||
+      file === "packages/case-law-ingestion-core/src/ingestion-constants.ts" ||
       file.startsWith(PARSER_ENTRY_DIRECTORY) ||
       OUTPUT_SHAPING_ROOTS.some((root) => file.startsWith(root))
     ) {

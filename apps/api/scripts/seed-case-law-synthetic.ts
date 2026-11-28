@@ -22,15 +22,15 @@
  */
 
 import { DECISION_TEXT_FIELD } from "@stll/api-contract/case-law-text-field";
+import {
+  FIXTURE_SOURCE_KEYS,
+  type FixtureSourceKey,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
 import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
-import {
-  FIXTURE_SOURCE_KEYS,
-  type FixtureSourceKey,
-} from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 
 import type { CaseLawFixture, FixtureDecision } from "./seed-case-law";

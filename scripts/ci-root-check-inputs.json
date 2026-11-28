@@ -792,6 +792,7 @@
       "@stll/docx-utils",
       "@stll/locales",
       "@stll/case-law-parsers",
+      "@stll/case-law-ingestion-core",
       "@stll/docx-engine"
     ],
     "Test projection-totality classification": [
@@ -824,6 +825,7 @@
       "@stll/uuid-codec",
       "scripts/**",
       "@stll/case-law-parsers",
+      "@stll/case-law-ingestion-core",
       "@stll/docx-engine"
     ],
     "Test aggregate inventories": [

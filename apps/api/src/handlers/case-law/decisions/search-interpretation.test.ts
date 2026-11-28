@@ -3,6 +3,7 @@ import type * as v from "valibot";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { CASE_LAW_SEARCH_FACET_NAMES } from "@stll/api-contract/search";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
 
 import {
   interpretDecisionQuery,
@@ -10,7 +11,6 @@ import {
   searchAnswer,
 } from "@/api/handlers/case-law/decisions/search-interpretation";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 
 type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema>;

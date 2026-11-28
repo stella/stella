@@ -13,18 +13,19 @@ import {
 } from "bun:test";
 
 import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  ReconciliationListingItem,
+  ReconciliationSlicePage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import {
   czUsAdapter,
   czUsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
-import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  ReconciliationListingItem,
-  ReconciliationSlicePage,
-} from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

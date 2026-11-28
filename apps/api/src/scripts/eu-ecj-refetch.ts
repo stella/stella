@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { printError } from "@stll/errors";
 
 import { caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   ECJ_LISTING_TIMEOUT_MS,
   fetchDecisionsByCelex,

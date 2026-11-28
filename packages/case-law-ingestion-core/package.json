@@ -1,0 +1,152 @@
+{
+  "name": "@stll/case-law-ingestion-core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure case-law ingestion foundation: adapter manifests, ingestion contracts, plain-text sanitization, decision text boundaries, and source fingerprinting",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./adapter-fetch-error": {
+      "types": "./src/adapter-fetch-error.ts",
+      "import": "./src/adapter-fetch-error.ts"
+    },
+    "./adapter-manifest": {
+      "types": "./src/adapter-manifest.ts",
+      "import": "./src/adapter-manifest.ts"
+    },
+    "./case-law-consts": {
+      "types": "./src/case-law-consts.ts",
+      "import": "./src/case-law-consts.ts"
+    },
+    "./case-number": {
+      "types": "./src/case-number.ts",
+      "import": "./src/case-number.ts"
+    },
+    "./census-listing-identity": {
+      "types": "./src/census-listing-identity.ts",
+      "import": "./src/census-listing-identity.ts"
+    },
+    "./cz-ecli-courts": {
+      "types": "./src/cz-ecli-courts.ts",
+      "import": "./src/cz-ecli-courts.ts"
+    },
+    "./decision-headnote": {
+      "types": "./src/decision-headnote.ts",
+      "import": "./src/decision-headnote.ts"
+    },
+    "./decision-supplement-kind": {
+      "types": "./src/decision-supplement-kind.ts",
+      "import": "./src/decision-supplement-kind.ts"
+    },
+    "./decision-text": {
+      "types": "./src/decision-text.ts",
+      "import": "./src/decision-text.ts"
+    },
+    "./document-stage-observation": {
+      "types": "./src/document-stage-observation.ts",
+      "import": "./src/document-stage-observation.ts"
+    },
+    "./ecli-court-codes": {
+      "types": "./src/ecli-court-codes.ts",
+      "import": "./src/ecli-court-codes.ts"
+    },
+    "./ingestion-constants": {
+      "types": "./src/ingestion-constants.ts",
+      "import": "./src/ingestion-constants.ts"
+    },
+    "./ingestion-diagnostics-sink": {
+      "types": "./src/ingestion-diagnostics-sink.ts",
+      "import": "./src/ingestion-diagnostics-sink.ts"
+    },
+    "./ingestion-types": {
+      "types": "./src/ingestion-types.ts",
+      "import": "./src/ingestion-types.ts"
+    },
+    "./judges-consts": {
+      "types": "./src/judges-consts.ts",
+      "import": "./src/judges-consts.ts"
+    },
+    "./metadata-urls": {
+      "types": "./src/metadata-urls.ts",
+      "import": "./src/metadata-urls.ts"
+    },
+    "./parser-registry.gen": {
+      "types": "./src/parser-registry.gen.ts",
+      "import": "./src/parser-registry.gen.ts"
+    },
+    "./parser-reparse-scopes": {
+      "types": "./src/parser-reparse-scopes.ts",
+      "import": "./src/parser-reparse-scopes.ts"
+    },
+    "./partial-observation": {
+      "types": "./src/partial-observation.ts",
+      "import": "./src/partial-observation.ts"
+    },
+    "./plain-text": {
+      "types": "./src/plain-text.ts",
+      "import": "./src/plain-text.ts"
+    },
+    "./plain-text-assembly": {
+      "types": "./src/plain-text-assembly.ts",
+      "import": "./src/plain-text-assembly.ts"
+    },
+    "./plain-text-markup": {
+      "types": "./src/plain-text-markup.ts",
+      "import": "./src/plain-text-markup.ts"
+    },
+    "./publisher-field-coverage": {
+      "types": "./src/publisher-field-coverage.ts",
+      "import": "./src/publisher-field-coverage.ts"
+    },
+    "./sk-collection-enrichment": {
+      "types": "./src/sk-collection-enrichment.ts",
+      "import": "./src/sk-collection-enrichment.ts"
+    },
+    "./source-exclusion-census": {
+      "types": "./src/source-exclusion-census.ts",
+      "import": "./src/source-exclusion-census.ts"
+    },
+    "./source-fingerprint": {
+      "types": "./src/source-fingerprint.ts",
+      "import": "./src/source-fingerprint.ts"
+    },
+    "./source-raw-envelope": {
+      "types": "./src/source-raw-envelope.ts",
+      "import": "./src/source-raw-envelope.ts"
+    },
+    "./stored-raw-reparse-boundary": {
+      "types": "./src/stored-raw-reparse-boundary.ts",
+      "import": "./src/stored-raw-reparse-boundary.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/case-law-ingestion-core",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/case-law-ingestion-core"
+  },
+  "dependencies": {
+    "@stll/api-contract": "workspace:*",
+    "@stll/case-law-parsers": "workspace:*",
+    "@stll/collation": "workspace:*",
+    "@stll/concurrency": "workspace:*",
+    "@stll/errors": "workspace:*",
+    "@stll/fetch": "workspace:*",
+    "@stll/legal-ast": "workspace:*",
+    "@stll/legal-atlas": "workspace:*",
+    "@stll/sha256": "workspace:*",
+    "better-result": "catalog:",
+    "entities": "^9.0.0",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/property-testing": "workspace:*",
+    "@stll/time": "0.4.3",
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
+  }
+}

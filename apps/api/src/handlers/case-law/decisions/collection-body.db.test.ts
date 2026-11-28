@@ -4,6 +4,11 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { databaseRelations } from "@/api/db/database-relations";
@@ -27,15 +32,10 @@ import {
 import type { CollectionDocumentPart } from "@/api/lib/legal-search/collection-document-part";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import { HELD_DECISION_MATCH_BASIS } from "@/api/lib/legal-search/held-decision-attachment-values";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   RAW_SOURCE_FAMILY,
   rawDocumentPayloadKey,
 } from "@/api/lib/legal-search/raw-source-storage";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";

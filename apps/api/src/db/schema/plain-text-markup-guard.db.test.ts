@@ -5,6 +5,11 @@ import { getColumns, getTableName } from "drizzle-orm";
 import type { Column } from "drizzle-orm";
 import fc from "fast-check";
 
+import { metadataUrlAddresses } from "@stll/case-law-ingestion-core/metadata-urls";
+import {
+  containsTagLikeMarkup,
+  TAG_LIKE_MARKUP_SOURCE,
+} from "@stll/case-law-ingestion-core/plain-text-markup";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
@@ -26,11 +31,6 @@ import {
   METADATA_URL_SCHEMAS,
 } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import {
-  containsTagLikeMarkup,
-  TAG_LIKE_MARKUP_SOURCE,
-} from "@/api/lib/case-law/plain-text-markup";
-import { metadataUrlAddresses } from "@/api/lib/legal-search/metadata-urls";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { readCommittedMigrations } from "@/api/tests/stella-table-privileges";
 

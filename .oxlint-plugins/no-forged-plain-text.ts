@@ -4,7 +4,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { filenameForContext, isAstNode, isIdentifier } from "./utils.ts";
 
-const OWNER = "/apps/api/src/lib/case-law/plain-text.ts";
+const OWNER = "/packages/case-law-ingestion-core/src/plain-text.ts";
 const PROOF_TYPES = new Set([
   "PlainText",
   "PlainTextMetadataValue",

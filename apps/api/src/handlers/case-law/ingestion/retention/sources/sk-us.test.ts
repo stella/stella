@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  encodeSourceRawEnvelope,
+  type IngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -10,11 +15,6 @@ import {
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { readAbsent } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  encodeSourceRawEnvelope,
-  type IngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

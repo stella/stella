@@ -1,6 +1,15 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type {
+  IngestionResult,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceRecapture,
+  StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import {
   assembleCzRegionalDecision,
   czRegionalAdapter,
@@ -9,14 +18,6 @@ import {
   readCzRegionalDocument,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { recaptureDecisionFromListing } from "@/api/handlers/case-law/ingestion/recapture";
-import type {
-  IngestionResult,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceRecapture,
-  StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const FIXTURES = new URL("adapters/__fixtures__/", import.meta.url);

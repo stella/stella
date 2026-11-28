@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   readBodyText,
   readPublisher,

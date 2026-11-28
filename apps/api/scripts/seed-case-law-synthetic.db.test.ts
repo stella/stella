@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import { APP_READER_TEXT } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -27,7 +28,6 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { appReaderTextForSource } from "@/api/lib/case-law/app-reader-text";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
-import { APP_READER_TEXT } from "@/api/lib/legal-search/adapter-manifest";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";

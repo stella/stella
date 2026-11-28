@@ -38,6 +38,12 @@ import {
   type SearchTotal,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { decisionHeadnoteMaxChars } from "@stll/case-law-ingestion-core/decision-headnote";
+import {
+  readDecisionHeadnote,
+  readDecisionKeywords,
+} from "@stll/case-law-ingestion-core/decision-text";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
@@ -107,7 +113,6 @@ import {
   corpusExcerpt,
   decisionHeadlineConfig,
 } from "@/api/lib/case-law/decision-excerpt";
-import { decisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import {
   decisionPagePlacement,
@@ -142,10 +147,6 @@ import {
   decisionSearchCursorAfterSql,
   decisionSortKeySql,
 } from "@/api/lib/case-law/decision-search-order-sql";
-import {
-  readDecisionHeadnote,
-  readDecisionKeywords,
-} from "@/api/lib/case-law/decision-text";
 import {
   decisionTypeFilterSql,
   decisionTypeKindSql,
@@ -187,7 +188,6 @@ import { readOnlineIndexesReady } from "@/api/lib/db/online-index-readiness";
 import type { OnlineIndexName } from "@/api/lib/db/online-index-readiness";
 import { POSTGRES_INTEGER_MAX } from "@/api/lib/db/postgres-integer";
 import { errorTag } from "@/api/lib/errors/utils";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
   caseLawAppliedProjections,

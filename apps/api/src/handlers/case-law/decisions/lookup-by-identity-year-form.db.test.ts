@@ -8,6 +8,7 @@ import {
   exactDecisionMatches,
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -28,7 +29,6 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,

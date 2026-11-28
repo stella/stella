@@ -13,8 +13,8 @@ import { panic } from "better-result";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
-import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { SourceAdapter } from "@stll/case-law-ingestion-core/ingestion-types";
 
 type AdapterLoader = () => Promise<SourceAdapter>;
 

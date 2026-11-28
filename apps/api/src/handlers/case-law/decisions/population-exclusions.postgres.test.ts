@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -23,7 +24,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { LIMITS } from "@/api/lib/limits";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

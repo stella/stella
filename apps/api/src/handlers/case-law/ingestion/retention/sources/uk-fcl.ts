@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 import * as slimdom from "slimdom";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 import {
   RETENTION_PROJECTION_FAILURE,
   type RetentionPolicy,
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 const AKN = "http://docs.oasis-open.org/legaldocml/ns/akn/3.0";
 const PARAGRAPH_ELEMENTS = new Set(["p", "heading", "num", "td", "th"]);

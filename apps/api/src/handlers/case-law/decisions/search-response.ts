@@ -8,9 +8,9 @@ import {
   caseLawPageOutcome,
   type CaseLawPagePhases,
 } from "@stll/api-contract/search";
+import type { DecisionHeadnoteMaxChars } from "@stll/case-law-ingestion-core/decision-headnote";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
-import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {

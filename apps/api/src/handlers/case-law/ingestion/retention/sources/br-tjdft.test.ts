@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -10,8 +12,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { brTjdftRetention } from "@/api/handlers/case-law/ingestion/retention/sources/br-tjdft";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 const FIXTURES = new URL("../../adapters/__fixtures__/", import.meta.url);
 

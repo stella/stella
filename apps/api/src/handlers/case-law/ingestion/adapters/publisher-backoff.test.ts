@@ -7,10 +7,10 @@ import {
   test,
 } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";

@@ -1,5 +1,13 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import {
+  decodeSourceRawEnvelopeObjects,
+  withSourceRawObjects,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  SourceRawObjectRef,
+  SourceRawObjects,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -8,14 +16,6 @@ import {
   formatCorpusLocation,
   parseCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
-import {
-  decodeSourceRawEnvelopeObjects,
-  withSourceRawObjects,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  SourceRawObjectRef,
-  SourceRawObjects,
-} from "@/api/lib/legal-search/ingestion-types";
 import { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
 import { emitRawSourceStoredMetric } from "@/api/lib/observability/request-metrics";
 import {

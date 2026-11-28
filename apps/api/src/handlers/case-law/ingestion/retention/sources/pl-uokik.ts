@@ -1,6 +1,8 @@
 /** The register keeps PDFs beside its text envelope; project the original sidecar bytes. */
 import { panic } from "better-result";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,
@@ -12,7 +14,6 @@ import {
   PDF_PROJECTION_MAX_BYTES,
   projectPdfText,
 } from "@/api/handlers/case-law/ingestion/retention/sources/pdf-text";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 /**
  * `Ŝ` stands for `ż` in the text layer of documents typeset with a common

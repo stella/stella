@@ -5,7 +5,8 @@ import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import {
   readDecisionHeadnote,
   readWholeDecisionHeadnote,
-} from "../lib/case-law/decision-text";
+} from "@/api/lib/case-law/decision-text";
+
 import { LIMITS } from "../lib/limits";
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 

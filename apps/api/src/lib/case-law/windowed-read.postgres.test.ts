@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -24,7 +25,6 @@ import { readReaderAnswerRelated } from "@/api/lib/case-law/reader-answer-corpus
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import type { CaseLawWindowProfile } from "@/api/lib/files/windowed-read-surface";
 import { WINDOWED_READ_SURFACE } from "@/api/lib/files/windowed-read-surface";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { currentReadWork } from "@/api/lib/observability/request-work";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";

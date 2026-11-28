@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-const OWNER = "apps/api/src/lib/case-law/plain-text.ts";
+const OWNER = "packages/case-law-ingestion-core/src/plain-text.ts";
 const lint = async (source: string, sourcePath = "adapter.ts") =>
   await lintSingleRule("no-forged-plain-text", source, { sourcePath });
 

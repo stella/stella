@@ -7,6 +7,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -23,8 +25,6 @@ import {
 import { PDF_PROJECTION_MAX_BYTES } from "@/api/handlers/case-law/ingestion/retention/sources/pdf-text";
 import { plUokikRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uokik";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 
 const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);

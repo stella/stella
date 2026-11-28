@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 
+import { STORED_RAW_REPARSE_REJECTION } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { createSafeId } from "@/api/lib/branded-types";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 
 import {
   REPLAY_ROW_OUTCOME,

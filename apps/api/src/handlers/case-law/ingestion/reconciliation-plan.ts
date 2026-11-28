@@ -12,10 +12,10 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import type { SourceSliceWalk } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DAY_IN_MS } from "@stll/time";
 
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
-import type { SourceSliceWalk } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**

@@ -22,6 +22,12 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
+import type {
+  SourceAdapter,
+  StoredRawReparseRejection,
+  StoredRawResultReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions } from "@/api/db/schema";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
@@ -32,11 +38,6 @@ import type { SupplementDisposition } from "@/api/handlers/case-law/ingestion/pi
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type {
-  SourceAdapter,
-  StoredRawReparseRejection,
-  StoredRawResultReader,
-} from "@/api/lib/legal-search/ingestion-types";
 
 /** What folding one stored row came to. */
 export const SUPPLEMENT_FOLD_OUTCOME = {
