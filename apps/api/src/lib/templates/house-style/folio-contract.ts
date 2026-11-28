@@ -75,6 +75,18 @@ export type DocxBlock = {
    *  Absent when it states neither, and from an engine that does not
    *  report it. What its style gives is not here. */
   spacing?: TemplatePlanSpacing;
+  /** The space in effect in front of the paragraph and behind it, in
+   *  twentieths of a point: each side its own, else its style's, else the
+   *  document defaults', else none. A side set to auto spacing or counted
+   *  in lines is left out. The line spacing resolved the same way, single
+   *  where nothing states one. Absent from an engine that does not report
+   *  it. */
+  spacingInEffect?: {
+    before?: number;
+    after?: number;
+    line?: number;
+    lineRule?: TemplatePlanLineRule;
+  };
   /** The indent in effect, in twentieths of a point: where the
    *  paragraph's lines start, and what its first line adds to that
    *  (negative for a hanging indent). Absent when nothing states one, and
@@ -300,7 +312,18 @@ export type TemplatePlanAlignment = "left" | "center" | "right" | "both";
 
 /** The space in front of a paragraph and behind it, in twentieths of a
  *  point: at least one side. */
-export type TemplatePlanSpacing = { before?: number; after?: number };
+/** How a line spacing is counted: `auto` in 240ths of a line, `exact` and
+ *  `atLeast` in twentieths of a point. */
+type TemplatePlanLineRule = "auto" | "exact" | "atLeast";
+
+export type TemplatePlanSpacing = {
+  before?: number;
+  after?: number;
+  /** The spacing of the paragraph's lines, counted by `lineRule` (`auto`
+   *  when left out). Left out by an engine that does not know it. */
+  line?: number;
+  lineRule?: TemplatePlanLineRule;
+};
 
 export type TemplatePlanNestedParagraph = {
   blockId: string;
@@ -311,6 +334,8 @@ export type TemplatePlanNestedParagraph = {
   labelAsText?: boolean;
   /** As on a source item. */
   dropPageShapes?: boolean;
+  /** As on a source item. */
+  indent?: TemplatePlanIndent;
   /** As on a source item. */
   alignment?: TemplatePlanAlignment;
   /** The paragraph's own space in front of it and behind it, over its
@@ -464,6 +489,29 @@ export type TemplatePlan = {
    *  for one view, and the output carries no revision; or it keeps them,
    *  and the output carries each as the change it is. */
   trackedChanges?: TrackedChangesChoice;
+  /** Whether the output's headers and footers keep the source's: their
+   *  content after the template's own, in the header or footer for the
+   *  same pages. An engine that does not know the option gives the
+   *  template's alone. */
+  sourceHeaders?: "drop" | "keep";
+};
+
+/** What the output's headers and footers carry of the source's. */
+export type SourceHeadersReport = {
+  kept: {
+    family: "header" | "footer";
+    kind: "first" | "default" | "even";
+    part: string;
+    paragraphs: number;
+    /** The template had none for those pages: a new part holds them. */
+    created: boolean;
+  }[];
+  leftOut: {
+    firstPageParts: number;
+    evenPageParts: number;
+    sharedParts: number;
+    unsupportedObjects: number;
+  };
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -506,6 +554,8 @@ export type TemplatePlanReport = {
      *  without. Absent from an engine that drops none. */
     pageShapes?: number;
   };
+  /** Present when the plan kept the source's headers and footers. */
+  sourceHeaders?: SourceHeadersReport;
 };
 
 /** Why the engine refused; the codes a plan can be repaired after. Any
@@ -690,6 +740,14 @@ const blockSchema = v.strictObject({
     v.strictObject({
       before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
       after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    }),
+  ),
+  spacingInEffect: v.exactOptional(
+    v.strictObject({
+      before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      line: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+      lineRule: v.exactOptional(v.picklist(["auto", "exact", "atLeast"])),
     }),
   ),
   indent: v.exactOptional(

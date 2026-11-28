@@ -5,6 +5,7 @@ import { resolveAmbiguitiesByRule } from "@/api/lib/templates/house-style/ambigu
 import { TemplateEngineError } from "@/api/lib/templates/house-style/folio-contract";
 import type {
   DocxBlockManifest,
+  SourceHeadersReport,
   TemplateEngineRefusal,
   TemplatePlan,
   TemplatePlanEngine,
@@ -35,6 +36,8 @@ type Answer =
       countingFieldLeft?: true;
       /** The output shows two form check boxes as text. */
       fieldsAsText?: true;
+      /** What the output's headers kept of the source's. */
+      sourceHeaders?: SourceHeadersReport;
       /** The output shows three links to places in the source as text. */
       internalLinks?: true;
     };
@@ -120,6 +123,9 @@ const fakeEngine = (
         internalHyperlinks: "internalLinks" in answer ? 3 : 0,
         sectionBreaks: 1,
       },
+      ...("sourceHeaders" in answer
+        ? { sourceHeaders: answer.sourceHeaders }
+        : {}),
     };
   };
   return {
@@ -197,6 +203,45 @@ describe("formatOntoTemplate", () => {
     expect(formatted.plan.highlights).toEqual([
       expect.objectContaining({ blockId: citing, color: "magenta" }),
     ]);
+  });
+
+  test("keeps the source's headers and footers and says what they kept and what had no place", async () => {
+    const leftOut = {
+      firstPageParts: 1,
+      evenPageParts: 0,
+      sharedParts: 0,
+      unsupportedObjects: 0,
+    };
+    const kept = [
+      {
+        family: "header" as const,
+        kind: "first" as const,
+        part: "word/header2.xml",
+        paragraphs: 1,
+        created: false,
+      },
+    ];
+    const engine = fakeEngine(manifest, [{ sourceHeaders: { kept, leftOut } }]);
+    const result = await format(engine);
+    expect(engine.plans.at(0)?.sourceHeaders).toBe("keep");
+    expect(result.isOk() && result.value.note.items).toContainEqual({
+      kind: "sourceHeaders",
+      kept,
+      leftOut,
+    });
+    // Headers that held nothing give no item.
+    const quiet = fakeEngine(manifest, [
+      {
+        sourceHeaders: {
+          kept: [],
+          leftOut: { ...leftOut, firstPageParts: 0 },
+        },
+      },
+    ]);
+    const plain = (await format(quiet)).unwrap();
+    expect(plain.note.items.some(({ kind }) => kind === "sourceHeaders")).toBe(
+      false,
+    );
   });
 
   test("says how many links to a place in the source the output shows as text", async () => {

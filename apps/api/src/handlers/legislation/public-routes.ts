@@ -65,7 +65,6 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { withPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
@@ -393,6 +392,6 @@ export const publicLegislationRoute = routes(
   },
   {
     prefix: "/law",
-    middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")],
+    deployment: { type: "flag", flag: "FEATURE_PUBLIC_LAW" },
   },
 );

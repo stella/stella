@@ -17,7 +17,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { mount, routes } from "@/api/http/route";
-import { localDevelopmentGate } from "@/api/lib/deployment-feature-route";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
 import {
   mintDevSeedSession,
@@ -325,8 +324,6 @@ const clearCache = defineEndpoint.member({}, () => {
 });
 
 /** Local development only: elsewhere these routes answer like absent ones. */
-const localDevOnly = localDevelopmentGate;
-
 export const devRoute = routes(
   {
     "/seed": { GET: seedStatusEndpoint, POST: startSeed },
@@ -342,7 +339,7 @@ export const devRoute = routes(
       POST: defineEndpoint.member({}, startPublicLawConnection),
     },
   },
-  { prefix: "/dev", middleware: [localDevOnly] },
+  { prefix: "/dev", deployment: { type: "local-dev" } },
 );
 
 // Public local development routes (no auth: the unauthenticated email-OTP
@@ -361,5 +358,5 @@ const lastOtp = defineEndpoint.public(
 
 export const devPublicRoute = mount(
   [routes({ "/last-otp": { GET: lastOtp } })],
-  { prefix: "/dev-public", middleware: [localDevOnly] },
+  { prefix: "/dev-public", deployment: { type: "local-dev" } },
 );

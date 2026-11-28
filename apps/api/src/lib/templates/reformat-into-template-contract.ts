@@ -72,6 +72,16 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
    *  (`REF:3,FORMCHECKBOX:2`). A form field's box or list is gone. Check
    *  them against the source. */
   "fields_as_text",
+  /** The output's header or footer that `reason` names (`header:first`,
+   *  `footer:default`, …) carries the document's own after the
+   *  template's: `count` paragraphs, with its pictures and fields. */
+  "source_header_kept",
+  /** `count` headers, footers or objects of the document's have no place
+   *  in the output: `reason` says which (`firstPageParts`: the output does
+   *  not set its first page apart; `evenPageParts`; `sharedParts`: the
+   *  template's part serves pages that take other content;
+   *  `unsupportedObjects`: an embedded object other than a picture). */
+  "source_header_left_out",
   /** `count` links of the document to a place in itself (a bookmark, a
    *  heading) show as plain text in the output: they no longer jump.
    *  Check them against the document. */

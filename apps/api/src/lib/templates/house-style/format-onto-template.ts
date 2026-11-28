@@ -306,6 +306,24 @@ const bulletIdsOf = ({ blocks }: DocxBlockManifest): Set<string> =>
 const sum = (entries: readonly { count: number }[]): number =>
   entries.reduce((total, { count }) => total + count, 0);
 
+/** The note says what the output's headers kept of the source's and what
+ *  they left out, where the source's headers held anything. */
+const withSourceHeaders = (
+  note: FormattingNote,
+  { sourceHeaders }: TemplatePlanReport,
+): FormattingNote => {
+  if (
+    sourceHeaders === undefined ||
+    (sourceHeaders.kept.length === 0 &&
+      Object.values(sourceHeaders.leftOut).every((count) => count === 0))
+  ) {
+    return note;
+  }
+  return {
+    ...note,
+    items: [...note.items, { kind: "sourceHeaders", ...sourceHeaders }],
+  };
+};
 /** The note says how many links of the source to a place in itself the
  *  output shows as plain text. */
 const withInternalLinks = (
@@ -602,7 +620,10 @@ export const formatOntoTemplate = async ({
     manifest,
     plan: built.plan,
     profile,
-    note: withInternalLinks(withFieldsAsText(built.note, report), report),
+    note: withInternalLinks(
+      withFieldsAsText(withSourceHeaders(built.note, report), report),
+      report,
+    ),
     outcome: { attempts, repairs, ...leftOf(report), pages },
   });
 };
