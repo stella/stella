@@ -174,7 +174,7 @@ at 0.
   `apps/api/src/lib/agent-input-owner.test.ts`
 - Registry-wide guards: `apps/api/src/mcp/uuid-id-inputs.test.ts`,
   `apps/api/src/mcp/null-optional-inputs.test.ts`
-- Warnings census and references: `apps/api/src/lib/docx/template-warnings.ts`,
+- Warnings census and references: `packages/docx-engine/src/template-warnings.ts`,
   `apps/api/src/mcp/template-workflow-reference.ts`
 - Authoring eval: `apps/api/evals/template-authoring.ts`
 
