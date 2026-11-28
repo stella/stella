@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  continuesCourtNumbering,
   huDecisionDateFrom,
   huDecisionTypeFrom,
   huDocketFrom,
-  continuesCourtNumbering,
   parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
 } from "@stll/case-law-parsers/hu-bhgy";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
