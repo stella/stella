@@ -73,6 +73,7 @@ const CONFIDENCE = {
   sectionHeading: 0.65,
   bullet: 0.35,
   annexBody: 0.4,
+  editorialNote: 0.6,
   plain: 0.5,
   alternative: 0.3,
   weakAlternative: 0.2,
@@ -93,6 +94,8 @@ const PARTY_MARKER = new RegExp(
   String.raw`${PARTY_IDENTITY_SOURCE}|\(dále jen|\(hereinafter|\((?:the )?["“„]|\(nachfolgend|\(im Folgenden`,
   "iu",
 );
+/** The words that close a preamble and lead into the provisions. */
+const AS_FOLLOWS = /\bas follows\b|takto:|wie folgt/iu;
 const PREAMBLE_MARKER =
   /uzavřel[yi]|uzavírají|se dohodl[yi]|preambule|whereas|have agreed|have concluded|agree as follows|präambel|vereinbaren/iu;
 /** A sentence that ends by naming who follows as the parties (`…
@@ -398,6 +401,15 @@ const partyHeadsOf = (
   if (opened) {
     return new Set();
   }
+  // Numbered lines right under the line that announces the parties
+  // (`BETWEEN:`) are the parties, named or not yet.
+  const introducedAt = provisions.at(0)?.position ?? 0;
+  const introduced = PARTY_INTRO.test(
+    blocks
+      .slice(0, introducedAt)
+      .findLast(({ text }) => text.trim() !== "")
+      ?.text.trim() ?? "",
+  );
   for (const [at, entry] of provisions.entries()) {
     const first = heads.at(0);
     if (
@@ -419,7 +431,16 @@ const partyHeadsOf = (
       first !== undefined &&
       above !== undefined &&
       ENDS_IN_JOINER.test(above.text.trim());
-    if (!identified && !joined) {
+    // The announcement covers the parties only: a numbered line behind the
+    // preamble (`IT IS AGREED as follows:`) is a provision.
+    const announced =
+      introduced &&
+      !blocks
+        .slice(heads.at(-1)?.position ?? introducedAt, entry.position)
+        .some(
+          ({ text }) => PREAMBLE_MARKER.test(text) || AS_FOLLOWS.test(text),
+        );
+    if (!identified && !joined && !announced) {
       break;
     }
     heads.push(entry);
@@ -666,12 +687,31 @@ const sectionHeading = (): Reading =>
     confidence: CONFIDENCE.alternative,
   });
 
+/**
+ * A drafter's note to whoever fills the form in: it opens with a note's
+ * word (`Note:`, `[Drafting note`, `Hinweis:`, `Pozn.`, `Bitte wählen`).
+ * It is no text of the provision it stands under, and is set as plain
+ * text. A bracketed alternative (`[Alternative 1: …]`) is the provision's
+ * own text.
+ */
+const NOTE_WORDS = String.raw`(?:drafting note|guidance(?: note)?|notes?|hinweise?|anmerkung(?:en)?|pozn(?:ámka|\.)|pokyny?|instrukce|bitte wählen)`;
+const EDITORIAL_NOTE = new RegExp(
+  String.raw`^(?:[[(]\s*${NOTE_WORDS}(?![\p{L}])|${NOTE_WORDS}\s*(?:[:.\]–-]|$))`,
+  "iu",
+);
+
 const readUnlabelled = (
   block: DocxBlock,
   position: number,
   zones: Zones,
   index: LabelIndex,
 ): Reading => {
+  if (EDITORIAL_NOTE.test(block.text.trim()) && printedLabel(block) === null) {
+    return reading("body", CONFIDENCE.editorialNote, {
+      role: "continuation",
+      confidence: CONFIDENCE.alternative,
+    });
+  }
   // A part of the document is headed, whatever its heading's words: its
   // number stays what the source shows.
   if (index.partHeadingBlockIds.has(block.id)) {
@@ -683,9 +723,31 @@ const readUnlabelled = (
       confidence: CONFIDENCE.alternative,
     });
   }
+  const context = index.contextByBlockId.get(block.id);
+  const inProvision =
+    context !== undefined &&
+    (context.clauseBlockId !== null || context.itemBlockId !== null);
   if (position >= zones.firstAnnexHeading) {
-    return isSectionHeading(block)
-      ? sectionHeading()
+    if (isSectionHeading(block)) {
+      return sectionHeading();
+    }
+    // Text under a numbered provision continues it, in an annex as in the
+    // body; so does text under an article the annex numbers itself.
+    const entryOf = (blockId: string | null | undefined) =>
+      blockId === null || blockId === undefined
+        ? undefined
+        : index.entryByBlockId.get(blockId);
+    const article = entryOf(context?.articleBlockId);
+    const annex = entryOf(context?.annexBlockId);
+    const underAnnexArticle =
+      article !== undefined &&
+      annex !== undefined &&
+      article.position > annex.position;
+    return (inProvision || underAnnexArticle) && printedLabel(block) === null
+      ? reading("continuation", CONFIDENCE.continuation, {
+          role: "body",
+          confidence: CONFIDENCE.weakAlternative,
+        })
       : reading("body", CONFIDENCE.annexBody);
   }
   if (position >= zones.signature) {
@@ -713,10 +775,6 @@ const readUnlabelled = (
   if (isSectionHeading(block)) {
     return sectionHeading();
   }
-  const context = index.contextByBlockId.get(block.id);
-  const inProvision =
-    context !== undefined &&
-    (context.clauseBlockId !== null || context.itemBlockId !== null);
   return inProvision
     ? reading("continuation", CONFIDENCE.continuation, {
         role: "body",
