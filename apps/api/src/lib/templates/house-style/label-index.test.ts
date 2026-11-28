@@ -607,6 +607,68 @@ describe("buildLabelIndex", () => {
     expect([...contentsBlockIds].toSorted()).toEqual(["p1", "p2", "p3", "p4"]);
   });
 
+  test("a rule or a lone column head between a caption and its lines goes with them", () => {
+    const manifest = manifestOf([
+      "AGREEMENT",
+      "CONTENTS",
+      "______________________________",
+      "CLAUSE",
+      { text: "1. Scope\t2", styleName: "toc 1" },
+      { text: "2. Price\t3", styleName: "toc 1" },
+      { ...heading("Scope"), label: "1." },
+    ]);
+    const { contentsBlockIds } = buildLabelIndex(manifest);
+    expect([...contentsBlockIds].toSorted()).toEqual([
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+    ]);
+  });
+
+  test("a rule or a lone column head with no caption over it heads nothing", () => {
+    const manifest = manifestOf([
+      "The parties agree as follows.",
+      "______________________________",
+      "Section",
+      { text: "1. Scope\t2", styleName: "toc 1" },
+      { ...heading("Scope"), label: "1." },
+    ]);
+    const { contentsBlockIds } = buildLabelIndex(manifest);
+    expect([...contentsBlockIds]).toEqual(["p3"]);
+  });
+
+  test("a drafting note between a caption and its lines stays, the caption goes with the lines", () => {
+    const manifest = manifestOf([
+      "FRAMEWORK CONTRACT",
+      { text: "Table of Content", styleName: "heading 1" },
+      "NB: After filling in the options, update this table.",
+      "",
+      { text: "I. Special Conditions\t6", styleName: "toc 1" },
+      { text: "II. General Conditions\t9", styleName: "toc 1" },
+      { ...heading("Special Conditions"), label: "I." },
+    ]);
+    const { contentsBlockIds } = buildLabelIndex(manifest);
+    expect([...contentsBlockIds].toSorted()).toEqual(["p1", "p4", "p5"]);
+  });
+
+  test("a sentence or two notes between a caption and its lines part them", () => {
+    for (const between of [
+      ["The contents are listed below."],
+      ["NB: update this table.", "[Note: delete before signing.]"],
+    ]) {
+      const manifest = manifestOf([
+        "Contents",
+        ...between,
+        { text: "1. Scope\t2", styleName: "toc 1" },
+        { ...heading("Scope"), label: "1." },
+      ]);
+      const { contentsBlockIds } = buildLabelIndex(manifest);
+      expect([...contentsBlockIds]).toEqual([`p${between.length + 1}`]);
+    }
+  });
+
   test("a group caption between lines of the source's contents goes with them", () => {
     const manifest = manifestOf([
       "Contents",
