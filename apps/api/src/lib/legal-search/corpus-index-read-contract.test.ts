@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { FUNCTION_WORDS } from "@stll/legal-morphology/function-words";
+
 import {
   caseLawCorpusQueryFields,
   caseLawIndexGroupReadContract,
@@ -9,7 +11,6 @@ import {
   requireCaseLawDecisionCountField,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
-import { FUNCTION_WORDS } from "@/api/lib/legal-search/morphology/function-words";
 
 test("case-law reads use their generation's declared schema", () => {
   expect(corpusIndexReadContract("case_law", "case_law_v5")).toEqual({

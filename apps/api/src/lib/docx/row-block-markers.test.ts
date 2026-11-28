@@ -3,16 +3,16 @@ import fc from "fast-check";
 import * as slimdom from "slimdom";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { processBlockDirectives } from "@stll/docx-engine/block-directives";
+import { processInlineConditions } from "@stll/docx-engine/inline-conditions";
+import { paragraphText, W_NS } from "@stll/docx-engine/ooxml";
+import type { TemplateData } from "@stll/docx-engine/types";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
-import { processBlockDirectives } from "./block-directives";
 import { discoverTemplate } from "./discover-template";
-import { processInlineConditions } from "./inline-conditions";
-import { paragraphText, W_NS } from "./ooxml";
-import type { TemplateData } from "./types";
 
 setDefaultTimeout(propertyTestTimeout(30_000));
 
@@ -151,7 +151,7 @@ describe("row-form {% for %} markers", () => {
     expect(inlineErrors).toEqual([
       {
         message:
-          'Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph in paragraph "{% for deliverable in deliverables %}{{ deliverable.item }}"',
+          'Unclosed inline {% for %}: the {% endfor %} must be in the same paragraph in paragraph "{% for deliverable in deliverables %}{{ deliverable.item }}"',
         paragraphIndex: 0,
         directive: "{% for deliverable in deliverables %}",
       },
@@ -197,7 +197,7 @@ describe("row-form {% for %} markers", () => {
       "{% endfor %}",
     ]);
     expect(inlineErrors[0]?.message).toStartWith(
-      "Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph",
+      "Unclosed inline {% for %}: the {% endfor %} must be in the same paragraph",
     );
   });
 

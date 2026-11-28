@@ -154,6 +154,30 @@ describe("route gates", () => {
         ],
       }),
     ).toEqual([]);
+    expect(
+      keys({
+        ...unflagged,
+        routes: [
+          mounted({
+            gateFlags: [],
+            capability: undefined,
+            alwaysOnReason: "core route",
+          }),
+        ],
+      }),
+    ).toEqual([]);
+    expect(
+      keys({
+        ...unflagged,
+        routes: [
+          mounted({
+            gateFlags: [],
+            capability: undefined,
+            alwaysOnReason: "   ",
+          }),
+        ],
+      }),
+    ).toEqual([`unclassified-route:${ROUTE}`]);
   });
 
   test("a capability without a flag is classified by its gate or prefix", () => {

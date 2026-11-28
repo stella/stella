@@ -5,11 +5,11 @@ import type {
   DECISION_UNDECIDED_REASON_CODES,
   DecisionUndecidedReason,
 } from "@stll/api-contract/ai-decision-provider";
+import type { AiFieldError } from "@stll/docx-engine/ai-field-error-types";
+import { LOOKUP_REGISTRIES } from "@stll/docx-engine/types";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
-import type { AiFieldError } from "@/api/lib/docx/ai-field-error-types";
-import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 
 import {
   entityFeatureGateChecks,

@@ -9,6 +9,7 @@ import {
   czechContract,
   czechDecimalContract,
   englishAgreement,
+  heading,
   inColumns,
   manifestOf,
   numbered,
@@ -30,6 +31,36 @@ const rolesOf = (
 };
 
 describe("proposeBlockRoles", () => {
+  test("heads the parts of a pack, whatever their words", () => {
+    const part = (label: string, text: string) => ({
+      ...heading(text),
+      label,
+      numId: 5,
+    });
+    const article = (label: string, text: string) => ({
+      text,
+      label,
+      styleName: "Level 1",
+      outlineLevel: 1,
+    });
+    const manifest = manifestOf([
+      part("III.", "Order Form"),
+      "The Buyer orders the Deliverables.",
+      part("IV.", "Short form Terms"),
+      article("1", "Definitions"),
+      numbered("1.1", "Terms have the meaning given."),
+      article("4", "The Supplier's obligations"),
+      numbered("4.1", "The Supplier must deliver."),
+      part("VI.", "[Annex – Specification] (Optional)"),
+    ]);
+    expect(rolesOf(manifest)).toMatchObject({
+      "Order Form": "heading",
+      "Short form Terms": "heading",
+      Definitions: "articleHeading",
+      "[Annex – Specification] (Opt": "heading",
+    });
+  });
+
   test("reads the parts of a Czech contract", () => {
     const manifest = czechContract("Viz čl. II této smlouvy.");
     expect(rolesOf(manifest)).toMatchObject({
@@ -221,6 +252,39 @@ describe("proposeBlockRoles", () => {
     expect(roles["a"]).toBe("body");
     expect(roles["Prodávající dodá zboží."]).toBe("clause1");
     expect(roles["Kupující zaplatí cenu."]).toBe("clause1");
+
+    // A sentence that concludes the agreement and ends by naming who
+    // follows announces the parties; it opens no operative part.
+    const announced = rolesOf(
+      manifestOf([
+        "DOHODA O MLČENLIVOSTI",
+        "Tuto dohodu uzavírají níže uvedeného dne následující účastníci:",
+        numbered("1.", "Alfa s.r.o., sídlo: Dlouhá 1, Praha", 5),
+        "(dále jen „Poskytovatel“)",
+        "a",
+        numbered("2.", "Beta a.s., IČO: 00000002", 5),
+        "(dále jen „Příjemce“)",
+        numbered("1.", "Úvodní ujednání", 10),
+        numbered("1.1.", "Poskytovatel je správcem díla.", 10),
+      ]),
+    );
+    expect(announced["Alfa s.r.o., sídlo: Dlouhá 1, Praha".slice(0, 28)]).toBe(
+      "party",
+    );
+    expect(announced["Beta a.s., IČO: 00000002"]).toBe("party");
+
+    // A sentence that only ends in a party noun announces no parties.
+    const obligations = rolesOf(
+      manifestOf([
+        "SMLOUVA",
+        "Strany se dohodly na těchto povinnostech pro jednotlivé smluvní strany:",
+        numbered("1.", "Alfa s.r.o., IČO: 00000001, předá dílo", 5),
+        numbered("2.", "Beta a.s., bankovní spojení: účet, zaplatí", 5),
+      ]),
+    );
+    expect(
+      obligations["Alfa s.r.o., IČO: 00000001, předá dílo".slice(0, 28)],
+    ).not.toBe("party");
 
     // Letters head them as numbers do, and the second party may have no
     // details of its own behind the word that joins the two.

@@ -16,6 +16,11 @@
 
 import * as slimdom from "slimdom";
 
+import { templateContentPartPaths, W_NS } from "@stll/docx-engine/ooxml";
+import {
+  paragraphSpanText,
+  replaceParagraphTextRanges,
+} from "@stll/docx-engine/rich-patch";
 import {
   type FilterCall,
   isFieldPath,
@@ -32,9 +37,6 @@ import {
 import { loadDocx } from "@/api/lib/docx-archive";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-
-import { templateContentPartPaths, W_NS } from "./ooxml";
-import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 
 /** The chain to write at one path. A path is either a value marker's or a
  *  `{% for %}` opener's; which one it is, is what the document says. */

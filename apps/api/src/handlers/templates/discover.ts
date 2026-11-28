@@ -1,6 +1,9 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { manifestNamedConditions } from "@stll/docx-engine/manifest-conditions";
+import { mergeManifestWithDiscovery } from "@stll/docx-engine/template-manifest";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -8,8 +11,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
-import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";

@@ -105,7 +105,7 @@ const projectionStates = async (entityIds: readonly string[]) =>
       workStatus: corpusIndexProjectionStates.workStatus,
       failureAttempts: corpusIndexProjectionStates.failureAttempts,
       lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
-      appendMode: corpusIndexProjectionStates.appendMode,
+      appendRequestCap: corpusIndexProjectionStates.appendRequestCap,
     })
     .from(corpusIndexProjectionStates)
     .where(
@@ -118,6 +118,20 @@ const projectionStates = async (entityIds: readonly string[]) =>
       ),
     )
     .orderBy(corpusIndexProjectionStates.entityId);
+
+/** How many of `entityIds` a cycle left reserved. */
+const reservedIntents = async (entityIds: readonly string[]) =>
+  (
+    await db
+      .select({ id: corpusIndexProjectionIntents.id })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          inArray(corpusIndexProjectionIntents.entityId, [...entityIds]),
+          eq(corpusIndexProjectionIntents.status, "reserved"),
+        ),
+      )
+  ).length;
 
 const runLegislationCycle = async ({
   entityIds,
@@ -348,7 +362,7 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
         workStatus: "retry_scheduled",
         failureAttempts: 0,
         lastFailureKind: "append_rejected",
-        appendMode: "single",
+        appendRequestCap: 1,
       })),
     );
 
@@ -368,14 +382,14 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
         workStatus: "retry_scheduled",
         failureAttempts: 1,
         lastFailureKind: "append_rejected",
-        appendMode: "single",
+        appendRequestCap: 1,
       },
       {
         entityId: healthyEntity,
         workStatus: "retry_scheduled",
         failureAttempts: 0,
         lastFailureKind: "append_rejected",
-        appendMode: "single",
+        appendRequestCap: 1,
       },
     ]);
 
@@ -395,7 +409,7 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
         workStatus: "eligible",
         failureAttempts: 0,
         lastFailureKind: null,
-        appendMode: "batchable",
+        appendRequestCap: 512,
       },
     ]);
 
@@ -415,14 +429,14 @@ test("repeated 413 cycles park only the rejected revision after its healthy batc
         workStatus: "blocked",
         failureAttempts: 2,
         lastFailureKind: "append_rejected",
-        appendMode: "single",
+        appendRequestCap: 1,
       },
       {
         entityId: healthyEntity,
         workStatus: "eligible",
         failureAttempts: 0,
         lastFailureKind: null,
-        appendMode: "batchable",
+        appendRequestCap: 512,
       },
     ]);
     expect(warn).toHaveBeenCalledWith(
@@ -467,7 +481,7 @@ test("a persistent 500 on one revision is charged until it parks", async () => {
         workStatus: parked ? "blocked" : "retry_scheduled",
         failureAttempts: attempt,
         lastFailureKind: "append_unknown",
-        appendMode: "batchable",
+        appendRequestCap: 512,
       },
     ]);
   }
@@ -489,14 +503,14 @@ test("an unknown two-revision outcome does not charge either batch mate", async 
   expect(requestSizes).toEqual([2]);
   expect(
     (await projectionStates(entityIds)).map(
-      ({ failureAttempts, appendMode }) => ({
+      ({ failureAttempts, appendRequestCap }) => ({
         failureAttempts,
-        appendMode,
+        appendRequestCap,
       }),
     ),
   ).toEqual([
-    { failureAttempts: 0, appendMode: "single" },
-    { failureAttempts: 0, appendMode: "single" },
+    { failureAttempts: 0, appendRequestCap: 1 },
+    { failureAttempts: 0, appendRequestCap: 1 },
   ]);
 
   await makeRetryDue(entityIds);
@@ -512,6 +526,9 @@ test("an unknown two-revision outcome does not charge either batch mate", async 
       ({ failureAttempts }) => failureAttempts,
     ),
   ).toEqual([1, 0]);
+  // The revision behind the failed request was handed back, not left to
+  // expire.
+  expect(await reservedIntents(entityIds)).toBe(0);
 });
 
 test.each([
@@ -543,7 +560,7 @@ test.each([
         workStatus: "retry_scheduled",
         failureAttempts: 0,
         lastFailureKind: "append_unknown",
-        appendMode: "batchable",
+        appendRequestCap: 512,
       },
     ]);
   },
@@ -562,6 +579,7 @@ test("an engine fault leaves later requests unattempted", async () => {
   expect(result.status).toBe("engine_unavailable");
   expect(result.requestCount).toBe(1);
   expect(result.cancelled).toBe(1);
+  expect(await reservedIntents(entityIds)).toBe(0);
   expect(
     (await projectionStates(entityIds)).map(
       ({ failureAttempts }) => failureAttempts,

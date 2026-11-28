@@ -14,6 +14,7 @@ import {
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
@@ -132,7 +133,6 @@ import type {
   LegislationWorkRef,
   NamedLegislationWork,
 } from "@/api/lib/legal-search/legislation-work-names";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";

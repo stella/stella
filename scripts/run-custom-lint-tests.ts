@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -40,9 +41,17 @@ export const customLintTestCommand = (args: readonly string[] = []) => {
   ];
 };
 
+const testFileWeight = (testPath: string): number => {
+  const resolved = path.isAbsolute(testPath)
+    ? testPath
+    : path.resolve(repoRoot, testPath);
+  return existsSync(resolved) ? statSync(resolved).size : 0;
+};
+
 export const customLintTestCommands = (
   args: readonly string[],
   testPaths: readonly string[],
+  weightOf: (testPath: string) => number = testFileWeight,
 ) => {
   const { bunArguments, patterns } = partitionRunnerArguments(
     args,
@@ -57,19 +66,40 @@ export const customLintTestCommands = (
   if (testPaths.length === 0) {
     return panic("Custom lint test discovery found no test files");
   }
-  const batches: string[][] = Array.from(
+  // Longest-processing-time-first bin-packing by file size avoids straggler
+  // skew when a few large rule test suites dominate worker wall time.
+  const weighted = testPaths
+    .map((testPath) => ({ testPath, weight: weightOf(testPath) }))
+    .toSorted((left, right) => {
+      if (right.weight !== left.weight) {
+        return right.weight - left.weight;
+      }
+      if (left.testPath < right.testPath) {
+        return -1;
+      }
+      return left.testPath > right.testPath ? 1 : 0;
+    });
+  const batches: { paths: string[]; weight: number }[] = Array.from(
     { length: CUSTOM_LINT_WORKERS },
-    () => [],
+    () => ({ paths: [], weight: 0 }),
   );
-  for (const [index, testPath] of testPaths.toSorted().entries()) {
-    const batch =
-      batches[index % CUSTOM_LINT_WORKERS] ??
-      panic("Missing custom lint worker batch");
-    batch.push(testPath);
+  for (const { testPath, weight } of weighted) {
+    let lightest = batches[0] ?? panic("Missing custom lint worker batch");
+    for (const batch of batches.slice(1)) {
+      if (
+        batch.weight < lightest.weight ||
+        (batch.weight === lightest.weight &&
+          batch.paths.length < lightest.paths.length)
+      ) {
+        lightest = batch;
+      }
+    }
+    lightest.paths.push(testPath);
+    lightest.weight += weight;
   }
   return batches
-    .filter((batch) => batch.length > 0)
-    .map((batch) => customLintTestCommand(batch));
+    .filter((batch) => batch.paths.length > 0)
+    .map((batch) => customLintTestCommand(batch.paths));
 };
 
 export const runCustomLintTestCommands = async (

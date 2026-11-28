@@ -59,7 +59,6 @@ import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-
 import updateVerificationDecisionModel from "@/api/handlers/organization-settings/verification-decision-model/update";
 import { mount, routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 import {
   listBillingKnowledgeFiles,
@@ -83,17 +82,15 @@ export const organizationSettingsRoute = mount(
       },
       {
         prefix: "/billing-drafts",
-        middleware: [
-          deploymentFeatureGate("FEATURE_TIME_BILLING"),
-          featureAccessGate("time-billing"),
-        ],
+        deployment: { type: "flag", flag: "FEATURE_TIME_BILLING" },
+        middleware: [featureAccessGate("time-billing")],
       },
     ),
     routes(
       { "/": { POST: updateVerificationDecisionModel } },
       {
         prefix: "/verification-decision-model",
-        middleware: [deploymentFeatureGate("FEATURE_LEGAL_LISTS")],
+        deployment: { type: "flag", flag: "FEATURE_LEGAL_LISTS" },
       },
     ),
     routes(
@@ -119,7 +116,7 @@ export const organizationSettingsRoute = mount(
       },
       {
         prefix: "/sso",
-        middleware: [deploymentFeatureGate("FEATURE_ENTERPRISE_SSO")],
+        deployment: { type: "flag", flag: "FEATURE_ENTERPRISE_SSO" },
       },
     ),
     routes({
@@ -193,10 +190,8 @@ export const organizationSettingsRoute = mount(
         "/members/:memberId/billing": { PUT: updateMemberBillingAccess },
       },
       {
-        middleware: [
-          deploymentFeatureGate("FEATURE_TIME_BILLING"),
-          featureAccessGate("time-billing"),
-        ],
+        deployment: { type: "flag", flag: "FEATURE_TIME_BILLING" },
+        middleware: [featureAccessGate("time-billing")],
       },
     ),
   ],

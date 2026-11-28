@@ -1,6 +1,5 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
-import { BASELINE_PATHS } from "../scripts/baseline-paths.ts";
 import { createTestDeterminismRule } from "./test-determinism-rule.ts";
 import { createTimeResolver } from "./test-time-resolver.ts";
 import {
@@ -64,7 +63,6 @@ const binaryTiming = ({
 
 const rule = createTestDeterminismRule({
   guard: RULE_NAME,
-  baselinePath: BASELINE_PATHS.testWallclockAssertion,
   message:
     "Wall-clock assertions depend on machine load. Count the work for performance assertions; use @stll/test-kit createTestClock, settledWithin, or waitFor for deterministic timing.",
   createDetector(context) {

@@ -3,6 +3,8 @@ import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
+
 import {
   caseLawDecisions,
   caseLawSources,
@@ -35,7 +37,6 @@ import {
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

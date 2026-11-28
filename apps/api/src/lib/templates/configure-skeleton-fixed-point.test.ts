@@ -9,11 +9,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { W_NS } from "@stll/docx-engine/ooxml";
+import type { FieldMeta } from "@stll/docx-engine/types";
 
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { W_NS } from "@/api/lib/docx/ooxml";
-import type { FieldMeta } from "@/api/lib/docx/types";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { partitionFieldConfiguration } from "@/api/lib/templates/configure-field-input";
 import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";

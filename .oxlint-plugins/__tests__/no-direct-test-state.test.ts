@@ -9,7 +9,7 @@ const lint = async (source: string) =>
   lintSingleRule(RULE, source, { sourcePath: "source.test.ts" });
 
 describe(RULE, () => {
-  test("a census counts mutations while normal lint also checks fixture lifecycle", async () => {
+  test("reports mutations and fixture lifecycle violations unconditionally", async () => {
     const source = [
       'import { test } from "bun:test";',
       'import { createTestState } from "@stll/test-state";',
@@ -19,12 +19,6 @@ describe(RULE, () => {
       'test.concurrent("shared state", () => {});',
     ].join("\n");
     expect(await lint(source)).toEqual([4, 5, 6]);
-    expect(
-      await lintSingleRule(RULE, source, {
-        sourcePath: "state-census.test.ts",
-        settings: { testDeterminismCensus: true },
-      }),
-    ).toEqual([4, 5]);
   });
 
   test("rejects environment assignment, delete, update and replacement", async () => {

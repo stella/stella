@@ -17,6 +17,12 @@
 import { panic } from "better-result";
 
 import type { ContactType } from "@stll/api-contract";
+import type {
+  AttorneyRef,
+  FieldSource,
+  WorkspaceContactRole,
+} from "@stll/docx-engine/binding-sources";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { resolvePath } from "@stll/template-conditions";
 
 import type {
@@ -27,13 +33,6 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
-import type { FieldMeta } from "@/api/lib/docx/types";
-
-import type {
-  AttorneyRef,
-  FieldSource,
-  WorkspaceContactRole,
-} from "./binding-sources";
 
 /** The subset of contact columns a contact/party-sourced field resolves from. */
 export type ContactSourceRecord = {

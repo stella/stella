@@ -1,10 +1,18 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+import { panic } from "better-result";
 
 import type { HttpStringInput } from "@stll/api-contract/http-input";
 
 import type { RouteCachePolicy } from "@/api/http/cache";
 import type { RequestContext } from "@/api/http/context";
 import type { BodyMode } from "@/api/http/input";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import {
+  type DeploymentFeatureException,
+  deploymentFeatureGate,
+  deploymentFeatureGateExcept,
+  localDevelopmentGate,
+} from "@/api/lib/deployment-feature-route";
 
 export const HTTP_METHODS = [
   "GET",
@@ -104,6 +112,31 @@ export type RouteDefinition = {
   readonly run: (request: RouteRequest) => Promise<unknown>;
 };
 
+/**
+ * How a route is classified for deployment gating.
+ *
+ * - `always-on`: served on every deployment (no feature flag may gate it).
+ * - `flag`: hidden behind `deploymentFeatureGate(flag)` unless enabled.
+ * - `flag-except`: hidden behind `deploymentFeatureGateExcept(flag, exception)`.
+ * - `local-dev`: hidden behind `localDevelopmentGate` outside local dev.
+ */
+export type RouteDeployment =
+  | { readonly type: "always-on"; readonly reason: string }
+  | {
+      readonly type: "flag";
+      readonly flag: DeploymentFeatureFlag;
+      /** A test seam; the gate still stands for `flag`. */
+      readonly isEnabled?: () => boolean;
+    }
+  | {
+      readonly type: "flag-except";
+      readonly flag: DeploymentFeatureFlag;
+      readonly exception: DeploymentFeatureException;
+      /** A test seam; the gate still stands for `flag`. */
+      readonly isEnabled?: () => boolean;
+    }
+  | { readonly type: "local-dev" };
+
 /** One mounted route: plain data that tooling and censuses read directly. */
 export type RouteEntry = {
   readonly method: HttpMethod;
@@ -112,6 +145,8 @@ export type RouteEntry = {
   /** Stages that run before this route only, outermost first. */
   readonly middleware: readonly Middleware[];
   readonly definition: RouteDefinition;
+  /** Deployment classification declared on `routes()` or inherited from `mount()`. */
+  readonly deployment?: RouteDeployment;
 };
 
 /** A path's routes by method, in the shape `Bun.serve` routes take. */
@@ -190,6 +225,49 @@ export type MountOptions<TPrefix extends string = string> = {
   readonly prefix?: TPrefix;
   /** Runs before every route mounted here, outermost first. */
   readonly middleware?: readonly Middleware[];
+  /**
+   * Deployment classification for every route mounted here. When `flag`,
+   * `flag-except`, or `local-dev`, prepends the matching gate middleware
+   * outermost. Child groups inside `mount()` inherit the parent's deployment
+   * unless they declare their own.
+   */
+  readonly deployment?: RouteDeployment;
+};
+
+const deploymentMiddleware = (
+  deployment: RouteDeployment | undefined,
+): readonly Middleware[] => {
+  if (deployment === undefined) {
+    return [];
+  }
+  switch (deployment.type) {
+    case "always-on":
+      return [];
+    case "flag":
+      return [
+        deploymentFeatureGate(
+          deployment.flag,
+          deployment.isEnabled === undefined
+            ? undefined
+            : { isEnabled: deployment.isEnabled },
+        ),
+      ];
+    case "flag-except":
+      return [
+        deploymentFeatureGateExcept(
+          deployment.flag,
+          deployment.exception,
+          deployment.isEnabled === undefined
+            ? undefined
+            : { isEnabled: deployment.isEnabled },
+        ),
+      ];
+    case "local-dev":
+      return [localDevelopmentGate];
+    default:
+      deployment satisfies never;
+      return panic("Unknown route deployment classification");
+  }
 };
 
 const joinPath = (prefix: string, path: string): string => {
@@ -221,14 +299,26 @@ export const routes = <
   options: MountOptions<TPrefix> = {},
 ): RouteGroup<PrefixRoutes<TTable, TPrefix>> => {
   const prefix: string = options.prefix ?? "";
-  const middleware = options.middleware ?? [];
+  const gate = deploymentMiddleware(options.deployment);
+  const baseMiddleware = options.middleware ?? [];
+  const middleware =
+    gate.length === 0 ? baseMiddleware : [...gate, ...baseMiddleware];
+  const deployment = options.deployment;
   const source: RouteTable = table;
   return Object.entries(source).flatMap(([path, methods]) =>
     HTTP_METHODS.flatMap((method) => {
       const definition = methods[method];
       return definition === undefined
         ? []
-        : [{ method, path: joinPath(prefix, path), middleware, definition }];
+        : [
+            {
+              method,
+              path: joinPath(prefix, path),
+              middleware,
+              definition,
+              ...(deployment === undefined ? {} : { deployment }),
+            },
+          ];
     }),
   );
 };
@@ -243,9 +333,19 @@ export const mount = <
 ): RouteGroup<PrefixRoutes<MergedRoutes<TGroups>, TPrefix>> => {
   const prefix: string = options.prefix ?? "";
   const middleware = options.middleware ?? [];
-  return groups.flat().map((entry) => ({
-    ...entry,
-    path: joinPath(prefix, entry.path),
-    middleware: [...middleware, ...entry.middleware],
-  }));
+  const gate = deploymentMiddleware(options.deployment);
+  const parentDeployment = options.deployment;
+  return groups.flat().map((entry) => {
+    const inheritsParentDeployment =
+      entry.deployment === undefined && parentDeployment !== undefined;
+    const deployment = entry.deployment ?? parentDeployment;
+    return {
+      ...entry,
+      path: joinPath(prefix, entry.path),
+      middleware: inheritsParentDeployment
+        ? [...gate, ...middleware, ...entry.middleware]
+        : [...middleware, ...entry.middleware],
+      ...(deployment === undefined ? {} : { deployment }),
+    };
+  });
 };

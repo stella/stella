@@ -1,6 +1,23 @@
 import { panic, Result } from "better-result";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
+import { corpusMorphologyLanguage } from "@stll/legal-morphology/corpus-language";
+import {
+  type ExpansionDictionaryIdentity,
+  foldExpansionKey,
+  isMorphologyDictionaryContentHash,
+  isSurfaceForm,
+  MORPHOLOGY_DICTIONARY_MAX_BYTES,
+  morphologyDictionaryKey,
+  morphologyDictionaryPointerKey,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
+  parseExpansionDictionaryOffLoop,
+  unpackExpansionForms,
+} from "@stll/legal-morphology/dictionary";
+import {
+  MORPHOLOGY_LANGUAGES,
+  type MorphologyLanguage,
+} from "@stll/legal-morphology/stem";
 /**
  * Morphological query expansion for the case-law corpus index.
  *
@@ -31,23 +48,6 @@ import {
   corpusFreeTextClause,
   type CorpusTermExpander,
 } from "@/api/lib/legal-search/corpus-query";
-import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
-import {
-  type ExpansionDictionaryIdentity,
-  foldExpansionKey,
-  isMorphologyDictionaryContentHash,
-  isSurfaceForm,
-  MORPHOLOGY_DICTIONARY_MAX_BYTES,
-  morphologyDictionaryKey,
-  morphologyDictionaryPointerKey,
-  NO_EXPANSION_DICTIONARY_IDENTITY,
-  parseExpansionDictionaryOffLoop,
-  unpackExpansionForms,
-} from "@/api/lib/legal-search/morphology/dictionary";
-import {
-  MORPHOLOGY_LANGUAGES,
-  type MorphologyLanguage,
-} from "@/api/lib/legal-search/morphology/stem";
 import type { QueryExpansionMode } from "@/api/lib/legal-search/query-expansion-mode";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";

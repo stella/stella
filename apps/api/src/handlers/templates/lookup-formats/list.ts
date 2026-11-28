@@ -3,6 +3,7 @@ import { and, desc, eq, isNotNull, lt, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { LOOKUP_REGISTRIES } from "@stll/docx-engine/types";
 
 import {
   LOOKUP_FORMAT_PREFERENCE,
@@ -16,7 +17,6 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
-import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createCursorPage,

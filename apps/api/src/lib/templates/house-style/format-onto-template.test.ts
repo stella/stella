@@ -5,6 +5,7 @@ import { resolveAmbiguitiesByRule } from "@/api/lib/templates/house-style/ambigu
 import { TemplateEngineError } from "@/api/lib/templates/house-style/folio-contract";
 import type {
   DocxBlockManifest,
+  SourceHeadersReport,
   TemplateEngineRefusal,
   TemplatePlan,
   TemplatePlanEngine,
@@ -33,6 +34,12 @@ type Answer =
       labelLost?: string[];
       /** The template brings a field that counts its own number. */
       countingFieldLeft?: true;
+      /** The output shows two form check boxes as text. */
+      fieldsAsText?: true;
+      /** What the output's headers kept of the source's. */
+      sourceHeaders?: SourceHeadersReport;
+      /** The output shows three links to places in the source as text. */
+      internalLinks?: true;
     };
 
 type FakeEngine = TemplatePlanEngine & { plans: TemplatePlan[] };
@@ -111,10 +118,14 @@ const fakeEngine = (
       },
       dropped: {
         comments: 2,
-        sourceFields: [],
-        internalHyperlinks: 0,
+        sourceFields:
+          "fieldsAsText" in answer ? [{ kind: "FORMCHECKBOX", count: 2 }] : [],
+        internalHyperlinks: "internalLinks" in answer ? 3 : 0,
         sectionBreaks: 1,
       },
+      ...("sourceHeaders" in answer
+        ? { sourceHeaders: answer.sourceHeaders }
+        : {}),
     };
   };
   return {
@@ -192,6 +203,68 @@ describe("formatOntoTemplate", () => {
     expect(formatted.plan.highlights).toEqual([
       expect.objectContaining({ blockId: citing, color: "magenta" }),
     ]);
+  });
+
+  test("keeps the source's headers and footers and says what they kept and what had no place", async () => {
+    const leftOut = {
+      firstPageParts: 1,
+      evenPageParts: 0,
+      sharedParts: 0,
+      unsupportedObjects: 0,
+    };
+    const kept = [
+      {
+        family: "header" as const,
+        kind: "first" as const,
+        part: "word/header2.xml",
+        paragraphs: 1,
+        created: false,
+      },
+    ];
+    const engine = fakeEngine(manifest, [{ sourceHeaders: { kept, leftOut } }]);
+    const result = await format(engine);
+    expect(engine.plans.at(0)?.sourceHeaders).toBe("keep");
+    expect(result.isOk() && result.value.note.items).toContainEqual({
+      kind: "sourceHeaders",
+      kept,
+      leftOut,
+    });
+    // Headers that held nothing give no item.
+    const quiet = fakeEngine(manifest, [
+      {
+        sourceHeaders: {
+          kept: [],
+          leftOut: { ...leftOut, firstPageParts: 0 },
+        },
+      },
+    ]);
+    const plain = (await format(quiet)).unwrap();
+    expect(plain.note.items.some(({ kind }) => kind === "sourceHeaders")).toBe(
+      false,
+    );
+  });
+
+  test("says how many links to a place in the source the output shows as text", async () => {
+    const result = await format(
+      fakeEngine(manifest, [{ internalLinks: true }]),
+    );
+    expect(result.isOk() && result.value.note.items).toContainEqual({
+      kind: "internalLinksAsText",
+      links: 3,
+    });
+    const quiet = (await format(fakeEngine(manifest, [{}]))).unwrap();
+    expect(
+      quiet.note.items.some(({ kind }) => kind === "internalLinksAsText"),
+    ).toBe(false);
+  });
+
+  test("says which fields of the source the output shows as text", async () => {
+    const engine = fakeEngine(manifest, [{ fieldsAsText: true }]);
+    const result = await format(engine);
+    expect(result.isOk() && result.value.note.items).toContainEqual({
+      kind: "fieldsAsText",
+      fields: [{ kind: "FORMCHECKBOX", count: 2 }],
+    });
   });
 
   test("takes back what the engine refuses of one block and applies again", async () => {
@@ -305,20 +378,18 @@ describe("formatOntoTemplate", () => {
       return {
         ...engine,
         analyze: async (_docx, options) => {
-          views.push(options?.trackedChanges);
-          return await Promise.resolve(
-            Result.ok(
-              options?.trackedChanges === undefined
-                ? { ...manifest, trackedChanges: 5, revisions: tracked }
-                : {
-                    ...manifest,
-                    trackedChangesResolved: {
-                      view: options.trackedChanges,
-                      ...tracked,
-                    },
-                  },
-            ),
-          );
+          const view = options?.trackedChanges;
+          views.push(view);
+          const asRead: DocxBlockManifest = {
+            ...manifest,
+            trackedChanges: 5,
+            revisions: tracked,
+          };
+          const viewed: DocxBlockManifest =
+            view === undefined || view === "keep"
+              ? asRead
+              : { ...manifest, trackedChangesResolved: { view, ...tracked } };
+          return await Promise.resolve(Result.ok(viewed));
         },
       };
     };
@@ -350,6 +421,46 @@ describe("formatOntoTemplate", () => {
     expect(rejected.note.items.at(0)).toMatchObject({
       view: "reject",
       stated: true,
+    });
+    // Asked to keep the changes, the document is read with them kept and
+    // the plan says so.
+    views.length = 0;
+    const keeping = fakeEngine(manifest, []);
+    const kept = (
+      await formatOntoTemplate({
+        engine: {
+          ...keeping,
+          analyze: async (_docx, options) => {
+            views.push(options?.trackedChanges);
+            const withKept: DocxBlockManifest = {
+              ...manifest,
+              trackedChangesKept: tracked,
+            };
+            const viewed: DocxBlockManifest = {
+              ...manifest,
+              trackedChanges: 5,
+              revisions: tracked,
+            };
+            return await Promise.resolve(
+              Result.ok(options?.trackedChanges === "keep" ? withKept : viewed),
+            );
+          },
+        },
+        source: SOURCE,
+        template: TEMPLATE,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+        trackedChanges: "keep",
+      })
+    ).unwrap();
+    // Once more with the changes rejected: the plan holds the numbers of
+    // the two views against each other.
+    expect(views).toEqual([undefined, "keep", "reject"]);
+    expect(kept.plan.trackedChanges).toBe("keep");
+    expect(kept.note.items.at(0)).toEqual({
+      kind: "trackedChangesKept",
+      notCarried: 0,
+      ...tracked,
     });
     // A document that tracks nothing is read once and its plan names no view.
     views.length = 0;

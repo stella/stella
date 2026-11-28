@@ -10,12 +10,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { W_NS } from "@stll/docx-engine/ooxml";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { extractDocxDocument } from "./extract-text";
-import { W_NS } from "./ooxml";
 
 const WRAP = (body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +

@@ -19,7 +19,6 @@ import createSection from "@/api/handlers/lists/sections/create";
 import updateList from "@/api/handlers/lists/update";
 import { createListVerificationRoutes } from "@/api/handlers/lists/verification-routes";
 import { mount, routes } from "@/api/http/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const listsRoute = mount(
   [
@@ -48,6 +47,6 @@ export const listsRoute = mount(
   ],
   {
     prefix: "/lists/:workspaceId",
-    middleware: [deploymentFeatureGate("FEATURE_LEGAL_LISTS")],
+    deployment: { type: "flag", flag: "FEATURE_LEGAL_LISTS" },
   },
 );

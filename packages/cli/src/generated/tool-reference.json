@@ -338,7 +338,7 @@
   {
     "access": "write",
     "command": ["template", "reformat"],
-    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \"house-style\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
+    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \"house-style\". A document with tracked changes needs tracked_changes (ask the user). A document that cannot be reformatted without changing its text (a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
     "name": "reformat_into_template",
     "title": "Reformat into template"
   },

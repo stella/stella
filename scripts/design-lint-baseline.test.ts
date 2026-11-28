@@ -22,13 +22,13 @@ const backlog = (
   restyle: Record<string, number>,
   arbitrary: Record<string, number> = {},
   overflow: Record<string, number> = {},
-  imported: Record<string, number> = {},
+  contextMenu: Record<string, number> = {},
 ): DesignLintBacklog => ({
   ...emptyBacklog(),
   "shadcn/no-restyle": restyle,
   "shadcn/no-arbitrary-values": arbitrary,
   "no-raw-overflow-scroll/no-raw-overflow-scroll": overflow,
-  "no-imported-class-constant/no-imported-class-constant": imported,
+  "no-raw-context-menu/no-raw-context-menu": contextMenu,
 });
 
 test("a count above its baseline regresses, a clean file goes stale, a fall improves", () => {
@@ -81,7 +81,7 @@ test("each rule is budgeted on its own", () => {
 
   expect(diffDesignBacklog(current, baseline).regressed).toEqual([
     "shadcn/no-arbitrary-values apps/web/src/a.tsx (2, baseline 1)",
-    "no-imported-class-constant/no-imported-class-constant apps/web/src/a.tsx (3, baseline 1)",
+    "no-raw-context-menu/no-raw-context-menu apps/web/src/a.tsx (3, baseline 1)",
   ]);
 });
 
@@ -101,26 +101,6 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-raw-context-menu/no-raw-context-menu",
     ],
     [
-      "no-imported-class-constant(no-imported-class-constant)",
-      "no-imported-class-constant/no-imported-class-constant",
-    ],
-    [
-      "require-bounded-request-schema(require-bounded-request-schema)",
-      "require-bounded-request-schema/require-bounded-request-schema",
-    ],
-    [
-      "no-unbounded-response-body(no-unbounded-response-body)",
-      "no-unbounded-response-body/no-unbounded-response-body",
-    ],
-    [
-      "no-computed-key-record-assignment(no-computed-key-record-assignment)",
-      "no-computed-key-record-assignment/no-computed-key-record-assignment",
-    ],
-    [
-      "exhaustive-union-map(exhaustive-union-map)",
-      "exhaustive-union-map/exhaustive-union-map",
-    ],
-    [
       "no-direct-status-set(no-direct-status-set)",
       "no-direct-status-set/no-direct-status-set",
     ],
@@ -128,51 +108,21 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "require-polite-publisher-fetch(require-polite-publisher-fetch)",
       "require-polite-publisher-fetch/require-polite-publisher-fetch",
     ],
-    ["no-native-ui(no-native-accordion)", "no-native-ui/no-native-accordion"],
     ["no-native-ui(no-native-button)", "no-native-ui/no-native-button"],
-    ["no-native-ui(no-native-checkbox)", "no-native-ui/no-native-checkbox"],
-    [
-      "no-native-ui(no-native-details-grid)",
-      "no-native-ui/no-native-details-grid",
-    ],
     ["no-native-ui(no-native-dialog)", "no-native-ui/no-native-dialog"],
-    ["no-native-ui(no-native-form)", "no-native-ui/no-native-form"],
-    ["no-native-ui(no-native-input)", "no-native-ui/no-native-input"],
-    ["no-native-ui(no-native-label)", "no-native-ui/no-native-label"],
-    ["no-native-ui(no-native-menu)", "no-native-ui/no-native-menu"],
-    [
-      "no-native-ui(no-native-number-input)",
-      "no-native-ui/no-native-number-input",
-    ],
-    [
-      "no-native-ui(no-native-secret-input)",
-      "no-native-ui/no-native-secret-input",
-    ],
     ["no-native-ui(no-native-select)", "no-native-ui/no-native-select"],
-    ["no-native-ui(no-native-separator)", "no-native-ui/no-native-separator"],
     ["no-native-ui(no-native-table)", "no-native-ui/no-native-table"],
-    ["no-native-ui(no-native-textarea)", "no-native-ui/no-native-textarea"],
-    ["no-native-ui(no-native-tooltip)", "no-native-ui/no-native-tooltip"],
     ["eslint(complexity)", "eslint/complexity"],
     ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
-    ["eslint(max-params)", "eslint/max-params"],
-    ["react(no-children-prop)", "react/no-children-prop"],
-    ["eslint(no-unexpected-multiline)", "eslint/no-unexpected-multiline"],
   ]);
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
     "no-raw-overflow-scroll",
     "no-raw-context-menu",
-    "no-imported-class-constant",
-    "require-bounded-request-schema",
-    "no-unbounded-response-body",
-    "no-computed-key-record-assignment",
-    "exhaustive-union-map",
     "no-direct-status-set",
     "require-polite-publisher-fetch",
     "no-native-ui",
     "eslint",
-    "react",
   ]);
   expect(DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.size).toBe(
     DESIGN_LINT_BACKLOG_RULES.length,
@@ -186,7 +136,7 @@ test("a backlog file drops a size limit to its ceiling, other rules to off", () 
   const overrides = designLintBacklogOverrides({
     ...backlog({ "apps/web/src/a.tsx": 1 }),
     "eslint/complexity": { "apps/api/src/b.ts": 1 },
-    "eslint/max-params": { "apps/api/src/b.ts": 2 },
+    "eslint/max-lines-per-function": { "apps/api/src/b.ts": 2 },
   });
 
   expect(overrides).toEqual([
@@ -195,7 +145,10 @@ test("a backlog file drops a size limit to its ceiling, other rules to off", () 
       files: ["apps/api/src/b.ts"],
       rules: { "eslint/complexity": ["error", 50] },
     },
-    { files: ["apps/api/src/b.ts"], rules: { "eslint/max-params": "off" } },
+    {
+      files: ["apps/api/src/b.ts"],
+      rules: { "eslint/max-lines-per-function": "off" },
+    },
   ]);
 });
 
@@ -208,7 +161,7 @@ const DIAGNOSTICS = [
   { code: "shadcn(no-restyle)", filename: "apps/web/src/chat.tsx" },
   { code: "shadcn(no-restyle)", filename: "apps/web/src/hooks.tsx" },
   { code: "shadcn(no-restyle)", filename: "apps/web/src/hooks.tsx" },
-  { code: "eslint(max-params)", filename: "apps/api/src/b.ts" },
+  { code: "eslint(max-lines-per-function)", filename: "apps/api/src/b.ts" },
   { code: "unicorn(no-null)", filename: "apps/api/src/b.ts" },
 ];
 
@@ -254,7 +207,7 @@ test("the serialized baseline is byte-identical in any report order", () => {
       "apps/web/src/hooks.tsx": 2,
       "apps/web/src/z.tsx": 1,
     },
-    "eslint/max-params": { "apps/api/src/b.ts": 1 },
+    "eslint/max-lines-per-function": { "apps/api/src/b.ts": 1 },
   });
   expect(Object.keys(parsed)).toEqual([...DESIGN_LINT_BACKLOG_RULES]);
   expect(Object.keys(parsed["shadcn/no-restyle"])).toEqual([

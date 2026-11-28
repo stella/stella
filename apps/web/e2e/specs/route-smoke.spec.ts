@@ -6,7 +6,6 @@ import type {
   Request,
 } from "@playwright/test";
 import { expect, request as apiRequestFactory } from "@playwright/test";
-import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -62,14 +61,9 @@ import {
 } from "../helpers/render-census-hook";
 import {
   measureSmokeWorlds,
-  parseRouteScaleLedger,
   routeScaleCensus,
   type RouteScaleMeasurement,
 } from "../helpers/route-scale";
-import {
-  addedLedgerEntries,
-  routeScaleLedgerMembership,
-} from "../helpers/route-scale-ledger";
 import { resolveRouteSmokeGroupCount } from "../helpers/route-smoke-groups";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
@@ -97,16 +91,12 @@ import {
   deleteTestWorkspace,
   type TestWorkspace,
 } from "../helpers/workspace";
-import scaleLedger from "../route-scale-ledger.json" with { type: "json" };
 
 // Every route retains the former one-second observation floor so delayed
 // warmups remain visible. After that floor, tracked API activity may finish
 // the longer document-route windows early once it stays quiet.
 const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
-const GIT_REF_OUTPUT_MAX_BYTES = 64 * 1024;
-const ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES = 256 * 1024;
-const SCALE_LEDGER = parseRouteScaleLedger(JSON.stringify(scaleLedger));
 // The small/large matter comparison walks every route three times, so it runs
 // in the nightly route-scale workflow; pull requests walk the baseline only.
 const ROUTE_SCALE = process.env["E2E_ROUTE_SCALE"] === "1";
@@ -118,43 +108,6 @@ const ROUTE_SCALE = process.env["E2E_ROUTE_SCALE"] === "1";
 // lifecycle; both need the authenticated storage state wired in explicitly.
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 
-const routeScaleLedgerAdditions = (): string[] => {
-  const baseRef = "origin/main";
-  const resolved = spawnSync(
-    "git",
-    [
-      "rev-parse",
-      "--verify",
-      "--quiet",
-      "--end-of-options",
-      `${baseRef}^{commit}`,
-    ],
-    { cwd: REPO_ROOT, encoding: "utf-8", maxBuffer: GIT_REF_OUTPUT_MAX_BYTES },
-  );
-  if (resolved.status !== 0) {
-    return [`base ${baseRef} could not be resolved`];
-  }
-  const commit = resolved.stdout.trim();
-  const ledgerPath = "apps/web/e2e/route-scale-ledger.json";
-  const base = spawnSync("git", ["show", `${commit}:${ledgerPath}`], {
-    cwd: REPO_ROOT,
-    encoding: "utf-8",
-    maxBuffer: ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES,
-  });
-  if (base.status !== 0) {
-    if (/exists on disk, but not in|does not exist in/u.test(base.stderr)) {
-      return addedLedgerEntries(
-        routeScaleLedgerMembership(JSON.stringify(scaleLedger)),
-        null,
-      );
-    }
-    return [`git show ${commit}:${ledgerPath} failed: ${base.stderr}`];
-  }
-  return addedLedgerEntries(
-    routeScaleLedgerMembership(JSON.stringify(scaleLedger)),
-    routeScaleLedgerMembership(base.stdout),
-  );
-};
 const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
 
 const ROUTE_TREE_PATH = path.resolve(
@@ -646,7 +599,7 @@ const declareRouteSmokeGroup = ({
           routes: defs.map(networkBaselineKey),
           small: measurements(smallScaleResults, smallRenderResults),
           large: measurements(scaleResults, largeRenderResults),
-          ledger: SCALE_LEDGER,
+          ledger: [],
         });
         expect(problems).toEqual([]);
       });
@@ -839,15 +792,6 @@ const declareRemainingStandaloneTests = () => {
 
   test("route coverage matches the authenticated route tree", async () => {
     await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
-    expect(
-      routeScaleLedgerAdditions(),
-      "route scale allowances only shrink",
-    ).toEqual([]);
-    const routeKeys = new Set(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
-    expect(
-      SCALE_LEDGER.filter(({ route }) => !routeKeys.has(route)),
-      "scale allowances reference smoke routes",
-    ).toEqual([]);
     // A write run may be adding the missing route entry; check the committed
     // baseline only in comparison mode.
     if (baselineMode !== "write" && baselineMode !== "rewrite") {

@@ -6,6 +6,8 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { corpusMorphologyLanguage } from "@stll/legal-morphology/corpus-language";
+import { functionWordsFor } from "@stll/legal-morphology/function-words";
 
 import {
   CASE_LAW_SEARCH_REFINE_SYSTEM,
@@ -28,8 +30,6 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
-import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
 import {
   readPublicLawCountry,
   tPublicLawCountry,

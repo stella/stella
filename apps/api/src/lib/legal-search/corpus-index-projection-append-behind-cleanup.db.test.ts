@@ -60,6 +60,7 @@ import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus
 import { corpusIndexProjectionAppendGateIsClear } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import {
   abandonCorpusProjectionAppendTx,
+  CORPUS_PROJECTION_LEASE_MAX_MS,
   type CorpusProjectionIntentLease,
   proveAcceptedCorpusProjectionAppendsTx,
   recordAcceptedCorpusProjectionAppendsTx,
@@ -263,7 +264,7 @@ const reserve = async (
         generation,
         scope: subject(n),
         limit: 8,
-        leaseMs: 60_000,
+        leaseMs: CORPUS_PROJECTION_LEASE_MAX_MS,
         ...(testNow === undefined ? {} : { testNow }),
         newIntentId: () => id,
       }),

@@ -1,3 +1,4 @@
+// parser-output-unchanged: routes unknown-code diagnostic logging through the injectable sink; court resolution output is identical.
 /**
  * Czech ECLI court codes, and the court a Czech decision is stored under.
  *
@@ -25,7 +26,8 @@ import {
   CZ_ECLI_COURTS,
   type CzEcliCourtCode,
 } from "@/api/lib/case-law/ecli-court-codes";
-import { logger } from "@/api/lib/observability/logger";
+
+import { getIngestionDiagnosticsSink } from "./ingestion-diagnostics-sink";
 
 /**
  * The court segment of a Czech ECLI. Bounded so a malformed identifier is a
@@ -106,11 +108,14 @@ export const czDecisionCourt = ({
     case "named":
       return fromEcli.court;
     case "unknown-code":
-      logger.error("case_law.ingestion.cz_ecli_court_code_unknown", {
-        adapterKey,
-        code: fromEcli.code,
-        sourceDocumentId: sourceDocumentId ?? "",
-      });
+      getIngestionDiagnosticsSink().error(
+        "case_law.ingestion.cz_ecli_court_code_unknown",
+        {
+          adapterKey,
+          code: fromEcli.code,
+          sourceDocumentId: sourceDocumentId ?? "",
+        },
+      );
       return statedCourt ?? fromEcli.code;
     case "unstated":
       return statedCourt ?? publisherCourt;
