@@ -1,6 +1,5 @@
 import { useId, useRef, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -37,6 +36,7 @@ import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 
 const FORMAT_DEBOUNCE_MS = 400;
 
@@ -105,8 +105,9 @@ const CompanySpecificationEditor = ({
   });
   const { format } = library;
   const [debouncedFormat] = useDebounce(format, FORMAT_DEBOUNCE_MS);
-  const { data, error, isPending } = useQuery({
+  const { data, error, isPending } = useResourceQuery({
     enabled: library.saved.isSuccess && format === debouncedFormat,
+    resourceReads: { type: "independent" },
     queryKey: companySpecificationQueryKey({
       activeOrganizationId,
       registry,

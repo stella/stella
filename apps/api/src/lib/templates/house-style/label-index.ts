@@ -110,6 +110,79 @@ const ANNEX_LIST_INTRO =
 const CONTENTS_CAPTION =
   /^(?:obsah|contents?|table of contents?|inhalt|inhaltsverzeichnis)[ \u00A0]*:?$/iu;
 
+/** The longest caption of a group of lines inside a table of contents. */
+const CONTENTS_GROUP_MAX = 40;
+
+/** The column heads over the lines of a table of contents: `Clause⇥Page`. */
+const CONTENTS_COLUMNS =
+  /^[\p{L} .]{1,24}\t+(?:page|pages|strana|str\.|seite|s\.)[ \u00A0]*$/iu;
+
+/** Of the lines with text in front of a table of contents, the caption and
+ *  the column heads that head it, nearest first. */
+const contentsHeadsOf = (lines: readonly DocxBlock[]): DocxBlock[] => {
+  const heads: DocxBlock[] = [];
+  for (const line of lines.toReversed()) {
+    const text = line.text.trim();
+    const columns = CONTENTS_COLUMNS.test(text);
+    if (columns || CONTENTS_CAPTION.test(text)) {
+      heads.push(line);
+    }
+    if (!columns) {
+      break;
+    }
+  }
+  return heads;
+};
+
+/**
+ * The caption of a group of lines inside a table of contents: the one short
+ * line between two runs of its lines (`Schedule` over the schedules), which
+ * is neither a heading nor the caption of contents of its own.
+ */
+const groupCaptionOf = (lines: readonly DocxBlock[]): DocxBlock | null => {
+  const [line] = lines;
+  return lines.length === 1 &&
+    line !== undefined &&
+    !isHeadingStyled(line) &&
+    line.pageBreakBefore === undefined &&
+    line.text.trim().length <= CONTENTS_GROUP_MAX &&
+    !CONTENTS_CAPTION.test(line.text.trim())
+    ? line
+    : null;
+};
+
+/**
+ * The lines of the source's tables of contents, with the caption and the
+ * column heads over each (alone they head nothing) and a short caption
+ * between two runs of its lines (`Schedule` over the schedules).
+ */
+const contentsBlockIdsOf = (blocks: readonly DocxBlock[]): Set<string> => {
+  const ids = new Set<string>();
+  /** The last paragraphs with text in front of the block, while they may be
+   *  the caption and the column heads of the contents that follow. */
+  let captions: DocxBlock[] = [];
+  /** Whether the lines in `captions` follow a line of contents. */
+  let inContents = false;
+  for (const block of blocks) {
+    if (block.kind === "paragraph" && isContentsBlock(block)) {
+      ids.add(block.id);
+      const group = inContents ? groupCaptionOf(captions) : null;
+      for (const line of group === null ? contentsHeadsOf(captions) : [group]) {
+        ids.add(line.id);
+      }
+      captions = [];
+      inContents = true;
+    } else if (block.kind !== "paragraph") {
+      captions = [];
+      inContents = false;
+    } else if (block.text.trim() !== "") {
+      inContents &&= captions.length === 0;
+      captions = [...captions.slice(-2), block];
+    }
+  }
+  return ids;
+};
+
 /** Whether the block is a line of the source's table of contents. */
 const isContentsBlock = ({
   styleName,
@@ -1401,24 +1474,9 @@ export const buildLabelIndex = ({
 
   const entries: LabelEntry[] = [];
   const contextByBlockId = new Map<string, BlockContext>();
-  const contentsBlockIds = new Set<string>();
-  /** The last paragraph with text in front of the row, while it may be the
-   *  caption of the contents that follow. */
-  let caption: DocxBlock | null = null;
+  const contentsBlockIds = contentsBlockIdsOf(rows.map(({ block }) => block));
   for (const row of rows) {
     const { block } = row;
-    if (block.kind === "paragraph" && isContentsBlock(block)) {
-      contentsBlockIds.add(block.id);
-      // The caption goes with the lines it heads: alone it heads nothing.
-      if (caption !== null && CONTENTS_CAPTION.test(caption.text.trim())) {
-        contentsBlockIds.add(caption.id);
-      }
-      caption = null;
-    } else if (block.kind !== "paragraph") {
-      caption = null;
-    } else if (block.text.trim() !== "") {
-      caption = block;
-    }
     const walk = walkOf(block);
     const entry = isLabelled(row) ? classify(walk, row) : null;
     if (entry !== null) {

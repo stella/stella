@@ -128,12 +128,8 @@ export class ProviderCallError extends HandlerError {
     providerDiagnostic,
     retryAfterMs,
   }: ProviderCallErrorOptions) {
-    super({
-      message: PROVIDER_CALL_ERROR_MESSAGE,
-      status,
-      code: code ?? PROVIDER_ERROR_CODE,
-      ...(retryAfterMs === undefined ? {} : { retryable: true, retryAfterMs }),
-      ...(facts === undefined
+    const causeProp =
+      facts === undefined
         ? {}
         : {
             cause: {
@@ -142,8 +138,24 @@ export class ProviderCallError extends HandlerError {
                 ? {}
                 : { isRetryable: facts.isRetryable }),
             },
-          }),
-    });
+          };
+    super(
+      retryAfterMs === undefined
+        ? {
+            message: PROVIDER_CALL_ERROR_MESSAGE,
+            status,
+            code: code ?? PROVIDER_ERROR_CODE,
+            ...causeProp,
+          }
+        : {
+            message: PROVIDER_CALL_ERROR_MESSAGE,
+            status,
+            code: code ?? PROVIDER_ERROR_CODE,
+            retryable: true,
+            retryAfterMs,
+            ...causeProp,
+          },
+    );
     if (providerDiagnostic !== undefined) {
       diagnostics.set(this, providerDiagnostic);
     }

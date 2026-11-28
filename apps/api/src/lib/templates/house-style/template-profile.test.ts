@@ -392,6 +392,8 @@ describe("inferTemplateProfile", () => {
       bodySection: 0,
       lastSection: 1,
     });
+    // The output is built from the body's section.
+    expect(profile.bodySection).toBe(0);
     expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
       profile,
     );
@@ -400,6 +402,7 @@ describe("inferTemplateProfile", () => {
         ({ kind }) => kind === "lastSectionNotBody",
       ),
     ).toBe(false);
+    expect(inferTemplateProfile(template).bodySection).toBeUndefined();
   });
 
   test("fields that prompt or change on open are frozen, the rest stay live", () => {

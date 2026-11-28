@@ -34,6 +34,10 @@ const RESOURCE_MUTATION_HOOK = {
   file: "apps/web/src/lib/workspace-realtime.ts",
   name: "useResourceMutation",
 } as const;
+const RESOURCE_QUERY_HOOK = {
+  file: "apps/web/src/lib/workspace-realtime.ts",
+  name: "useResourceQuery",
+} as const;
 /** Route helpers that take the query client first and the query options
  *  second (`apps/web/src/lib/react-query.ts`). The census and the
  *  invalidation check both read options from this one list. */
@@ -1318,6 +1322,12 @@ class CensusAnalyzer {
         imported.imported === RESOURCE_MUTATION_HOOK.name)
     ) {
       return "useMutation";
+    }
+    if (
+      module.file === RESOURCE_QUERY_HOOK.file &&
+      imported.imported === RESOURCE_QUERY_HOOK.name
+    ) {
+      return "useQuery";
     }
     seen.add(`${module.file}:${imported.imported}`);
     const reexport = module.reexports.get(imported.imported);

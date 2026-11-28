@@ -1,12 +1,12 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { IMPORT_SOURCE_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   recordPublisherFieldCoverage,
   retainedPublisherParts,
 } from "@stll/case-law-ingestion-core/publisher-field-coverage";
-
-import { logger } from "@/api/lib/observability/logger";
 
 import {
   COURTLISTENER_SOURCE_FIELD_INVENTORY,
@@ -40,7 +40,7 @@ export const courtListenerImport = {
         inventory: COURTLISTENER_SOURCE_FIELD_INVENTORY,
         observedFields:
           COURTLISTENER_SOURCE_FIELD_INVENTORY.listSourceFields(parts),
-        report: logger.error,
+        report: getIngestionDiagnosticsSink().error,
       });
     }),
   reparseStoredRaw,

@@ -892,6 +892,19 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("the plan names the template section its body stands in, where the template gives one", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    expect(build(manifest).plan.bodySection).toBeUndefined();
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...PROFILE, bodySection: 0 },
+    });
+    expect(plan.bodySection).toBe(0);
+  });
+
   test("a bullet takes a level outside the outline list where the template has one", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -4604,5 +4617,25 @@ describe("buildTemplatePlan, clauses deeper than the template's levels", () => {
     }
     expect(note.counts.labelsConvertedToText).toBe(0);
     expect(labelsNotKept).toEqual([]);
+  });
+});
+
+describe("buildTemplatePlan, a paragraph that cites itself", () => {
+  test("cites its own number through a field that shows the number", () => {
+    const citing = "Nothing in this Clause 4.2 limits liability.";
+    const manifest = englishAgreement(citing);
+    const own = blockIdOf(manifest, citing);
+    const { plan } = build(manifest);
+    expect(
+      (plan.references ?? []).filter(
+        ({ blockId, targetBlockId }) =>
+          blockId === own && targetBlockId === own,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        instruction: String.raw`\n \h`,
+        expectedText: "4.2",
+      }),
+    ]);
   });
 });

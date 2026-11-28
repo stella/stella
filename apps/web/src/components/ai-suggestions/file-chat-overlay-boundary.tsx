@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -14,6 +13,7 @@ import {
   isStaleDeploymentLoadError,
 } from "@/lib/preload-error-recovery";
 import { queryView } from "@/lib/query-view.logic";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 
 type FileChatOverlayErrorFallbackProps = {
   error: Error;
@@ -38,13 +38,14 @@ export const FileChatOverlayErrorFallback = ({
   // it is on screen and is dropped when it unmounts, so the next failure is
   // classified anew instead of reusing an earlier answer (the query cache
   // hashes Error objects as {}, so the error cannot tell failures apart).
-  const classification = useQuery({
+  const classification = useResourceQuery({
     queryKey: ["failed-document-chat-chunk"],
     queryFn: classifyFailedChunkLoad,
     enabled: chunkShapedError,
     gcTime: 0,
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
+    resourceReads: { type: "independent" },
   });
   const classificationView = queryView(classification);
   const confirmedBuildSkew =

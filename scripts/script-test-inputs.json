@@ -493,6 +493,10 @@
       "scripts/upload-release-assets.sh"
     ],
     "scripts/validate-main-heavy-sha.test.ts": ["**"],
+    "scripts/verify-fast.test.ts": [
+      "scripts/verify-fast.ts",
+      "scripts/verify-error.ts"
+    ],
     "scripts/verify-release-candidate-tree.test.ts": ["**"],
     "scripts/verify-release-tree-proof.test.ts": ["**"],
     "scripts/verify-step.test.sh": ["**"],

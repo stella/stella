@@ -342,14 +342,14 @@ const updateProperty = createSafeHandler(
 
         if (isFileProperty(oldProperty.content) !== isFileProperty(content)) {
           return {
-            ok: false as const,
-            status: 422 as const,
+            ok: false,
+            status: 422,
             code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
             retryable: false,
             message:
               "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
             hint: "Keep the existing content.type in properties.update, or use properties.create to add a custom property with another type.",
-          };
+          } as const;
         }
 
         if (isFileProperty(content) && tool.type !== "manual-input") {

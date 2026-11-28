@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
@@ -60,6 +61,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -114,7 +116,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 const KEY = ADAPTER_KEYS.BR_TJDFT;
@@ -1018,7 +1019,7 @@ const restartWindow = (
   if (position.restarts < MAX_WINDOW_RESTARTS) {
     return windowStart(position.day, position.base, position.restarts + 1);
   }
-  logger.warn("case_law.ingestion.window_unstable", {
+  getIngestionDiagnosticsSink().warn("case_law.ingestion.window_unstable", {
     adapterKey: KEY,
     day: position.day,
     base: position.base,
@@ -1117,7 +1118,7 @@ const crawlPage = async (
   } else {
     // The secret records are counted here, against the window's own total,
     // because no row records that they were seen and left.
-    logger.info("case_law.ingestion.window_collected", {
+    getIngestionDiagnosticsSink().info("case_law.ingestion.window_collected", {
       adapterKey: KEY,
       day: position.day,
       base: position.base,

@@ -50,27 +50,6 @@
   "statusConnected": {
     "message": "Connected"
   },
-  "statusNotConnected": {
-    "message": "Not connected"
-  },
-  "statusWebsiteAccessNeeded": {
-    "message": "Website access needed"
-  },
-  "statusOpenStella": {
-    "message": "Open stella to connect"
-  },
-  "allowAndConnect": {
-    "message": "Allow website access and connect"
-  },
-  "allowWebsiteAccess": {
-    "message": "Allow website access"
-  },
-  "connectStella": {
-    "message": "Connect stella"
-  },
-  "openStella": {
-    "message": "Open stella"
-  },
   "adoptTab": {
     "message": "Use this tab with stella"
   },
@@ -80,28 +59,25 @@
   "revokeAccess": {
     "message": "Remove access"
   },
-  "checkingAccess": {
-    "message": "Checking connection…"
-  },
-  "statusConnectedElsewhere": {
-    "message": "Connected elsewhere"
-  },
-  "connectStellaInstead": {
-    "message": "Connect stella here instead"
-  },
-  "allowDesktop": {
-    "message": "Use with stella desktop"
-  },
-  "desktopConnected": {
-    "message": "stella desktop connected"
-  },
-  "desktopNotRunning": {
-    "message": "stella desktop is not running"
-  },
   "desktopUpdateNeeded": {
     "message": "Update stella desktop and this extension"
   },
-  "desktopConnecting": {
-    "message": "Connecting to stella desktop…"
+  "lineWebsite": {
+    "message": "stella website"
+  },
+  "lineDesktop": {
+    "message": "stella desktop app"
+  },
+  "lineConnect": {
+    "message": "Connect"
+  },
+  "lineConnecting": {
+    "message": "Connecting…"
+  },
+  "lineOpenApp": {
+    "message": "Open the app"
+  },
+  "lineUpdateApp": {
+    "message": "Update the app"
   }
 }

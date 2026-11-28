@@ -24,7 +24,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { gotenbergConvertTarget } from "@/api/lib/files/converter-settings";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { getCorpusS3, getS3 } from "@/api/lib/s3";
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 

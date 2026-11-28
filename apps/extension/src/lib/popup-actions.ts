@@ -1,52 +1,40 @@
 import { panic } from "better-result";
 
-import type { PopupAction, PopupSecondaryAction } from "./popup-view";
+import type { PopupAction } from "./popup-view";
 
 /** The tab fields the popup reads: its id to address it and its url to classify it. */
 export type PopupTab = Pick<chrome.tabs.Tab, "id" | "url">;
 
 type PopupActionDependencies = {
-  renderedTab: PopupTab | null;
   requestAccess: () => Promise<boolean>;
   readActiveTab: () => Promise<PopupTab | null>;
-  pair: (tab: PopupTab | null) => Promise<void>;
+  /** Connects the stella tab with this id, or else opens or finds one. */
+  connectWebsite: (tabId: number | null) => Promise<void>;
   adopt: (tab: PopupTab | null) => Promise<void>;
-  openStella: () => Promise<void>;
   disconnect: () => Promise<void>;
   revoke: () => Promise<void>;
   render: () => Promise<void>;
 };
 
-/** Grant actions must call requestAccess first, synchronously within the click's user gesture. */
+/**
+ * Runs one popup click. Connecting asks for website access first,
+ * synchronously within the click's user gesture, as Chrome requires.
+ */
 export const runPopupAction = async (
-  action: PopupAction["action"] | PopupSecondaryAction["action"],
+  action: PopupAction,
   deps: PopupActionDependencies,
 ): Promise<void> => {
-  switch (action) {
-    case "grant":
-    case "grant-and-connect": {
-      const granted = await deps.requestAccess();
-      if (!granted) {
+  switch (action.action) {
+    case "connect-website": {
+      if (action.askAccess && !(await deps.requestAccess())) {
         await deps.render();
         return;
       }
-      if (action === "grant-and-connect") {
-        await deps.pair(deps.renderedTab);
-      } else {
-        await deps.render();
-      }
+      await deps.connectWebsite(action.tabId);
       return;
     }
-    case "connect":
-      await deps.pair(await deps.readActiveTab());
-      return;
     case "adopt":
       await deps.adopt(await deps.readActiveTab());
-      return;
-    // The popup then shows what the tab now in front offers, such as connect.
-    case "open-stella":
-      await deps.openStella();
-      await deps.render();
       return;
     case "disconnect":
       await deps.disconnect();

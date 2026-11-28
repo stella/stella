@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
@@ -77,6 +78,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   defineSourceAdapter,
   encodeSourceRawEnvelope,
@@ -160,7 +162,6 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { logger } from "@/api/lib/observability/logger";
 
 const KEY = ADAPTER_KEYS.CZ_ISIR;
 const ORIGIN = "https://isir.justice.cz:8443";
@@ -840,10 +841,13 @@ const crawlPage = async ({
         // A listed decision the reader cannot address: counted, never
         // taken for an update without a document.
         failed += 1;
-        logger.warn("case_law.ingestion.cz_isir_document_reference_malformed", {
-          adapterKey: KEY,
-          actionId: action.id,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.cz_isir_document_reference_malformed",
+          {
+            adapterKey: KEY,
+            actionId: action.id,
+          },
+        );
       }
       continue;
     }
@@ -876,12 +880,15 @@ const crawlPage = async ({
       failed += 1;
       decisions.push(czIsirListingOnlyDecision(action, selected.documentId));
     }
-    logger.info("case_law.ingestion.cz_isir_decision_unbuilt", {
-      adapterKey: KEY,
-      sourceDocumentId: selected.documentId,
-      reason: read.value.reason,
-      detail: read.value.detail ?? "",
-    });
+    getIngestionDiagnosticsSink().info(
+      "case_law.ingestion.cz_isir_decision_unbuilt",
+      {
+        adapterKey: KEY,
+        sourceDocumentId: selected.documentId,
+        reason: read.value.reason,
+        detail: read.value.detail ?? "",
+      },
+    );
   }
   const lastId = page.value.lastId;
   return Result.ok({

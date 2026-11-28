@@ -49,6 +49,7 @@ import {
   SameBytesFiledError,
 } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerErrorCode } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
   scanUpload,
@@ -104,7 +105,7 @@ const isPdf = (bytes: Uint8Array): boolean =>
 
 const refused = (
   status: 409 | 413 | 422,
-  code: string,
+  code: HandlerErrorCode,
   message: string,
 ): HandlerError => new HandlerError({ status, code, message });
 

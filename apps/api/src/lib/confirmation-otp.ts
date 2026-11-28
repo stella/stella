@@ -10,6 +10,7 @@ import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { lockAccountRowByEmail } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerErrorCode } from "@/api/lib/errors/tagged-errors";
 import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 /**
@@ -103,8 +104,8 @@ export const createConfirmationOtp = async ({
  * module.
  */
 type ConfirmationOtpErrorCodes = {
-  invalid: string;
-  expired: string;
+  invalid: HandlerErrorCode;
+  expired: HandlerErrorCode;
 };
 
 type VerifyConfirmationOtpParams = {

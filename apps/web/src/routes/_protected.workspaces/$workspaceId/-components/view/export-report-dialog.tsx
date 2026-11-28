@@ -1,10 +1,11 @@
 import { useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -44,6 +45,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 import {
   reportExportsKeys,
   reportTemplatesKeys,
@@ -269,8 +271,12 @@ const ExportReportDialogBody = ({
   const submitting = submission.type === "submitting";
   const [customizing, setCustomizing] = useState(false);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useResourceQuery({
     queryKey: reportTemplatesKeys.all(workspaceId),
+    resourceReads: {
+      resources: [RESOURCE_TYPE.REPORT_EXPORT, RESOURCE_TYPE.WORKSPACE],
+      scope: { type: "workspace", workspaceId },
+    },
     queryFn: async ({ signal }) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })

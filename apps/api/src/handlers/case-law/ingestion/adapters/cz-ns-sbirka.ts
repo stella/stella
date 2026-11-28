@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -65,6 +66,7 @@ import {
   CZ_NS_SBIRKA_VAZNY_SLICE,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -141,7 +143,6 @@ import {
   type CzNsCollectionEntry,
   czNsCollectionPartOfKind,
 } from "@/api/lib/legal-search/cz-ns-collection-entry";
-import { logger } from "@/api/lib/observability/logger";
 import { LANGUAGE_STOPWORDS } from "@/api/lib/templates/template-languages";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1078,11 +1079,14 @@ const crawlPage = async (
         break;
       case "unkeyable":
         failed += 1;
-        logger.warn("case_law.ingestion.cz_ns_sbirka_entry_unbuilt", {
-          adapterKey: KEY,
-          sourceDocumentId: entry.postId,
-          outcome: read.value.type,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.cz_ns_sbirka_entry_unbuilt",
+          {
+            adapterKey: KEY,
+            sourceDocumentId: entry.postId,
+            outcome: read.value.type,
+          },
+        );
         break;
       case "unread":
         // A withdrawn entry (listed, then 404 or 410) has nothing to store,
@@ -1090,11 +1094,14 @@ const crawlPage = async (
         // one page is counted; the reconciliation's walk meets it again.
         if (read.value.read.type === "refused") {
           failed += 1;
-          logger.warn("case_law.ingestion.cz_ns_sbirka_entry_unbuilt", {
-            adapterKey: KEY,
-            sourceDocumentId: entry.postId,
-            outcome: read.value.read.type,
-          });
+          getIngestionDiagnosticsSink().warn(
+            "case_law.ingestion.cz_ns_sbirka_entry_unbuilt",
+            {
+              adapterKey: KEY,
+              sourceDocumentId: entry.postId,
+              outcome: read.value.read.type,
+            },
+          );
         }
         break;
       default:

@@ -2,7 +2,6 @@ import { createElement, lazy, Suspense, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import type { AppRendererProps } from "@mcp-ui/client";
-import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -55,6 +54,7 @@ import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import { getUserFileContentUrl } from "@/lib/user-files";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 
 export type RichChatPart = Extract<
   ChatPart,
@@ -459,8 +459,9 @@ const StellaAppFrame = ({
   const frameTitle = t("chat.richContentTitle");
   const sandboxUrl = withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle);
   const directory = stellaAppDirectory(part.resource.uri) ?? "";
-  const bundle = useQuery({
+  const bundle = useResourceQuery({
     queryKey: ["stella-mcp-app-bundle", directory],
+    resourceReads: { type: "independent" },
     queryFn: async ({ signal }) =>
       v.parse(
         stellaMcpAppBundleSchema,

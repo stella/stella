@@ -45,7 +45,10 @@ type ReferenceEvidence =
   | "withinAnnex"
   /** `č.` stands where `čl.` would: possibly a slip, possibly a number of
    *  something else. Never linked without the model's decision. */
-  | "looseHead";
+  | "looseHead"
+  /** The source holds the citation as a field of its own that points at a
+   *  provision of the document. */
+  | "sourceField";
 
 type ReferenceResolution =
   | { status: "resolved"; targetBlockId: string; confidence: number }
@@ -116,6 +119,8 @@ const CONFIDENCE = {
   namedDocument: 0.8,
   ownNoun: 0.85,
   ownNumbering: 0.85,
+  /** The source's own field points at the provision. */
+  sourceField: 0.98,
   unknown: 0.5,
 } as const;
 
@@ -685,8 +690,229 @@ export const detectReferences = (
       return reference === null ? [] : [reference];
     });
   });
+  const settled = [
+    ...references.map((reference) =>
+      settledBySourceFields(reference, manifest.blocks, index),
+    ),
+    ...fieldsReadAsNone(manifest.blocks, references, index),
+  ].toSorted(byPlaceIn(manifest.blocks));
   return {
-    references,
-    ambiguities: collectAmbiguities(references),
+    references: settled,
+    ambiguities: collectAmbiguities(settled),
+  };
+};
+
+/**
+ * The source's own fields to a numbered provision that no chain was read
+ * over: a bare number of a list the drafter linked (`Sections 2.1, 2.10,
+ * [3.1, 3.2]`). Each is a citation of its target as the field shows it;
+ * whether a field of the output can show the same is the plan's to say.
+ */
+const fieldsReadAsNone = (
+  blocks: readonly DocxBlock[],
+  references: readonly DetectedReference[],
+  index: LabelIndex,
+): DetectedReference[] =>
+  blocks.flatMap((block) => {
+    if (block.crossReferences === undefined) {
+      return [];
+    }
+    const read = references.filter(({ blockId }) => blockId === block.id);
+    return block.crossReferences.flatMap(
+      ({ start, end, targetBlockId }): DetectedReference[] => {
+        const entry =
+          targetBlockId === null
+            ? undefined
+            : index.entryByBlockId.get(targetBlockId);
+        const overlaps = read.some(
+          (reference) => reference.start < end && start < reference.end,
+        );
+        if (
+          entry === undefined ||
+          targetBlockId === null ||
+          overlaps ||
+          block.text.slice(start, end).trim() === ""
+        ) {
+          return [];
+        }
+        return [
+          {
+            id: `${block.id}:${String(start)}`,
+            blockId: block.id,
+            start,
+            end,
+            scope: "internal",
+            confidence: CONFIDENCE.sourceField,
+            evidence: ["sourceField"],
+            designators: [
+              {
+                start,
+                end,
+                level: entry.level,
+                join: null,
+                resolution: {
+                  status: "resolved",
+                  targetBlockId,
+                  confidence: CONFIDENCE.sourceField,
+                },
+              },
+            ],
+          },
+        ];
+      },
+    );
+  });
+
+/** Document order: by block, then by place in the block. */
+const byPlaceIn = (
+  blocks: readonly DocxBlock[],
+): ((left: DetectedReference, right: DetectedReference) => number) => {
+  const order = new Map(blocks.map(({ id }, position) => [id, position]));
+  const at = (blockId: string): number => order.get(blockId) ?? -1;
+  return (left, right) =>
+    left.blockId === right.blockId
+      ? left.start - right.start
+      : at(left.blockId) - at(right.blockId);
+};
+
+/** The block and every provision it stands in, nearest first. */
+const lineageOf = (blockId: string, index: LabelIndex): Set<string> => {
+  const lineage = new Set<string>();
+  let current: string | null = blockId;
+  while (current !== null && !lineage.has(current)) {
+    lineage.add(current);
+    current = index.entryByBlockId.get(current)?.parentBlockId ?? null;
+  }
+  return lineage;
+};
+
+/**
+ * A chain read as naming another document whose every designator the source
+ * holds in a field to a provision of this one (`clause 30 of the Core
+ * Terms`, where the Core Terms are part of the file): the drafter linked it
+ * here. The last designator of a field means the field's target; one in
+ * front of it the provision of its level the target stands in. Null where a
+ * designator is outside every field or no provision of its level is found.
+ */
+const linkedByDrafter = (
+  reference: DetectedReference,
+  fields: readonly NonNullable<DocxBlock["crossReferences"]>[number][],
+  index: LabelIndex,
+): DetectedReference | null => {
+  const designators: ReferenceDesignator[] = [];
+  for (const designator of reference.designators) {
+    const field = fields.find(
+      ({ start, end }) => start <= designator.start && designator.end <= end,
+    );
+    if (field === undefined) {
+      return null;
+    }
+    if (field.targetBlockId === null) {
+      return null;
+    }
+    const last = !reference.designators.some(
+      (other) =>
+        other.start > designator.start &&
+        field.start <= other.start &&
+        other.end <= field.end,
+    );
+    const meant = last
+      ? field.targetBlockId
+      : ([...lineageOf(field.targetBlockId, index)].find(
+          (blockId) =>
+            index.entryByBlockId.get(blockId)?.level === designator.level,
+        ) ?? null);
+    if (meant === null) {
+      return null;
+    }
+    designators.push({
+      ...designator,
+      resolution: {
+        status: "resolved",
+        targetBlockId: meant,
+        confidence: CONFIDENCE.sourceField,
+      },
+    });
+  }
+  return {
+    ...reference,
+    scope: "internal",
+    confidence: CONFIDENCE.sourceField,
+    evidence: [...reference.evidence, "sourceField"],
+    designators,
+  };
+};
+
+/**
+ * A reference the source holds as a field of its own: the field names the
+ * provision the citation means. A designator inside the field that the rules
+ * could not settle takes the one candidate that is the field's target or a
+ * provision the target stands in (`1.2` of a field to `1.2(c)`), and the
+ * chain reads as internal.
+ */
+const settledBySourceFields = (
+  reference: DetectedReference,
+  blocks: readonly DocxBlock[],
+  index: LabelIndex,
+): DetectedReference => {
+  const held = blocks.find(
+    ({ id }) => id === reference.blockId,
+  )?.crossReferences;
+  const fields =
+    held === undefined
+      ? []
+      : held.filter(({ targetBlockId }) => targetBlockId !== null);
+  if (fields.length === 0) {
+    return reference;
+  }
+  if (reference.scope === "external") {
+    return linkedByDrafter(reference, fields, index) ?? reference;
+  }
+  const designators = reference.designators.map((designator) => {
+    const field = fields.find(
+      ({ start, end }) => start <= designator.start && designator.end <= end,
+    );
+    if (field?.targetBlockId === null || field === undefined) {
+      return designator;
+    }
+    const lineage = lineageOf(field.targetBlockId, index);
+    const { resolution } = designator;
+    const candidates =
+      resolution.status === "ambiguous"
+        ? resolution.candidates.map(({ targetBlockId }) => targetBlockId)
+        : [];
+    const meant = candidates.filter((candidate) => lineage.has(candidate));
+    const [only] = meant;
+    if (only === undefined || meant.length > 1) {
+      return designator;
+    }
+    return {
+      ...designator,
+      resolution: {
+        status: "resolved" as const,
+        targetBlockId: only,
+        confidence: CONFIDENCE.sourceField,
+      },
+    };
+  });
+  const covered = reference.designators.some((designator) =>
+    fields.some(
+      ({ start, end }) => start <= designator.start && designator.end <= end,
+    ),
+  );
+  const settledAny = designators.some(
+    (designator, position) => designator !== reference.designators[position],
+  );
+  const internal = covered && reference.scope === "unknown";
+  if (!settledAny && !internal) {
+    return reference;
+  }
+  return {
+    ...reference,
+    ...(internal
+      ? { scope: "internal" as const, confidence: CONFIDENCE.sourceField }
+      : {}),
+    evidence: [...reference.evidence, "sourceField"],
+    designators,
   };
 };

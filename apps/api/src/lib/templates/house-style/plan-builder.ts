@@ -3786,6 +3786,9 @@ const keptListFieldOf = (
     : "designatorMismatch";
 };
 
+/** A `REF` switch that shows the target paragraph's number, not its text. */
+const SHOWS_NUMBER = /\\[nrw]\b/u;
+
 /** What the general format switch may name for a carried field: that an
  *  update keeps the look of the result before it. */
 const KEPT_LOOK = /^(?:mergeformat|charformat)$/iu;
@@ -4245,9 +4248,6 @@ const markReferences = ({
     ) {
       return typedAnnex(target) ? "annexTyped" : "targetNotNumbered";
     }
-    if (paragraphOf(reference.blockId) === paragraphOf(targetBlockId)) {
-      return "sameParagraph";
-    }
     const text = blockById.get(reference.blockId)?.text;
     if (text === undefined) {
       return "notPlaceable";
@@ -4260,6 +4260,15 @@ const markReferences = ({
       return field;
     }
     const { instruction, expectedText } = field;
+    // A paragraph cites its own number (`this Section 3.2(f)`, `22.11` of
+    // `22.11(b)` inside 22.11) through a field that shows the number; one
+    // that would show its text would show itself.
+    if (
+      paragraphOf(reference.blockId) === paragraphOf(targetBlockId) &&
+      !SHOWS_NUMBER.test(instruction)
+    ) {
+      return "sameParagraph";
+    }
     const from = field.start ?? start;
     if (touchesChange(blockById.get(reference.blockId), from, end)) {
       return "trackedChange";
@@ -4833,6 +4842,11 @@ const buildOnce = (
     ...(context.keptSections.last === undefined
       ? {}
       : { lastSection: context.keptSections.last }),
+    // A template whose last section is not its body's (an annex, a
+    // signature page) gives the output the body's page and headers.
+    ...(context.profile.bodySection === undefined
+      ? {}
+      : { bodySection: context.profile.bodySection }),
     // The template's headers and footers stay; the source's (a notice, a
     // draft line, a logo, a page number) are added to them.
     sourceHeaders: "keep",

@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -10,6 +11,7 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -41,6 +43,7 @@ import type {
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { inlineStyleIsItalic } from "@stll/case-law-parsers/inline-style";
 import {
   listPlTkPageFields,
@@ -149,8 +152,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -991,10 +992,13 @@ export const plTkDecisionType = (
     .at(0);
   const matched = PL_TK_DECISION_TYPES.find((type) => type === head);
   if (matched === undefined) {
-    logger.warn("case_law.ingestion.decision_type_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_TK,
-      decisionForm: form,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.decision_type_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        decisionForm: form,
+      },
+    );
   }
   return matched;
 };
@@ -1189,7 +1193,7 @@ export const assemblePlTkDecision = ({
     courtAsPrinted: ruling?.courtAsPrinted,
   });
   if (deciding.type === "unknown") {
-    logger.warn("case_law.ingestion.court_not_stated", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.court_not_stated", {
       adapterKey: ADAPTER_KEYS.PL_TK,
       caseNumber,
       courtAsPrinted: deciding.courtAsPrinted ?? "",
@@ -1426,11 +1430,14 @@ export const buildPlTkDecision = async ({
       // Redirected with a fresh session too: the case, not the session. The
       // row is kept listing-only, which the reconciliation does not count as
       // held, so a later walk asks again.
-      logger.warn("case_law.ingestion.document_unavailable", {
-        adapterKey: ADAPTER_KEYS.PL_TK,
-        caseNumber: docket,
-        documentId: row.documentId,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.document_unavailable",
+        {
+          adapterKey: ADAPTER_KEYS.PL_TK,
+          caseNumber: docket,
+          documentId: row.documentId,
+        },
+      );
       return listingOnly();
     }
     if (response.status !== 200) {
