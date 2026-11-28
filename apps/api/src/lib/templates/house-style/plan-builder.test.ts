@@ -642,6 +642,31 @@ describe("buildTemplatePlan, annexes a field numbers", () => {
     ).toEqual([]);
   });
 
+  test("a page reference of the source stays a page reference to the heading, whatever its bookmark holds", () => {
+    // A drafter's words shown by a picture: "clause " linked to the heading.
+    const { built, block, heading, start } = withField(
+      "clause ",
+      String.raw`PAGEREF annex1\# "'clause '"  \h`,
+      false,
+    );
+    expect(built.plan.references).toEqual([
+      {
+        blockId: block.id,
+        start,
+        end: start + "clause ".length,
+        targetBlockId: heading.id,
+        instruction: String.raw`\# "'clause '" \h`,
+        expectedText: "clause ",
+        field: "PAGEREF",
+      },
+    ]);
+    // A switch a page reference cannot carry leaves it text.
+    expect(
+      withField("clause ", String.raw`PAGEREF annex1 \x`).built.plan
+        .references ?? [],
+    ).toEqual([]);
+  });
+
   test("a field that shows a number, part of the heading or another text stays text", () => {
     for (const [result, instruction, whole] of [
       ["Příloha č. 1 Ceník", String.raw` REF annex1 \r \h `, true],
