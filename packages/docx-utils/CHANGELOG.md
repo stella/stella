@@ -1,5 +1,17 @@
 # @stll/docx-utils
 
+## 0.3.7
+
+### Patch Changes
+
+- [#9713](https://github.com/stella/stella/pull/9713) [`71d2410`](https://github.com/stella/stella/commit/71d24108c5e0e18c3eac83169ec37caaa8c0427b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build on `@stll/docx-core` 0.50.2.
+
+- [#9684](https://github.com/stella/stella/pull/9684) [`e66f25f`](https://github.com/stella/stella/commit/e66f25f1fac5714c155ecfee8b446dfc61f6b697) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build on `@stll/docx-core` 0.49.0.
+
+- [#9716](https://github.com/stella/stella/pull/9716) [`7789168`](https://github.com/stella/stella/commit/77891689ac8d945e9adb351e019b72f77278987c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build on `@stll/docx-core` 0.51.0.
+
+- [#9691](https://github.com/stella/stella/pull/9691) [`0ba8fc0`](https://github.com/stella/stella/commit/0ba8fc05dbcb94f2dc8297c272f5e8a8fbebd0e7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build on `@stll/docx-core` 0.50.0.
+
 ## 0.3.6
 
 ### Patch Changes
