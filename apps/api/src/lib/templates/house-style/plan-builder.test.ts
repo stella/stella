@@ -665,6 +665,11 @@ describe("buildTemplatePlan, annexes a field numbers", () => {
       withField("clause ", String.raw`PAGEREF annex1 \x`).built.plan
         .references ?? [],
     ).toEqual([]);
+    // So does a result that holds a tab: no number to check the field by.
+    expect(
+      withField("clause\t5", String.raw`PAGEREF annex1 \h`, false).built.plan
+        .references ?? [],
+    ).toEqual([]);
   });
 
   test("a field that shows a number, part of the heading or another text stays text", () => {
