@@ -2515,6 +2515,32 @@ describe("buildTemplatePlan, tables and omissions", () => {
     expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
   });
 
+  test("a heading in front of the source's contents does not take the template's contents", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = manifestOf([
+      "SMLOUVA O DODÁVCE",
+      { text: "Shrnutí", styleName: "heading 1", outlineLevel: 0 },
+      "Smlouva upravuje dodávku zboží.",
+      "Obsah",
+      { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+      "Článek I.\nPředmět",
+      numbered("1.", "Dodavatel dodá zboží.", 10),
+    ]);
+    const { plan } = build(manifest, "keepSource", { profile });
+    // In place of the source's contents, behind the summary: in front of
+    // the first article (p5), not in front of the summary's heading.
+    const article = plan.body.findIndex(
+      (item) => item.kind === "source" && item.blockId === "p5",
+    );
+    expect(plan.body[article - 1]).toEqual({
+      kind: "template",
+      templateBlockIds: ["p4", "p5", "p6", "p7"],
+    });
+    expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
+  });
+
   test("a part's own contents stay, in the template's style for contents lines", () => {
     const plain = manifestOf([
       "SMLOUVA",
