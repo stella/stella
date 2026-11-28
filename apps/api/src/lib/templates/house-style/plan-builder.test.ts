@@ -15,6 +15,7 @@ import {
   englishAgreement,
   germanContract,
   inColumns,
+  leveled,
   manifestOf,
   numbered,
 } from "@/api/lib/templates/house-style/manifest.test-helpers";
@@ -1082,7 +1083,7 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
   ]);
   const composite = blockIdOf(manifest, "Bod se složeným");
 
-  for (const mode of ["keepSource", "houseScheme"] as const) {
+  for (const mode of ["houseScheme"] as const) {
     test(`are written as text and reported (${mode})`, () => {
       const { plan, note, labelsNotKept } = build(manifest, mode);
       expect(itemOf(plan, manifest, "Bod se složeným")).toMatchObject({
@@ -1135,20 +1136,108 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
     }
   });
 
-  test("a numbered cell placed with its table keeps its number as text", () => {
+  test("a numbered cell placed with its table keeps its number as text under the house scheme", () => {
     const table = inColumns(2, [
       numbered("I. 1)", "Položka", 7),
       "12 ks",
       numbered("I. 2)", "Další položka", 7),
       "3 ks",
     ]);
-    const { plan, labelsNotKept } = build(table);
+    const { plan, labelsNotKept } = build(table, "houseScheme");
     const nested = sourceItems(plan).at(0)?.nested ?? [];
     expect(nested.filter(({ labelAsText }) => labelAsText === true)).toEqual([
       { blockId: "p0", numbering: null, labelAsText: true },
       { blockId: "p2", numbering: null, labelAsText: true },
     ]);
     expect(labelsNotKept).toEqual([]);
+  });
+
+  test("a list no level of the template prints keeps the source's own list", () => {
+    // Keeping the source's numbering, the cells' list is carried whole:
+    // its labels stay counted rather than typed.
+    const table = inColumns(2, [
+      numbered("I. 1)", "Položka", 7),
+      "12 ks",
+      numbered("I. 2)", "Další položka", 7),
+      "3 ks",
+    ]);
+    const { plan, note, labelsNotKept } = build(table);
+    const nested = sourceItems(plan).at(0)?.nested ?? [];
+    const kept = nested.filter(
+      ({ numbering }) => numbering !== null && numbering !== undefined,
+    );
+    expect(kept.map(({ blockId, numbering }) => [blockId, numbering])).toEqual([
+      ["p0", { numId: "new", ilvl: 0, sourceNumId: 7 }],
+      ["p2", { numId: "new", ilvl: 0, sourceNumId: 7 }],
+    ]);
+    expect(nested.some(({ labelAsText }) => labelAsText === true)).toBe(false);
+    expect(note.counts.labelsConvertedToText).toBe(0);
+    expect(labelsNotKept).toEqual([]);
+    // So are placed paragraphs whose whole list no level prints.
+    const lettered = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+      numbered("I. 1)", "Bod se složeným označením.", 2),
+      numbered("I. 2)", "Další bod se složeným označením.", 2),
+    ]);
+    const placed = build(lettered);
+    expect(itemOf(placed.plan, lettered, "Bod se složeným")).toMatchObject({
+      numbering: { numId: "new", ilvl: 0, sourceNumId: 2 },
+    });
+    expect(placed.labelsNotKept).toEqual([]);
+  });
+
+  test("a citation of a row the source's own list numbers is a number field", () => {
+    const table = inColumns(2, [
+      numbered("1.", "", 7),
+      "Customer",
+      numbered("2.", "", 7),
+      "Supplier",
+    ]);
+    const citing = "The party identified at Item 2 of this Agreement.";
+    const block: DocxBlock = {
+      ...manifestOf([citing]).blocks[0]!,
+      id: "p9",
+      index: 9,
+    };
+    const start = citing.indexOf("2");
+    block.crossReferences = [
+      {
+        start,
+        end: start + 1,
+        instruction: String.raw` REF _Ref2 \w \h `,
+        bookmark: "_Ref2",
+        targetBlockId: "p2",
+        targetWhole: true,
+      },
+    ];
+    const withCitation = { ...table, blocks: [...table.blocks, block] };
+    const { plan } = build(withCitation);
+    expect(plan.references).toContainEqual({
+      blockId: "p9",
+      start,
+      end: start + 1,
+      targetBlockId: "p2",
+      instruction: String.raw`\n \h`,
+      expectedText: "2",
+    });
+  });
+
+  test("a list one paragraph of which a level of the template prints stays on the template's list", () => {
+    // Paragraph 1. and the composite items count in one definition: a copy
+    // of it would count without 1., so the composite labels stay text.
+    const shared = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 3),
+      numbered("I. 1)", "Bod se složeným označením.", 3),
+    ]);
+    const { plan } = build(shared);
+    expect(itemOf(plan, shared, "Bod se složeným")).toMatchObject({
+      numbering: null,
+      labelAsText: true,
+    });
   });
 
   test("a bullet of a cell read as no role keeps its mark on a list", () => {
@@ -4397,6 +4486,277 @@ describe("buildTemplatePlan, list items in a table cell", () => {
           items.some(({ id }) => id === blockId),
       ),
     ).toBe(true);
+  });
+});
+
+describe("buildTemplatePlan, labels printed by the source's level text", () => {
+  const article = (label: string, title: string) =>
+    leveled(label, title, { ilvl: 0, lvlText: "%1.", numFmt: "upperRoman" });
+
+  test("a clause in legal numbering under a roman article keeps its number on a legal level", () => {
+    const clause = (label: string, text: string) =>
+      leveled(label, text, {
+        ilvl: 1,
+        lvlText: "%1.%2",
+        numFmt: "decimal",
+        legal: true,
+      });
+    const manifest = manifestOf([
+      "SMLOUVA",
+      article("I.", "Úvodní ustanovení"),
+      clause("1.1", "Strany se dohodly na tomto znění smlouvy o dílo."),
+      clause("1.2", "Smlouva se řídí právním řádem České republiky a zákony."),
+      article("II.", "Předmět smlouvy"),
+      clause("2.1", "Zhotovitel se zavazuje provést dílo podle této smlouvy."),
+    ]);
+    const { plan, note, labelsNotKept } = build(manifest);
+    for (const start of ["Strany", "Smlouva se", "Zhotovitel"]) {
+      expect(itemOf(plan, manifest, start)?.numbering).not.toBeNull();
+    }
+    expect(plan.numberingPatches).toContainEqual(
+      expect.objectContaining({ lvlText: "%1.%2", isLgl: true }),
+    );
+    expect(note.counts.labelsConvertedToText).toBe(0);
+    expect(labelsNotKept).toEqual([]);
+  });
+
+  test("a label that prints the counters above its own is read through its level text", () => {
+    const clause = (label: string, text: string) =>
+      leveled(label, text, { ilvl: 1, lvlText: "%1. %2)", numFmt: "decimal" });
+    const letter = (label: string, text: string) =>
+      leveled(label, text, {
+        ilvl: 3,
+        lvlText: "%1. %2) %4)",
+        numFmt: "lowerLetter",
+      });
+    const manifest = manifestOf([
+      "SMLOUVA",
+      article("I.", "Definice"),
+      clause("I. 1)", "Pro účely této smlouvy mají pojmy tento význam:"),
+      letter(
+        "I. 1) a)",
+        "dílem se rozumí stavba podle projektové dokumentace;",
+      ),
+      letter("I. 1) b)", "stavbou se rozumí budova a všechny její součásti."),
+      article("II.", "Předmět smlouvy"),
+      clause(
+        "II. 1)",
+        "Příkazník se zavazuje vykonávat technický dozor stavby.",
+      ),
+    ]);
+    const { plan, note, labelsNotKept } = build(manifest);
+    for (const start of ["Pro účely", "dílem", "stavbou", "Příkazník"]) {
+      expect(itemOf(plan, manifest, start)).not.toHaveProperty("labelAsText");
+      expect(itemOf(plan, manifest, start)?.numbering).not.toBeNull();
+    }
+    const patched = (plan.numberingPatches ?? []).map(({ lvlText }) => lvlText);
+    expect(patched).toContain("%1. %2)");
+    expect(patched.some((text) => /^%1\. %\d\) %\d\)$/u.test(text ?? ""))).toBe(
+      true,
+    );
+    expect(note.counts.labelsConvertedToText).toBe(0);
+    expect(labelsNotKept).toEqual([]);
+  });
+
+  test("a number field of the source that shows another number than its target's is noted", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      article("I.", "Úvodní ustanovení"),
+      leveled("1.", "Strany se dohodly na tomto znění smlouvy o dílo.", {
+        ilvl: 1,
+        lvlText: "%2.",
+        numFmt: "decimal",
+      }),
+      leveled("2.", "Smlouva se řídí právním řádem České republiky.", {
+        ilvl: 1,
+        lvlText: "%2.",
+        numFmt: "decimal",
+      }),
+      "Podle odstavce 3 a odstavce 2 platí totéž.",
+    ]);
+    const citing = manifest.blocks.at(-1);
+    if (citing === undefined) {
+      throw new Error("fixture");
+    }
+    const at = (shown: string) => citing.text.indexOf(shown);
+    citing.crossReferences = [
+      {
+        start: at("3"),
+        end: at("3") + 1,
+        instruction: String.raw` REF _Ref2 \n \h `,
+        bookmark: "_Ref2",
+        targetBlockId: "p3",
+        targetWhole: true,
+      },
+      {
+        start: at("2 platí"),
+        end: at("2 platí") + 1,
+        instruction: String.raw` REF _Ref2 \n \h `,
+        bookmark: "_Ref2",
+        targetBlockId: "p3",
+        targetWhole: true,
+      },
+    ];
+    const { note } = build(manifest);
+    expect(note.items.filter(({ kind }) => kind === "referenceStale")).toEqual([
+      {
+        kind: "referenceStale",
+        blockId: citing.id,
+        start: at("3"),
+        end: at("3") + 1,
+        targetBlockId: "p3",
+        shown: "3",
+        current: "2",
+      },
+    ]);
+  });
+});
+
+describe("buildTemplatePlan, levels the source's headings and their clauses share", () => {
+  test("a part whose clauses print its counter keeps the article level over more numerous headings", () => {
+    const part = (label: string, title: string) =>
+      leveled(label, title, { ilvl: 0, lvlText: "%1.", numFmt: "upperRoman" });
+    const clause = (label: string, text: string) =>
+      leveled(label, text, { ilvl: 1, lvlText: "%1.%2.", numFmt: "decimal" });
+    const annexArticle = (label: string, title: string) =>
+      leveled(
+        label,
+        title,
+        { ilvl: 0, lvlText: "Článek %1", numFmt: "decimal" },
+        2,
+      );
+    const manifest = manifestOf([
+      "RÁMCOVÁ SMLOUVA",
+      part("I.", "Zvláštní podmínky"),
+      clause("I.1.", "Smlouva se uzavírá na dobu čtyř let od jejího podpisu."),
+      clause("I.2.", "Dodavatel poskytuje služby podle zadávací dokumentace."),
+      part("II.", "Obecné podmínky"),
+      clause("II.1.", "Strany si poskytnou veškerou potřebnou součinnost."),
+      clause("II.2.", "Změny smlouvy jsou možné jen písemným dodatkem."),
+      annexArticle("Článek 1", "Předmět"),
+      annexArticle("Článek 2", "Cena"),
+      annexArticle("Článek 3", "Platnost"),
+    ]);
+    const { plan, note } = build(manifest);
+    for (const start of ["Smlouva se", "Dodavatel", "Strany si", "Změny"]) {
+      expect(itemOf(plan, manifest, start)?.numbering).not.toBeNull();
+    }
+    expect(note.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "labelConvertedToText",
+        blockId: blockIdOf(manifest, "Smlouva se"),
+      }),
+    );
+  });
+
+  test("a list most of whose labels no level prints moves whole, its numbered paragraph too", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s číslem.", 3),
+      numbered("I. 1)", "Bod se složeným označením.", 3),
+      numbered("I. 2)", "Další bod se složeným označením.", 3),
+      numbered("I. 3)", "Třetí bod se složeným označením.", 3),
+    ]);
+    const { plan, labelsNotKept } = build(manifest);
+    for (const start of [
+      "Odstavec s číslem",
+      "Bod se",
+      "Další bod",
+      "Třetí bod",
+    ]) {
+      expect(itemOf(plan, manifest, start)?.numbering).toMatchObject({
+        numId: "new",
+        sourceNumId: 3,
+      });
+    }
+    expect(labelsNotKept).toEqual([]);
+  });
+});
+
+describe("buildTemplatePlan, automatic labels the index does not read", () => {
+  test("count with the paragraphs at their level of their list", () => {
+    const note = (label: string, text: string) =>
+      leveled(label, text, { ilvl: 0, lvlText: "%1.", numFmt: "decimal" });
+    const point = (label: string, text: string) =>
+      leveled(label, text, { ilvl: 1, lvlText: "%1.%2", numFmt: "decimal" });
+    const manifest = manifestOf([
+      "NOTES ON THE REPORT",
+      note("1.", "This form of Report is primarily intended to be used where:"),
+      point("1.1", "the transaction involves a number of properties, "),
+      point("1.2", "there is limited time available, "),
+      "The parties may, of course, agree to use it in other cases.",
+      note("2.", "The addressees of this Report should consider the notes."),
+      note(
+        "3.",
+        "The Report has been drafted on the basis of the law in force.",
+      ),
+    ]);
+    const unread = blockIdOf(manifest, "The addressees");
+    // The index leaves the paragraph out, as it does a second run of
+    // numbers in notes behind a report's text.
+    const read = buildLabelIndex(manifest);
+    const index = {
+      ...read,
+      entryByBlockId: new Map(
+        [...read.entryByBlockId].filter(([blockId]) => blockId !== unread),
+      ),
+    };
+    const { plan, note: formattingNote } = build(manifest, "keepSource", {
+      index,
+    });
+    expect(itemOf(plan, manifest, "The addressees")).not.toHaveProperty(
+      "labelAsText",
+    );
+    expect(formattingNote.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "labelConvertedToText",
+        blockId: unread,
+      }),
+    );
+  });
+});
+
+describe("buildTemplatePlan, clauses deeper than the template's levels", () => {
+  test("count on a spare level under parents a first build moved", () => {
+    const at = (ilvl: number) => (label: string, text: string) =>
+      leveled(label, text, {
+        ilvl,
+        lvlText: Array.from(
+          { length: ilvl + 1 },
+          (_unused, n) => `%${String(n + 1)}`,
+        ).join("."),
+        numFmt: "decimal",
+      });
+    const manifest = manifestOf([
+      "CONSORTIUM AGREEMENT",
+      at(0)("9", "Access Rights"),
+      at(1)("9.7", "Access rights for parties leaving the consortium"),
+      at(2)("9.7.2", "Access rights granted to and by a leaving party"),
+      at(3)("9.7.2.1", "Access rights granted to a leaving party"),
+      at(4)(
+        "9.7.2.1.1",
+        "Access rights granted to a defaulting party end with its membership.",
+      ),
+      at(4)(
+        "9.7.2.1.2",
+        "Access rights granted to a non-defaulting party continue for its results.",
+      ),
+      at(3)("9.7.2.2", "Access rights granted by a leaving party"),
+      at(4)(
+        "9.7.2.2.1",
+        "A leaving party grants the access rights it agreed to grant.",
+      ),
+    ]);
+    const { plan, note, labelsNotKept } = build(manifest);
+    for (const start of [
+      "Access rights granted to a defaulting",
+      "A leaving party grants",
+    ]) {
+      expect(itemOf(plan, manifest, start)).not.toHaveProperty("labelAsText");
+    }
+    expect(note.counts.labelsConvertedToText).toBe(0);
+    expect(labelsNotKept).toEqual([]);
   });
 });
 
