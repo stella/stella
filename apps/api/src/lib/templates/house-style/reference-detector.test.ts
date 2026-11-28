@@ -850,3 +850,74 @@ describe("ambiguity", () => {
     ).toEqual([0.6]);
   });
 });
+
+describe("references the source holds as fields", () => {
+  /** The manifest of `citing` with a source field over `shown` that points
+   *  at the paragraph holding `target`. */
+  const withField = (
+    citing: string,
+    shown: string,
+    target: string,
+  ): DocxBlockManifest => {
+    const manifest = englishAgreement(citing);
+    const block = manifest.blocks.find(({ text }) => text.includes(citing));
+    if (block === undefined) {
+      return panic("the citing paragraph is missing");
+    }
+    const start = block.text.indexOf(shown);
+    block.crossReferences = [
+      {
+        start,
+        end: start + shown.length,
+        instruction: String.raw` REF _Ref1 \r \h `,
+        bookmark: "_Ref1",
+        targetBlockId: blockIdOf(manifest, target),
+        targetWhole: true,
+      },
+    ];
+    return manifest;
+  };
+
+  test("a bare number the drafter linked is a citation of the field's target", () => {
+    const citing = "The rules of 3.2 apply to it.";
+    expect(read(withField(citing, "3.2", "Wording 3.2:"), citing)).toEqual([
+      { text: "3.2", scope: "internal", links: "3.2→3/2" },
+    ]);
+    // Without the field the number is no citation.
+    expect(read(englishAgreement(citing), citing)).toEqual([]);
+  });
+
+  test("a chain read over the field is not read twice", () => {
+    const citing = "See Clause 3.2 for the charges.";
+    expect(read(withField(citing, "3.2", "Wording 3.2:"), citing)).toEqual(
+      read(englishAgreement(citing), citing),
+    );
+  });
+});
+
+describe("a chain read as another document's that the drafter linked here", () => {
+  test("takes the field's target and reads as internal", () => {
+    const citing = "As in Section 3.2 of the Companies Act 2006.";
+    const manifest = englishAgreement(citing);
+    const unlinked = read(manifest, citing);
+    expect(unlinked.map(({ scope }) => scope)).toEqual(["external"]);
+    const block = manifest.blocks.find(({ text }) => text.includes(citing));
+    const start = citing.indexOf("3.2");
+    if (block === undefined) {
+      throw new Error("the citing paragraph is missing");
+    }
+    block.crossReferences = [
+      {
+        start: block.text.indexOf(citing) + start,
+        end: block.text.indexOf(citing) + start + 3,
+        instruction: String.raw` REF _Ref1 \w \h `,
+        bookmark: "_Ref1",
+        targetBlockId: blockIdOf(manifest, "Wording 3.2:"),
+        targetWhole: true,
+      },
+    ];
+    expect(read(manifest, citing)).toEqual([
+      { text: unlinked[0]?.text ?? "", scope: "internal", links: "3.2→3/2" },
+    ]);
+  });
+});
