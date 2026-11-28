@@ -707,17 +707,6 @@ const styleTarget = (
   return null;
 };
 
-/** The style a role's paragraphs get, without counting a missing one. */
-const styleIdOf = (context: Context, role: HouseStyleRole): string | null => {
-  for (const candidate of [role, ...STYLE_FALLBACK[role]]) {
-    const target = context.profile.roles[candidate];
-    if (target !== null) {
-      return evenedStyle(context, candidate, target).styleId;
-    }
-  }
-  return null;
-};
-
 /**
  * Notes each paragraph placed outside a table whose role the rules were
  * unsure of and no answer decided, when its next likeliest reading would
@@ -752,7 +741,7 @@ const noteUncertainRoles = (
     const alternativeStyleId =
       alternative === undefined || context.tableOf.has(block.id)
         ? null
-        : styleIdOf(context, alternative);
+        : styleIdAs(context, block, alternative);
     if (
       alternative === undefined ||
       alternativeStyleId === null ||
@@ -1011,6 +1000,25 @@ const placementOf = (
     context.sourceLevels.set(numbering.abstractNumId, levels);
   }
   return placement;
+};
+
+/**
+ * The style `block` would get as `role`, set as a placement sets it. A
+ * reading not taken leaves the count of roles without a style alone.
+ */
+const styleIdAs = (
+  context: Context,
+  block: DocxBlock,
+  role: HouseStyleRole,
+): string | null => {
+  const entry = context.index.entryByBlockId.get(block.id) ?? null;
+  const { profile } = settingOf(context, block, entry);
+  const { target } = targetsOf(
+    { ...context, stylelessRoles: new Map() },
+    profile,
+    { block, role, entry },
+  );
+  return target?.styleId ?? null;
 };
 
 const placementAt = (

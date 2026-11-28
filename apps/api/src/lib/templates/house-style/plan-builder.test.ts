@@ -292,6 +292,38 @@ describe("buildTemplatePlan, roles nobody decided", () => {
     ).toEqual([]);
   });
 
+  test("a reading that would set the paragraph in its own style is not noted", () => {
+    // Recitals are numbered here, so an unlabelled one is set as body text:
+    // both readings look the same.
+    const recital = PROFILE.roles.clause1;
+    if (recital === null) {
+      throw new Error("the template numbers clauses");
+    }
+    const profile = {
+      ...PROFILE,
+      roles: { ...PROFILE.roles, recital: { ...recital, styleId: "Recital" } },
+    };
+    // The word between the parties, read as body text.
+    const line = manifest.blocks.find(({ text }) => text === "a")?.id ?? "";
+    const doubt = {
+      id: roleItemId(line),
+      kind: "blockRole" as const,
+      blockId: line,
+      options: [
+        { role: "body" as const, confidence: 0.45 },
+        { role: "recital" as const, confidence: 0.1 },
+      ],
+    };
+    const { plan, note } = build(manifest, "keepSource", {
+      profile,
+      roleItems: [doubt],
+    });
+    expect(
+      sourceItems(plan).find((item) => item.blockId === line)?.styleId,
+    ).toBe(PROFILE.roles.body?.styleId);
+    expect(uncertain(note.items)).toEqual([]);
+  });
+
   test("an answered one is not", () => {
     const { note } = build(manifest, "keepSource", {
       roleItems,
