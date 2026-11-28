@@ -717,8 +717,16 @@ export const isBlankParagraph = ({
   text,
   label,
   inlineObjects = 0,
+  revisions,
 }: DocxBlock): boolean =>
-  text.trim() === "" && printedLabel({ label }) === null && inlineObjects === 0;
+  text.trim() === "" &&
+  printedLabel({ label }) === null &&
+  inlineObjects === 0 &&
+  // Text somebody deleted is still on the page of a document that keeps
+  // its tracked changes: the paragraph is not blank while it shows it.
+  revisions?.some(
+    ({ kind, paragraphMark }) => kind === "deletion" && paragraphMark !== true,
+  ) !== true;
 
 /**
  * Proposes a role for every paragraph of the main story that stands on its

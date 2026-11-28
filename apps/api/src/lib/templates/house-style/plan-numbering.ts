@@ -39,7 +39,10 @@ export type LabelKeptReason =
   /** The label is not one this reader can restate as a level text. */
   | "unreadable"
   /** An earlier attempt showed the engine will not number the block. */
-  | "excluded";
+  | "excluded"
+  /** A tracked change the output keeps sits in the typed label: the label
+   *  stays as it is written, change and all. */
+  | "trackedChange";
 
 type LevelFormat = { numFmt: string; lvlText: string };
 
