@@ -519,6 +519,11 @@ export type TemplatePlan = {
    *  paragraph that stands for their target. An engine that does not know
    *  the option writes their text. */
   internalLinks?: "drop" | "keep";
+  /** Whether the output keeps the colours and run shading that mark part
+   *  of the source's text (a red note, a grey placeholder); the colour of
+   *  most of the text stays the template's. An engine that does not know
+   *  the option keeps none. */
+  textColors?: "drop" | "keep";
 };
 
 /** What the output carries of the source's comments. */

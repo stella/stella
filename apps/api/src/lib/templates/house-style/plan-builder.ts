@@ -4367,6 +4367,8 @@ export const buildTemplatePlan = ({
     comments: "keep",
     // A link to a heading of the document (a contents line) still jumps.
     internalLinks: "keep",
+    // A red note or a grey placeholder keeps its colour.
+    textColors: "keep",
   };
   return {
     plan,
