@@ -18,13 +18,7 @@
 
 import { panic } from "better-result";
 
-import {
-  assertNever,
-  referencedConditionPaths,
-} from "@stll/template-conditions";
-
-import { arrayOrEmpty } from "@/api/lib/array";
-import { foldItemCountConstraints } from "@/api/lib/docx/field-filters";
+import { foldItemCountConstraints } from "@stll/docx-engine/field-filters";
 import {
   CLEARED_FIELD_SOURCE,
   type DiscoveredField,
@@ -36,7 +30,13 @@ import {
   type FieldMeta,
   isLookupFormatKey,
   LOOKUP_FORMATS_MAX,
-} from "@/api/lib/docx/types";
+} from "@stll/docx-engine/types";
+import {
+  assertNever,
+  referencedConditionPaths,
+} from "@stll/template-conditions";
+
+import { arrayOrEmpty } from "@/api/lib/array";
 
 /** One rejected entry. `path` is the dot path of the offending entry in
  *  the tool input (`fields.2`), matching the schema-derived issue paths, so an

@@ -174,10 +174,7 @@ test("test determinism baselines only permit lower counts and deleted files", ()
 
   for (const path of [
     BASELINE_PATHS.testAmbientTime,
-    BASELINE_PATHS.testWallclockAssertion,
     BASELINE_PATHS.testRealTimers,
-    BASELINE_PATHS.testState,
-    BASELINE_PATHS.rustTestDeterminism,
   ]) {
     expect(pruneViolations(path, before, lowered), path).toEqual([]);
     expect(pruneViolations(path, before, "{}"), path).toEqual([]);

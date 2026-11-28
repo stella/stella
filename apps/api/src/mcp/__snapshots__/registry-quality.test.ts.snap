@@ -2680,7 +2680,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Reformat into template is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Reformat into template is confined to the private workspace or a bounded computation."
     },
-    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \\"house-style\\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
+    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \\"house-style\\". A document with tracked changes needs tracked_changes (ask the user). A document that cannot be reformatted without changing its text (a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
     "annotations": {
       "title": "Reformat into template",
       "destructiveHint": false,
@@ -2721,6 +2721,15 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "accept_suggested_decisions": {
           "type": "boolean",
           "description": "Link a cross-reference whose target the rules clearly prefer; by default an uncertain one stays text"
+        },
+        "tracked_changes": {
+          "enum": [
+            "keep",
+            "accept",
+            "reject"
+          ],
+          "type": "string",
+          "description": "For a document with tracked changes: keep carries them over as tracked changes; accept or reject reformats the text with all of them accepted or rejected. Omitted, such a document is refused so the user can choose"
         }
       }
     }
@@ -10567,7 +10576,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Reformat into template is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Reformat into template is confined to the private workspace or a bounded computation."
     },
-    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \\"house-style\\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
+    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \\"house-style\\". A document with tracked changes needs tracked_changes (ask the user). A document that cannot be reformatted without changing its text (a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
     "annotations": {
       "title": "Reformat into template",
       "destructiveHint": false,
@@ -10608,6 +10617,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "accept_suggested_decisions": {
           "type": "boolean",
           "description": "Link a cross-reference whose target the rules clearly prefer; by default an uncertain one stays text"
+        },
+        "tracked_changes": {
+          "enum": [
+            "keep",
+            "accept",
+            "reject"
+          ],
+          "type": "string",
+          "description": "For a document with tracked changes: keep carries them over as tracked changes; accept or reject reformats the text with all of them accepted or rejected. Omitted, such a document is refused so the user can choose"
         }
       }
     }

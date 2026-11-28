@@ -18,6 +18,12 @@
  * the fill boundary injects the adapter (see `buildAiOccurrenceAdapter`).
  */
 
+import { templateContentPartPaths } from "@stll/docx-engine/ooxml";
+import {
+  partParagraphTexts,
+  patchXmlPartPerOccurrence,
+} from "@stll/docx-engine/rich-patch";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { placeholderPattern, resolvePath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -25,10 +31,7 @@ import { loadDocx } from "@/api/lib/docx-archive";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
-import { templateContentPartPaths } from "./ooxml";
 import type { AiFieldError } from "./resolve-ai-fields";
-import { partParagraphTexts, patchXmlPartPerOccurrence } from "./rich-patch";
-import type { FieldMeta } from "./types";
 
 export const AI_FIELD_ADAPTATION_FAILURE_MESSAGE =
   "AI could not adapt this value to the wording around it, so it was inserted as written. Retry or provide the adapted wording yourself.";

@@ -89,6 +89,10 @@ import type {
   TemplateHealthFinding,
   TemplateProfile,
 } from "@/api/lib/templates/house-style/template-profile";
+import {
+  numberShown,
+  numbersWhenRejected,
+} from "@/api/lib/templates/house-style/tracked-views";
 
 /** The share of automatic labels that may go unread before a reference
  *  without a target stops being marked as one. */
@@ -136,7 +140,15 @@ type UnlinkedReason =
   | "sameParagraph"
   /** The span cannot carry a field: it lies in a stripped label or in a
    *  block the plan does not place, or the engine refused it. */
-  | "notPlaceable";
+  | "notPlaceable"
+  /** A tracked change the output keeps lies in the citation or touches
+   *  it: a field would replace the change with its own text. */
+  | "trackedChange"
+  /** The output keeps the tracked changes, and with them rejected the
+   *  target shows another number than now (a clause was inserted or
+   *  deleted in front of it) or is not there: a field would follow its
+   *  target and show a number the source does not print in that view. */
+  | "renumberedWhenRejected";
 
 export type FormattingNoteItem =
   | {
@@ -175,6 +187,14 @@ export type FormattingNoteItem =
       view: TrackedChangesView;
       stated: boolean;
     } & TrackedChanges)
+  /** The source tracked changes and the output keeps them as the changes
+   *  they are, by their authors and dates. Change tracking is switched off
+   *  in the output, so the new formatting is no change of anybody's. The
+   *  counts are what the source tracks; formatting changes it recorded are
+   *  not carried. `notCarried` counts the changes in paragraphs the output
+   *  does not have: blank lines and the lines of the source's own table of
+   *  contents. */
+  | ({ kind: "trackedChangesKept"; notCarried: number } & TrackedChanges)
   /** `blocks` paragraphs numbered like articles are running text: they
    *  keep their numbers and are set as clauses, not as headings. */
   | { kind: "articlesSetAsText"; blocks: number }
@@ -416,6 +436,11 @@ type BuildOptions = {
   /** Whether the caller chose the view of the source's tracked changes;
    *  the note says when nobody did. */
   trackedChangesStated?: boolean;
+  /** The source read with its tracked changes rejected, for a manifest
+   *  that keeps them: it tells the targets whose number depends on the
+   *  view. Without it no citation of such a manifest becomes a field
+   *  whose target a kept change could renumber. */
+  rejectedView?: DocxBlockManifest | undefined;
   /** The languages of the document and of the template, when the caller
    *  knows them. */
   languages?: PlanLanguages;
@@ -440,6 +465,10 @@ type BuiltPlan = {
 type Context = {
   blocks: readonly DocxBlock[];
   blockById: ReadonlyMap<string, DocxBlock>;
+  /** For a manifest that keeps its tracked changes: the number each
+   *  paragraph shows with them rejected, by block id; a paragraph that is
+   *  not there then has none. Null for any other manifest. */
+  rejectedNumbers: ReadonlyMap<string, string> | null;
   /** The table a cell paragraph sits in. */
   tableOf: ReadonlyMap<string, string>;
   topLevel: readonly DocxBlock[];
@@ -732,11 +761,9 @@ const placementOf = (
       ? mark
       : block.text.slice(lead, lead + entry.shape.length);
   placement.sourceLabel = sourceLabel;
-  if (
-    entry.origin === "manual" &&
-    !isStrippableLabel(sourceLabel, block.text)
-  ) {
-    placement.keptReason = "notStrippable";
+  const typedKept = typedLabelKept(block, entry, sourceLabel);
+  if (typedKept !== null) {
+    placement.keptReason = typedKept;
     return placement;
   }
   placement.pattern = patternOf(entry, sourceLabel, outline);
@@ -2021,9 +2048,48 @@ const settledContentsHolder = (
   return null;
 };
 
+/** The placements of a table's cell paragraphs that have a reading; one
+ *  without is placed with its table. */
+const cellPlacementsOf = (context: Context, table: DocxBlock): Placement[] =>
+  insideOf(table, context.blockById).flatMap((inner) => {
+    const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
+    return role === null ? [] : [placementOf(context, inner, role)];
+  });
+
+/**
+ * Whether a title paragraph joins the heading placed right in front of it,
+ * the heading it was read as the title of.
+ */
+const joinsItsHeading = (
+  context: Context,
+  { titleOf }: Placed,
+  {
+    title,
+    head,
+    startsPage,
+  }: { title: DocxBlock; head: string; startsPage: ReadonlySet<string> },
+): boolean => {
+  const headBlock = context.blockById.get(head);
+  // An article's heading takes the page start with it: the page starts
+  // in front of the heading, and the title joins it as on any page.
+  const movesWithHead =
+    headBlock !== undefined && roleOf(context, headBlock) === "articleHeading";
+  return (
+    !titleOf.has(head) &&
+    !context.exclusions.merges.has(head) &&
+    // A paragraph mark somebody inserted stays the mark of its paragraph.
+    !endsInInsertedMark(headBlock) &&
+    // Any other title that starts a page is a line of its own: joined to
+    // its heading it would stay on the page before. So is one behind the
+    // end of a section that stays a section: it belongs to the next.
+    (movesWithHead || !startsPage.has(title.id)) &&
+    !context.keptSections.ends.has(head)
+  );
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
-  const { topLevel, blockById, index, exclusions, proposalById } = context;
+  const { topLevel, index, proposalById } = context;
   const pageHolders = pageHoldersBeforeTables(context);
   const contentsHolder = pageHolderBeforeContents(context);
   // A blank paragraph that ends a section which stays one carries it.
@@ -2056,13 +2122,7 @@ const placeParagraphs = (context: Context): Placed => {
     if (block.kind === "table") {
       lastPlaced = null;
       lead = null;
-      for (const inner of insideOf(block, blockById)) {
-        const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
-        // A cell paragraph without a reading is placed with its table.
-        if (role !== null) {
-          placed.placements.push(placementOf(context, inner, role));
-        }
-      }
+      placed.placements.push(...cellPlacementsOf(context, block));
       continue;
     }
     // The source's own contents give way to the template's; a template
@@ -2080,22 +2140,10 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     const head = proposalById.get(block.id)?.mergedIntoBlockId ?? null;
-    const headBlock = head === null ? undefined : blockById.get(head);
-    // An article's heading takes the page start with it: the page starts
-    // in front of the heading, and the title joins it as on any page.
-    const movesWithHead =
-      headBlock !== undefined &&
-      roleOf(context, headBlock) === "articleHeading";
     if (
       head !== null &&
       lastPlaced === head &&
-      !placed.titleOf.has(head) &&
-      !exclusions.merges.has(head) &&
-      // Any other title that starts a page is a line of its own: joined to
-      // its heading it would stay on the page before. So is one behind the
-      // end of a section that stays a section: it belongs to the next.
-      (movesWithHead || !startsPage.has(block.id)) &&
-      !context.keptSections.ends.has(head)
+      joinsItsHeading(context, placed, { title: block, head, startsPage })
     ) {
       placed.mergedInto.set(block.id, head);
       placed.titleOf.set(head, block);
@@ -2174,6 +2222,128 @@ const asTextOf = (
   numbering === null && shownLabelOf(block) !== null
     ? { labelAsText: true }
     : {};
+
+/**
+ * What a plan does with its source's tracked changes: a manifest read in one
+ * view gives a plan for that view; one read with the changes kept, a plan
+ * that keeps them.
+ */
+const trackedChoiceOf = ({
+  trackedChangesResolved,
+  trackedChangesKept,
+}: DocxBlockManifest): Pick<TemplatePlan, "trackedChanges"> => {
+  if (trackedChangesKept !== undefined) {
+    return { trackedChanges: "keep" };
+  }
+  return trackedChangesResolved === undefined
+    ? {}
+    : { trackedChanges: trackedChangesResolved.view };
+};
+
+/** Opens the note with what became of the source's tracked changes. */
+const noteTrackedChanges = (
+  { items, blockById }: Context,
+  { omitted }: Placed,
+  { trackedChangesResolved, trackedChangesKept }: DocxBlockManifest,
+  stated: boolean,
+): void => {
+  if (trackedChangesResolved !== undefined) {
+    items.unshift({
+      kind: "trackedChangesResolved",
+      stated,
+      ...trackedChangesResolved,
+    });
+  }
+  if (trackedChangesKept !== undefined) {
+    let notCarried = 0;
+    for (const blockId of omitted.keys()) {
+      notCarried += blockById.get(blockId)?.revisions?.length ?? 0;
+    }
+    items.unshift({
+      kind: "trackedChangesKept",
+      notCarried,
+      ...trackedChangesKept,
+    });
+  }
+};
+
+/**
+ * Why a typed label stays text whatever list the template has: the engine
+ * strips only what it recognises as a label, and a label somebody changed is
+ * kept with its change (stripped, the change would go with it). Null when
+ * the label can be stripped.
+ */
+const typedLabelKept = (
+  block: DocxBlock,
+  entry: LabelEntry,
+  sourceLabel: string,
+): LabelKeptReason | null => {
+  if (entry.origin !== "manual") {
+    return null;
+  }
+  if (!isStrippableLabel(sourceLabel, block.text)) {
+    return "notStrippable";
+  }
+  const lead = block.text.length - block.text.trimStart().length;
+  return changeStartsBefore(
+    block,
+    Math.max(entry.manualLength, lead + entry.shape.length),
+  )
+    ? "trackedChange"
+    : null;
+};
+
+/** Whether a kept tracked change of `block` begins in its first `length`
+ *  characters: in a label that long. */
+const changeStartsBefore = (block: DocxBlock, length: number): boolean =>
+  block.revisions?.some(({ start }) => start < length) === true;
+
+/** Whether a kept tracked change of `block` lies in `start` to `end` or
+ *  touches it. A deletion is one offset, so it touches what it borders. */
+const touchesChange = (
+  block: DocxBlock | undefined,
+  start: number,
+  end: number,
+): boolean =>
+  block?.revisions?.some(
+    (revision) => revision.start <= end && revision.end >= start,
+  ) === true;
+
+/** The numbers of a manifest that keeps its tracked changes, as they are
+ *  with the changes rejected; null for a manifest that keeps none. */
+const rejectedNumbersOf = (
+  manifest: DocxBlockManifest,
+  rejectedView: DocxBlockManifest | undefined,
+): ReadonlyMap<string, string> | null =>
+  manifest.trackedChangesKept === undefined
+    ? null
+    : numbersWhenRejected(manifest.blocks, rejectedView?.blocks ?? NO_BLOCKS);
+
+/**
+ * Whether a field to `targetBlockId` would show another number with the
+ * kept tracked changes rejected than the citation prints: the target's
+ * number differs there, or the target is not there, or the two readings
+ * could not be held against each other.
+ */
+const renumberedWhenRejected = (
+  { rejectedNumbers, blockById }: Context,
+  targetBlockId: string,
+): boolean => {
+  if (rejectedNumbers === null) {
+    return false;
+  }
+  const target = blockById.get(targetBlockId);
+  return (
+    target === undefined ||
+    rejectedNumbers.get(targetBlockId) !== numberShown(target)
+  );
+};
+
+/** Whether the paragraph's own mark is one somebody inserted. */
+const endsInInsertedMark = (block: DocxBlock | undefined): boolean =>
+  block?.revisions?.some(
+    ({ kind, paragraphMark }) => kind === "insertion" && paragraphMark === true,
+  ) === true;
 
 const stripOf = ({
   numbered,
@@ -2747,6 +2917,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
 type HeaderField = "addressee" | "date" | "reference";
 
 const NO_SLOTS: HeaderFill["slots"] = [];
+const NO_BLOCKS: readonly DocxBlock[] = [];
 const NO_LINES: readonly string[] = [];
 
 type HeaderFill = {
@@ -2776,12 +2947,28 @@ type HeaderFill = {
  * states nothing for keeps the template's sample and is named in the note.
  * Null when the template keeps no letterhead or the document is no letter.
  */
-const fillHeader = ({ profile, topLevel }: Context): HeaderFill | null => {
+const fillHeader = ({
+  profile,
+  topLevel,
+  blockById,
+}: Context): HeaderFill | null => {
   const { header } = profile;
   if (header === undefined) {
     return null;
   }
-  const head = readLetterHead(topLevel);
+  const read = readLetterHead(topLevel);
+  // A line whose paragraph mark is a tracked change the output keeps is a
+  // paragraph of its own and fills no cell. A head that holds one stays in
+  // the body whole, and every cell is left as the template has it.
+  const marked = (blockId: string | null): boolean =>
+    blockId !== null &&
+    blockById
+      .get(blockId)
+      ?.revisions?.some(({ paragraphMark }) => paragraphMark === true) === true;
+  const head =
+    read !== null && [...read.addressee, read.date, read.reference].some(marked)
+      ? null
+      : read;
   const fill: HeaderFill = {
     slots: [],
     fields: null,
@@ -3335,6 +3522,7 @@ const markReferences = ({
       !isPlaced(blockId) ||
       exclusions.marks.has(blockId) ||
       start < strippedLength(blockId) ||
+      touchesChange(blockById.get(blockId), start, end) ||
       taken?.some((span) => start < span.end && end > span.start) === true
     ) {
       return false;
@@ -3443,6 +3631,12 @@ const markReferences = ({
     }
     const { instruction, expectedText } = field;
     const from = field.start ?? start;
+    if (touchesChange(blockById.get(reference.blockId), from, end)) {
+      return "trackedChange";
+    }
+    if (renumberedWhenRejected(context, targetBlockId)) {
+      return "renumberedWhenRejected";
+    }
     return claim(reference.blockId, from, end)
       ? {
           blockId: reference.blockId,
@@ -3799,6 +3993,7 @@ export const buildTemplatePlan = ({
   exclusions = NO_EXCLUSIONS,
   sourceHighlightColors,
   trackedChangesStated = false,
+  rejectedView,
   languages,
 }: BuildOptions): BuiltPlan => {
   const { blocks } = manifest;
@@ -3828,6 +4023,7 @@ export const buildTemplatePlan = ({
     stylelessRoles: new Map(),
     items: [],
     headerFill: null,
+    rejectedNumbers: rejectedNumbersOf(manifest, rejectedView),
   };
   takeHeaderLines(context);
 
@@ -3865,13 +4061,7 @@ export const buildTemplatePlan = ({
     labelRequests(context, body),
   );
   noteReadings(context, placed, references, suspicions);
-  if (manifest.trackedChangesResolved !== undefined) {
-    context.items.unshift({
-      kind: "trackedChangesResolved",
-      stated: trackedChangesStated,
-      ...manifest.trackedChangesResolved,
-    });
-  }
+  noteTrackedChanges(context, placed, manifest, trackedChangesStated);
 
   const health = profile.health ?? NO_HEALTH;
   const drawn = {
@@ -3910,10 +4100,7 @@ export const buildTemplatePlan = ({
     version: 1,
     sourceSha256: manifest.sha256,
     templateSha256: profile.templateSha256,
-    // A manifest read in one view of tracked changes gives a plan for it.
-    ...(manifest.trackedChangesResolved === undefined
-      ? {}
-      : { trackedChanges: manifest.trackedChangesResolved.view }),
+    ...trackedChoiceOf(manifest),
     body,
     omit: [...placed.omitted].map(([blockId, reason]) => ({ blockId, reason })),
     ...emptiedOf(context),

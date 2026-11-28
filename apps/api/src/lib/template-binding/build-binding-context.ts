@@ -15,6 +15,11 @@
 import { panic } from "better-result";
 
 import type { ContactType } from "@stll/api-contract";
+import type {
+  AttorneyRef,
+  WorkspaceContactRole,
+} from "@stll/docx-engine/binding-sources";
+import type { FieldMeta } from "@stll/docx-engine/types";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import type {
@@ -26,7 +31,6 @@ import type {
   ContactPhone,
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { FieldMeta } from "@/api/lib/docx/types";
 import { LIMITS } from "@/api/lib/limits";
 
 import type {
@@ -36,7 +40,6 @@ import type {
   UserSourceRecord,
 } from "./apply-source-fields";
 import { EMPTY_BINDING_CONTEXT } from "./apply-source-fields";
-import type { AttorneyRef, WorkspaceContactRole } from "./binding-sources";
 
 /** The contact columns mapped into a {@link ContactSourceRecord}; shared by the
  *  client and party projections. */

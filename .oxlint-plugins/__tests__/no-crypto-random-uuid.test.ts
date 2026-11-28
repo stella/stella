@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { lintSingleRule } from "./lint-single-rule";
+import { lintSingleRule, runSingleRule } from "./lint-single-rule";
 
 test("rejects ambient crypto UUIDs and direct UUID package generators", async () => {
   expect(
@@ -61,4 +61,42 @@ test("allows ordered Bun identifiers and runtime UUID owners", async () => {
       ].join("\n"),
     ),
   ).toEqual([]);
+});
+
+test("autofixes ambient crypto.randomUUID() only in Bun API runtime files", async () => {
+  expect(
+    await runSingleRule(
+      "no-crypto-random-uuid",
+      [
+        "const a = crypto.randomUUID();",
+        "const b = globalThis.crypto.randomUUID();",
+      ].join("\n"),
+      { sourcePath: "apps/api/src/example.ts", fix: true },
+    ),
+  ).toEqual({
+    lines: [],
+    source: [
+      "const a = Bun.randomUUIDv7();",
+      "const b = Bun.randomUUIDv7();",
+    ].join("\n"),
+  });
+
+  const browserSource = "const id = crypto.randomUUID();";
+  expect(
+    await runSingleRule("no-crypto-random-uuid", browserSource, {
+      sourcePath: "apps/web/src/example.ts",
+      fix: true,
+    }),
+  ).toEqual({ lines: [1], source: browserSource });
+
+  const nonAmbient = [
+    "const fn = (crypto: Crypto) => crypto.randomUUID();",
+    "const opt = crypto?.randomUUID();",
+  ].join("\n");
+  expect(
+    await runSingleRule("no-crypto-random-uuid", nonAmbient, {
+      sourcePath: "apps/api/src/example.ts",
+      fix: true,
+    }),
+  ).toEqual({ lines: [1, 2], source: nonAmbient });
 });

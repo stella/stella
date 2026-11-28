@@ -2,11 +2,11 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta, TemplateManifest } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";

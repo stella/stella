@@ -504,7 +504,9 @@ if (import.meta.main) {
       rekeys,
     });
     if (problems.length) {
-      panic(problems.join("\n"));
+      panic(
+        `${problems.join("\n")}\nFix: resolve the aggregate lock violations above and re-run \`bun scripts/check-aggregate-locks.ts --generate\`.`,
+      );
     }
     writeFileSync(
       path.resolve(AGGREGATE_LOCK_BASELINE_PATH),
@@ -513,7 +515,9 @@ if (import.meta.main) {
   } else {
     const problems = checkAggregateLocks();
     if (problems.length) {
-      panic(problems.join("\n"));
+      panic(
+        `${problems.join("\n")}\nFix: resolve lock violations or shrink stale baseline rows with \`bun scripts/check-aggregate-locks.ts --generate\`, then re-run \`bun scripts/check-aggregate-locks.ts\`.`,
+      );
     }
     console.log("Aggregate lock inventory matches its shrinking baseline.");
   }

@@ -448,6 +448,10 @@ const main = async (targets: readonly string[]): Promise<number> => {
     console.error(
       "Annotate a directive covering several hits with `-- xN` (e.g. `-- x2`).",
     );
+    const targetSuffix = targets.length > 0 ? ` ${targets.join(" ")}` : "";
+    console.error(
+      `Fix: update fixture expect-error/expect-clean directives and re-run \`bun scripts/check-oxlint-fixture-counts.ts${targetSuffix}\`.`,
+    );
     return 1;
   }
   console.log(`Oxlint fixture hit counts OK (${expected.size} lines).`);

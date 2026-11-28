@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 
 import { FACET_COUNT_TYPE } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import { queryStems } from "@stll/legal-morphology/stem";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -28,8 +30,6 @@ import {
   rankedDecisionQuery,
   type RankedDecisionWord,
 } from "@/api/lib/legal-search/corpus-ranked-decision-query";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { queryStems } from "@/api/lib/legal-search/morphology/stem";
 import {
   PUBLIC_READ_TIMEOUT_CODE,
   publicReadTimeoutError,

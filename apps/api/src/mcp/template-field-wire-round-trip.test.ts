@@ -11,8 +11,9 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import type { FieldMeta } from "@/api/lib/docx/types";
-import { fieldMetaToolInputSchema } from "@/api/lib/docx/types";
+import type { FieldMeta } from "@stll/docx-engine/types";
+import { fieldMetaToolInputSchema } from "@stll/docx-engine/types";
+
 import type { TemplateFieldSourceInput } from "@/api/mcp/template-field-input";
 import {
   DEFAULT_LOOKUP_FORMAT,

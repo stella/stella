@@ -108,7 +108,7 @@ test("current baselines reject missing, untracked and nonregular test files", ()
       members,
       repoRoot,
       trackedFiles,
-      baselineRel: "scripts/test-state-baseline.json",
+      baselineRel: "scripts/test-ambient-time-baseline.json",
     });
   const failure = `${FILE} must exist as a regular tracked test file; delete its baseline entry`;
   try {
@@ -121,7 +121,7 @@ test("current baselines reject missing, untracked and nonregular test files", ()
         members,
         repoRoot,
         trackedFiles: new Set(),
-        baselineRel: "scripts/test-state-baseline.json",
+        baselineRel: "scripts/test-ambient-time-baseline.json",
       }),
     ).toThrow(failure);
     rmSync(path.join(repoRoot, FILE));

@@ -20,16 +20,10 @@ export const BASELINE_PATHS = {
   /** scripts/check-mutation-query-invalidation.ts */
   mutationQueryInvalidation:
     "scripts/mutation-query-invalidation-baseline.json",
-  /** scripts/check-test-state-baseline.ts */
-  testState: "scripts/test-state-baseline.json",
   /** scripts/seed-test-determinism-baselines.ts */
   testAmbientTime: "scripts/test-ambient-time-baseline.json",
   /** scripts/seed-test-determinism-baselines.ts */
   testRealTimers: "scripts/test-real-timers-baseline.json",
-  /** scripts/seed-test-determinism-baselines.ts */
-  testWallclockAssertion: "scripts/test-wallclock-assertion-baseline.json",
-  /** scripts/check-rust-test-determinism.ts */
-  rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
   /** scripts/check-write-contracts.ts */
@@ -87,8 +81,6 @@ export const BASELINE_PATHS = {
   // English the translations follow; only `--sync` and `--accept` may write it.
   /** packages/scripts/src/i18n-check.ts, apps/web */
   webI18nCheck: "apps/web/src/i18n/i18n-check-baseline.json",
-  /** packages/scripts/src/i18n-lint.ts, apps/web */
-  webI18nLint: "apps/web/src/i18n/i18n-lint-baseline.json",
   /** packages/scripts/src/i18n-check.ts, apps/landing */
   landingI18nCheck: "apps/landing/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/landing */

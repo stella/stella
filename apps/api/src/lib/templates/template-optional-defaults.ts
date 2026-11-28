@@ -1,9 +1,9 @@
-import { resolvePath } from "@stll/template-conditions";
-
 import {
   findRepeatableContainer,
   readRowSubPath,
-} from "@/api/lib/docx/repeatable-paths";
+} from "@stll/docx-engine/repeatable-paths";
+import { resolvePath } from "@stll/template-conditions";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 type TemplateFieldRequiredness = {

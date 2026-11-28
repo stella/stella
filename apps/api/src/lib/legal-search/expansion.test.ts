@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
 
+import {
+  type ExpansionBucket,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
+  parseExpansionDictionary,
+  serializeExpansionDictionary,
+} from "@stll/legal-morphology/dictionary";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -17,12 +23,6 @@ import {
   rewrittenCorpusQuery,
   shadowExpansionAttributes,
 } from "@/api/lib/legal-search/expansion";
-import {
-  type ExpansionBucket,
-  NO_EXPANSION_DICTIONARY_IDENTITY,
-  parseExpansionDictionary,
-  serializeExpansionDictionary,
-} from "@/api/lib/legal-search/morphology/dictionary";
 import { sanitizeLogAttributes } from "@/api/lib/observability/logger";
 
 const dictionaryOf = (buckets: readonly ExpansionBucket[]) =>

@@ -4,14 +4,15 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { repoRelativePath } from "@stll/portable-path";
 import { assertProperty } from "@stll/property-testing";
 
 import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
@@ -573,14 +574,26 @@ test("exception identity survives sibling removal and rejects ambiguous covered 
 // The workflow scans every git-tracked file; this CLI fixture checks that its
 // supplied file list is authoritative while registered catalogs still load.
 test("check consumes only supplied tracked files under the offline preload", () => {
-  const root = path.resolve(import.meta.dir, "..");
-  const directory = mkdtempSync(path.join(root, ".dated-waiver-tracked-"));
+  const repoRoot = path.resolve(import.meta.dir, "..");
+  const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-tracked-"));
+  const fixtureRoot = path.join(directory, "repo");
   const trackedFiles = path.join(directory, "tracked-files");
   const changedFiles = path.join(directory, "changed-files");
   const baseFiles = path.join(directory, "base-files");
-  const waiverFile = path.join(directory, "waivers.json");
-  const relativeWaiverFile = repoRelativePath(root, waiverFile);
+  const relativeWaiverFile = "waivers.json";
+  const waiverFile = path.join(fixtureRoot, relativeWaiverFile);
   try {
+    mkdirSync(fixtureRoot);
+    for (const entry of readdirSync(repoRoot, { withFileTypes: true })) {
+      if (entry.name === ".git" || entry.name === "node_modules") {
+        continue;
+      }
+      symlinkSync(
+        path.join(repoRoot, entry.name),
+        path.join(fixtureRoot, entry.name),
+        entry.isDirectory() ? "junction" : "file",
+      );
+    }
     writeFileSync(waiverFile, JSON.stringify({ expiresAt: "2026-10-01" }));
     writeFileSync(trackedFiles, "bunfig.toml\0");
     writeFileSync(changedFiles, "apps/web/src/unrelated.ts\0");
@@ -592,6 +605,8 @@ test("check consumes only supplied tracked files under the offline preload", () 
       "./scripts/offline-network-preload.ts",
       "scripts/dated-waivers.ts",
       "--check",
+      "--root",
+      fixtureRoot,
       "--tracked-files",
       trackedFiles,
       "--changed-files",
@@ -599,12 +614,12 @@ test("check consumes only supplied tracked files under the offline preload", () 
       "--base-files",
       baseFiles,
     ];
-    const checked = Bun.spawnSync(command, { cwd: root });
+    const checked = Bun.spawnSync(command, { cwd: repoRoot });
     expect(checked.stderr.toString()).toBe("");
     expect(checked.exitCode).toBe(0);
 
     writeFileSync(trackedFiles, `bunfig.toml\0${relativeWaiverFile}\0`);
-    const included = Bun.spawnSync(command, { cwd: root });
+    const included = Bun.spawnSync(command, { cwd: repoRoot });
     expect(included.exitCode).not.toBe(0);
     expect(included.stderr.toString()).toContain(
       `Unregistered dated waiver owners: ${relativeWaiverFile}`,

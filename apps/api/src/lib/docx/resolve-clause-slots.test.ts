@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ClauseSlot } from "@stll/docx-engine/clause-slots";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 
-import type { ClauseSlot } from "./discover-clause-slots";
 import { resolveClauseSlotBodies } from "./resolve-clause-slots";
 
 // Exercise lookup batching and rich conversion with explicit fill values.

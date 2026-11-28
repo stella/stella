@@ -13,6 +13,8 @@ import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import type { AiConditionDecider } from "@stll/docx-engine/resolve-ai-conditions";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -43,7 +45,6 @@ import {
   SKILL_REF_GENERATOR_GUIDANCE,
   type SkillToolsContext,
 } from "@/api/lib/docx/ai-skill-tools";
-import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
 import { AI_FIELD_GENERATION_FAILURE_MESSAGE } from "@/api/lib/docx/resolve-ai-fields";
 import type {
   AiFieldDraft,

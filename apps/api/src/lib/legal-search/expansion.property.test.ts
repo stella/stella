@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { parseExpansionDictionary } from "@stll/legal-morphology/dictionary";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -8,7 +9,6 @@ import {
   corpusFreeTextClause,
 } from "@/api/lib/legal-search/corpus-query";
 import { expandTermWith } from "@/api/lib/legal-search/expansion";
-import { parseExpansionDictionary } from "@/api/lib/legal-search/morphology/dictionary";
 
 /**
  * Arbitrary serialized dictionaries, including hostile ones. Dictionary

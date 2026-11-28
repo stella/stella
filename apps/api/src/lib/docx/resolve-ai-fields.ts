@@ -19,18 +19,17 @@
  * `registerItemPatchValues` picks it up natively with no loop-engine change.
  */
 
+import type {
+  AiFieldError,
+  AiFieldFailureReason,
+} from "@stll/docx-engine/ai-field-error-types";
+import { omitSourceBoundValues } from "@stll/docx-engine/ai-visible-values";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { isSafeFieldPath, resolvePath } from "@stll/template-conditions";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isRecord } from "@/api/lib/type-guards";
-
-import type {
-  AiFieldError,
-  AiFieldFailureReason,
-} from "./ai-field-error-types";
-import { omitSourceBoundValues } from "./ai-visible-values";
-import type { FieldMeta } from "./types";
 
 export type { AiFieldError };
 
