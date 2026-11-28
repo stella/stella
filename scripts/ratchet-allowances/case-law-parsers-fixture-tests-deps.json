@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Declare @stll/folio-core devDependency in @stll/case-law-parsers for the moved hu-bhgy.test.ts fixture test (already in catalog and apps/api)."
+}

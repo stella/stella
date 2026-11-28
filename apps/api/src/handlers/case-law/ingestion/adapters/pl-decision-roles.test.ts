@@ -9,6 +9,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 import { readPlKioLayout } from "@stll/case-law-parsers/pl-kio-layout";
 import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@stll/case-law-parsers/pl-kis";
@@ -26,7 +27,6 @@ import {
 import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { isRecord } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);

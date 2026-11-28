@@ -9,6 +9,13 @@
  * service run the same code.
  */
 
+import { filterChainSignature } from "@stll/docx-engine/field-filters";
+import type {
+  DiscoveredField,
+  DiscoveredTemplate,
+  FieldMeta,
+  TemplateManifest,
+} from "@stll/docx-engine/types";
 import {
   arrayFiltersFromFieldConfig,
   assertNever,
@@ -21,13 +28,6 @@ import {
 import { arrayOrEmpty } from "@/api/lib/array";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { filterChainSignature } from "@/api/lib/docx/field-filters";
-import type {
-  DiscoveredField,
-  DiscoveredTemplate,
-  FieldMeta,
-  TemplateManifest,
-} from "@/api/lib/docx/types";
 import {
   type ConditionRewrite,
   type FieldFilterRewrite,

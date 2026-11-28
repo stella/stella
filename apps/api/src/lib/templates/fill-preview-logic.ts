@@ -6,17 +6,18 @@ import type { Result as ResultType } from "better-result";
  */
 import { Result } from "better-result";
 
+import type { ResolvedAiCondition } from "@stll/docx-engine/resolve-ai-conditions";
+import type {
+  ExtractedParagraph,
+  TemplateStructureError,
+} from "@stll/docx-engine/types";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
-import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
-import type {
-  ExtractedParagraph,
-  TemplateStructureError,
-} from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { containsNull } from "@/api/lib/templates/template-data";
 import {

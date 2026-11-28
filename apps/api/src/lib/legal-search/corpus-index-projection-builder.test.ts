@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 
 import { resolveUsCourt } from "@stll/api-contract/us-courts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { CaseLawDocumentLanguageUndeclaredError } from "@stll/legal-morphology/corpus-language";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -38,9 +40,7 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
   planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
-import { CaseLawDocumentLanguageUndeclaredError } from "@/api/lib/legal-search/morphology/corpus-language";
 import { LIMITS } from "@/api/lib/limits";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(

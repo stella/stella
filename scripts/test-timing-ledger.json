@@ -35,11 +35,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/api/src/handlers/case-law/decisions/search-expand.test.ts::<module>::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts::<module>::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."

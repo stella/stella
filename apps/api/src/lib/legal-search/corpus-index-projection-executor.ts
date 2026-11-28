@@ -9,7 +9,6 @@ import type { Transaction } from "@/api/db/types";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { drainCaseLawRankingSignalChanges } from "@/api/lib/legal-search/case-law-ranking-signal-drain";
 import {
-  CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
   type CorpusIndexClient,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -18,14 +17,17 @@ import {
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
+  type CorpusIndexProjectionAppendRequestCap,
+} from "@/api/lib/legal-search/corpus-index-projection-contract";
+import {
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
   corpusIndexCommitTimeoutSecs,
   type CorpusProjectionAppendCommitMode,
-  corpusProjectionAppendIngestBudgetMs,
+  corpusProjectionAppendStartMarginMs,
   proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
@@ -251,7 +253,7 @@ type PreparedProjectionEntry = {
   ndjsonBytes: number;
   parts: readonly string[];
   leaseExpiresAtMs: number;
-  appendMode: CorpusProjectionIntentLease["appendMode"];
+  appendRequestCap: CorpusIndexProjectionAppendRequestCap;
 };
 
 type PreparedProjectionRequest = {
@@ -264,7 +266,8 @@ type ProjectionAppendPart = {
   ndjson: string;
   ndjsonBytes: number;
   leaseExpiresAtMs: number;
-  appendMode?: CorpusProjectionIntentLease["appendMode"];
+  /** The entity's request cap; a full request when absent. */
+  appendRequestCap?: CorpusIndexProjectionAppendRequestCap;
   parts?: readonly string[];
 };
 
@@ -276,23 +279,20 @@ type ProjectionAppendTail<Entry extends ProjectionAppendPart> = {
 };
 
 /**
- * Lease an append to `manifest`'s indexes must still hold when it starts: the
- * ingest's whole budget, which follows the generation's commit window, one
- * presence-confirmation aggregate per census batch of a full request, and the
- * unknown-outcome margin. The expired-lease sweep turns an `append_started`
- * row whose lease has passed into cleanup, so any shorter margin lets it
- * reclaim an append that is still in flight.
+ * How long before its start margin a buffered tail flushes: the time its
+ * start transaction may take to run after the cycle decides to send it. The
+ * start refuses a lease inside the margin (`startCorpusProjectionAppendBatchTx`),
+ * so flushing exactly at the margin would lose every margin-led request to
+ * the start's own latency.
  */
-export const corpusProjectionAppendStartMarginMs = (
+export const CORPUS_PROJECTION_APPEND_START_LEAD_MS = 30_000;
+
+/** Lease remaining at which a buffered tail flushes. */
+export const corpusProjectionAppendFlushMarginMs = (
   manifest: CorpusIndexManifest,
 ): number =>
-  corpusProjectionAppendIngestBudgetMs(manifest) +
-  Math.ceil(
-    CORPUS_PROJECTION_APPEND_MAX_REVISIONS /
-      CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  ) *
-    CORPUS_INDEX_AGGREGATION_TIMEOUT_MS +
-  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
+  corpusProjectionAppendStartMarginMs(manifest) +
+  CORPUS_PROJECTION_APPEND_START_LEAD_MS;
 
 type CorpusProjectionAppendLeaseOptions = {
   manifest: CorpusIndexManifest;
@@ -300,7 +300,7 @@ type CorpusProjectionAppendLeaseOptions = {
 };
 
 /**
- * Reservation lease for an append cycle: the generation's start margin plus
+ * Reservation lease for an append cycle: the generation's flush margin plus
  * the time the cycle may spend filling its requests, capped at the store's
  * longest lease.
  *
@@ -323,7 +323,7 @@ export const corpusProjectionAppendLeaseMs = ({
     );
   }
   return Math.min(
-    corpusProjectionAppendStartMarginMs(manifest) + fillWindowMs,
+    corpusProjectionAppendFlushMarginMs(manifest) + fillWindowMs,
     CORPUS_PROJECTION_LEASE_MAX_MS,
   );
 };
@@ -333,14 +333,23 @@ type AdvanceProjectionAppendTailsOptions<Entry extends ProjectionAppendPart> = {
   entries: readonly Entry[];
   mode: "buffer" | "flush-all";
   nowMs: number;
-  /** `corpusProjectionAppendStartMarginMs` of the cycle's generation. */
-  appendStartMarginMs: number;
+  /** `corpusProjectionAppendFlushMarginMs` of the cycle's generation. */
+  flushMarginMs: number;
 };
 
+/** One tail per physical index and request cap. */
+const appendTailKey = (
+  indexId: string,
+  cap: CorpusIndexProjectionAppendRequestCap,
+): string => `${indexId}\u0000${cap}`;
+
 /**
- * Extend one serialized, byte-bounded tail per physical index in linear time.
- * A tail flushes when full or near its earliest lease deadline; serialization
+ * Extend one serialized, byte-bounded tail per physical index and request cap
+ * in linear time. A tail flushes when full (its cap, the request's revision
+ * ceiling or its bytes) or near its earliest lease deadline; serialization
  * and byte measurement are paid once per revision, not once per read window.
+ * Revisions of one cap travel together, so a reservation whose entities a
+ * failed append capped is still sent in requests of that size, not one each.
  *
  * `leaseMarginReached` separates the two reasons a tail flushed. A cap is a
  * property of the tail, so the next one fills from empty as before. The lease
@@ -355,7 +364,7 @@ export const advanceCorpusProjectionAppendTails = <
   entries,
   mode,
   nowMs,
-  appendStartMarginMs,
+  flushMarginMs,
 }: AdvanceProjectionAppendTailsOptions<Entry>): {
   flush: ProjectionAppendTail<Entry>[];
   tails: Map<string, ProjectionAppendTail<Entry>>;
@@ -375,12 +384,7 @@ export const advanceCorpusProjectionAppendTails = <
   for (const indexId of [...byIndex.keys()].toSorted()) {
     const group = byIndex.get(indexId) ?? panic("Lost projection entry group");
     for (const entry of group) {
-      let tail = nextTails.get(indexId);
       if (entry.parts !== undefined && entry.parts.length > 1) {
-        if (tail !== undefined) {
-          flush.push(tail);
-          nextTails.delete(indexId);
-        }
         flush.push({
           indexId,
           entries: [entry],
@@ -389,50 +393,56 @@ export const advanceCorpusProjectionAppendTails = <
         });
         continue;
       }
+      const cap =
+        entry.appendRequestCap ??
+        CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL;
+      const key = appendTailKey(indexId, cap);
+      let tail = nextTails.get(key);
       if (
         tail !== undefined &&
-        (tail.entries.length >= CORPUS_PROJECTION_APPEND_MAX_REVISIONS ||
-          entry.appendMode === "single" ||
-          tail.ndjsonBytes + entry.ndjsonBytes >
-            CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES)
+        tail.ndjsonBytes + entry.ndjsonBytes >
+          CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES
       ) {
         flush.push(tail);
-        nextTails.delete(indexId);
+        nextTails.delete(key);
         tail = undefined;
       }
       if (tail === undefined) {
-        const next = {
+        tail = {
           indexId,
           entries: [entry],
           ndjsonBytes: entry.ndjsonBytes,
           earliestLeaseExpiresAtMs: entry.leaseExpiresAtMs,
         };
-        if (entry.appendMode === "single") {
-          flush.push(next);
-        } else {
-          nextTails.set(indexId, next);
-        }
-        continue;
+        nextTails.set(key, tail);
+      } else {
+        tail.entries.push(entry);
+        tail.ndjsonBytes += entry.ndjsonBytes;
+        tail.earliestLeaseExpiresAtMs = Math.min(
+          tail.earliestLeaseExpiresAtMs,
+          entry.leaseExpiresAtMs,
+        );
       }
-      tail.entries.push(entry);
-      tail.ndjsonBytes += entry.ndjsonBytes;
-      tail.earliestLeaseExpiresAtMs = Math.min(
-        tail.earliestLeaseExpiresAtMs,
-        entry.leaseExpiresAtMs,
-      );
+      if (
+        tail.entries.length >=
+        Math.min(cap, CORPUS_PROJECTION_APPEND_MAX_REVISIONS)
+      ) {
+        flush.push(tail);
+        nextTails.delete(key);
+      }
     }
   }
   let leaseMarginReached = false;
-  for (const [indexId, tail] of nextTails) {
+  for (const [key, tail] of nextTails) {
     if (
       mode === "buffer" &&
-      tail.earliestLeaseExpiresAtMs - nowMs > appendStartMarginMs
+      tail.earliestLeaseExpiresAtMs - nowMs > flushMarginMs
     ) {
       continue;
     }
     leaseMarginReached = leaseMarginReached || mode === "buffer";
     flush.push(tail);
-    nextTails.delete(indexId);
+    nextTails.delete(key);
   }
   return { flush, tails: nextTails, leaseMarginReached };
 };
@@ -454,7 +464,7 @@ const planProjectionRevisionRequest = ({
   ndjsonBytes: Buffer.byteLength(parts[0], "utf-8") + 1,
   parts,
   leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
-  appendMode: material.lease.appendMode,
+  appendRequestCap: material.lease.appendRequestCap,
 });
 
 type BuildPreparedEntryOptions = {
@@ -716,104 +726,125 @@ const acceptAndProveProjectionAppend = async ({
   return failure;
 };
 
-type StopAfterUnknownRequestOptions = {
-  runInTransaction: ProjectionTransactionRunner;
-  failure: { stopForEngine: boolean };
-  blocked: boolean;
-  laterLeases: readonly CorpusProjectionIntentLease[];
-  cancelMessage: string;
-  result: CorpusProjectionAppendCycleResult;
-};
+/** How a request, and the chain of requests it belongs to, ended. */
+type ProjectionAppendChainStatus =
+  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable";
 
-/** Cancel the chain behind a request whose outcome stopped it. */
-const stopAfterUnknownRequest = async ({
-  runInTransaction,
+/**
+ * Which status a chain reports when its requests ended differently: an
+ * unavailable engine also delays the next cycle, so it outranks a blocked
+ * entity, which outranks an unknown outcome.
+ */
+const CHAIN_STATUS_RANK = {
+  completed: 0,
+  append_unknown: 1,
+  append_blocked: 2,
+  engine_unavailable: 3,
+} as const satisfies Record<ProjectionAppendChainStatus, number>;
+
+const worseChainStatus = (
+  left: ProjectionAppendChainStatus,
+  right: ProjectionAppendChainStatus,
+): ProjectionAppendChainStatus =>
+  CHAIN_STATUS_RANK[right] > CHAIN_STATUS_RANK[left] ? right : left;
+
+/** The status a failed request reports. */
+const failedRequestStatus = ({
   failure,
   blocked,
-  laterLeases,
-  cancelMessage,
-  result,
-}: StopAfterUnknownRequestOptions): Promise<
-  "append_unknown" | "append_blocked" | "engine_unavailable"
-> => {
-  addCancellation(
-    result,
-    await cancelCorpusProjectionReservations({
-      runInTransaction,
-      leases: laterLeases,
-      errorMessage: cancelMessage,
-    }),
-  );
+}: {
+  failure: { stopForEngine: boolean };
+  blocked: boolean;
+}): Exclude<ProjectionAppendChainStatus, "completed"> => {
   if (failure.stopForEngine) {
-    result.status = "engine_unavailable";
-    result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
     return "engine_unavailable";
   }
-  result.status = blocked ? "append_blocked" : "append_unknown";
-  return result.status;
+  return blocked ? "append_blocked" : "append_unknown";
 };
 
-/** Every lease behind request `requestIndex` in its chain. */
-const laterLeasesOf = (
-  requests: readonly PreparedProjectionRequest[],
-  requestIndex: number,
-  unattemptedLeases: readonly CorpusProjectionIntentLease[],
-): CorpusProjectionIntentLease[] => [
-  ...requests
-    .slice(requestIndex + 1)
-    .flatMap(({ entries }) => entries.map(({ material }) => material.lease)),
-  ...unattemptedLeases,
-];
+/**
+ * What one request did. `leaseShort`: its start found a lease that no longer
+ * covers the start margin and left it reserved. Every lease of the cycle
+ * shares one expiry and only gets closer to it, so the chain starts nothing
+ * more.
+ */
+type ProjectionRequestOutcome = {
+  status: ProjectionAppendChainStatus;
+  leaseShort: boolean;
+};
 
-type ProcessPreparedRequestsOptions = {
+const HAND_BACK_MESSAGE =
+  "projection append handed back a reservation it did not start";
+
+/**
+ * Every reservation a cycle holds until a committed transaction decides it:
+ * an append start (started, stale and cancelled, or lost), or a failure
+ * classification. `handBack` cancels whatever is still held, under the
+ * store's status and token predicates, so a row another transaction already
+ * moved is left alone. The cycle calls it on every exit, a thrown one
+ * included, so a reservation it did not start never waits out its lease:
+ * one whose start transaction rolled back is still held and goes back too.
+ */
+type CycleReservations = {
+  decided: (
+    intentIds: Iterable<CorpusProjectionIntentLease["intentId"]>,
+  ) => void;
+  handBack: () => Promise<{ cancelled: number; leaseLost: number }>;
+};
+
+const holdCycleReservations = ({
+  runInTransaction,
+  leases,
+}: {
+  runInTransaction: ProjectionTransactionRunner;
+  leases: readonly CorpusProjectionIntentLease[];
+}): CycleReservations => {
+  const held = new Map(leases.map((lease) => [lease.intentId, lease]));
+  return {
+    decided: (intentIds) => {
+      for (const intentId of intentIds) {
+        held.delete(intentId);
+      }
+    },
+    handBack: async () => {
+      const rest = [...held.values()];
+      held.clear();
+      return await cancelCorpusProjectionReservations({
+        runInTransaction,
+        leases: rest,
+        errorMessage: HAND_BACK_MESSAGE,
+      });
+    },
+  };
+};
+
+type ProcessPreparedRequestOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   commitMode: CorpusProjectionAppendCommitMode;
-  requests: readonly PreparedProjectionRequest[];
-  requestIndex: number;
-  unattemptedLeases: readonly CorpusProjectionIntentLease[];
+  request: PreparedProjectionRequest;
+  reservations: CycleReservations;
   result: CorpusProjectionAppendCycleResult;
 };
 
-const processPreparedRequests = async ({
+/** Start, send, and record one physical request. */
+const processPreparedRequest = async ({
   runInTransaction,
   client,
   commitMode,
-  requests,
-  requestIndex,
-  unattemptedLeases,
+  request,
+  reservations,
   result,
-}: ProcessPreparedRequestsOptions): Promise<
-  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
-> => {
-  const request = requests.at(requestIndex);
-  if (request === undefined) {
-    return "completed";
-  }
+}: ProcessPreparedRequestOptions): Promise<ProjectionRequestOutcome> => {
   const multipart =
     request.entries.length === 1 ? request.entries.at(0) : undefined;
   if (multipart !== undefined && multipart.parts.length > 1) {
-    const laterLeases = requests
-      .slice(requestIndex + 1)
-      .flatMap(({ entries }) => entries.map(({ material }) => material.lease));
-    const status = await processMultipartEntry({
+    return await processMultipartEntry({
       runInTransaction,
       client,
       commitMode,
       entry: multipart,
-      unattemptedLeases: [...laterLeases, ...unattemptedLeases],
-      result,
-    });
-    if (status !== "completed") {
-      return status;
-    }
-    return await processPreparedRequests({
-      runInTransaction,
-      client,
-      commitMode,
-      requests,
-      requestIndex: requestIndex + 1,
-      unattemptedLeases,
+      reservations,
       result,
     });
   }
@@ -832,34 +863,40 @@ const processPreparedRequests = async ({
       result.timing.storeCommitMs += elapsedMs;
     },
   );
-  result.cancelled += starts.filter(
-    ({ status }) => status === "stale_cancelled",
-  ).length;
-  result.leaseLost += starts.filter(
-    ({ status }) => status === "lease_lost",
-  ).length;
   const entriesByIntent = new Map(
     request.entries.map((entry) => [entry.material.lease.intentId, entry]),
   );
-  const started = starts.flatMap(({ intentId, status }) => {
-    if (status !== "started") {
-      return [];
-    }
-    return [
+  const started: PreparedProjectionEntry[] = [];
+  let leaseShort = false;
+  reservations.decided(
+    starts.flatMap(({ intentId, status }) =>
+      status === "lease_ends_before_run" ? [] : [intentId],
+    ),
+  );
+  for (const { intentId, status } of starts) {
+    const entry =
       entriesByIntent.get(intentId) ??
-        panic(`Lost started projection revision ${intentId}`),
-    ];
-  });
+      panic(`Lost started projection revision ${intentId}`);
+    switch (status) {
+      case "started":
+        started.push(entry);
+        break;
+      case "stale_cancelled":
+        result.cancelled += 1;
+        break;
+      case "lease_lost":
+        result.leaseLost += 1;
+        break;
+      case "lease_ends_before_run":
+        leaseShort = true;
+        break;
+      default:
+        status satisfies never;
+        panic(`Unhandled append start: ${String(status)}`);
+    }
+  }
   if (started.length === 0) {
-    return await processPreparedRequests({
-      runInTransaction,
-      client,
-      commitMode,
-      requests,
-      requestIndex: requestIndex + 1,
-      unattemptedLeases,
-      result,
-    });
+    return { status: "completed", leaseShort };
   }
   result.requestCount += 1;
   const appended = await measured(
@@ -904,14 +941,13 @@ const processPreparedRequests = async ({
       };
     });
     recordAbandonedAppendResults(result, abandoned);
-    return await stopAfterUnknownRequest({
-      runInTransaction,
-      failure,
-      blocked: abandoned.blocked.length > 0,
-      laterLeases: laterLeasesOf(requests, requestIndex, unattemptedLeases),
-      cancelMessage: "projection append stopped after an unknown request",
-      result,
-    });
+    return {
+      status: failedRequestStatus({
+        failure,
+        blocked: abandoned.blocked.length > 0,
+      }),
+      leaseShort,
+    };
   }
 
   const unproven = await acceptAndProveProjectionAppend({
@@ -922,29 +958,20 @@ const processPreparedRequests = async ({
     result,
   });
   if (unproven !== null) {
-    return await stopAfterUnknownRequest({
-      runInTransaction,
-      failure: logAppendFailure({
-        indexId: request.indexId,
-        documents: started.length,
-        revisionCount: started.length,
-        error: unproven,
+    return {
+      status: failedRequestStatus({
+        failure: logAppendFailure({
+          indexId: request.indexId,
+          documents: started.length,
+          revisionCount: started.length,
+          error: unproven,
+        }),
+        blocked: false,
       }),
-      blocked: false,
-      laterLeases: laterLeasesOf(requests, requestIndex, unattemptedLeases),
-      cancelMessage: "projection append stopped after an unknown request",
-      result,
-    });
+      leaseShort,
+    };
   }
-  return await processPreparedRequests({
-    runInTransaction,
-    client,
-    commitMode,
-    requests,
-    requestIndex: requestIndex + 1,
-    unattemptedLeases,
-    result,
-  });
+  return { status: "completed", leaseShort };
 };
 
 type ProcessMultipartEntryOptions = {
@@ -952,20 +979,27 @@ type ProcessMultipartEntryOptions = {
   client: ProjectionAppendClient;
   commitMode: CorpusProjectionAppendCommitMode;
   entry: PreparedProjectionEntry;
-  unattemptedLeases: readonly CorpusProjectionIntentLease[];
+  reservations: CycleReservations;
   result: CorpusProjectionAppendCycleResult;
 };
+
+/** One part's step: sent, refused before the first part, or stopped. */
+type MultipartPartOutcome =
+  | { type: "appended" }
+  | { type: "not_started"; leaseShort: boolean }
+  | {
+      type: "stopped";
+      status: Exclude<ProjectionAppendChainStatus, "completed">;
+    };
 
 const processMultipartEntry = async ({
   runInTransaction,
   client,
   commitMode,
   entry,
-  unattemptedLeases,
+  reservations,
   result,
-}: ProcessMultipartEntryOptions): Promise<
-  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
-> => {
+}: ProcessMultipartEntryOptions): Promise<ProjectionRequestOutcome> => {
   const lease = entry.material.lease;
   const stop = async ({
     errorMessage,
@@ -977,8 +1011,8 @@ const processMultipartEntry = async ({
     rejection?: CorpusIndexError["rejection"];
     fault?: CorpusProjectionAppendFault;
     stopForEngine?: boolean;
-  }): Promise<"append_unknown" | "append_blocked" | "engine_unavailable"> => {
-    const outcome = await runInTransaction(
+  }): Promise<MultipartPartOutcome> => {
+    const abandonedPart = await runInTransaction(
       async (tx) =>
         await abandonCorpusProjectionAppendTx(tx, {
           intentId: lease.intentId,
@@ -988,55 +1022,39 @@ const processMultipartEntry = async ({
           fault,
         }),
     );
-    switch (outcome.status) {
+    switch (abandonedPart.status) {
       case "cleanup_pending":
         result.unknownCleanupPending += 1;
         break;
       case "blocked":
         result.blocked += 1;
         logger.warn("corpus_projection.append_blocked", {
-          entity: outcome.entityId,
-          kind: outcome.kind,
-          attempts: outcome.attempts,
+          entity: abandonedPart.entityId,
+          kind: abandonedPart.kind,
+          attempts: abandonedPart.attempts,
         });
         break;
       case "lease_lost":
         result.leaseLost += 1;
         break;
       default:
-        outcome satisfies never;
-        panic(`Unhandled multipart abandon: ${String(outcome)}`);
+        abandonedPart satisfies never;
+        panic(`Unhandled multipart abandon: ${String(abandonedPart)}`);
     }
-    addCancellation(
-      result,
-      await cancelCorpusProjectionReservations({
-        runInTransaction,
-        leases: unattemptedLeases,
-        errorMessage: "projection append stopped after a multipart request",
+    return {
+      type: "stopped",
+      status: failedRequestStatus({
+        failure: { stopForEngine },
+        blocked: abandonedPart.status === "blocked",
       }),
-    );
-    if (stopForEngine) {
-      result.status = "engine_unavailable";
-      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
-    } else if (outcome.status === "blocked") {
-      result.status = "append_blocked";
-    } else {
-      result.status = "append_unknown";
-    }
-    return result.status;
+    };
   };
   const appendPart = async (
     partIndex: number,
-  ): Promise<
-    | "completed"
-    | "skipped"
-    | "append_unknown"
-    | "append_blocked"
-    | "engine_unavailable"
-  > => {
+  ): Promise<MultipartPartOutcome> => {
     const ndjson = entry.parts.at(partIndex);
     if (ndjson === undefined) {
-      return "completed";
+      return { type: "appended" };
     }
     const started = await measured(
       async () =>
@@ -1049,18 +1067,28 @@ const processMultipartEntry = async ({
         result.timing.storeCommitMs += elapsedMs;
       },
     );
+    if (partIndex === 0 && started !== "lease_ends_before_run") {
+      reservations.decided([lease.intentId]);
+    }
     if (started !== "started") {
       if (partIndex > 0) {
         return await stop({
           errorMessage: "projection multipart append lost its lease",
         });
       }
-      if (started === "stale_cancelled") {
-        result.cancelled += 1;
-      } else {
-        result.leaseLost += 1;
+      switch (started) {
+        case "stale_cancelled":
+          result.cancelled += 1;
+          return { type: "not_started", leaseShort: false };
+        case "lease_lost":
+          result.leaseLost += 1;
+          return { type: "not_started", leaseShort: false };
+        case "lease_ends_before_run":
+          return { type: "not_started", leaseShort: true };
+        default:
+          started satisfies never;
+          return panic(`Unhandled multipart start: ${String(started)}`);
       }
-      return "skipped";
     }
     result.requestCount += 1;
     const appended = await measured(
@@ -1092,11 +1120,16 @@ const processMultipartEntry = async ({
     return await appendPart(partIndex + 1);
   };
   const appendStatus = await appendPart(0);
-  if (appendStatus === "skipped") {
-    return "completed";
-  }
-  if (appendStatus !== "completed") {
-    return appendStatus;
+  switch (appendStatus.type) {
+    case "not_started":
+      return { status: "completed", leaseShort: appendStatus.leaseShort };
+    case "stopped":
+      return { status: appendStatus.status, leaseShort: false };
+    case "appended":
+      break;
+    default:
+      appendStatus satisfies never;
+      return panic(`Unhandled multipart outcome: ${String(appendStatus)}`);
   }
   const unproven = await acceptAndProveProjectionAppend({
     runInTransaction,
@@ -1106,32 +1139,102 @@ const processMultipartEntry = async ({
     result,
   });
   if (unproven === null) {
-    return "completed";
+    return { status: "completed", leaseShort: false };
   }
-  return await stopAfterUnknownRequest({
-    runInTransaction,
-    failure: logAppendFailure({
-      indexId: entry.indexId,
-      documents: entry.documentCount,
-      revisionCount: 1,
-      error: unproven,
+  return {
+    status: failedRequestStatus({
+      failure: logAppendFailure({
+        indexId: entry.indexId,
+        documents: entry.documentCount,
+        revisionCount: 1,
+        error: unproven,
+      }),
+      blocked: false,
     }),
-    blocked: false,
-    laterLeases: unattemptedLeases,
-    cancelMessage: "projection append stopped after a multipart request",
-    result,
-  });
+    leaseShort: false,
+  };
+};
+
+type ProjectionAppendChain = {
+  /** Whether the chain still starts requests. */
+  accepting: () => boolean;
+  /** How the chain's requests ended so far. */
+  status: () => ProjectionAppendChainStatus;
+  /**
+   * Send `requests` one after another, each settled before the next starts,
+   * so a chain never has more than one request in flight and the operator's
+   * per-chain request and byte budget holds. Requests behind one that closed
+   * the chain are not started; their reservations stay held for the cycle to
+   * hand back.
+   */
+  submit: (requests: readonly PreparedProjectionRequest[]) => Promise<void>;
+};
+
+type OpenProjectionAppendChainOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  client: ProjectionAppendClient;
+  commitMode: CorpusProjectionAppendCommitMode;
+  reservations: CycleReservations;
+  result: CorpusProjectionAppendCycleResult;
+};
+
+/**
+ * The requests of one cycle, in order. A request that fails, whatever the
+ * reason, closes the chain to new starts, and so does a start that finds its
+ * lease inside the start margin.
+ */
+const openProjectionAppendChain = ({
+  runInTransaction,
+  client,
+  commitMode,
+  reservations,
+  result,
+}: OpenProjectionAppendChainOptions): ProjectionAppendChain => {
+  let status: ProjectionAppendChainStatus = "completed";
+  let accepting = true;
+
+  const submitFrom = async (
+    requests: readonly PreparedProjectionRequest[],
+    index: number,
+  ): Promise<void> => {
+    const request = requests.at(index);
+    if (request === undefined || !accepting) {
+      return;
+    }
+    // Closed first, so a request that throws leaves the chain closed.
+    accepting = false;
+    const sent = await processPreparedRequest({
+      runInTransaction,
+      client,
+      commitMode,
+      request,
+      reservations,
+      result,
+    });
+    accepting = sent.status === "completed" && !sent.leaseShort;
+    status = worseChainStatus(status, sent.status);
+    await submitFrom(requests, index + 1);
+  };
+
+  return {
+    accepting: () => accepting,
+    status: () => status,
+    submit: async (requests) => {
+      await submitFrom(requests, 0);
+    },
+  };
 };
 
 type ProcessPreparedStreamOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   commitMode: CorpusProjectionAppendCommitMode;
-  appendStartMarginMs: number;
+  flushMarginMs: number;
   materialsReady: readonly CorpusProjectionMaterial[];
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
+  reservations: CycleReservations;
   result: CorpusProjectionAppendCycleResult;
   payloadReader: CorpusProjectionPayloadReader;
 };
@@ -1148,55 +1251,45 @@ type ProcessPreparedStreamOptions = {
  * most that many payloads are in flight while that many prepared revisions
  * wait — the pair a window already held at its own peak.
  *
- * Revisions are still consumed in material order, so each physical index's
- * tail receives the same revisions in the same order and the appended ndjson
- * is unchanged. Failed reads are classified in one transaction per append
- * rather than one per revision.
+ * Revisions are consumed in material order, so each tail receives the same
+ * revisions in the same order. Flushed requests go out one at a time in the
+ * cycle's chain (`openProjectionAppendChain`); failed reads are classified in
+ * one transaction per append rather than one per revision. Whatever the
+ * stream does not start stays held for the cycle to hand back.
  */
-/** Leases still buffered in a tail, plus every material not yet consumed. */
-const remainingLeases = (
-  tails: Map<string, ProjectionAppendTail<PreparedProjectionEntry>>,
-  consumed: number,
-  materialsReady: readonly CorpusProjectionMaterial[],
-): CorpusProjectionIntentLease[] => {
-  const leases: CorpusProjectionIntentLease[] = [];
-  for (const tail of tails.values()) {
-    for (const { material } of tail.entries) {
-      leases.push(material.lease);
-    }
-  }
-  for (const { lease } of materialsReady.slice(consumed)) {
-    leases.push(lease);
-  }
-  return leases;
-};
-
 const processPreparedStream = async ({
   runInTransaction,
   client,
   commitMode,
-  appendStartMarginMs,
+  flushMarginMs,
   materialsReady,
   payloadReadConcurrency,
   retryDelayMs,
   payloadRetryLimit,
+  reservations,
   result,
   payloadReader,
-}: ProcessPreparedStreamOptions): Promise<
-  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
-> => {
+}: ProcessPreparedStreamOptions): Promise<ProjectionAppendChainStatus> => {
   let tails = new Map<string, ProjectionAppendTail<PreparedProjectionEntry>>();
   const pendingFailures: CorpusProjectionReservationFailureOfLease[] = [];
-  let consumed = 0;
+  const chain = openProjectionAppendChain({
+    runInTransaction,
+    client,
+    commitMode,
+    reservations,
+    result,
+  });
 
   const classifyPendingFailures = async (): Promise<void> => {
     if (pendingFailures.length === 0) {
       return;
     }
+    const failures = pendingFailures.splice(0);
     const classified = await classifyCorpusProjectionReservationFailures({
       runInTransaction,
-      failures: pendingFailures.splice(0),
+      failures,
     });
+    reservations.decided(failures.map(({ lease }) => lease.intentId));
     result.retryScheduled += classified.retryScheduled;
     result.blocked += classified.blocked;
     result.cancelled += classified.staleCancelled;
@@ -1221,12 +1314,10 @@ const processPreparedStream = async ({
   });
 
   let waitingSince = Temporal.Now.instant().epochMilliseconds;
-  /** The margin-led flush to append once the pool is closed, if one came. */
-  let marginFlush: ProjectionAppendTail<PreparedProjectionEntry>[] | undefined;
+  let stoppedReading = false;
   for await (const { material, prepared } of payloads) {
     result.timing.payloadLoadMs +=
       Temporal.Now.instant().epochMilliseconds - waitingSince;
-    consumed += 1;
     const entries: PreparedProjectionEntry[] = [];
     if (prepared.isOk()) {
       entries.push(prepared.value);
@@ -1268,79 +1359,41 @@ const processPreparedStream = async ({
       entries,
       mode: "buffer",
       nowMs: Temporal.Now.instant().epochMilliseconds,
-      appendStartMarginMs,
+      flushMarginMs,
     });
     tails = advanced.tails;
-    if (advanced.leaseMarginReached) {
-      // The lease is inside the margin an append needs to start safely, and it
-      // only gets closer. Reading on would append one revision per request,
-      // each paying a batch start, an ingest round trip and a commit for what
-      // belongs in one capful, so the cycle stops here and hands the rest back
-      // to a cycle whose lease can fill its requests.
-      //
-      // Breaking before the append is what stops the reads: closing the pool
-      // ends the refill, so the cycle spends the ingest and commit appending
-      // rather than reading payloads for revisions it has already given up.
-      marginFlush = advanced.flush;
-      break;
-    }
     if (advanced.flush.length > 0) {
       // db-await-in-loop: one batched classification before each append
       await classifyPendingFailures();
-      // db-await-in-loop: one ordered append per flushed capful, under the cycle's leases
-      const requestStatus = await processPreparedRequests({
-        runInTransaction,
-        client,
-        commitMode,
-        requests: advanced.flush,
-        requestIndex: 0,
-        unattemptedLeases: remainingLeases(tails, consumed, materialsReady),
-        result,
-      });
-      if (requestStatus !== "completed") {
-        return requestStatus;
-      }
+      await chain.submit(advanced.flush);
+    }
+    // Past the flush margin the lease only gets closer to the start margin,
+    // and reading on would append one revision per request; a chain a
+    // request closed starts nothing more. Either way the cycle stops reading
+    // here, which closes the pool and waits for the reads in flight, and
+    // hands the rest back when it ends.
+    if (advanced.leaseMarginReached || !chain.accepting()) {
+      stoppedReading = true;
+      break;
     }
     waitingSince = Temporal.Now.instant().epochMilliseconds;
   }
 
-  if (marginFlush !== undefined) {
+  if (!stoppedReading) {
+    result.timing.payloadLoadMs +=
+      Temporal.Now.instant().epochMilliseconds - waitingSince;
     await classifyPendingFailures();
-    // The revisions this cycle will not attempt keep their reservations. Every
-    // one of them is inside the start margin by construction, so they come
-    // back on their own within it, and cancelling instead would spend a
-    // statement per lease — up to the whole batch — holding a connection and
-    // the shared fence to reclaim them barely sooner.
-    return await processPreparedRequests({
-      runInTransaction,
-      client,
-      commitMode,
-      requests: marginFlush,
-      requestIndex: 0,
-      unattemptedLeases: remainingLeases(tails, consumed, materialsReady),
-      result,
+    const final = advanceCorpusProjectionAppendTails({
+      tails,
+      entries: [],
+      mode: "flush-all",
+      nowMs: Temporal.Now.instant().epochMilliseconds,
+      flushMarginMs,
     });
+    await chain.submit(final.flush);
   }
-
-  result.timing.payloadLoadMs +=
-    Temporal.Now.instant().epochMilliseconds - waitingSince;
   await classifyPendingFailures();
-  const final = advanceCorpusProjectionAppendTails({
-    tails,
-    entries: [],
-    mode: "flush-all",
-    nowMs: Temporal.Now.instant().epochMilliseconds,
-    appendStartMarginMs,
-  });
-  return await processPreparedRequests({
-    runInTransaction,
-    client,
-    commitMode,
-    requests: final.flush,
-    requestIndex: 0,
-    unattemptedLeases: [],
-    result,
-  });
+  return chain.status();
 };
 
 /**
@@ -1458,6 +1511,67 @@ export const executeCorpusProjectionAppendCycle = async <
     status: "completed",
     reserved: leases.length,
   };
+  // From here every exit, a thrown one included, hands back what the cycle
+  // reserved and did not start. The chain sends one request at a time and
+  // awaits each, so nothing the cycle launched is still running by then.
+  const reservations = holdCycleReservations({ runInTransaction, leases });
+  try {
+    const chainStatus = await appendReservedRevisions({
+      runInTransaction,
+      client,
+      commitMode,
+      manifest,
+      leases,
+      retryDelayMs,
+      payloadRetryLimit,
+      payloadReadConcurrency,
+      payloadReader,
+      reservations,
+      result,
+    });
+    if (chainStatus !== "completed") {
+      result.status = chainStatus;
+    }
+    if (chainStatus === "engine_unavailable") {
+      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
+    }
+  } finally {
+    addCancellation(result, await reservations.handBack());
+  }
+  if (result.status === "completed" && result.blocked > 0) {
+    result.status = "append_blocked";
+  }
+  return withProofFailure(result, proofFailure);
+};
+
+type AppendReservedRevisionsOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  client: ProjectionAppendClient;
+  commitMode: CorpusProjectionAppendCommitMode;
+  manifest: CorpusIndexManifest;
+  leases: readonly CorpusProjectionIntentLease[];
+  retryDelayMs: number;
+  payloadRetryLimit: number;
+  payloadReadConcurrency: number;
+  payloadReader: CorpusProjectionPayloadReader;
+  reservations: CycleReservations;
+  result: CorpusProjectionAppendCycleResult;
+};
+
+/** Read, settle and append what one cycle reserved. */
+const appendReservedRevisions = async ({
+  runInTransaction,
+  client,
+  commitMode,
+  manifest,
+  leases,
+  retryDelayMs,
+  payloadRetryLimit,
+  payloadReadConcurrency,
+  payloadReader,
+  reservations,
+  result,
+}: AppendReservedRevisionsOptions): Promise<ProjectionAppendChainStatus> => {
   const materials = await measured(
     async () =>
       await runInTransaction(
@@ -1473,26 +1587,24 @@ export const executeCorpusProjectionAppendCycle = async <
     rejected: materials.rejected,
     policy: { retryDelayMs, payloadRetryLimit },
   });
+  reservations.decided(materials.rejected.map(({ lease }) => lease.intentId));
   result.cancelled += rejected.cancelled;
   result.leaseLost += rejected.leaseLost;
   result.unread += rejected.unread;
   result.retryScheduled += rejected.retryScheduled;
   result.blocked += rejected.blocked;
 
-  await processPreparedStream({
+  return await processPreparedStream({
     runInTransaction,
     client,
     commitMode,
-    appendStartMarginMs: corpusProjectionAppendStartMarginMs(manifest),
+    flushMarginMs: corpusProjectionAppendFlushMarginMs(manifest),
     materialsReady: materials.ready,
     payloadReadConcurrency,
     retryDelayMs,
     payloadRetryLimit,
+    reservations,
     result,
     payloadReader,
   });
-  if (result.status === "completed" && result.blocked > 0) {
-    result.status = "append_blocked";
-  }
-  return withProofFailure(result, proofFailure);
 };

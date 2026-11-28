@@ -52,6 +52,7 @@ import {
   type ProjectedCorpusIndexGeneration,
   readProjectedCorpusIndexGenerationsTx,
 } from "@/api/lib/legal-search/corpus-index-projected-generations";
+import { CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
@@ -1145,6 +1146,7 @@ const writeDesiredStates = async (
           appendMode: sql<
             "batchable" | "single"
           >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
+          appendRequestCap: sql<number>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendRequestCap} ELSE ${CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL}::integer END`,
           lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
           lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
         },

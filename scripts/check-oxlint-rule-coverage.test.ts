@@ -5,6 +5,7 @@ import {
   coverageErrors,
   coverageProblems,
   exportedRuleIds,
+  fixableRuleIds,
   readCoverage,
 } from "./check-oxlint-rule-coverage.ts";
 
@@ -137,4 +138,53 @@ test("executed evidence rejects malformed records", () => {
   expect(() =>
     readCoverage(JSON.stringify({ ruleId, outcome: "named" })),
   ).toThrow("Invalid executed rule coverage record");
+});
+
+test("fixableRuleIds detects code and whitespace fixable rules", () => {
+  expect(
+    fixableRuleIds({
+      meta: { name: "fixture-plugin" },
+      rules: {
+        codeFix: { meta: { fixable: "code" } },
+        wsFix: { meta: { fixable: "whitespace" } },
+        plain: { meta: { type: "problem" } },
+        bare: {},
+      },
+    }),
+  ).toEqual(["fixture-plugin/codeFix", "fixture-plugin/wsFix"]);
+});
+
+test("rejects a fixable rule without an executed autofix test", () => {
+  expect(
+    coverageProblems({
+      ruleIds,
+      registeredRuleIds: new Set(ruleIds),
+      fixableRuleIds: new Set(ruleIds),
+      lintConfig,
+      trackedFiles: ["src/example.ts"],
+      coverage: complete,
+    }),
+  ).toEqual([{ ruleId, category: "untested-fix" }]);
+
+  const withFix = readCoverage(
+    [
+      JSON.stringify({ ruleId, outcome: "report" }),
+      JSON.stringify({ ruleId, outcome: "clean" }),
+      JSON.stringify({ ruleId, outcome: "fix" }),
+    ].join("\n"),
+  );
+  expect(
+    coverageProblems({
+      ruleIds,
+      registeredRuleIds: new Set(ruleIds),
+      fixableRuleIds: new Set(ruleIds),
+      lintConfig,
+      trackedFiles: ["src/example.ts"],
+      coverage: withFix,
+    }),
+  ).toEqual([]);
+
+  expect(coverageErrors([{ ruleId, category: "untested-fix" }])).toEqual([
+    `Custom rule coverage gap: ${ruleId}::untested-fix (add an autofix test case (runSingleRule with fix: true) in .oxlint-plugins/__tests__/)`,
+  ]);
 });

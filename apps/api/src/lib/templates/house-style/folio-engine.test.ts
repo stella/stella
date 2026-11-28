@@ -282,6 +282,60 @@ describe("folioTemplatePlanEngine", () => {
     });
   });
 
+  test("a memo's own lines fill the header of fields the template keeps", async () => {
+    const cell = (text: string): string =>
+      `<w:tc><w:p>${text === "" ? "" : `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`}</w:p></w:tc>`;
+    const row = (name: string): string =>
+      `<w:tr>${cell(name)}${cell("")}</w:tr>`;
+    const memoTemplate = await docx({
+      body: [
+        paragraph("MEMORANDUM", styled("Title")),
+        `<w:tbl>${["From:", "To:", "Date:", "Subject:"].map(row).join("")}</w:tbl>`,
+        paragraph("Text of the memo goes here.", styled("Body")),
+      ].join(""),
+      styles: [
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+        style("Title", "Title"),
+        style("Body", "Body Text"),
+      ].join(""),
+      numbering: "",
+    });
+    const memo = await docx({
+      body: [
+        paragraph("MEMORANDUM"),
+        paragraph("To: Jane Roe"),
+        paragraph("From: Peter Lang"),
+        paragraph("Re: Lease of the warehouse"),
+        paragraph("The lease ends in June."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: "",
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: memo,
+        template: memoTemplate,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.note.items).toContainEqual(
+      expect.objectContaining({ kind: "headerFieldsFilled" }),
+    );
+    const texts = (await folioTemplatePlanEngine.analyze(formatted.docx))
+      .unwrap()
+      .blocks.map(({ text }) => text);
+    // The values stand in the cells, word for word, without their own
+    // names; the cell without a line stays empty.
+    expect(texts).toContain("Jane Roe");
+    expect(texts).toContain("Peter Lang");
+    expect(texts).toContain("Lease of the warehouse");
+    expect(texts).not.toContain("To: Jane Roe");
+    expect(texts).toContain("The lease ends in June.");
+  });
+
   test("a cell paragraph the source sets tight stays tight in the output", async () => {
     const TIGHT = '<w:spacing w:before="0" w:after="0"/>';
     const cell = (text: string, properties = ""): string =>
@@ -429,5 +483,51 @@ describe("folioTemplatePlanEngine", () => {
     };
     expect(await textOf()).toContain("Kept inserted.");
     expect(await textOf("reject")).toContain("Kept deleted.");
+  });
+
+  test("formats a document with its tracked changes kept: the output is the same redline", async () => {
+    const tracked = await docx({
+      body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,
+      styles: "",
+      numbering: "",
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: tracked,
+        template: await template(),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+        trackedChanges: "keep",
+      })
+    ).unwrap();
+    expect(formatted.plan.trackedChanges).toBe("keep");
+    expect(formatted.note.items.at(0)).toMatchObject({
+      kind: "trackedChangesKept",
+      insertions: 1,
+      deletions: 1,
+    });
+    // The output tracks what the source tracks, and reads as the source
+    // does in either view.
+    const kept = (
+      await folioTemplatePlanEngine.analyze(formatted.docx, {
+        trackedChanges: "keep",
+      })
+    ).unwrap();
+    expect(kept.trackedChangesKept).toMatchObject({
+      insertions: 1,
+      deletions: 1,
+      authors: ["A"],
+    });
+    const textsOf = async (view: "accept" | "reject") =>
+      (
+        await folioTemplatePlanEngine.analyze(formatted.docx, {
+          trackedChanges: view,
+        })
+      )
+        .unwrap()
+        .blocks.map(({ text }) => text);
+    expect(await textsOf("accept")).toContain("Kept inserted.");
+    expect(await textsOf("reject")).toContain("Kept deleted.");
   });
 });

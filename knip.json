@@ -65,6 +65,9 @@
     "packages/case-law-parsers": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/legal-morphology": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
     },

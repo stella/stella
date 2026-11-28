@@ -9,6 +9,11 @@
  * rewrite in apply-field-suggestions.ts.
  */
 
+import {
+  MAIN_DOCUMENT_PART_PATH,
+  templateContentPartPaths,
+} from "@stll/docx-engine/ooxml";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { loadDocx } from "@/api/lib/docx-archive";
@@ -17,11 +22,6 @@ import {
   type FieldSuggestion,
 } from "@/api/lib/docx/apply-field-suggestions";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
-import {
-  MAIN_DOCUMENT_PART_PATH,
-  templateContentPartPaths,
-} from "@/api/lib/docx/ooxml";
-import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";

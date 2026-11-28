@@ -1,3 +1,4 @@
+// parser-output-unchanged: CourtListener parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 import { panic, Result } from "better-result";
@@ -13,6 +14,13 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  COURTLISTENER_REJECTION_REASON,
+  type CourtListenerRecordRejectedError,
+  type CourtListenerRejectionReason,
+  rejectCourtListenerRecord,
+  type RejectionDiagnostic,
+} from "@stll/case-law-parsers/courtlistener/rejection";
+import {
   type CitationType,
   isCitationType,
   isOpinionType,
@@ -24,13 +32,6 @@ import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { isoCalendarDay } from "@/api/lib/dates";
 import { isRecord } from "@/api/lib/type-guards";
 
-import {
-  COURTLISTENER_REJECTION_REASON,
-  type CourtListenerRecordRejectedError,
-  type CourtListenerRejectionReason,
-  rejectCourtListenerRecord,
-  type RejectionDiagnostic,
-} from "./rejection";
 import {
   CITATION_COLUMNS,
   type CitationRow,

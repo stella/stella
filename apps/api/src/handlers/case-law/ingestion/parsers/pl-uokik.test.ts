@@ -11,6 +11,7 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   extractPdfBodyAndNotes,
   PDF_PARAGRAPH_START,
@@ -39,7 +40,6 @@ import {
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { logger } from "@/api/lib/observability/logger";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlUokikDocument = guardParser(uncheckedParsePlUokikDocument);
 

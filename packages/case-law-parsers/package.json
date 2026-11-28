@@ -35,13 +35,81 @@
       "types": "./src/br-tst.ts",
       "import": "./src/br-tst.ts"
     },
+    "./citation-scopes": {
+      "types": "./src/citation-scopes.ts",
+      "import": "./src/citation-scopes.ts"
+    },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
       "import": "./src/court-paragraph-numbers.ts"
     },
+    "./courtlistener/blocks": {
+      "types": "./src/courtlistener/blocks.ts",
+      "import": "./src/courtlistener/blocks.ts"
+    },
     "./courtlistener/canonical-id-order": {
       "types": "./src/courtlistener/canonical-id-order.ts",
       "import": "./src/courtlistener/canonical-id-order.ts"
+    },
+    "./courtlistener/compose": {
+      "types": "./src/courtlistener/compose.ts",
+      "import": "./src/courtlistener/compose.ts"
+    },
+    "./courtlistener/front-matter": {
+      "types": "./src/courtlistener/front-matter.ts",
+      "import": "./src/courtlistener/front-matter.ts"
+    },
+    "./courtlistener/harvard-xml": {
+      "types": "./src/courtlistener/harvard-xml.ts",
+      "import": "./src/courtlistener/harvard-xml.ts"
+    },
+    "./courtlistener/html": {
+      "types": "./src/courtlistener/html.ts",
+      "import": "./src/courtlistener/html.ts"
+    },
+    "./courtlistener/markup-residue": {
+      "types": "./src/courtlistener/markup-residue.ts",
+      "import": "./src/courtlistener/markup-residue.ts"
+    },
+    "./courtlistener/opinion-class": {
+      "types": "./src/courtlistener/opinion-class.ts",
+      "import": "./src/courtlistener/opinion-class.ts"
+    },
+    "./courtlistener/opinion-row": {
+      "types": "./src/courtlistener/opinion-row.ts",
+      "import": "./src/courtlistener/opinion-row.ts"
+    },
+    "./courtlistener/outcome": {
+      "types": "./src/courtlistener/outcome.ts",
+      "import": "./src/courtlistener/outcome.ts"
+    },
+    "./courtlistener/plain-text": {
+      "types": "./src/courtlistener/plain-text.ts",
+      "import": "./src/courtlistener/plain-text.ts"
+    },
+    "./courtlistener/plain-text-structure": {
+      "types": "./src/courtlistener/plain-text-structure.ts",
+      "import": "./src/courtlistener/plain-text-structure.ts"
+    },
+    "./courtlistener/rejection": {
+      "types": "./src/courtlistener/rejection.ts",
+      "import": "./src/courtlistener/rejection.ts"
+    },
+    "./courtlistener/select": {
+      "types": "./src/courtlistener/select.ts",
+      "import": "./src/courtlistener/select.ts"
+    },
+    "./courtlistener/source-defects": {
+      "types": "./src/courtlistener/source-defects.ts",
+      "import": "./src/courtlistener/source-defects.ts"
+    },
+    "./courtlistener/usability": {
+      "types": "./src/courtlistener/usability.ts",
+      "import": "./src/courtlistener/usability.ts"
+    },
+    "./courtlistener/validation-policy": {
+      "types": "./src/courtlistener/validation-policy.ts",
+      "import": "./src/courtlistener/validation-policy.ts"
     },
     "./courtlistener/vocabulary": {
       "types": "./src/courtlistener/vocabulary.ts",
@@ -111,6 +179,10 @@
       "types": "./src/libpdf-utils.ts",
       "import": "./src/libpdf-utils.ts"
     },
+    "./marker-injection.test-helper": {
+      "types": "./src/marker-injection.test-helper.ts",
+      "import": "./src/marker-injection.test-helper.ts"
+    },
     "./markup-residue": {
       "types": "./src/markup-residue.ts",
       "import": "./src/markup-residue.ts"
@@ -122,6 +194,10 @@
     "./parser-logger": {
       "types": "./src/parser-logger.ts",
       "import": "./src/parser-logger.ts"
+    },
+    "./parser-reader-guard": {
+      "types": "./src/parser-reader-guard.ts",
+      "import": "./src/parser-reader-guard.ts"
     },
     "./pdf-bands": {
       "types": "./src/pdf-bands.ts",
@@ -239,6 +315,10 @@
       "types": "./src/uk-fcl.ts",
       "import": "./src/uk-fcl.ts"
     },
+    "./us-citation-scanner": {
+      "types": "./src/us-citation-scanner.ts",
+      "import": "./src/us-citation-scanner.ts"
+    },
     "./validate-ast": {
       "types": "./src/validate-ast.ts",
       "import": "./src/validate-ast.ts"
@@ -265,6 +345,7 @@
     "@stll/html": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/mojibake": "workspace:*",
+    "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "0.4.3",
     "better-result": "catalog:",
@@ -273,6 +354,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@stll/folio-core": "catalog:",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",

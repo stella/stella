@@ -19,6 +19,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { FieldMeta } from "@stll/docx-engine/types";
 import {
   renderDeterministicFieldValue,
   resolvePath,
@@ -26,7 +27,6 @@ import {
 
 import type { LookupResolver } from "./lookup-fields";
 import { applyManifestFillSteps } from "./manifest-fill-steps";
-import type { FieldMeta } from "./types";
 
 // Lookup is out of scope (server-only). No deterministic field below uses it,
 // so the resolver is never invoked; it errors loudly if a future case adds a

@@ -26,6 +26,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -41,7 +43,6 @@ import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

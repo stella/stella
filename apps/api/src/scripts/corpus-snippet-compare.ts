@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { mkdir } from "node:fs/promises";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import type { MorphologyLanguage } from "@stll/legal-morphology/stem";
 
 import { envBase } from "@/api/env-base";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
@@ -14,7 +15,6 @@ import {
   readCorpusPassages,
 } from "@/api/lib/legal-search/corpus-passage-reader";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
 import type { LegalSearchHit } from "@/api/lib/legal-search/types";
 import {

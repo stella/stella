@@ -15,9 +15,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { W_NS } from "@stll/docx-engine/ooxml";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { W_NS } from "@/api/lib/docx/ooxml";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { partitionFieldConfiguration } from "@/api/lib/templates/configure-field-input";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";

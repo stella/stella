@@ -14,6 +14,6 @@ export default {
     kind: "custom-rule",
     rule: "no-direct-test-state/no-direct-test-state",
     reason:
-      "Direct `process.env` and validated `env` writes in test files are rejected; existing sites hold shrink-only counts in scripts/test-state-baseline.json.",
+      "Direct `process.env` and validated `env` writes in test files are rejected unconditionally.",
   },
 } as const satisfies OwnershipEntry;

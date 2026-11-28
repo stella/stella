@@ -4,6 +4,12 @@ import fc from "fast-check";
 
 import { flattenInlineText, type Inline } from "@stll/legal-ast/inline";
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import { functionWordsFor } from "@stll/legal-morphology/function-words";
+import {
+  LEGACY_STEMMERS,
+  MORPHOLOGY_LANGUAGES,
+} from "@stll/legal-morphology/stem";
 import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -26,12 +32,6 @@ import {
   CORPUS_QUERY_VARIANT_POLICY,
   type CorpusIndexQueryVariant,
 } from "@/api/lib/legal-search/corpus-query-variant-policy";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
-import {
-  LEGACY_STEMMERS,
-  MORPHOLOGY_LANGUAGES,
-} from "@/api/lib/legal-search/morphology/stem";
 
 test("free text cannot escape into the query DSL", () => {
   expect(corpusFreeTextClause('smlouva) OR (court:"X" AND text:*')).toBe(

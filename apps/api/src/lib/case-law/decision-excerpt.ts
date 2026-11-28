@@ -1,13 +1,13 @@
 import { panic } from "better-result";
 
 import { SEARCH_EXCERPTS, type SearchExcerpt } from "@stll/api-contract/search";
+import type { MorphologyLanguage } from "@stll/legal-morphology/stem";
 
 import {
   highlightCorpusPassage,
   markCorpusFragment,
 } from "@/api/lib/legal-search/corpus-passage-highlight";
 import type { CorpusQueryToken } from "@/api/lib/legal-search/corpus-query";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import {
   escapeSearchHtml,
   HIGHLIGHT_START,

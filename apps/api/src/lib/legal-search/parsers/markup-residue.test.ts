@@ -1,11 +1,10 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { markupResidueIn } from "@stll/case-law-parsers/courtlistener/markup-residue";
 import { entityResidueIn } from "@stll/case-law-parsers/entity-residue";
 import { RTF_CONTROLS } from "@stll/case-law-parsers/rtf-control-vocabulary";
 import { assertProperty } from "@stll/property-testing";
-
-import { markupResidueIn } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/markup-residue";
 
 const LETTERS = fc.stringMatching(/^[a-z]{2,20}$/u);
 const RTF_CONTROL_WORDS = new Set<string>(

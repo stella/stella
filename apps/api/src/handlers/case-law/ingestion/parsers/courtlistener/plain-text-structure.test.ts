@@ -1,13 +1,12 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { createTextBudget } from "@stll/case-law-parsers/courtlistener/outcome";
+import { plainTextStructureOf } from "@stll/case-law-parsers/courtlistener/plain-text-structure";
+import { selectOpinionText } from "@stll/case-law-parsers/courtlistener/select";
 import { assertProperty } from "@stll/property-testing";
 
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-
-import { createTextBudget } from "./outcome";
-import { plainTextStructureOf } from "./plain-text-structure";
-import { selectOpinionText } from "./select";
 
 const select = (plain_text: string) =>
   selectOpinionText({

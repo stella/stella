@@ -10,6 +10,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml,
   plUodoSourceTexts,
@@ -24,7 +25,6 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import { toPlainCorpusText } from "@/api/mcp/tool-utils";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlUodoDecisionXml = guardParser(uncheckedParsePlUodoDecisionXml);
 

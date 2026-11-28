@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlNsaDecision as uncheckedParsePlNsaDecision,
   plNsaParagraphs,
@@ -21,7 +22,6 @@ import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters
  */
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlNsaDecision = guardParser(uncheckedParsePlNsaDecision);
 

@@ -1,12 +1,6 @@
 import { sql } from "drizzle-orm";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
-import { normalizeUnicode } from "@stll/text-normalize";
-
-import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
-import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
-import { zstdCompress } from "@/api/lib/compression";
-import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   type ExpansionBucket,
   foldExpansionKey,
@@ -17,12 +11,18 @@ import {
   morphologyDictionaryPointerKey,
   parseExpansionDictionary,
   serializeExpansionDictionary,
-} from "@/api/lib/legal-search/morphology/dictionary";
+} from "@stll/legal-morphology/dictionary";
 import {
   MORPHOLOGY_LANGUAGES,
   type MorphologyLanguage,
   stemLegalTerm,
-} from "@/api/lib/legal-search/morphology/stem";
+} from "@stll/legal-morphology/stem";
+import { normalizeUnicode } from "@stll/text-normalize";
+
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
+import { zstdCompress } from "@/api/lib/compression";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { putCorpusS3ObjectWithSignal, refreshCorpusS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 

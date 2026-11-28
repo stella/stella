@@ -13,12 +13,12 @@ import {
   parseBrTstHtml as uncheckedParseBrTstHtml,
   parseBrTstPrecedent as uncheckedParseBrTstPrecedent,
 } from "@stll/case-law-parsers/br-tst";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { isRecord } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseBrTstDespacho = guardParser(uncheckedParseBrTstDespacho);
 const parseBrTstHtml = guardParser(uncheckedParseBrTstHtml);

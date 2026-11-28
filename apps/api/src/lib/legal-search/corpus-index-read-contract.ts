@@ -1,6 +1,16 @@
 import { panic, TaggedError } from "better-result";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import {
+  caseLawDocumentStemLanguages,
+  corpusMorphologyLanguage,
+  documentMorphologyLanguage,
+} from "@stll/legal-morphology/corpus-language";
+import { functionWordsFor } from "@stll/legal-morphology/function-words";
+import {
+  LEGACY_STEMMERS,
+  type MorphologyLanguage,
+} from "@stll/legal-morphology/stem";
 
 import { isCaseLawIndexGroup } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -24,16 +34,6 @@ import type {
   CorpusLegacyStemming,
   CorpusStemming,
 } from "@/api/lib/legal-search/corpus-query";
-import {
-  caseLawDocumentStemLanguages,
-  corpusMorphologyLanguage,
-  documentMorphologyLanguage,
-} from "@/api/lib/legal-search/morphology/corpus-language";
-import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
-import {
-  LEGACY_STEMMERS,
-  type MorphologyLanguage,
-} from "@/api/lib/legal-search/morphology/stem";
 
 /**
  * The serving case-law generation cannot answer a case-law read: its index

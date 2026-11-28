@@ -10,6 +10,7 @@ import {
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { CitationScopesRejectedError } from "@stll/case-law-parsers/citation-scopes";
 import { createSha256 } from "@stll/sha256/node";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -21,7 +22,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import { CitationScopesRejectedError } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import {
   processDecision,
   processStoredDecision,

@@ -1,18 +1,17 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { composeCourtListenerText } from "@stll/case-law-parsers/courtlistener/compose";
+import { COURTLISTENER_HTML_PARSERS } from "@stll/case-law-parsers/courtlistener/html";
+import { markupResidueMatchesIn } from "@stll/case-law-parsers/courtlistener/markup-residue";
+import { createTextBudget } from "@stll/case-law-parsers/courtlistener/outcome";
+import { selectOpinionText } from "@stll/case-law-parsers/courtlistener/select";
+import { publishedTextDefects } from "@stll/case-law-parsers/courtlistener/source-defects";
+import { courtListenerValidationPolicy } from "@stll/case-law-parsers/courtlistener/validation-policy";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
-
-import { composeCourtListenerText } from "./compose";
-import { COURTLISTENER_HTML_PARSERS } from "./html";
-import { markupResidueMatchesIn } from "./markup-residue";
-import { createTextBudget } from "./outcome";
-import { selectOpinionText } from "./select";
-import { publishedTextDefects } from "./source-defects";
-import { courtListenerValidationPolicy } from "./validation-policy";
 
 const select = (html: string) =>
   selectOpinionText({

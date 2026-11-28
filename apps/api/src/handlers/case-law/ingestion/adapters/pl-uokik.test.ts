@@ -12,6 +12,7 @@ import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { PL_UOKIK_RULING_UNREAD } from "@stll/case-law-parsers/pl-uokik";
 import { load } from "@stll/html";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
@@ -62,7 +63,6 @@ import {
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

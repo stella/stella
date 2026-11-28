@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 
 import {
@@ -31,7 +32,6 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import {
   installRecordingAnalytics,
   installRecordingLogger,

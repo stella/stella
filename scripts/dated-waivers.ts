@@ -485,8 +485,10 @@ export const isExpiryPolicySource = (file: string): boolean =>
       /\.(?:ts|json|toml|ya?ml)$/u.test(file))) &&
   !/(?:\.test\.|\.spec\.|\.fixtures?\.|fixtures\/|__fixtures__\/)/u.test(file);
 
-export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
-  const root = path.resolve(import.meta.dir, "..");
+export const loadWaivers = (
+  tracked: readonly string[],
+  root = path.resolve(import.meta.dir, ".."),
+): DatedWaiver[] => {
   const read = (file: string): string =>
     readFileSync(path.join(root, file), "utf-8");
   const files = tracked.filter(
@@ -555,6 +557,15 @@ if (import.meta.main) {
   assertOfflineCheckPreload();
 
   const check = process.argv.includes("--check");
+  const rootFlag = process.argv.indexOf("--root");
+  const rootArg = rootFlag === -1 ? undefined : process.argv.at(rootFlag + 1);
+  if (rootFlag !== -1 && !rootArg) {
+    panic("--root requires a path");
+  }
+  const root =
+    rootArg === undefined
+      ? path.resolve(import.meta.dir, "..")
+      : path.resolve(rootArg);
   const trackedFilesFlag = process.argv.indexOf("--tracked-files");
   if (check && trackedFilesFlag === -1) {
     panic("--check requires --tracked-files <NUL-separated-file>");
@@ -574,7 +585,7 @@ if (import.meta.main) {
   if (trackedFilesPath === undefined) {
     panic("Inventory modes require --tracked-files <NUL-separated-file>");
   }
-  const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
+  const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath), root);
   if (check) {
     const now = new Date();
     const changedFiles =
@@ -612,8 +623,7 @@ if (import.meta.main) {
             entries,
             changedFiles,
             baseSources,
-            read: (file) =>
-              readFileSync(path.resolve(import.meta.dir, "..", file), "utf-8"),
+            read: (file) => readFileSync(path.resolve(root, file), "utf-8"),
           });
     for (const annotation of expiredWaiverAnnotations(
       entries,
