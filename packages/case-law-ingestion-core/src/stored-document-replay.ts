@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 import {
   decodeSourceRawEnvelopeObjects,
   StoredRawReadError,
   type StoredRawReparseInput,
-} from "@stll/case-law-ingestion-core/ingestion-types";
-import { sha256Hex } from "@stll/sha256/bun";
+} from "./ingestion-types";
 
 /** Read only the object the envelope names; absence never triggers a publisher read. */
 export const readStoredDocumentObject = async (

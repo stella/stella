@@ -1,7 +1,7 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: shared error output does not change parsed decisions.
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
-
-import { logger } from "@/api/lib/observability/logger";
 
 const DOCUMENT_PARSE_FAILED_EVENT = "case_law.ingestion.document_parse_failed";
 
@@ -21,5 +21,5 @@ export const logDocumentParseFailure = ({
     caseNumber,
     "error.type": error,
   });
-  logger.warn(DOCUMENT_PARSE_FAILED_EVENT, attributes);
+  getIngestionDiagnosticsSink().warn(DOCUMENT_PARSE_FAILED_EVENT, attributes);
 };

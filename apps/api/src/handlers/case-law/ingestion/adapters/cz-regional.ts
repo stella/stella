@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
@@ -21,6 +22,7 @@ import {
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
 import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -116,9 +118,6 @@ import {
 import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
-import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
@@ -139,19 +138,17 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const MAX_FINALDOC_RESPONSE_BYTES = 20 * 1024 * 1024;
 
-const itemBuildFailed = failureSink({
-  event: "case_law.ingestion.item_build_failed",
-  expected: [],
-});
-
 const observeItemBuildFailure = (error: object, documentId?: string): void => {
-  observeFailure(classifyFailure(error, "upstream_unavailable"), {
-    sink: itemBuildFailed,
-    ctx: {
-      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      ...(documentId === undefined ? {} : { documentId }),
+  getIngestionDiagnosticsSink().observeFailure(
+    classifyFailure(error, "upstream_unavailable"),
+    {
+      event: "case_law.ingestion.item_build_failed",
+      ctx: {
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        ...(documentId === undefined ? {} : { documentId }),
+      },
     },
-  });
+  );
 };
 
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
@@ -299,11 +296,14 @@ const mapDecisionType = (
   // A member nothing maps reaches the corpus as the enum lowercased, which no
   // reader and no heading lookup recognises. The row is still worth storing,
   // so the miss is reported rather than dropped.
-  logger.warn("case_law.ingestion.decision_type_unmapped", {
-    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-    caseNumber,
-    decisionTypeRaw: type,
-  });
+  getIngestionDiagnosticsSink().warn(
+    "case_law.ingestion.decision_type_unmapped",
+    {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      caseNumber,
+      decisionTypeRaw: type,
+    },
+  );
   return type.toLowerCase();
 };
 
@@ -712,11 +712,6 @@ export const readCzRegionalChain = (
 };
 
 /** A document request or body read that failed. */
-const documentReadFailed = failureSink({
-  event: "case_law.ingestion.detail_fetch_failed",
-  expected: [],
-});
-
 const FINALDOC_SHAPE_FIELDS = [
   "uuid",
   "verdictText",
@@ -760,7 +755,7 @@ const retryFinaldocRead = async (
   if (!isRetryableFinaldocRead(first)) {
     return first;
   }
-  logger.warn("case_law.ingestion.fetch_retry", {
+  getIngestionDiagnosticsSink().warn("case_law.ingestion.fetch_retry", {
     adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
     attempt: 1,
     maxRetries: 1,
@@ -797,10 +792,13 @@ const fetchFinaldoc = async (
 ): Promise<CzRegionalFinaldocRead> => {
   const target = restrictCzRegionalFinaldocUrl(docUrl);
   if (target === null) {
-    logger.warn("case_law.ingestion.outbound_url_rejected", {
-      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      caseNumber,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.outbound_url_rejected",
+      {
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        caseNumber,
+      },
+    );
     return { type: "link-rejected" };
   }
 
@@ -1127,11 +1125,6 @@ const documentTextOf = (doc: CzRegionalFinaldoc | null): DocumentText => {
 };
 
 /** A document payload the structured parser could not read. */
-const documentParseFailed = failureSink({
-  event: "case_law.ingestion.document_parse_failed",
-  expected: [],
-});
-
 type ParseDocumentPayloadOptions = {
   doc: CzRegionalFinaldoc;
   caseNumber: string;
@@ -1186,8 +1179,8 @@ const parseDocumentPayload = ({
   } catch (error) {
     // Reported, so a parser that starts failing across the source is told
     // apart from decisions that carry only the plain-text rendering.
-    observeFailure(error, {
-      sink: documentParseFailed,
+    getIngestionDiagnosticsSink().observeFailure(error, {
+      event: "case_law.ingestion.document_parse_failed",
       ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
     });
     return { documentAst: EMPTY_AST, fulltext: text.plain };
@@ -1254,10 +1247,13 @@ export const assembleCzRegionalDecision = ({
     ? restrictCzRegionalFinaldocUrl(publishedDocumentUrl)
     : null;
   if (publishedDocumentUrl && documentUrl === null) {
-    logger.warn("case_law.ingestion.outbound_url_rejected", {
-      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      caseNumber,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.outbound_url_rejected",
+      {
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        caseNumber,
+      },
+    );
   }
 
   const docMetadata = parsedDocument?.metadata ?? undefined;
@@ -1440,7 +1436,7 @@ const finaldocOf = ({
     case "link-rejected":
       return { type: "document", document: null };
     case "refused":
-      observeFailure(
+      getIngestionDiagnosticsSink().observeFailure(
         classifyFailure(
           unreadPublisherError({
             outcome: read,
@@ -1451,7 +1447,7 @@ const finaldocOf = ({
           "upstream_unavailable",
         ),
         {
-          sink: documentReadFailed,
+          event: "case_law.ingestion.detail_fetch_failed",
           ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
         },
       );
@@ -1474,10 +1470,13 @@ const finaldocOf = ({
         read.cause.error !== null
           ? read.cause.error
           : error;
-      observeFailure(classifyFailure(reported, "upstream_unavailable"), {
-        sink: documentReadFailed,
-        ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
-      });
+      getIngestionDiagnosticsSink().observeFailure(
+        classifyFailure(reported, "upstream_unavailable"),
+        {
+          event: "case_law.ingestion.detail_fetch_failed",
+          ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
+        },
+      );
       return {
         type: "unread",
         // The adapter sees one cycle; counting consecutive ones is the
@@ -1732,15 +1731,18 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
         delayMs: (failure, { attempt }) => {
           if (isTimeoutError(failure.cause)) {
             const delayMs = LIST_FETCH_RETRY_DELAY_MS * attempt;
-            logger.warn("case_law.ingestion.page_timeout_retry", {
-              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-              "error.type": errorTag(failure),
-              page: state.page,
-              date: state.date,
-              retry: attempt,
-              maxRetries: LIST_FETCH_RETRIES,
-              retryDelayMs: delayMs,
-            });
+            getIngestionDiagnosticsSink().warn(
+              "case_law.ingestion.page_timeout_retry",
+              {
+                adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+                "error.type": errorTag(failure),
+                page: state.page,
+                date: state.date,
+                retry: attempt,
+                maxRetries: LIST_FETCH_RETRIES,
+                retryDelayMs: delayMs,
+              },
+            );
             return delayMs;
           }
 
@@ -1750,15 +1752,18 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
           ) {
             panic("Retry delay requested for a non-retryable list failure");
           }
-          logger.warn("case_law.ingestion.page_server_error_retry", {
-            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-            "error.type": errorTag(failure),
-            page: state.page,
-            date: state.date,
-            httpStatus: failure.cause.status,
-            retry: attempt,
-            maxRetries: LIST_FETCH_RETRIES,
-          });
+          getIngestionDiagnosticsSink().warn(
+            "case_law.ingestion.page_server_error_retry",
+            {
+              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+              "error.type": errorTag(failure),
+              page: state.page,
+              date: state.date,
+              httpStatus: failure.cause.status,
+              retry: attempt,
+              maxRetries: LIST_FETCH_RETRIES,
+            },
+          );
           return LIST_FETCH_RETRY_DELAY_MS;
         },
       },
@@ -2970,12 +2975,15 @@ export const czRegionalAdapter = defineSourceAdapter({
             throw new DOMException("Cycle aborted", "AbortError");
           }
           if (isTimeoutError(responseResult.error.cause)) {
-            logger.warn("case_law.ingestion.page_timeout_exhausted", {
-              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-              page: state.page,
-              date: state.date,
-              retries: LIST_FETCH_RETRIES,
-            });
+            getIngestionDiagnosticsSink().warn(
+              "case_law.ingestion.page_timeout_exhausted",
+              {
+                adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+                page: state.page,
+                date: state.date,
+                retries: LIST_FETCH_RETRIES,
+              },
+            );
           }
           throw responseResult.error;
         }
@@ -3019,24 +3027,30 @@ export const czRegionalAdapter = defineSourceAdapter({
           },
         );
         if (deferred > 0) {
-          logger.warn("case_law.ingestion.document_budget_exhausted", {
-            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-            page: state.page,
-            date: state.date,
-            deferred,
-            items: items.length,
-          });
+          getIngestionDiagnosticsSink().warn(
+            "case_law.ingestion.document_budget_exhausted",
+            {
+              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+              page: state.page,
+              date: state.date,
+              deferred,
+              items: items.length,
+            },
+          );
         }
 
         const fetchMs = Math.round(performance.now() - fetchT0);
-        logger.info("case_law.ingestion.page_completed", {
-          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-          page: state.page,
-          date: state.date,
-          decisions: decisions.length,
-          items: items.length,
-          totalMs: fetchMs,
-        });
+        getIngestionDiagnosticsSink().info(
+          "case_law.ingestion.page_completed",
+          {
+            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+            page: state.page,
+            date: state.date,
+            decisions: decisions.length,
+            items: items.length,
+            totalMs: fetchMs,
+          },
+        );
 
         return {
           decisions,
