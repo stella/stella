@@ -190,6 +190,7 @@ const KNOWN_NOTE_KINDS = [
   "lineBreakSpacingKept",
   "invisibleEffectsRemoved",
   "templateBlocksKept",
+  "fieldsAsText",
 ] as const satisfies readonly NoteSource["kind"][];
 
 type KnownNoteSource = Extract<
@@ -301,6 +302,14 @@ const noteItemOf = (
         kind: "template_blocks_kept",
         reason: item.region,
         count: item.blockIds.length,
+      };
+    case "fieldsAsText":
+      return {
+        kind: "fields_as_text",
+        reason: item.fields
+          .map(({ kind, count }) => `${kind}:${String(count)}`)
+          .join(","),
+        count: item.fields.reduce((total, { count }) => total + count, 0),
       };
     default: {
       item satisfies never;

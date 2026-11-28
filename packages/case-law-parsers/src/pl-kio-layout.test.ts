@@ -8,7 +8,10 @@ import type * as cheerio from "@stll/html";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
-const FIXTURES_DIR = new URL("../adapters/__fixtures__/", import.meta.url);
+const FIXTURES_DIR = new URL(
+  "../../../apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
 
 const gzFixtureText = async (name: string): Promise<string> =>
   new TextDecoder().decode(

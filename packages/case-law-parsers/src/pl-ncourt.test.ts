@@ -8,6 +8,8 @@ import {
 } from "@stll/case-law-parsers/pl-courts";
 import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 test.each([
@@ -20,7 +22,7 @@ test.each([
   "recorded portal XML keeps provision indices distinct: $name",
   async ({ name, provisions }) => {
     const xml = await Bun.file(
-      new URL(`__fixtures__/${name}.xml`, import.meta.url),
+      new URL(`${name}.xml`, PARSER_FIXTURES_DIR),
     ).text();
     const content =
       readPlNcourtContent(xml) ?? panic("Fixture holds no court content");

@@ -9,8 +9,6 @@ import type { BlockContent, Document } from "@stll/docx-core/model";
 import { load } from "@stll/html";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-
 import recordedLines from "./rtf-line-parity.expected.json";
 
 const expectations = new Map(Object.entries(recordedLines));
@@ -102,8 +100,5 @@ export const assertHtmlRtfLineParity = (html: string): void => {
   if (rtf === undefined || rtf.trim().length === 0) {
     return;
   }
-  assertRtfLineParity(
-    rtf,
-    readRtfString(rtf, RTF_SOURCE_OPTIONS[ADAPTER_KEYS.CZ_US]),
-  );
+  assertRtfLineParity(rtf, readRtfString(rtf, RTF_SOURCE_OPTIONS["cz-us"]));
 };

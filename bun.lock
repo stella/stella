@@ -989,6 +989,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@stll/folio-core": "catalog:",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",

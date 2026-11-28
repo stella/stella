@@ -17,6 +17,8 @@ import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parsePlSnDecisionPdf = guardParser(uncheckedParsePlSnDecisionPdf);
 
 type PlSnTextLine = Extract<PdfLine, { type: "text" }>;
@@ -34,10 +36,7 @@ const opens = (text: string, bold = false): PlSnTextLine => ({
 
 const BLANK: PdfLine = { type: "blank" };
 
-const UOKIK_PDF = new URL(
-  "__fixtures__/pl-uokik-dok-9-2011.pdf",
-  import.meta.url,
-);
+const UOKIK_PDF = new URL("pl-uokik-dok-9-2011.pdf", PARSER_FIXTURES_DIR);
 
 const plainText = (paragraphs: readonly { text: string }[][]): string[] =>
   paragraphs.map((runs) => runs.map(({ text }) => text).join(""));
@@ -386,7 +385,7 @@ describe("reading recorded PDF lines", () => {
 });
 
 const SN_FIXTURE = (name: string): URL =>
-  new URL(`__fixtures__/${name}.pdf`, import.meta.url);
+  new URL(`${name}.pdf`, PARSER_FIXTURES_DIR);
 
 const parseSupremeCourtFixture = async (name: string, caseNumber: string) =>
   await parsePlSnDecisionPdf({

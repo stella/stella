@@ -6,12 +6,11 @@ import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parseUkFclDecision as uncheckedParseUkFclDecision } from "@stll/case-law-parsers/uk-fcl";
 import * as astValidation from "@stll/case-law-parsers/validate-ast";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseUkFclDecision = guardParser(uncheckedParseUkFclDecision);
 
-const xml = await readFile(
-  new URL("__fixtures__/uk-fcl.xml", import.meta.url),
-  "utf-8",
-);
+const xml = await readFile(new URL("uk-fcl.xml", PARSER_FIXTURES_DIR), "utf-8");
 const parse = (source = xml) =>
   parseUkFclDecision({
     xml: source,
@@ -272,7 +271,7 @@ describe("LegalDocML tribunal decision", () => {
   // `decision` date rather than a `judgment` one.
   test("[2026] UKUT 79 (IAC) is read with its decision date", async () => {
     const tribunal = await readFile(
-      new URL("__fixtures__/uk-fcl-ukut-iac-2026-79.xml", import.meta.url),
+      new URL("uk-fcl-ukut-iac-2026-79.xml", PARSER_FIXTURES_DIR),
       "utf-8",
     );
     const result = parse(tribunal).unwrap();

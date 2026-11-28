@@ -32,6 +32,7 @@ import { recoverExpiredCorpusProjectionIntentsTx } from "@/api/lib/legal-search/
 import {
   CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
   type CorpusIndexIntentStatus,
+  requireCorpusIndexProjectionAppendRequestCap,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -275,7 +276,7 @@ const transactionRunner =
         model.switchedToSingle = reserved;
         await db.execute(
           sql`UPDATE ${corpusIndexProjectionStates}
-            SET append_mode = 'single'
+            SET append_request_cap = 1
             WHERE entity_id = ${reserved}`,
         );
       }
@@ -379,7 +380,7 @@ const readStates = async (entityIds: readonly string[]) =>
       entityId: corpusIndexProjectionStates.entityId,
       desiredAction: corpusIndexProjectionStates.desiredAction,
       appliedRevision: corpusIndexProjectionStates.appliedRevision,
-      appendMode: corpusIndexProjectionStates.appendMode,
+      appendRequestCap: corpusIndexProjectionStates.appendRequestCap,
       workStatus: corpusIndexProjectionStates.workStatus,
       failureAttempts: corpusIndexProjectionStates.failureAttempts,
     })
@@ -477,7 +478,7 @@ const deliverer =
         appendDelivery: corpusIndexProjectionIntents.appendDelivery,
         expectedDocumentCount:
           corpusIndexProjectionIntents.expectedDocumentCount,
-        appendMode: corpusIndexProjectionStates.appendMode,
+        appendRequestCap: corpusIndexProjectionStates.appendRequestCap,
         appendRequestId: corpusIndexProjectionIntents.appendRequestId,
       })
       .from(corpusIndexProjectionIntents)
@@ -512,7 +513,7 @@ const deliverer =
       expect(intent.appendDelivery).toBe("offline_indexer");
       // An entity that delivers alone is never in a file with another.
       if (intents.length > 1) {
-        expect(intent.appendMode).toBe("batchable");
+        expect(intent.appendRequestCap).toBe(512);
       }
       expect(intent.expectedDocumentCount).toBe(
         lines.filter((line) => line === intent.id).length,
@@ -541,7 +542,9 @@ const deliverer =
                   intent.leaseToken ?? panic("Started without a lease"),
                 leaseExpiresAt:
                   intent.leaseExpiresAt ?? panic("Started without a lease"),
-                appendMode: intent.appendMode,
+                appendRequestCap: requireCorpusIndexProjectionAppendRequestCap(
+                  intent.appendRequestCap,
+                ),
               }) satisfies CorpusProjectionIntentLease,
           ),
         ),
@@ -1182,7 +1185,7 @@ const drain = async (model: Model) => {
       (state) =>
         state.appliedRevision !== null ||
         state.workStatus === "blocked" ||
-        (state.appendMode === "single" &&
+        (state.appendRequestCap < 512 &&
           intents.every(
             ({ entityId, status }) =>
               entityId !== state.entityId ||
@@ -1742,7 +1745,7 @@ describe("offline route build", () => {
             // lone revision kept being killed: that is charged like any
             // isolated document fault, and blocked at the attempt limit.
             for (const state of states) {
-              expect(state.appendMode).toBe("batchable");
+              expect(state.appendRequestCap).toBe(512);
               if (state.workStatus === "blocked") {
                 continue;
               }
@@ -1858,7 +1861,8 @@ describe("offline route build", () => {
             );
             // Every entity the run handed back is in single requests now.
             expect(progress.perRowHandoffs).toBe(
-              states.filter(({ appendMode }) => appendMode === "single").length,
+              states.filter(({ appendRequestCap }) => appendRequestCap < 512)
+                .length,
             );
             if (deliveries.every((delivery) => delivery === "ingest")) {
               expect(progress.proved).toBe(ENTITIES);
@@ -1892,7 +1896,7 @@ describe("offline route build", () => {
     // batched, uncharged, and retries shortly.
     for (const state of await readStates(model.entityIds)) {
       expect(state).toMatchObject({
-        appendMode: "batchable",
+        appendRequestCap: 512,
         workStatus: "retry_scheduled",
         failureAttempts: 0,
       });
@@ -2013,7 +2017,7 @@ describe("offline route build", () => {
     }
     for (const state of await readStates(model.entityIds)) {
       expect(state.appliedRevision).not.toBeNull();
-      expect(state.appendMode).toBe("batchable");
+      expect(state.appendRequestCap).toBe(512);
       expect(state.failureAttempts).toBe(0);
     }
     expect(
@@ -2124,7 +2128,7 @@ describe("offline route build", () => {
     // What a retirement from a shared request leaves behind.
     await db.execute(
       sql`UPDATE ${corpusIndexProjectionStates}
-        SET append_mode = 'single'
+        SET append_request_cap = 1
         WHERE entity_id = ${isolated}`,
     );
     const run = await runBuild(model, { ...QUIET_RUN, maxShardRevisions: 8 });
@@ -2344,7 +2348,7 @@ describe("offline route build", () => {
     for (const state of await readStates(model.entityIds)) {
       expect(state.workStatus).not.toBe("blocked");
       expect(state.failureAttempts).toBe(0);
-      expect(state.appendMode).toBe("batchable");
+      expect(state.appendRequestCap).toBe(512);
     }
     // Once the engine is back, the next run delivers every entity.
     model.offsetMs += 10 * 60_000;
@@ -2380,7 +2384,7 @@ describe("offline route build", () => {
     for (const state of await readStates(model.entityIds)) {
       expect(state.failureAttempts).toBe(0);
       expect(state.workStatus).not.toBe("blocked");
-      expect(state.appendMode).toBe("batchable");
+      expect(state.appendRequestCap).toBe(512);
     }
   });
 
@@ -2471,7 +2475,7 @@ describe("offline route build", () => {
     ).toEqual(["none"]);
     for (const state of await readStates(refused.entityIds)) {
       expect(state.failureAttempts).toBe(0);
-      expect(state.appendMode).toBe("batchable");
+      expect(state.appendRequestCap).toBe(512);
     }
   });
 
@@ -2526,7 +2530,7 @@ describe("offline route build", () => {
                 indexId: withdrawn.indexId,
                 leaseToken: Bun.randomUUIDv7(),
                 leaseExpiresAt,
-                appendMode: "batchable",
+                appendRequestCap: 512,
               },
             ],
           ),

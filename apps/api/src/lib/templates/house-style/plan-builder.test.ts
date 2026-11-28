@@ -1250,6 +1250,33 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(note.items).toContainEqual({ kind: "alignmentsKept", blocks: 3 });
   });
 
+  test("a party line led by a bullet keeps the alignment the source sets it in", () => {
+    const front = withFacts(
+      [
+        "VERTRAG",
+        "zwischen",
+        "der Universität",
+        "nachstehend „Auftragnehmerin“ genannt -",
+        "Článek I.\nPrvní",
+        "Text ustanovení.",
+      ],
+      {
+        3: {
+          alignment: "right",
+          label: "–",
+          numbering: { numId: 7, ilvl: 0, abstractNumId: 7, bullet: true },
+        },
+      },
+    );
+    const { plan } = build(front);
+    const item = itemOf(plan, front, "nachstehend");
+    expect(item?.alignment).toBe("right");
+    // The mark stays a list's.
+    expect(item?.numbering).toEqual(
+      expect.objectContaining({ numId: expect.any(Number) }),
+    );
+  });
+
   test("the text of a table takes the style the template writes its tables in", () => {
     const table = inColumns(2, ["Položka", "Cena", "1. První", "100"]);
     const plain = build(table);
@@ -2162,6 +2189,20 @@ describe("buildTemplatePlan, tables and omissions", () => {
       blockId: "t0",
       hash: "ht0",
     });
+  });
+
+  test("a template without contents keeps the source's contents, so no entry goes missing", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+      "Článek I.\nPředmět",
+      numbered("1.", "Text.", 1),
+    ]);
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...PROFILE, regions: { ...PROFILE.regions, contents: [] } },
+    });
+    expect(plan.omit).toEqual([]);
+    expect(itemOf(plan, manifest, "Článek I. Předmět")).toBeDefined();
   });
 
   test("a blank paragraph stays where it parts two tables or closes the document after one", () => {
@@ -3218,6 +3259,31 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
     expect(note.items.map(({ kind }) => kind)).not.toContain("textLabelsHung");
   });
 
+  test("a line under an item that hangs a typed mark keeps the mark in front of its text", () => {
+    const manifest = withIndents({
+      2: { left: 567, firstLine: -567 },
+      3: { left: 1506, firstLine: -360 },
+      // A dash at the item's text, the line's text 284 twips further in.
+      4: { left: 1790, firstLine: -284 },
+      5: { left: 1506, firstLine: 0 },
+    });
+    const { plan, note } = build(manifest, "keepSource", { roles });
+    const under = PROFILE.roles.roman?.numbering?.indent.left ?? 0;
+    expect(under).toBeGreaterThan(0);
+    expect(itemOf(plan, manifest, "k.ú.")?.indent).toEqual({
+      left: under + 284,
+      hanging: 284,
+    });
+    expect(itemOf(plan, manifest, "budova včetně")?.indent).toEqual({
+      left: under,
+    });
+    expect(note.items).toContainEqual({
+      kind: "continuationsIndented",
+      blocks: 2,
+    });
+    expect(note.items.map(({ kind }) => kind)).not.toContain("textLabelsHung");
+  });
+
   test("without the source's indents nothing is moved", () => {
     const manifest = withIndents({});
     const { plan, note } = build(manifest, "keepSource", { roles });
@@ -3225,6 +3291,97 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
     expect(note.items.map(({ kind }) => kind)).not.toContain(
       "continuationsIndented",
     );
+  });
+});
+
+describe("buildTemplatePlan, a source list deeper than the template's levels", () => {
+  const reading = (
+    blockId: string,
+    role: "title" | "articleHeading" | "clause1" | "letter" | "roman",
+  ) => ({
+    blockId,
+    role,
+    confidence: 0.9,
+    alternatives: [],
+    mergedIntoBlockId: null,
+  });
+  const manifest = (): DocxBlockManifest => {
+    const built = manifestOf([
+      "AGREEMENT",
+      "Článek I.\nPurchase",
+      "The Company sells the Shares.",
+      "the Initial Shares;",
+      "at the Closing, either",
+      "in cash; or",
+      "by wire transfer;",
+      "the Additional Shares.",
+    ]);
+    const levels: Record<number, [string, number]> = {
+      2: ["1.1", 1],
+      3: ["(a)", 2],
+      4: ["(i)", 3],
+      5: ["(A)", 4],
+      6: ["(B)", 4],
+      7: ["(b)", 2],
+    };
+    return {
+      ...built,
+      blocks: built.blocks.map((block, position) => {
+        const level = levels[position];
+        return level === undefined
+          ? block
+          : {
+              ...block,
+              label: level[0],
+              hash: `h${String(position)}`,
+              numbering: { numId: 1, ilvl: level[1], abstractNumId: 1 },
+            };
+      }),
+    };
+  };
+  const roles = [
+    reading("p0", "title"),
+    reading("p1", "articleHeading"),
+    reading("p2", "clause1"),
+    reading("p3", "letter"),
+    reading("p4", "roman"),
+    reading("p5", "letter"),
+    reading("p6", "letter"),
+    reading("p7", "letter"),
+  ];
+
+  test("an item the template would set left of its parent hangs in from the parent's text", () => {
+    const letter = PROFILE.roles.letter?.numbering?.indent;
+    const roman = PROFILE.roles.roman?.numbering?.indent;
+    expect(letter?.left ?? 0).toBeLessThan(roman?.left ?? 0);
+    const built = manifest();
+    const { plan } = build(built, "keepSource", { roles });
+    const hanging = letter?.hanging ?? 0;
+    expect(hanging).toBeGreaterThan(0);
+    for (const text of ["in cash", "by wire"]) {
+      expect(itemOf(plan, built, text)?.indent).toEqual({
+        left: (roman?.left ?? 0) + hanging,
+        hanging,
+      });
+    }
+    // Items at their own depth keep the template's indent.
+    for (const text of ["the Initial", "at the Closing", "the Additional"]) {
+      expect(itemOf(plan, built, text)).not.toHaveProperty("indent");
+    }
+  });
+
+  test("items under a line set in capitals keep the template's indent", () => {
+    const built = manifest();
+    const capitals = {
+      ...built,
+      blocks: built.blocks.map((block) =>
+        block.text === "at the Closing, either"
+          ? { ...block, text: "AT THE CLOSING" }
+          : block,
+      ),
+    };
+    const { plan } = build(capitals, "keepSource", { roles });
+    expect(itemOf(plan, capitals, "in cash")).not.toHaveProperty("indent");
   });
 });
 
