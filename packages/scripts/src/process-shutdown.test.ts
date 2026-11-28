@@ -10,15 +10,15 @@ import { attachTestProcessShutdown } from "./process-shutdown";
 import { spawnTestProcess } from "./process-spawn";
 
 const isProcessDeadOrZombie = (pid: number): boolean => {
-  const alive = Result.try(() => process.kill(pid, 0));
-  if (alive.isErr()) {
-    return true;
+  if (process.platform === "linux") {
+    const status = Result.try(() =>
+      readFileSync(`/proc/${pid}/status`, "utf-8"),
+    );
+    if (status.isOk() && /^State:\s+[ZX]\b/mu.test(status.value)) {
+      return true;
+    }
   }
-  if (process.platform !== "linux") {
-    return false;
-  }
-  const status = Result.try(() => readFileSync(`/proc/${pid}/status`, "utf-8"));
-  return status.isOk() && /^State:\s+Z\b/mu.test(status.value);
+  return Result.try(() => process.kill(pid, 0)).isErr();
 };
 
 const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 } as const;
@@ -72,28 +72,18 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {
         }
       }
       // The parent's exit and the kernel's child reap notification can differ by a tick.
-      const trackedPids = [childPid, grandchildPid].filter(
-        (pid): pid is number => pid !== undefined,
-      );
-      await waitForExternalState({
+      if (childPid === undefined || grandchildPid === undefined) {
+        throw new TypeError("Fixture readiness must contain both PIDs");
+      }
+      const trackedPids = [childPid, grandchildPid];
+      const reaped = await waitForExternalState({
         description: "child and grandchild processes to exit",
         intervalMs: 10,
         timeoutMs: 2000,
         read: () => trackedPids.every(isProcessDeadOrZombie),
-        onTimeout: () => undefined,
+        onTimeout: () => false,
       });
-      for (const pid of [childPid, grandchildPid]) {
-        if (pid === undefined) {
-          throw new TypeError("Fixture readiness must contain both PIDs");
-        }
-        const alive = Result.try(() => process.kill(pid, 0));
-        const status =
-          process.platform === "linux"
-            ? Result.try(() => readFileSync(`/proc/${pid}/status`, "utf-8"))
-            : undefined;
-        const zombie = status?.isOk() && /^State:\s+Z\b/mu.test(status.value);
-        expect(alive.isErr() || zombie).toBe(true);
-      }
+      expect(reaped).toBe(true);
     } finally {
       if (parent.exitCode === null && parent.signalCode === null) {
         parent.kill("SIGKILL");
@@ -217,20 +207,14 @@ test("disposing after the test leader exits immediately reaps its surviving long
     await parent.stdin.end();
     await parent.exited;
     expect(parent.exitCode).toBe(0);
-    await waitForExternalState({
+    const reaped = await waitForExternalState({
       description: "worker process to exit",
       intervalMs: 10,
       timeoutMs: 2000,
       read: () => isProcessDeadOrZombie(worker),
-      onTimeout: () => undefined,
+      onTimeout: () => false,
     });
-    const alive = Result.try(() => process.kill(worker, 0));
-    const status =
-      process.platform === "linux"
-        ? Result.try(() => readFileSync(`/proc/${worker}/status`, "utf-8"))
-        : undefined;
-    const zombie = status?.isOk() && /^State:\s+Z\b/mu.test(status.value);
-    expect(alive.isErr() || zombie).toBe(true);
+    expect(reaped).toBe(true);
   } finally {
     if (parent.exitCode === null && parent.signalCode === null) {
       parent.kill("SIGKILL");
