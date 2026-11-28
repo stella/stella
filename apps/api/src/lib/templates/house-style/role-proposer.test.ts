@@ -469,11 +469,13 @@ describe("proposeBlockRoles", () => {
       "[Pozn. pro uchazeče: doplní uchazeč podle nabídky.]",
       "Hinweis: Die Parteien können abweichend vereinbaren.",
       "Note that the price is fixed for the whole term.",
+      "[Alternative 1: The price is fixed for the whole term.]",
     ]);
     expect(rolesOf(manifest)).toMatchObject({
       "[Pozn. pro uchazeče: doplní ": "body",
       "Hinweis: Die Parteien können": "body",
       "Note that the price is fixed": "continuation",
+      "[Alternative 1: The price is": "continuation",
     });
   });
 
