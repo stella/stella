@@ -28,6 +28,11 @@ export const REFORMAT_REFUSAL_CODES = [
 export const REFORMAT_NOTE_ITEM_KINDS = [
   "reference_kept_as_text",
   "reference_suspected",
+  /** A cross-reference field of the document shows another number than
+   *  the provision it points to now has (`text`: what it shows; `reason`:
+   *  the number the provision has). Its text was written before that
+   *  provision was renumbered; check the citation. */
+  "reference_stale",
   "label_kept_as_text",
   "label_converted_to_text",
   "role_without_style",
