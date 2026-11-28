@@ -5,6 +5,7 @@ import {
   huDecisionDateFrom,
   huDecisionTypeFrom,
   huDocketFrom,
+  continuesCourtNumbering,
   parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
 } from "@stll/case-law-parsers/hu-bhgy";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
@@ -937,6 +938,44 @@ describe("reading a document folio handed over", () => {
       "h2:section-heading:A felülvizsgálat alapjául szolgáló tényállás",
       "p:argumentation#1:Az alperes közgyűlése.",
     ]);
+  });
+
+  test("a quoted paragraph keeps its own bracketed number as text, not as the court's", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "[114]\tAz Alkotmánybíróság a következőket állapította meg:" },
+      {
+        text: "[43] Az Alkotmánybíróság ezen megállapításait az Alaptörvény hatálybalépését követően is irányadónak tekinti.",
+      },
+      { text: "[115]\tA kereset ezért nem alapos." },
+      { text: "[116]\tA perköltségről a bíróság döntött." },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation#114:Az Alkotmánybíróság a következőket állapította meg:",
+      "p:argumentation:[43] Az Alkotmánybíróság ezen megállapításait az Alaptörvény hatálybalépését követően is irányadónak tekinti.",
+      "p:argumentation#115:A kereset ezért nem alapos.",
+      "p:argumentation#116:A perköltségről a bíróság döntött.",
+    ]);
+  });
+
+  test("the court's numbering may skip forward or restart, but never steps back into a quotation", () => {
+    // [number, previous, next] → whether the number is the court's own.
+    const cases: [number, number | undefined, number | undefined, boolean][] = [
+      [1, undefined, 2, true],
+      [5, undefined, 6, true],
+      [12, 11, 13, true],
+      [13, 11, 14, true],
+      [13, 11, undefined, true],
+      [43, 114, 115, false],
+      [44, 114, 115, false],
+      [143, 114, 115, false],
+      [1, 30, 2, true],
+      [1, 30, 31, false],
+    ];
+    for (const [number, previous, next, expected] of cases) {
+      expect(continuesCourtNumbering(number, previous, next)).toBe(expected);
+    }
   });
 
   test("titles the court prints inside its reasons are headings, whatever their wording", () => {

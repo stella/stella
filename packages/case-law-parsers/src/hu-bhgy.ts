@@ -1140,6 +1140,50 @@ const inlinesOf = (runs: readonly DocRun[]): Inline[] =>
 const COURT_PARAGRAPH_NUMBER = /^\[(?<number>\d{1,4})\]\s*/u;
 
 /**
+ * The bracketed number a body line opens with, on its first line or after
+ * the soft break that follows a title (`Kereset` + `w:br` + `[2] …`);
+ * undefined for a note, a table or a line without one.
+ */
+const bracketedNumberOf = (item: DocItem): number | undefined => {
+  if (item.type !== "line" || item.line.kind !== "body") {
+    return undefined;
+  }
+  const text = item.line.value.text.trim();
+  const breakAt = text.indexOf("\n");
+  const candidates =
+    breakAt === -1 ? [text] : [text, text.slice(breakAt + 1).trimStart()];
+  for (const candidate of candidates) {
+    const number = COURT_PARAGRAPH_NUMBER.exec(candidate)?.groups?.["number"];
+    if (number !== undefined) {
+      return parseIntegerToken(number).unwrapOr(undefined);
+    }
+  }
+  return undefined;
+};
+
+/**
+ * Whether a bracketed number continues the court's own numbering. A court
+ * numbers its paragraphs in order, while a paragraph it quotes from another
+ * decision (`[43]` of a Constitutional Court ruling inside `[114]`–`[115]`)
+ * keeps the number it had there. A number is the court's when it is the
+ * first one, the next one, or a forward step that the next bracketed number
+ * does not undo; a `[1]` restarts the numbering only when a `[2]` follows.
+ */
+export const continuesCourtNumbering = (
+  number: number,
+  previous: number | undefined,
+  next: number | undefined,
+): boolean => {
+  if (previous === undefined || number === previous + 1) {
+    return true;
+  }
+  if (number > previous) {
+    return next === undefined || next > number;
+  }
+  return number === 1 && next === 2;
+};
+
+/**
  * What the next line of the body is, as evidence for the line before it: a
  * title heads the court's next numbered paragraph, or the closing part when
  * the court titles that too (`Záró rész` before the place and date).
@@ -1387,6 +1431,21 @@ export const parseHuBhgyDecision = (
   let softBreakDate: string | undefined;
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
+  /** The last bracketed number read as the court's own paragraph number. */
+  let lastCourtNumber: number | undefined;
+  /** The item being read, so a paragraph can look at the numbers after it. */
+  let currentItem = 0;
+  /** The next bracketed number after the item being read, if any. */
+  const nextBracketedNumber = (): number | undefined => {
+    for (let next = currentItem + 1; next < items.length; next += 1) {
+      const item = items[next];
+      const number = item === undefined ? undefined : bracketedNumberOf(item);
+      if (number !== undefined) {
+        return number;
+      }
+    }
+    return undefined;
+  };
 
   /**
    * Whether a line of the reasons is a title the court prints there. Besides
@@ -1445,7 +1504,16 @@ export const parseHuBhgyDecision = (
       normalized,
       COURT_PARAGRAPH_NUMBER,
     );
-    const number = numbered?.groups?.["number"];
+    const printedNumber = numbered?.groups?.["number"];
+    const number =
+      printedNumber !== undefined &&
+      continuesCourtNumbering(
+        parseIntegerToken(printedNumber).unwrapOr(0),
+        lastCourtNumber,
+        nextBracketedNumber(),
+      )
+        ? printedNumber
+        : undefined;
     const role: ParagraphRole = BODY_ROLE[region];
     if (number === undefined && opensTitle(runs, next)) {
       emitTitle(runs);
@@ -1455,6 +1523,7 @@ export const parseHuBhgyDecision = (
       ? FINISHED_PARAGRAPH
       : { type: "runs-on", weight: weightOf(runs) };
     if (number === undefined) {
+      // A quoted paragraph keeps its bracketed number as printed text.
       builder.paragraph({
         type: "paragraph",
         role,
@@ -1463,6 +1532,7 @@ export const parseHuBhgyDecision = (
       });
       return;
     }
+    lastCourtNumber = parseIntegerToken(number).unwrapOr(lastCourtNumber);
     // The bracketed number is the citable paragraph number, so it is kept as
     // structure: a citation names `[31]`, and a prefix inside the text would
     // make every search for the paragraph's words find the number too.
@@ -1676,6 +1746,7 @@ export const parseHuBhgyDecision = (
   };
 
   for (const [index, item] of items.entries()) {
+    currentItem = index;
     if (item.type === "line") {
       emitLine(item.line, nextBodyLineAfter(items, index));
       continue;
