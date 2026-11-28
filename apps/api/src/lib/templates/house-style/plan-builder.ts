@@ -3400,6 +3400,11 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     items.push({ kind: "contentsNotKept", reason: "noHeadingCollected" });
   }
   let contentsKept = false;
+  // Where the source has contents the plan leaves out, the template's
+  // stand there and nowhere else.
+  const standsAtSourceContents = topLevel.some(
+    ({ id }) => omitted.get(id) === "sourceToc",
+  );
   const keepContents = (): void => {
     contentsPending = false;
     contentsKept = true;
@@ -3431,7 +3436,11 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     if (placement === undefined) {
       continue;
     }
-    if (contentsPending && opensBody(placement.role)) {
+    if (
+      contentsPending &&
+      !standsAtSourceContents &&
+      opensBody(placement.role)
+    ) {
       keepContents();
     }
     const paragraph = paragraphItems({
@@ -4030,7 +4039,11 @@ const carryCrossReferences = ({
     if (
       targetBlockId === null ||
       switches === null ||
-      !(placementById.has(targetBlockId) || mergedInto.has(targetBlockId)) ||
+      !(
+        placementById.has(targetBlockId) ||
+        mergedInto.has(targetBlockId) ||
+        tableOf.has(targetBlockId)
+      ) ||
       exclusions.targets.has(targetBlockId) ||
       paragraphOf(block.id) === paragraphOf(targetBlockId) ||
       expectedText.trim() === "" ||
