@@ -191,6 +191,7 @@ const KNOWN_NOTE_KINDS = [
   "invisibleEffectsRemoved",
   "templateBlocksKept",
   "fieldsAsText",
+  "internalLinksAsText",
 ] as const satisfies readonly NoteSource["kind"][];
 
 type KnownNoteSource = Extract<
@@ -303,6 +304,8 @@ const noteItemOf = (
         reason: item.region,
         count: item.blockIds.length,
       };
+    case "internalLinksAsText":
+      return { kind: "internal_links_as_text", count: item.links };
     case "fieldsAsText":
       return {
         kind: "fields_as_text",

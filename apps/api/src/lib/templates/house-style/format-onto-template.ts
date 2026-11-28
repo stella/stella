@@ -303,6 +303,22 @@ const bulletIdsOf = ({ blocks }: DocxBlockManifest): Set<string> =>
 const sum = (entries: readonly { count: number }[]): number =>
   entries.reduce((total, { count }) => total + count, 0);
 
+/** The note says how many links of the source to a place in itself the
+ *  output shows as plain text. */
+const withInternalLinks = (
+  note: FormattingNote,
+  { dropped }: TemplatePlanReport,
+): FormattingNote =>
+  dropped.internalHyperlinks === 0
+    ? note
+    : {
+        ...note,
+        items: [
+          ...note.items,
+          { kind: "internalLinksAsText", links: dropped.internalHyperlinks },
+        ],
+      };
+
 /** The note says which fields of the source the output shows as text. */
 const withFieldsAsText = (
   note: FormattingNote,
@@ -561,7 +577,7 @@ export const formatOntoTemplate = async ({
     manifest,
     plan: built.plan,
     profile,
-    note: withFieldsAsText(built.note, report),
+    note: withInternalLinks(withFieldsAsText(built.note, report), report),
     outcome: { attempts, repairs, ...leftOf(report), pages },
   });
 };
