@@ -418,7 +418,7 @@ const noteItemsOf = (
       ),
       ...Object.entries(item.leftOut).flatMap(
         ([reason, count]): ReformatNoteItem[] =>
-          count === undefined || count === 0
+          count === 0
             ? []
             : [{ kind: "source_header_left_out", reason, count }],
       ),
