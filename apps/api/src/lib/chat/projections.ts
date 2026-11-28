@@ -79,6 +79,7 @@ import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "@/api/lib/search/pagination-ou
 import {
   REFORMAT_NOTE_ITEM_KINDS,
   REFORMAT_NUMBERING_MODES,
+  REFORMAT_PARAGRAPH_ROLES,
   REFORMAT_TEMPLATE_HEALTH_KINDS,
 } from "@/api/lib/templates/reformat-into-template-contract";
 
@@ -3099,6 +3100,16 @@ export const REFORMAT_INTO_TEMPLATE_PROJECTION = v.strictObject({
         reason: v.optional(v.string()),
       }),
     ),
+    roleQuestions: v.optional(
+      v.array(
+        v.strictObject({
+          blockId: v.string(),
+          text: v.optional(contentText()),
+          options: v.array(v.picklist(REFORMAT_PARAGRAPH_ROLES)),
+        }),
+      ),
+    ),
+    roleQuestionsOmitted: v.optional(count()),
   }),
 });
 

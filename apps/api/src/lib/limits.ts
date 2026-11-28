@@ -219,6 +219,10 @@ export const LIMITS = {
   /** Longest submitted value a manifest `pattern` is matched against. A longer
    *  value is rejected as a field error instead of being matched. */
   templateFieldPatternValueMaxLength: 1000,
+  /** Longest block id a reformat role decision may name. */
+  reformatRoleBlockIdMaxLength: 64,
+  /** Role decisions one reformat call may carry. */
+  reformatRoleDecisionsMax: 500,
   clausesPerOrganization: 500,
   clausesPageSizeDefault: 50,
   clausesPageSizeMax: 200,

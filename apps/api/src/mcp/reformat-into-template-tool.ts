@@ -51,6 +51,7 @@ import type { TemplateSelection } from "@/api/lib/templates/reformat-into-templa
 import {
   HOUSE_STYLE_TEMPLATE_TAG,
   REFORMAT_NUMBERING_MODES,
+  REFORMAT_PARAGRAPH_ROLES,
   REFORMAT_TRACKED_CHANGES,
 } from "@/api/lib/templates/reformat-into-template-contract";
 import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
@@ -124,6 +125,32 @@ const reformatIntoTemplateArgsSchema = nullAsAbsent(
         v.boolean(),
         v.description(
           "Link a cross-reference whose target the rules clearly prefer; by default an uncertain one stays text",
+        ),
+      ),
+    ),
+    ask_role_questions: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Return the paragraphs whose role the formatter was unsure of, each with the roles it may take, so they can be answered in role_decisions on a second call",
+        ),
+      ),
+    ),
+    role_decisions: v.optional(
+      v.pipe(
+        v.array(
+          v.strictObject({
+            block_id: v.pipe(
+              v.string(),
+              v.maxLength(LIMITS.reformatRoleBlockIdMaxLength),
+              v.description("blockId of a returned role question"),
+            ),
+            role: v.picklist(REFORMAT_PARAGRAPH_ROLES),
+          }),
+        ),
+        v.maxLength(LIMITS.reformatRoleDecisionsMax),
+        v.description(
+          "Answers to role questions of an earlier call: one of the roles each question offered; other answers are ignored",
         ),
       ),
     ),
@@ -626,6 +653,10 @@ export const handleReformatIntoTemplateTool = async (
             template: new Uint8Array(template.value.file.bytes),
             numbering,
             acceptSuggestedDecisions: input.accept_suggested_decisions ?? false,
+            askRoleQuestions: input.ask_role_questions ?? false,
+            roleDecisions: (input.role_decisions ?? []).map(
+              ({ block_id, role }) => ({ blockId: block_id, role }),
+            ),
             ...(input.tracked_changes === undefined
               ? {}
               : { trackedChanges: input.tracked_changes }),

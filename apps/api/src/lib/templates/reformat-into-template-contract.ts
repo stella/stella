@@ -3,6 +3,27 @@
  * that produce it, so the chat projection reads it without the formatter.
  */
 
+/** The roles a caller may give a paragraph the formatter asks about: the
+ *  house style's roles, each placed in the template's style for it. */
+export const REFORMAT_PARAGRAPH_ROLES = [
+  "title",
+  "party",
+  "recital",
+  "articleHeading",
+  "clause1",
+  "clause2",
+  "clause3",
+  "letter",
+  "roman",
+  "bullet",
+  "continuation",
+  "signature",
+  "annexList",
+  "annexHeading",
+  "heading",
+  "body",
+] as const;
+
 /** The tag that marks an organisation template as a house style to apply. */
 export const HOUSE_STYLE_TEMPLATE_TAG = "house-style";
 

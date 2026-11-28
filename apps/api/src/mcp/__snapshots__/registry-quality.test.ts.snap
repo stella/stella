@@ -2722,6 +2722,51 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "boolean",
           "description": "Link a cross-reference whose target the rules clearly prefer; by default an uncertain one stays text"
         },
+        "ask_role_questions": {
+          "type": "boolean",
+          "description": "Return the paragraphs whose role the formatter was unsure of, each with the roles it may take, so they can be answered in role_decisions on a second call"
+        },
+        "role_decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "block_id": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "blockId of a returned role question"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "party",
+                  "recital",
+                  "articleHeading",
+                  "clause1",
+                  "clause2",
+                  "clause3",
+                  "letter",
+                  "roman",
+                  "bullet",
+                  "continuation",
+                  "signature",
+                  "annexList",
+                  "annexHeading",
+                  "heading",
+                  "body"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "block_id",
+              "role"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 500,
+          "description": "Answers to role questions of an earlier call: one of the roles each question offered; other answers are ignored"
+        },
         "tracked_changes": {
           "enum": [
             "keep",
@@ -10617,6 +10662,51 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "accept_suggested_decisions": {
           "type": "boolean",
           "description": "Link a cross-reference whose target the rules clearly prefer; by default an uncertain one stays text"
+        },
+        "ask_role_questions": {
+          "type": "boolean",
+          "description": "Return the paragraphs whose role the formatter was unsure of, each with the roles it may take, so they can be answered in role_decisions on a second call"
+        },
+        "role_decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "block_id": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "blockId of a returned role question"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "party",
+                  "recital",
+                  "articleHeading",
+                  "clause1",
+                  "clause2",
+                  "clause3",
+                  "letter",
+                  "roman",
+                  "bullet",
+                  "continuation",
+                  "signature",
+                  "annexList",
+                  "annexHeading",
+                  "heading",
+                  "body"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "block_id",
+              "role"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 500,
+          "description": "Answers to role questions of an earlier call: one of the roles each question offered; other answers are ignored"
         },
         "tracked_changes": {
           "enum": [
