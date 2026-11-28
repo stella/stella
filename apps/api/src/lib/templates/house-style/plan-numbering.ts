@@ -10,6 +10,7 @@
 
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation";
 
 import {
@@ -159,12 +160,21 @@ export const labelOrdinalOf = (
   label: string,
   numFmt: string,
 ): number | null => {
-  const counter = /([\p{L}\p{N}]+)[^\p{L}\p{N}]*$/u.exec(label)?.[1];
-  if (counter === undefined) {
+  const isCounterChar = (char: string) => /[\p{L}\p{N}]/u.test(char);
+  let end = label.length;
+  while (end > 0 && !isCounterChar(label.charAt(end - 1))) {
+    end -= 1;
+  }
+  let start = end;
+  while (start > 0 && isCounterChar(label.charAt(start - 1))) {
+    start -= 1;
+  }
+  const counter = label.slice(start, end);
+  if (counter === "") {
     return null;
   }
   if (numFmt === "decimal" || numFmt === "decimalZero") {
-    return /^\d+$/u.test(counter) ? Number(counter) : null;
+    return parseIntegerToken(counter, { sign: "unsigned" }).unwrapOr(null);
   }
   if (numFmt === "lowerLetter" || numFmt === "upperLetter") {
     return letterOrdinal(counter.toLowerCase());
@@ -521,12 +531,19 @@ const voteLevelPatterns = (
  * outline, patched to print it: the format most paragraphs need first, while
  * spare levels last.
  */
+/** The level (from 0) a placeholder of a level's text names: `%1` names
+ *  level 0; -1 for no digit. */
+export const levelOfPlaceholder = (digit: string | undefined): number =>
+  parseIntegerToken(digit, { sign: "unsigned" }).unwrapOr(0) - 1;
+
 /** The deepest level a pattern prints the counter of besides its own; -1
  *  for none. */
 const deepestNamedLevel = ({ lvlText }: LabelPattern): number =>
   Math.max(
     -1,
-    ...[...lvlText.matchAll(/%(\d)/gu)].map((match) => Number(match[1]) - 1),
+    ...[...lvlText.matchAll(/%(\d)/gu)].map((match) =>
+      levelOfPlaceholder(match[1]),
+    ),
   );
 
 /**

@@ -1133,11 +1133,11 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
       "Supplier",
     ]);
     const citing = "The party identified at Item 2 of this Agreement.";
-    const block = {
-      ...manifestOf([citing]).blocks[0],
+    const block: DocxBlock = {
+      ...manifestOf([citing]).blocks[0]!,
       id: "p9",
       index: 9,
-    } as DocxBlock;
+    };
     const start = citing.indexOf("2");
     block.crossReferences = [
       {

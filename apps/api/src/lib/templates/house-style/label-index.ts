@@ -147,10 +147,46 @@ export const isRunningText = (text: string): boolean => {
   );
 };
 
-/** Short bracketed choices a model sets behind its sentence (`[and/or]`). */
-const TRAILING_CHOICES = /(?:[ \u00A0]*\[[^[\].;:]{0,40}\])+$/u;
+/** `text` without the characters at its end that `strip` accepts. */
+const trimEndWhile = (
+  text: string,
+  strip: (char: string) => boolean,
+): string => {
+  let end = text.length;
+  while (end > 0 && strip(text.charAt(end - 1))) {
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
+
+/** The longest a bracketed choice behind a sentence runs (`[and/or]`). */
+const CHOICE_MAX = 40;
+const CHOICE_BREAK = /[[\].;:]/u;
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 /** Brackets and quotes that close behind a sentence's last mark. */
-const CLOSING_MARKS = /[\])"”’]+$/u;
+const CLOSING_MARKS = new Set(["]", ")", '"', "”", "’"]);
+
+/** `text` without the short bracketed choices a model sets behind its
+ *  sentence (`[and/or]`). */
+const withoutTrailingChoices = (text: string): string => {
+  let rest = text;
+  while (rest.endsWith("]")) {
+    const open = rest.lastIndexOf("[");
+    const choice = rest.slice(open + 1, -1);
+    if (
+      open === -1 ||
+      choice.length > CHOICE_MAX ||
+      CHOICE_BREAK.test(choice)
+    ) {
+      return rest;
+    }
+    rest = trimEndWhile(
+      rest.slice(0, open),
+      (char) => char === " " || char === "\u00A0",
+    );
+  }
+  return rest;
+};
 
 /**
  * A text as far as its sentence goes: without the short bracketed choices
@@ -158,7 +194,7 @@ const CLOSING_MARKS = /[\])"”’]+$/u;
  * behind its last mark (`… attached to this letter.] [and/or]`).
  */
 const sentenceOf = (text: string): string =>
-  text.replace(TRAILING_CHOICES, "").replace(CLOSING_MARKS, "");
+  trimEndWhile(withoutTrailingChoices(text), (char) => CLOSING_MARKS.has(char));
 
 type LabelOrigin = "auto" | "manual" | "field";
 
@@ -201,13 +237,14 @@ export const ownLabelPartOf = (
   if (!label.endsWith(after)) {
     return null;
   }
-  const counter = /[\p{L}\p{N}]+$/u.exec(
-    label.slice(0, label.length - after.length),
+  const head = label.slice(0, label.length - after.length);
+  const counter = head.slice(
+    trimEndWhile(head, (char) => LETTER_OR_DIGIT.test(char)).length,
   );
-  if (counter === null) {
+  if (counter === "") {
     return null;
   }
-  const part = `${open}${counter[0]}${after}`;
+  const part = `${open}${counter}${after}`;
   return label.endsWith(part) ? part : null;
 };
 

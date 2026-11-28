@@ -52,6 +52,7 @@ import type {
 import { readLetterHead } from "@/api/lib/templates/house-style/letter-head";
 import {
   labelOrdinalOf,
+  levelOfPlaceholder,
   levelsInLanguage,
   numberPlacements,
   ordinalOf,
@@ -808,28 +809,33 @@ const levelTextPatternOf = (
   ) {
     return null;
   }
-  const hinted = levelHints?.blockIds.has(block.id) === true;
-  const above = hinted
-    ? levelHints?.levels.get(numbering.abstractNumId)
-    : sourceLevels.get(numbering.abstractNumId);
+  const hints = levelHints?.blockIds.has(block.id) === true ? levelHints : null;
+  const above =
+    hints === null
+      ? sourceLevels.get(numbering.abstractNumId)
+      : hints.levels.get(numbering.abstractNumId);
   // With the settled levels of an earlier build, a paragraph without a
   // level of its own counts on a spare level of its parents' list.
   let list = ownLevel?.abstractNumId ?? null;
-  let failed = false;
-  const text = lvlText.replace(/%(\d)/gu, (_whole, digit: string) => {
-    const sourceIlvl = Number(digit) - 1;
+  let text = "";
+  let copied = 0;
+  for (const match of lvlText.matchAll(/%(\d)/gu)) {
+    text += lvlText.slice(copied, match.index);
+    copied = match.index + match[0].length;
+    const sourceIlvl = levelOfPlaceholder(match[1]);
     if (sourceIlvl === numbering.ilvl) {
-      return OWN_COUNTER;
+      text += OWN_COUNTER;
+      continue;
     }
     const level = above?.get(sourceIlvl) ?? null;
     list ??= level?.abstractNumId ?? null;
     if (level === null || level.abstractNumId !== list) {
-      failed = true;
-      return "";
+      return null;
     }
-    return `%${String(level.ilvl + 1)}`;
-  });
-  if (failed || !text.includes(OWN_COUNTER)) {
+    text += `%${String(level.ilvl + 1)}`;
+  }
+  text += lvlText.slice(copied);
+  if (!text.includes(OWN_COUNTER)) {
     return null;
   }
   return {
@@ -903,7 +909,8 @@ const placementOf = (
   const numbering = block.numbering;
   if (numbering !== null && (block.label ?? "").trim() !== "") {
     const levels =
-      context.sourceLevels.get(numbering.abstractNumId) ?? new Map();
+      context.sourceLevels.get(numbering.abstractNumId) ??
+      new Map<number, ProfileListLevel | null>();
     levels.set(numbering.ilvl, placement.numbered ? placement.level : null);
     context.sourceLevels.set(numbering.abstractNumId, levels);
   }
@@ -3728,6 +3735,15 @@ const labelFieldOf = (
     : "punctuatedLevelWords";
 };
 
+/** `text` without the periods it ends in. */
+const withoutTrailingDots = (text: string): string => {
+  let end = text.length;
+  while (end > 0 && text.charAt(end - 1) === ".") {
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
+
 /**
  * The label a target counted by the source's own list prints (a placed
  * paragraph on a kept list, or a cell paragraph placed with its table whose
@@ -3761,7 +3777,7 @@ const keptListFieldOf = (
   { text, start, end }: Citation,
   label: string | null,
 ): Field | UnlinkedReason => {
-  const number = (label ?? "").replace(/\.+$/u, "");
+  const number = withoutTrailingDots(label ?? "");
   if (number === "") {
     return "targetNotNumbered";
   }
@@ -4002,7 +4018,7 @@ const carryCrossReferences = ({
 
 /** A number as a field shows it: without its trailing periods. */
 const fieldNumberOf = (label: string): string =>
-  label.trim().replace(/\.+$/u, "");
+  withoutTrailingDots(label.trim());
 
 /**
  * Notes the number fields of the source whose text is not the number of
@@ -4014,7 +4030,7 @@ const fieldNumberOf = (label: string): string =>
 const noteStaleReferences = ({ blocks, blockById, items }: Context): void => {
   const context = fullContextsOf(blocks);
   for (const block of blocks) {
-    for (const reference of block.crossReferences ?? []) {
+    for (const reference of block.crossReferences ?? NO_CROSS_REFERENCES) {
       const stale = staleReferenceOf(block, reference, blockById, context);
       if (stale !== null) {
         items.push(stale);
@@ -4657,7 +4673,9 @@ const settledLevelsOf = (
     if (numbering === null || !numbered || level === null) {
       continue;
     }
-    const levels = settled.get(numbering.abstractNumId) ?? new Map();
+    const levels =
+      settled.get(numbering.abstractNumId) ??
+      new Map<number, ProfileListLevel>();
     levels.set(numbering.ilvl, level);
     settled.set(numbering.abstractNumId, levels);
   }
