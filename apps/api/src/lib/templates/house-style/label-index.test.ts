@@ -602,6 +602,29 @@ describe("buildLabelIndex", () => {
     expect([...contentsBlockIds].toSorted()).toEqual(["p1", "p2", "p3", "p4"]);
   });
 
+  test("a group caption between lines of the source's contents goes with them", () => {
+    const manifest = manifestOf([
+      "Contents",
+      { text: "1. Scope\t2", styleName: "toc 1" },
+      "Schedule",
+      { text: "1. Warranties\t12", styleName: "toc 4" },
+      "Section II",
+      "Contents",
+      { text: "A. General\t6", styleName: "toc 2" },
+    ]);
+    const { contentsBlockIds } = buildLabelIndex(manifest);
+    // Two lines between runs are a part of the document and the caption of
+    // the next contents, not a group of the first.
+    expect([...contentsBlockIds].toSorted()).toEqual([
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+    ]);
+  });
+
   test("an annex named in front of the first article is not the annex", () => {
     const manifest = manifestOf([
       "GUIDANCE",
