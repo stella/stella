@@ -820,7 +820,8 @@ const roleOf = (
 
 /**
  * The blank paragraphs that stay: the first one after a table that only
- * blank paragraphs part from the next table or from the document's end.
+ * blank paragraphs (or ones holding only marks of the source's page) part
+ * from the next table or from the document's end.
  * Two tables with nothing between them are one table to a word processor,
  * and a document's last block has to be a paragraph.
  */
@@ -852,7 +853,12 @@ const tableSeparators = (
     if (!afterTable || index.contentsBlockIds.has(block.id)) {
       continue;
     }
-    if (roleOf(context, block) === null && isBlankParagraph(block)) {
+    // A paragraph that holds only marks of the source's page parts two
+    // tables as a blank one does; it stays, without its marks.
+    if (
+      (roleOf(context, block) === null && isBlankParagraph(block)) ||
+      holdsOnlyPageMarks(block)
+    ) {
       firstBlank ??= block.id;
       held ||= pageHolders.has(block.id);
       continue;
@@ -2233,6 +2239,8 @@ const holdsOnlyPageMarks = (block: DocxBlock): boolean =>
   printedLabel(block) === null &&
   block.pageShapes !== undefined &&
   block.inlineObjects === block.pageShapes &&
+  // A number a field counts is in no text and is content of its own.
+  (block.selfNumbers ?? []).length === 0 &&
   (block.pageBreaks ?? 0) === 0 &&
   block.pageBreakBefore !== true &&
   block.endsSection !== true;

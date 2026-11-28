@@ -2813,6 +2813,52 @@ describe("buildTemplatePlan, drawn marks fixed to the source's page", () => {
     ]);
   });
 
+  test("a paragraph with a counted number or between two tables stays without its marks", () => {
+    // A number a field counts is content of the paragraph's own.
+    const counted = marked(["SMLOUVA", "", "Článek I.\nPrvní", "1.1\tText."], {
+      1: { inlineObjects: 1, pageShapes: 1, selfNumbers: [0] },
+    });
+    expect(
+      build(counted).plan.omit.map(({ blockId }) => blockId),
+    ).not.toContain("p1");
+    // Two tables with nothing between them are one table.
+    const first = inColumns(2, ["Položka", "Cena"]);
+    const second = inColumns(2, ["Termín", "Místo"]);
+    const between = manifestOf([""]).blocks.map((block) => ({
+      ...block,
+      id: "between",
+      inlineObjects: 1,
+      pageShapes: 1,
+    }));
+    const { plan } = build({
+      ...first,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...first.blocks,
+        ...between,
+        ...second.blocks.map((block) => ({
+          ...block,
+          id: `second-${block.id}`,
+          ...(block.cells === undefined
+            ? {}
+            : {
+                cells: block.cells.map((cell) => ({
+                  ...cell,
+                  blockIds: cell.blockIds.map((id) => `second-${id}`),
+                })),
+              }),
+        })),
+      ],
+    });
+    expect(plan.omit.map(({ blockId }) => blockId)).not.toContain("between");
+    expect(
+      sourceItems(plan).find(({ blockId }) => blockId === "between"),
+    ).toMatchObject({ dropPageShapes: true });
+  });
+
   test("a mark next to the words of a signature stays, and the note says so", () => {
     const manifest = marked(
       [
