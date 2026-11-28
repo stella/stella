@@ -2853,6 +2853,197 @@ describe("buildTemplatePlan, a template in another language than the document", 
   });
 });
 
+describe("buildTemplatePlan, drawn marks fixed to the source's page", () => {
+  const marked = (
+    lines: readonly string[],
+    marks: Readonly<Record<number, Partial<DocxBlock>>>,
+  ): DocxBlockManifest => {
+    const manifest = manifestOf(lines);
+    return {
+      ...manifest,
+      blocks: manifest.blocks.map((block, position) => ({
+        ...block,
+        ...marks[position],
+      })),
+    };
+  };
+  const notesOf = (note: { items: readonly FormattingNoteItem[] }) =>
+    note.items.filter(
+      ({ kind }) => kind === "pageMarksDropped" || kind === "pageMarksKept",
+    );
+
+  test("a paragraph is written without them, one that holds nothing else goes with them, and the note names each place", () => {
+    const manifest = marked(
+      [
+        "SMLOUVA",
+        "",
+        "Článek I.\nPrvní",
+        "1.1\tZhotovitel provede dílo podle přílohy.",
+        "",
+        "1.2\tObjednatel dílo převezme.",
+      ],
+      {
+        // Dots and nothing else; a provision with two dots; a paragraph
+        // that holds a picture beside its one dot.
+        1: { inlineObjects: 3, pageShapes: 3 },
+        3: { inlineObjects: 2, pageShapes: 2 },
+        4: { inlineObjects: 2, pageShapes: 1 },
+      },
+    );
+    // A paragraph of dots that also starts a page stays for that, without
+    // its dots: by a break of its own, or because a blank paragraph in
+    // front of it breaks the page.
+    for (const facts of [
+      { 2: { inlineObjects: 2, pageShapes: 2, pageBreaks: 1 } },
+      { 1: { pageBreaks: 1 }, 2: { inlineObjects: 2, pageShapes: 2 } },
+    ]) {
+      const paged = marked(
+        ["SMLOUVA", "", "", "Článek I.\nPrvní", "1.1\tText."],
+        facts,
+      );
+      const breaking = build(paged).plan;
+      expect(breaking.omit.map(({ blockId }) => blockId)).not.toContain("p2");
+      expect(
+        sourceItems(breaking).find(({ blockId }) => blockId === "p2"),
+      ).toMatchObject({ dropPageShapes: true });
+      // Its note names the place and does not say the paragraph went.
+      expect(notesOf(build(paged).note)).toContainEqual({
+        kind: "pageMarksDropped",
+        blockId: "p2",
+        marks: 2,
+        nearBlockId: "p3",
+      });
+    }
+    const { plan, note } = build(manifest);
+    expect(plan.omit).toContainEqual({ blockId: "p1", reason: "pageArtifact" });
+    expect(itemOf(plan, manifest, "1.1\t")).toMatchObject({
+      dropPageShapes: true,
+    });
+    // The picture keeps its paragraph, which loses only the dot.
+    expect(
+      sourceItems(plan).find(({ blockId }) => blockId === "p4"),
+    ).toMatchObject({ dropPageShapes: true });
+    expect(itemOf(plan, manifest, "1.2\t")).not.toHaveProperty(
+      "dropPageShapes",
+    );
+    expect(notesOf(note)).toEqual([
+      {
+        kind: "pageMarksDropped",
+        blockId: "p1",
+        marks: 3,
+        nearBlockId: "p2",
+        paragraphOmitted: true,
+      },
+      { kind: "pageMarksDropped", blockId: "p3", marks: 2 },
+      // The paragraph with the picture has no words to name it by.
+      { kind: "pageMarksDropped", blockId: "p4", marks: 1, nearBlockId: "p5" },
+    ]);
+  });
+
+  test("a paragraph with a counted number or between two tables stays without its marks", () => {
+    // A number a field counts is content of the paragraph's own.
+    const counted = marked(["SMLOUVA", "", "Článek I.\nPrvní", "1.1\tText."], {
+      1: { inlineObjects: 1, pageShapes: 1, selfNumbers: [0] },
+    });
+    expect(
+      build(counted).plan.omit.map(({ blockId }) => blockId),
+    ).not.toContain("p1");
+    // Two tables with nothing between them are one table.
+    const first = inColumns(2, ["Položka", "Cena"]);
+    const second = inColumns(2, ["Termín", "Místo"]);
+    const between = manifestOf([""]).blocks.map((block) => ({
+      ...block,
+      id: "between",
+      inlineObjects: 1,
+      pageShapes: 1,
+    }));
+    const { plan } = build({
+      ...first,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...first.blocks,
+        ...between,
+        ...second.blocks.map((block) => ({
+          ...block,
+          id: `second-${block.id}`,
+          ...(block.cells === undefined
+            ? {}
+            : {
+                cells: block.cells.map((cell) => ({
+                  ...cell,
+                  blockIds: cell.blockIds.map((id) => `second-${id}`),
+                })),
+              }),
+        })),
+      ],
+    });
+    expect(plan.omit.map(({ blockId }) => blockId)).not.toContain("between");
+    expect(
+      sourceItems(plan).find(({ blockId }) => blockId === "between"),
+    ).toMatchObject({ dropPageShapes: true });
+  });
+
+  test("a mark next to the words of a signature stays, and the note says so", () => {
+    const manifest = marked(
+      [
+        "SMLOUVA",
+        "Článek I.\nPrvní",
+        "1.1\tZhotovitel provede dílo.",
+        "1.2\tObjednatel dílo převezme.",
+        "V Praze dne 1. 2. 2026",
+        "",
+        "Podpis: ____________________",
+      ],
+      {
+        // A dot in the text, and a drawn line above the signature words.
+        2: { inlineObjects: 1, pageShapes: 1 },
+        5: { inlineObjects: 1, pageShapes: 1 },
+      },
+    );
+    const { plan, note } = build(manifest);
+    expect(plan.omit.map(({ blockId }) => blockId)).not.toContain("p5");
+    expect(
+      sourceItems(plan).find(({ blockId }) => blockId === "p5"),
+    ).not.toHaveProperty("dropPageShapes");
+    expect(notesOf(note)).toEqual([
+      { kind: "pageMarksDropped", blockId: "p2", marks: 1 },
+      { kind: "pageMarksKept", blockId: "p5", marks: 1 },
+    ]);
+  });
+
+  test("a cell paragraph loses its marks with its table's placement", () => {
+    const table = inColumns(2, ["Položka", "Cena"]);
+    const cells = table.blocks.map((block) =>
+      block.text === "Cena"
+        ? { ...block, inlineObjects: 1, pageShapes: 1 }
+        : block,
+    );
+    const { plan } = build({
+      ...table,
+      blocks: [
+        ...manifestOf(["SMLOUVA"]).blocks.map((block) => ({
+          ...block,
+          id: "title",
+        })),
+        ...cells,
+        ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
+          (block, position) => ({ ...block, id: `after${String(position)}` }),
+        ),
+      ],
+    });
+    const nested = sourceItems(plan).flatMap((item) => item.nested ?? []);
+    expect(
+      nested.find(
+        ({ blockId }) =>
+          blockId === cells.find(({ text }) => text === "Cena")?.id,
+      ),
+    ).toMatchObject({ dropPageShapes: true });
+  });
+});
+
 describe("buildTemplatePlan, a source read with its tracked changes kept", () => {
   const BY = { author: "First Author", date: "2026-01-05T10:00:00Z" };
   const KEPT = {
