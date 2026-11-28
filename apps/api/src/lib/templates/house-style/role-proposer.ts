@@ -95,11 +95,13 @@ const PARTY_MARKER = new RegExp(
 );
 const PREAMBLE_MARKER =
   /uzavřel[yi]|uzavírají|se dohodl[yi]|preambule|whereas|have agreed|have concluded|agree as follows|präambel|vereinbaren/iu;
-/** A sentence that ends by naming who follows (`… uzavírají následující
- *  účastníci:`, `… between the following parties:`): it introduces the
- *  parties, the operative part has not opened. */
+/** A sentence that ends by naming who follows as the parties (`…
+ *  uzavírají následující účastníci:`, `… between the following
+ *  parties:`, `… between:`): it introduces the parties, the operative
+ *  part has not opened. A sentence that merely ends in a party noun
+ *  (`… pro jednotlivé smluvní strany:`) is no such announcement. */
 const PARTIES_FOLLOW =
-  /(?:účastníci|smluvní strany|strany|parties|parteien|vertragspartner|between|zwischen)[  ]*:[  ]*$/iu;
+  /(?:(?:následující|tyto|níže uvedené|the following|these|folgende|nachstehende)[ \u00A0]+(?:účastníci|smluvní strany|strany|parties|parteien|vertragsparteien|vertragspartner)|between|zwischen)[ \u00A0]*:[ \u00A0]*$/iu;
 const SIGNATURE_MARKER = new RegExp(
   String.raw`^\s*(?:ve?[ \u00A0].{0,40}[ \u00A0]dne${NOT_LETTER}|(?:in|at)[ \u00A0].{0,40}[ ,]on${NOT_LETTER}|(?:ort|datum|date|place|místo)[^\n]{0,20}[:.…_]{2,}|(?:za|for and on behalf of|on behalf of|für|im namen)[ \u00A0])|_{4,}|\.{6,}|…{3,}|podpis|signature|unterschrift|signed by|name:|title:|jméno:|funkce:`,
   "iu",

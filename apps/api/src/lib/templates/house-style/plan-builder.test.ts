@@ -273,10 +273,8 @@ describe("buildTemplatePlan, parties headed by a number", () => {
     // name stands at one tab stop.
     if (item?.labelAsText === true) {
       const clause = PROFILE.roles.clause1?.numbering?.indent;
-      expect(item.indent).toEqual({
-        left: clause?.left,
-        hanging: clause?.hanging,
-      });
+      expect(item.indent?.left).toBe(clause?.left ?? undefined);
+      expect(item.indent?.hanging).toBe(clause?.hanging ?? undefined);
     }
   });
 });

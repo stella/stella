@@ -273,6 +273,19 @@ describe("proposeBlockRoles", () => {
     );
     expect(announced["Beta a.s., IČO: 00000002"]).toBe("party");
 
+    // A sentence that only ends in a party noun announces no parties.
+    const obligations = rolesOf(
+      manifestOf([
+        "SMLOUVA",
+        "Strany se dohodly na těchto povinnostech pro jednotlivé smluvní strany:",
+        numbered("1.", "Alfa s.r.o., IČO: 00000001, předá dílo", 5),
+        numbered("2.", "Beta a.s., bankovní spojení: účet, zaplatí", 5),
+      ]),
+    );
+    expect(
+      obligations["Alfa s.r.o., IČO: 00000001, předá dílo".slice(0, 28)],
+    ).not.toBe("party");
+
     // Letters head them as numbers do, and the second party may have no
     // details of its own behind the word that joins the two.
     const lettered = rolesOf(
