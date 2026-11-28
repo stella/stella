@@ -453,6 +453,11 @@ const templateHealthOf = (finding: {
   if (finding.kind === "lastSectionNotBody") {
     return { kind: "template_last_section_not_body" };
   }
+  if (finding.kind === "headingStartsPage") {
+    return "styleId" in finding && typeof finding.styleId === "string"
+      ? { kind: "template_heading_starts_page", styleId: finding.styleId }
+      : { kind: "template_heading_starts_page" };
+  }
   return { kind: "other", reason: finding.kind };
 };
 
