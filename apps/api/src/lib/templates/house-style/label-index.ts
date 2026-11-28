@@ -121,17 +121,42 @@ const CONTENTS_GROUP_MAX = 40;
 const CONTENTS_COLUMNS =
   /^[\p{L} .]{1,24}\t+(?:page|pages|strana|str\.|seite|s\.)[ \u00A0]*$/iu;
 
+/** A line that only rules a caption off from its lines: `______`. */
+const CONTENTS_RULE = /^[-_–—=.·*  ]{3,}$/u;
+
+/** One column head alone over the lines of a table of contents: `CLAUSE`. */
+const CONTENTS_COLUMN =
+  /^(?:clauses?|sections?|articles?|paragraphs?|pages?|článek|články|strana|abschnitt|artikel|seite)$/iu;
+
+/** A drafting note to whoever fills the document in (`NB: update this
+ *  table …`, `[Note: …]`): it may stand between a caption and its lines. */
+const DRAFTING_NOTE =
+  /^(?:\[.*\]|n\.?[  ]?b(?:\.|[  ]*:)|note[  ]*:|pozn(?:ámka)?[  ]*[.:]|hinweis[  ]*:|anm(?:erkung)?[  ]*[.:])/isu;
+
 /** Of the lines with text in front of a table of contents, the caption and
- *  the column heads that head it, nearest first. */
+ *  the column heads that head it, nearest first. A rule or a column head
+ *  alone between them goes with them; a drafting note stays where it is,
+ *  as part of the text. */
 const contentsHeadsOf = (lines: readonly DocxBlock[]): DocxBlock[] => {
   const heads: DocxBlock[] = [];
+  /** Rules and lone column heads since the last head: they go only with a
+   *  caption or column heads further up, never on their own. */
+  let between: DocxBlock[] = [];
+  let noted = false;
   for (const line of lines.toReversed()) {
     const text = line.text.trim();
     const columns = CONTENTS_COLUMNS.test(text);
     if (columns || CONTENTS_CAPTION.test(text)) {
-      heads.push(line);
-    }
-    if (!columns) {
+      heads.push(...between, line);
+      between = [];
+      if (!columns) {
+        break;
+      }
+    } else if (CONTENTS_RULE.test(text) || CONTENTS_COLUMN.test(text)) {
+      between.push(line);
+    } else if (!noted && DRAFTING_NOTE.test(text)) {
+      noted = true;
+    } else {
       break;
     }
   }
