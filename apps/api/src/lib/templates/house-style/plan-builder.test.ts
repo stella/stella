@@ -1081,6 +1081,39 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
     expect(labelsNotKept).toEqual([]);
   });
 
+  test("a bullet of a cell read as no role keeps its mark on a list", () => {
+    // Flagged as a bullet by its list, or only shown as a bullet's mark.
+    for (const flagged of [true, false]) {
+      const table = inColumns(2, [
+        "Requirement",
+        numbered("•", "The company was a domestic corporation.", 6),
+        "Assets",
+        "Yes",
+      ]);
+      const bullet = table.blocks.find(({ text }) =>
+        text.startsWith("The company"),
+      );
+      if (flagged && bullet?.numbering) {
+        bullet.numbering = { ...bullet.numbering, bullet: true };
+      }
+      const { plan, labelsNotKept } = build(table);
+      const nested = sourceItems(plan).at(0)?.nested ?? [];
+      const item = nested.find(({ blockId }) => blockId === bullet?.id);
+      // The engine writes no bullet's glyph as text: the mark stays a list's.
+      expect(item).not.toHaveProperty("labelAsText");
+      expect(item?.numbering).toEqual(
+        expect.objectContaining({ numId: expect.any(Number) }),
+      );
+      expect(
+        (plan.numberingPatches ?? []).map(({ numFmt, lvlText }) => [
+          numFmt,
+          lvlText,
+        ]),
+      ).toContainEqual(["bullet", "•"]);
+      expect(labelsNotKept).toEqual([]);
+    }
+  });
+
   test("every label of a contract is printed by a list or written as text", () => {
     for (const contract of [
       czechContract("Viz čl. II odst. 2 této smlouvy."),
@@ -1451,7 +1484,9 @@ describe("buildTemplatePlan, pages the source starts", () => {
     // the page, and nothing is reported as lost.
     const contents = withFacts(
       ["SMLOUVA", "Text.", "", "Článek I. Předmět\t2"],
-      { 3: { pageBreakBefore: true, styleName: "toc 1" } },
+      {
+        3: { pageBreakBefore: true, styleName: "toc 1" },
+      },
     );
     const later = build({
       ...contents,
@@ -3500,7 +3535,10 @@ describe("buildTemplatePlan, the lines of the parties", () => {
         })),
         ...table.blocks,
         ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
-          (block, position) => ({ ...block, id: `after${String(position)}` }),
+          (block, position) => ({
+            ...block,
+            id: `after${String(position)}`,
+          }),
         ),
       ],
     });
@@ -3528,7 +3566,10 @@ describe("buildTemplatePlan, the lines of the parties", () => {
         })),
         ...amounts.blocks,
         ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
-          (block, position) => ({ ...block, id: `after${String(position)}` }),
+          (block, position) => ({
+            ...block,
+            id: `after${String(position)}`,
+          }),
         ),
       ],
     });
@@ -3572,7 +3613,10 @@ describe("buildTemplatePlan, the lines of the parties", () => {
         })),
         ...table.blocks,
         ...manifestOf(["Článek I.\nPrvní", "1.1\tOdstavec."]).blocks.map(
-          (block, position) => ({ ...block, id: `after${String(position)}` }),
+          (block, position) => ({
+            ...block,
+            id: `after${String(position)}`,
+          }),
         ),
       ],
     });
@@ -3854,7 +3898,10 @@ describe("buildTemplatePlan, a typed article behind the document's numbered ones
     const index = buildLabelIndex(manifest);
     expect(
       index.entryByBlockId.get(blockIdOf(manifest, "Article 3 Notices")),
-    ).toMatchObject({ level: "article", origin: "manual" });
+    ).toMatchObject({
+      level: "article",
+      origin: "manual",
+    });
     expect(
       index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Term")),
     ).toBe(false);

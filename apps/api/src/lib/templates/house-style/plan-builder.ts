@@ -2118,11 +2118,20 @@ const leftOutOfSource = (
   return goesWithPageMarks(context, block, held) ? "pageArtifact" : null;
 };
 
+/** An automatic bullet: a mark of a font, which no engine writes as text. */
+const isListBullet = (block: DocxBlock): boolean =>
+  isBulleted(block) && shownLabelOf(block) !== null;
+
 /** The placements of a table's cell paragraphs that have a reading; one
- *  without is placed with its table. */
+ *  without is placed with its table. A bullet without one keeps its mark
+ *  as a bullet of the body does, on the template's bullet level. */
 const cellPlacementsOf = (context: Context, table: DocxBlock): Placement[] =>
   insideOf(table, context.blockById).flatMap((inner) => {
-    const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
+    if (inner.kind !== "paragraph") {
+      return [];
+    }
+    const role =
+      roleOf(context, inner) ?? (isListBullet(inner) ? "body" : null);
     return role === null ? [] : [placementOf(context, inner, role)];
   });
 
