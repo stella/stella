@@ -254,6 +254,9 @@ export type FormattingNoteItem =
   /** What the output's headers and footers kept of the source's, and what
    *  had no place there. */
   | ({ kind: "sourceHeaders" } & SourceHeadersReport)
+  /** Links of the source to a place in itself or to a part of its own
+   *  package that the output shows as plain text: `links` of them. */
+  | { kind: "internalLinksAsText"; links: number }
   /** The template's style for a numbered level sets it apart from its
    *  sibling levels (bold, or another size). `blocks` paragraphs of the
    *  role were placed in the sibling's style instead, on their own level of
@@ -1386,6 +1389,25 @@ const hangBullet = (
   bullet: Placement,
   lead: Placement | null,
 ): void => {
+  // The template's own bullet level sets its mark for one place on the
+  // page. Under a paragraph whose text starts elsewhere (a clause of a
+  // template whose bullet style was made for another column or another
+  // depth) the mark would stand far from that text: the bullet then hangs
+  // from its paragraph as a bullet without a level of its own does.
+  const own = bullet.level;
+  if (own !== null && bullet.pattern?.numFmt === "bullet" && lead !== null) {
+    const step = own.indent.hanging ?? 0;
+    const mark = (own.indent.left ?? 0) - step;
+    if (
+      step > 0 &&
+      Math.abs(mark - textStartOf(context, lead)) > BULLET_DRIFT
+    ) {
+      bullet.level = null;
+      bullet.borrowedLevel = own;
+    } else {
+      return;
+    }
+  }
   const beside = bullet.borrowedLevel;
   if (beside === null || bullet.pattern?.numFmt !== "bullet" || lead === null) {
     return;
@@ -1405,6 +1427,9 @@ const hangBullet = (
 };
 
 const HEADING_TEXT_MAX = 160;
+/** How far, in twentieths of a point, a bullet's mark may stand from the
+ *  text of the paragraph its list belongs to (15 pt). */
+const BULLET_DRIFT = 300;
 
 /**
  * Whether a paragraph read as an article's heading is one on the page: a
@@ -2052,11 +2077,20 @@ const settledContentsHolder = (
   return null;
 };
 
+/** An automatic bullet: a mark of a font, which no engine writes as text. */
+const isListBullet = (block: DocxBlock): boolean =>
+  isBulleted(block) && shownLabelOf(block) !== null;
+
 /** The placements of a table's cell paragraphs that have a reading; one
- *  without is placed with its table. */
+ *  without is placed with its table. A bullet without one keeps its mark
+ *  as a bullet of the body does, on the template's bullet level. */
 const cellPlacementsOf = (context: Context, table: DocxBlock): Placement[] =>
   insideOf(table, context.blockById).flatMap((inner) => {
-    const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
+    if (inner.kind !== "paragraph") {
+      return [];
+    }
+    const role =
+      roleOf(context, inner) ?? (isListBullet(inner) ? "body" : null);
     return role === null ? [] : [placementOf(context, inner, role)];
   });
 

@@ -324,6 +324,21 @@ const withSourceHeaders = (
     items: [...note.items, { kind: "sourceHeaders", ...sourceHeaders }],
   };
 };
+/** The note says how many links of the source to a place in itself the
+ *  output shows as plain text. */
+const withInternalLinks = (
+  note: FormattingNote,
+  { dropped }: TemplatePlanReport,
+): FormattingNote =>
+  dropped.internalHyperlinks === 0
+    ? note
+    : {
+        ...note,
+        items: [
+          ...note.items,
+          { kind: "internalLinksAsText", links: dropped.internalHyperlinks },
+        ],
+      };
 
 /** The note says which fields of the source the output shows as text. */
 const withFieldsAsText = (
@@ -605,7 +620,10 @@ export const formatOntoTemplate = async ({
     manifest,
     plan: built.plan,
     profile,
-    note: withFieldsAsText(withSourceHeaders(built.note, report), report),
+    note: withInternalLinks(
+      withFieldsAsText(withSourceHeaders(built.note, report), report),
+      report,
+    ),
     outcome: { attempts, repairs, ...leftOf(report), pages },
   });
 };

@@ -38,6 +38,8 @@ type Answer =
       fieldsAsText?: true;
       /** What the output's headers kept of the source's. */
       sourceHeaders?: SourceHeadersReport;
+      /** The output shows three links to places in the source as text. */
+      internalLinks?: true;
     };
 
 type FakeEngine = TemplatePlanEngine & { plans: TemplatePlan[] };
@@ -118,7 +120,7 @@ const fakeEngine = (
         comments: 2,
         sourceFields:
           "fieldsAsText" in answer ? [{ kind: "FORMCHECKBOX", count: 2 }] : [],
-        internalHyperlinks: 0,
+        internalHyperlinks: "internalLinks" in answer ? 3 : 0,
         sectionBreaks: 1,
       },
       ...("sourceHeaders" in answer
@@ -240,6 +242,20 @@ describe("formatOntoTemplate", () => {
     expect(plain.note.items.some(({ kind }) => kind === "sourceHeaders")).toBe(
       false,
     );
+  });
+
+  test("says how many links to a place in the source the output shows as text", async () => {
+    const result = await format(
+      fakeEngine(manifest, [{ internalLinks: true }]),
+    );
+    expect(result.isOk() && result.value.note.items).toContainEqual({
+      kind: "internalLinksAsText",
+      links: 3,
+    });
+    const quiet = (await format(fakeEngine(manifest, [{}]))).unwrap();
+    expect(
+      quiet.note.items.some(({ kind }) => kind === "internalLinksAsText"),
+    ).toBe(false);
   });
 
   test("says which fields of the source the output shows as text", async () => {

@@ -65,7 +65,6 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
-import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import {
   decodeSourceRawEnvelope,
@@ -74,6 +73,8 @@ import {
 } from "@/api/lib/legal-search/source-raw-envelope";
 import { readStoredRawReparseResult } from "@/api/lib/legal-search/stored-raw-reparse-boundary";
 import { isRecord } from "@/api/lib/type-guards";
+
+import type { ObservationDetail } from "./partial-observation";
 
 export { EMPTY_AST };
 export type { EmptyAst };

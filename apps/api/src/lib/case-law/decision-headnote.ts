@@ -1,6 +1,18 @@
+// parser-output-unchanged: defines identical headnote character/keyword constants locally instead of importing LIMITS.
 import { DECISION_HEADNOTE_TRUNCATION_MARK } from "@stll/api-contract/case-law-text-field";
 
-import { LIMITS } from "@/api/lib/limits";
+/** One-row budget for the headnote a list row shows under the case number. */
+export const CASE_LAW_HEADNOTE_MAX_CHARS = 240;
+
+/** Expanded headnote budget used by MCP presentation. */
+export const MCP_CASE_LAW_HEADNOTE_MAX_CHARS = 4000;
+
+/**
+ * Terms of a publisher's classification one row draws as tags. A subject
+ * index runs to dozens of terms on some sources, and a row is a hook, not
+ * the index.
+ */
+export const CASE_LAW_HEADNOTE_KEYWORDS = 8;
 
 // parser-output-unchanged: the expanded budget is read-time MCP presentation; parsers keep the compact default.
 /** The MCP reading expands the same source text used by compact HTTP rows. */
@@ -8,8 +20,8 @@ export const decisionHeadnoteMaxChars = (
   presentation: "expanded" | undefined,
 ) =>
   presentation === "expanded"
-    ? LIMITS.mcpCaseLawHeadnoteMaxChars
-    : LIMITS.caseLawHeadnoteMaxChars;
+    ? MCP_CASE_LAW_HEADNOTE_MAX_CHARS
+    : CASE_LAW_HEADNOTE_MAX_CHARS;
 
 export type DecisionHeadnoteMaxChars = ReturnType<
   typeof decisionHeadnoteMaxChars
@@ -24,7 +36,7 @@ const WORD_SEGMENTER = new Intl.Segmenter("und", { granularity: "word" });
  */
 export const truncateDecisionHeadnote = (
   text: string,
-  max: number = LIMITS.caseLawHeadnoteMaxChars,
+  max: number = CASE_LAW_HEADNOTE_MAX_CHARS,
 ) => {
   if (text.length <= max) {
     return { text, truncated: false };
@@ -99,7 +111,7 @@ const collapseDecisionTerm = (raw: unknown): string | null => {
  */
 export const normalizeDecisionHeadnote = (
   raw: unknown,
-  maxChars: number = LIMITS.caseLawHeadnoteMaxChars,
+  maxChars: number = CASE_LAW_HEADNOTE_MAX_CHARS,
 ) => {
   const collapsed = collapseDecisionHeadnote(raw);
   return collapsed === null
@@ -130,14 +142,11 @@ export const normalizeDecisionKeywords = (raw: unknown) => {
   }
 
   const items: string[] = [];
-  let budget = LIMITS.caseLawHeadnoteMaxChars;
+  let budget = CASE_LAW_HEADNOTE_MAX_CHARS;
   for (const term of terms) {
     // A term is a term: the row drops the ones past its budget rather than
     // drawing a tag cut in half.
-    if (
-      term.length > budget ||
-      items.length >= LIMITS.caseLawHeadnoteKeywords
-    ) {
+    if (term.length > budget || items.length >= CASE_LAW_HEADNOTE_KEYWORDS) {
       break;
     }
     budget -= term.length;

@@ -202,6 +202,7 @@ const KNOWN_NOTE_KINDS = [
   "trackedChangesKept",
   "trackedChangesResolved",
   "fieldsAsText",
+  "internalLinksAsText",
 ] as const satisfies readonly NoteSource["kind"][];
 
 type KnownNoteSource = Extract<
@@ -350,6 +351,8 @@ const noteItemOf = (
         reason: item.region,
         count: item.blockIds.length,
       };
+    case "internalLinksAsText":
+      return { kind: "internal_links_as_text", count: item.links };
     case "trackedChangesResolved":
       return {
         kind: "tracked_changes_resolved",
@@ -421,6 +424,12 @@ const templateHealthOf = (finding: {
     return "styleId" in finding && typeof finding.styleId === "string"
       ? { kind: "text_drawn_as_picture", styleId: finding.styleId }
       : { kind: "text_drawn_as_picture" };
+  }
+  if (finding.kind === "rolesNotRead") {
+    return { kind: "template_roles_not_read" };
+  }
+  if (finding.kind === "lastSectionNotBody") {
+    return { kind: "template_last_section_not_body" };
   }
   return { kind: "other", reason: finding.kind };
 };

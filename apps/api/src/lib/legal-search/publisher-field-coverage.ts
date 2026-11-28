@@ -1,5 +1,9 @@
 import { panic, Result } from "better-result";
 
+import {
+  getIngestionDiagnosticsSink,
+  type IngestionDiagnosticsLogFn,
+} from "@/api/lib/case-law/ingestion-diagnostics-sink";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
   IngestionResult,
@@ -10,7 +14,6 @@ import {
   decodeSourceRawEnvelope,
   type SourceRawParts,
 } from "@/api/lib/legal-search/source-raw-envelope";
-import type { logger } from "@/api/lib/observability/logger";
 
 export const PUBLISHER_FIELD_COVERAGE_EVENT = {
   UNMAPPED: "case_law.ingestion.publisher_fields_unmapped",
@@ -48,7 +51,7 @@ type PublisherFieldCoverageOptions = {
   adapterKey: string;
   inventory: Pick<SourceFieldInventory, "fields">;
   observedFields: readonly string[];
-  report: typeof logger.error;
+  report: IngestionDiagnosticsLogFn;
 };
 
 /** Counts are additive per observed record; publisher values never enter logs. */
@@ -86,7 +89,7 @@ export const recordPublisherFieldCoverage = ({
 
 type InspectPublisherFieldCoverageOptions = RetainedPublisherPartsOptions & {
   inventory: SourceFieldInventory;
-  report?: typeof logger.error;
+  report?: IngestionDiagnosticsLogFn;
 };
 
 /**
@@ -105,8 +108,7 @@ export const inspectPublisherFieldCoverage = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(observed)) {
-    const emit =
-      report ?? (await import("@/api/lib/observability/logger")).logger.error;
+    const emit = report ?? getIngestionDiagnosticsSink().error;
     emit(PUBLISHER_FIELD_COVERAGE_EVENT.READER_FAILED, {
       adapterKey,
       recordCount: 1,
@@ -128,8 +130,7 @@ export const inspectPublisherFieldCoverage = async ({
       audit satisfies never;
       return panic("Unhandled publisher field retention observation");
   }
-  const emit =
-    report ?? (await import("@/api/lib/observability/logger")).logger.error;
+  const emit = report ?? getIngestionDiagnosticsSink().error;
   recordPublisherFieldCoverage({
     adapterKey,
     inventory,

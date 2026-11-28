@@ -71,6 +71,10 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
    *  template's part serves pages that take other content;
    *  `unsupportedObjects`: an embedded object other than a picture). */
   "source_header_left_out",
+  /** `count` links of the document to a place in itself (a bookmark, a
+   *  heading) show as plain text in the output: they no longer jump.
+   *  Check them against the document. */
+  "internal_links_as_text",
   /** A finding of the formatter this tool does not word yet; `reason`
    *  names it. */
   "other",
@@ -79,5 +83,15 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
 export const REFORMAT_TEMPLATE_HEALTH_KINDS = [
   "number_drawn_as_picture",
   "text_drawn_as_picture",
+  /** The template shows no style in use for an article heading, a clause
+   *  or body text (a filled document used as a template, or numbered
+   *  styles without sample text): those paragraphs were placed by
+   *  fallbacks. Check the output's look; the template wants sample text in
+   *  its own styles. */
+  "template_roles_not_read",
+  /** The template ends with sections after its body's (an exhibit, a
+   *  signature page, a landscape annex): the output takes its page setup,
+   *  headers and footers from the last of them. Check the output's pages. */
+  "template_last_section_not_body",
   "other",
 ] as const;
