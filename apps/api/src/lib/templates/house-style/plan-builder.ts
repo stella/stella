@@ -1340,14 +1340,21 @@ const hangOf = (
   { block, entry, level, borrowedLevel, role }: Placement,
 ): TemplatePlanIndent | null => {
   const labelled = entry !== null || shownLabelOf(block) !== null;
+  // A party's numbered heading line without a style of the template for
+  // it hangs its number as a clause's would.
+  const partyHead = role === "party" && entry !== null;
   const provision =
     HANGING_ROLES.has(role) ||
+    partyHead ||
     (role === "articleHeading" && runsOn(block, entry));
   if (!labelled || !provision) {
     return null;
   }
   const beside =
-    level ?? borrowedLevel ?? profile.roles[role]?.numbering ?? null;
+    level ??
+    borrowedLevel ??
+    (partyHead ? profile.roles.clause1 : profile.roles[role])?.numbering ??
+    null;
   const left = beside?.indent.left ?? null;
   const hanging = beside?.indent.hanging ?? null;
   return left === null || hanging === null || hanging <= 0
