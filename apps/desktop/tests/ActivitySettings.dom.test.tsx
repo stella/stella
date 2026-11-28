@@ -127,13 +127,13 @@ test("a read that succeeds clears the error an earlier read left", async () => {
     await emit(ACTIVITY_CHANGED_EVENT);
   });
 
-  await findByRole("checkbox", { name: messages.detectCalls });
+  await findByRole("switch", { name: messages.detectCalls });
   expect(queryByText(messages.errorRead)).toBeNull();
 });
 
 test("a read that succeeds leaves the error of a failed change in place", async () => {
   const { findByRole, findByText } = await renderPane({ readable: true });
-  fireEvent.click(await findByRole("checkbox", { name: messages.detectCalls }));
+  fireEvent.click(await findByRole("switch", { name: messages.detectCalls }));
   await findByText(messages.errorUpdate);
 
   await act(async () => {
@@ -146,17 +146,16 @@ test("a read that succeeds leaves the error of a failed change in place", async 
 test("the title setting describes what flipping it does in its current state", async () => {
   const native = { readable: true, captureDetails: false };
   const { findByRole } = await renderPane(native);
-  const checkbox = await findByRole("checkbox", {
+  const toggle = await findByRole("switch", {
     name: messages.captureDetails,
   });
   const description = () =>
-    document.querySelector(
-      `#${checkbox.getAttribute("aria-describedby") ?? ""}`,
-    )?.textContent;
-  expect(checkbox.getAttribute("aria-checked")).toBe("false");
+    document.querySelector(`#${toggle.getAttribute("aria-describedby") ?? ""}`)
+      ?.textContent;
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
   expect(description()).toBe(messages.captureDetailsOffDescription);
 
-  fireEvent.click(checkbox);
+  fireEvent.click(toggle);
   // The native side applies the change, then announces it.
   await waitFor(() => {
     expect(native.captureDetails).toBe(true);
@@ -167,7 +166,7 @@ test("the title setting describes what flipping it does in its current state", a
 
   expect(
     (
-      await findByRole("checkbox", { name: messages.captureDetails })
+      await findByRole("switch", { name: messages.captureDetails })
     ).getAttribute("aria-checked"),
   ).toBe("true");
   expect(description()).toBe(messages.captureDetailsDescription);
@@ -182,7 +181,7 @@ test("where policy keeps details off, the row says so and offers nothing to turn
   expect((await findAllByText(messages.detailsManaged)).length).toBeGreaterThan(
     0,
   );
-  expect(queryByRole("checkbox", { name: messages.captureDetails })).toBeNull();
+  expect(queryByRole("switch", { name: messages.captureDetails })).toBeNull();
   expect(
     document.body.textContent.includes(messages.captureModesDetailsOff),
   ).toBe(false);

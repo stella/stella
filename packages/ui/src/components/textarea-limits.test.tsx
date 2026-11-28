@@ -120,6 +120,32 @@ describe("Textarea limits", () => {
     expect(markup).not.toContain("max-sm:min-h-21.5");
   });
 
+  test("with maxRows, rows is the floor so a long placeholder fits", () => {
+    const markup = renderToStaticMarkup(
+      <Textarea
+        aria-label="Instructions"
+        maxRows={8}
+        placeholder="A placeholder long enough to wrap onto a second line"
+        rows={3}
+      />,
+    );
+
+    expect(markup).toContain("--textarea-min-rows:3");
+    expect(markup).toContain(
+      "min-h-[calc(var(--textarea-min-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))]",
+    );
+    expect(markup).not.toContain("min-h-0");
+    expect(markup).not.toContain("min-h-17.5");
+  });
+
+  test("the rows floor never exceeds maxRows", () => {
+    const markup = renderToStaticMarkup(
+      <Textarea aria-label="Title" maxRows={2} rows={5} />,
+    );
+
+    expect(markup).toContain("--textarea-min-rows:2");
+  });
+
   test("without maxRows it grows freely", () => {
     const markup = renderToStaticMarkup(<Textarea aria-label="Note" />);
 

@@ -22,6 +22,8 @@ const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { AgentSubscriptionsSection } =
   await import("../src/mainview/AgentSubscriptionsSection");
+const { NativeStatusMemoryProvider } =
+  await import("../src/mainview/native-status-memory");
 const { HARNESS_INSTALL_CHANGED_EVENT } =
   await import("../src/mainview/harness-install-status");
 
@@ -268,7 +270,9 @@ test("reports a failed update, the release still in use, and retries", async () 
   expect(alert.textContent).toBe(
     `${message(install.failure.verification, { name: "Codex" })} ${message(
       install.activeStays,
-      { version: "0.150.0" },
+      {
+        version: "0.150.0",
+      },
     )}`,
   );
   fireEvent.click(await findByRole("button", { name: install.retry }));
@@ -561,10 +565,11 @@ test.each([
 );
 
 test("Check again shows the check running, then what the CLI answered", async () => {
-  const { checkAgain, holdNext, statusLine, calls } = renderAntigravity({
-    state: "signed_out",
-    version: "1.5.17",
-  });
+  const { checkAgain, holdNext, statusLine, calls, queryByRole } =
+    renderAntigravity({
+      state: "signed_out",
+      version: "1.5.17",
+    });
   await waitFor(() => {
     expect(statusLine()).toBe(antigravityMessages.signedOut);
   });
@@ -582,7 +587,16 @@ test("Check again shows the check running, then what the CLI answered", async ()
   });
   expect(checkAgain().hasAttribute("disabled")).toBe(false);
 
-  // Signed in from the CLI meanwhile.
+  // A check the native side could not answer says so, keeping the version.
+  settle = holdNext();
+  fireEvent.click(checkAgain());
+  settle(new Error("refused"));
+  await waitFor(() => {
+    expect(statusLine()).toBe(antigravityMessages.checkFailed);
+  });
+
+  // Signed in from the CLI meanwhile: nothing is left to ask of the member,
+  // so the row offers no button, like the other agents' signed-in rows.
   settle = holdNext();
   fireEvent.click(checkAgain());
   await waitFor(() => {
@@ -592,14 +606,9 @@ test("Check again shows the check running, then what the CLI answered", async ()
   await waitFor(() => {
     expect(statusLine()).toBe(defaultMessages.agentSubscriptions.signedIn);
   });
-
-  // A check the native side could not answer says so, keeping the version.
-  settle = holdNext();
-  fireEvent.click(checkAgain());
-  settle(new Error("refused"));
-  await waitFor(() => {
-    expect(statusLine()).toBe(antigravityMessages.checkFailed);
-  });
+  expect(
+    queryByRole("button", { name: antigravityMessages.checkAgain }),
+  ).toBeNull();
 
   const refreshes = calls.filter(
     ({ command, args }) =>
@@ -646,10 +655,18 @@ test("every subscription row says its sign-in the same way and keeps one text ed
     ).not.toBeNull();
     // The version line starts on the title's edge, past the mark.
     expect(row?.lastElementChild?.className).toContain("ps-15");
+  }
+  // Rows stella can sign out have a control; signed-in Antigravity, which
+  // stella cannot sign out, asks nothing of the member.
+  const [chatGptRow, claudeCodeRow, antigravityRow] = rows;
+  for (const row of [chatGptRow, claudeCodeRow]) {
     expect(
       row?.querySelector('[data-slot="settings-row-control"]')?.textContent,
     ).not.toBe("");
   }
+  expect(
+    antigravityRow?.querySelector('[data-slot="settings-row-control"]'),
+  ).toBeNull();
   // One line, cut short rather than wrapped when the email is long.
   const lines = await waitFor(() => {
     const found = [...document.querySelectorAll("span")].filter(
@@ -675,4 +692,80 @@ test("every subscription row says its sign-in the same way and keeps one text ed
   ] as const) {
     expect(getByText(message(install.ready, { name, version }))).toBeTruthy();
   }
+});
+
+test("shown again, a row starts from its last answer while a slow read runs", async () => {
+  const email = "counsel@example-law-firm.test";
+  const signedInAs = message(defaultMessages.agentSubscriptions.signedInAs, {
+    email,
+  });
+  let claudeCodeAnswer: () => unknown = () => ({
+    state: "signed_in",
+    email,
+    plan: "pro",
+  });
+  const calls: string[] = [];
+  mockIPC(
+    (command) => {
+      calls.push(command);
+      switch (command) {
+        case "claude_code_auth_get_status":
+          return claudeCodeAnswer();
+        case "chatgpt_auth_get_status":
+          return SIGNED_OUT_CHATGPT;
+        case "harness_get_status":
+          return statuses(
+            { state: "ready", active: "0.164.0" },
+            { state: "ready", active: "2.1.309" },
+          );
+        default:
+          return null;
+      }
+    },
+    { shouldMockEvents: true },
+  );
+  // Another settings page, then back: the section unmounts, the window not.
+  const Window = () => {
+    const [shown, setShown] = useState(true);
+    return (
+      <NativeStatusMemoryProvider>
+        <button
+          onClick={() => {
+            setShown((now) => !now);
+          }}
+          type="button"
+        >
+          toggle page
+        </button>
+        {shown ? (
+          <AgentSubscriptionsSection
+            focus={null}
+            onFocusShown={() => undefined}
+            renderGroup={(content) => <section>{content}</section>}
+          />
+        ) : null}
+      </NativeStatusMemoryProvider>
+    );
+  };
+  const view = render(
+    <DesktopIntlProvider language="en" messages={defaultMessages}>
+      <Window />
+    </DesktopIntlProvider>,
+  );
+  await view.findByText(signedInAs);
+  fireEvent.click(view.getByRole("button", { name: "toggle page" }));
+  expect(view.queryByText(signedInAs)).toBeNull();
+
+  // The CLI is slow to answer this time: the row must not wait for it.
+  const { promise: neverAnswers } = Promise.withResolvers<never>();
+  claudeCodeAnswer = async () => neverAnswers;
+  const readsBefore = calls.length;
+  fireEvent.click(view.getByRole("button", { name: "toggle page" }));
+  expect(view.getByText(signedInAs)).toBeTruthy();
+  // It still asks again, so the remembered answer is replaced.
+  await waitFor(() => {
+    expect(
+      calls.slice(readsBefore).includes("claude_code_auth_get_status"),
+    ).toBe(true);
+  });
 });

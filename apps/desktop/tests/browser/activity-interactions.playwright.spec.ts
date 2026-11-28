@@ -2046,7 +2046,7 @@ test("detail capture is unchecked in welcome and recording starts without enabli
     page,
     snapshot: { ...SNAPSHOT, recordingStatus: "off" },
   });
-  const details = page.getByRole("checkbox", {
+  const details = page.getByRole("switch", {
     name: enMessages.activity.captureDetails,
   });
   await expect(details).not.toBeChecked();
@@ -2071,7 +2071,7 @@ test("detail capture changes only on explicit choice in the welcome", async ({
     page,
     snapshot: { ...SNAPSHOT, recordingStatus: "off" },
   });
-  const details = page.getByRole("checkbox", {
+  const details = page.getByRole("switch", {
     name: enMessages.activity.captureDetails,
   });
   await details.check();
@@ -2092,7 +2092,7 @@ test("detail capture is unchecked in the settings until chosen and can be turned
   page,
 }) => {
   await installNativeBoundary({ page, view: "settings" });
-  const details = page.getByRole("checkbox", {
+  const details = page.getByRole("switch", {
     name: enMessages.activity.captureDetails,
   });
   await expect(details).not.toBeChecked();
@@ -3009,7 +3009,7 @@ test("call recording is on by default and changes only on explicit choice", asyn
   page,
 }) => {
   await installNativeBoundary({ page, view: "settings" });
-  const calls = page.getByRole("checkbox", {
+  const calls = page.getByRole("switch", {
     name: enMessages.activity.detectCalls,
   });
   await expect(calls).toBeChecked();

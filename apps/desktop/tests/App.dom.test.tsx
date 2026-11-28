@@ -256,14 +256,14 @@ const rowFor = (container: HTMLElement, key: PreferenceKey) =>
     (element) => element.textContent.includes(PREFERENCE_LABELS[key]),
   ) ?? panic(`No notification row for ${key}`);
 
-// The labelled native input takes the click; the visible checkbox reports state.
+// The labelled native input takes the click; the visible switch reports state.
 const toggleInput = (container: HTMLElement, key: PreferenceKey) =>
   rowFor(container, key).querySelector('input[type="checkbox"]') ??
-  panic(`No checkbox input for ${key}`);
+  panic(`No switch input for ${key}`);
 
 const shownChecked = (container: HTMLElement, key: PreferenceKey) =>
   rowFor(container, key)
-    .querySelector('[role="checkbox"]')
+    .querySelector('[role="switch"]')
     ?.getAttribute("aria-checked") === "true";
 
 test("notification preferences show the backend's newest state in every response order", async () => {

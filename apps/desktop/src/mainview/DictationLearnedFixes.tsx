@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { useMountEffect } from "@stll/ui/effects";
+import { ListEmpty } from "@stll/ui/list";
 import {
   SettingsRow,
   settingsRowIds,
@@ -107,9 +108,7 @@ export const DictationLearnedFixes = ({ shortcut }: { shortcut: string }) => {
         ) : null}
       </SettingsRow>
       {stored.status === "read" && listed.length === 0 ? (
-        <li className="text-muted-foreground px-4 pb-3 text-xs">
-          {t("empty")}
-        </li>
+        <ListEmpty>{t("empty")}</ListEmpty>
       ) : null}
       {listed.map((fix) => (
         <LearnedFixRow
@@ -126,19 +125,23 @@ export const DictationLearnedFixes = ({ shortcut }: { shortcut: string }) => {
           }}
         />
       ))}
-      <li className="px-4 py-2.5">
-        <Button
-          aria-describedby={ids.description}
-          disabled={busy || nothingToDelete}
-          disabledReason={busy ? t("working") : t("empty")}
-          onClick={() => {
-            void run(async () => invoke<unknown>("dictation_learned_delete"));
-          }}
-          variant="outline"
-        >
-          {t("delete")}
-        </Button>
-      </li>
+      {/* Nothing stored, nothing to delete: the empty row says so. Fixes
+          still being learned are not listed but are deleted too. */}
+      {nothingToDelete ? null : (
+        <li className="px-4 py-2.5">
+          <Button
+            aria-describedby={ids.description}
+            disabled={busy}
+            disabledReason={t("working")}
+            onClick={() => {
+              void run(async () => invoke<unknown>("dictation_learned_delete"));
+            }}
+            variant="outline"
+          >
+            {t("delete")}
+          </Button>
+        </li>
+      )}
     </SettingsSection>
   );
 };
