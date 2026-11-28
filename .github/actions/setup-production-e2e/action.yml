@@ -13,6 +13,10 @@ inputs:
     description: Optional Docker Hub token for image pulls
     required: false
     default: ""
+  pause-native-extraction:
+    description: Pause documentProcessing.dispatchNativeExtraction.twoMinute while measuring route-smoke network baselines so uploaded fixture documents do not broadcast entity SSE invalidations mid-route
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -31,6 +35,22 @@ runs:
       with:
         dockerhub-username: ${{ inputs.dockerhub-username }}
         dockerhub-token: ${{ inputs.dockerhub-token }}
+
+    - name: Pause inline document extraction for network measurement
+      if: steps.stack.outcome == 'success' && inputs.pause-native-extraction == 'true'
+      shell: bash
+      run: |
+        # setup-e2e-stack waits on /live, while ensureDefaultJobs registers the
+        # scheduler_jobs rows right after listen. Retry until the row is present.
+        for i in {1..30}; do
+          if NODE_ENV=development STELLA_LOCAL_DEV=1 bun run --cwd apps/api scheduler:job-pause -- pause --job documentProcessing.dispatchNativeExtraction.twoMinute --for 1h --reason "route-smoke network measurement" --actor route-smoke --apply; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::Failed to pause documentProcessing.dispatchNativeExtraction.twoMinute"
+        tail -200 /tmp/api.log || true
+        exit 1
 
     - name: Install Playwright browsers
       if: steps.stack.outcome == 'success'
