@@ -487,6 +487,18 @@ export type TemplatePlan = {
    *  same pages. An engine that does not know the option gives the
    *  template's alone. */
   sourceHeaders?: "drop" | "keep";
+  /** Whether the output carries the source's comments: each whose anchor
+   *  the output places, on the same text. An engine that does not know the
+   *  option carries none. */
+  comments?: "drop" | "keep";
+};
+
+/** What the output carries of the source's comments. */
+export type SourceCommentsReport = {
+  kept: number;
+  /** Comments anchored where the output has no place (an omitted block, a
+   *  note, a header). */
+  leftOut: number;
 };
 
 /** What the output's headers and footers carry of the source's. */
@@ -546,6 +558,8 @@ export type TemplatePlanReport = {
   };
   /** Present when the plan kept the source's headers and footers. */
   sourceHeaders?: SourceHeadersReport;
+  /** Present when the plan kept the source's comments. */
+  sourceComments?: SourceCommentsReport;
 };
 
 /** Why the engine refused; the codes a plan can be repaired after. Any

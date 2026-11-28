@@ -75,6 +75,12 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
    *  heading) show as plain text in the output: they no longer jump.
    *  Check them against the document. */
   "internal_links_as_text",
+  /** `count` comments of the document are in the output on the text they
+   *  were made on. */
+  "comments_kept",
+  /** `count` comments of the document were anchored where the output has
+   *  no place (an omitted line, a note, a header) and are not in it. */
+  "comments_left_out",
   /** A finding of the formatter this tool does not word yet; `reason`
    *  names it. */
   "other",

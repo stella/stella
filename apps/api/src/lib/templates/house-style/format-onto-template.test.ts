@@ -40,6 +40,8 @@ type Answer =
       sourceHeaders?: SourceHeadersReport;
       /** The output shows three links to places in the source as text. */
       internalLinks?: true;
+      /** What the output carries of the source's comments. */
+      sourceComments?: { kept: number; leftOut: number };
     };
 
 type FakeEngine = TemplatePlanEngine & { plans: TemplatePlan[] };
@@ -125,6 +127,9 @@ const fakeEngine = (
       },
       ...("sourceHeaders" in answer
         ? { sourceHeaders: answer.sourceHeaders }
+        : {}),
+      ...("sourceComments" in answer
+        ? { sourceComments: answer.sourceComments }
         : {}),
     };
   };
@@ -255,6 +260,27 @@ describe("formatOntoTemplate", () => {
     const quiet = (await format(fakeEngine(manifest, [{}]))).unwrap();
     expect(
       quiet.note.items.some(({ kind }) => kind === "internalLinksAsText"),
+    ).toBe(false);
+  });
+
+  test("keeps the source's comments and says how many had no place", async () => {
+    const engine = fakeEngine(manifest, [
+      { sourceComments: { kept: 3, leftOut: 1 } },
+    ]);
+    const result = await format(engine);
+    expect(engine.plans.at(0)?.comments).toBe("keep");
+    expect(result.isOk() && result.value.note.items).toContainEqual({
+      kind: "sourceComments",
+      kept: 3,
+      leftOut: 1,
+    });
+    // A source without comments gives no item.
+    const quiet = await format(
+      fakeEngine(manifest, [{ sourceComments: { kept: 0, leftOut: 0 } }]),
+    );
+    expect(
+      quiet.isOk() &&
+        quiet.value.note.items.some(({ kind }) => kind === "sourceComments"),
     ).toBe(false);
   });
 

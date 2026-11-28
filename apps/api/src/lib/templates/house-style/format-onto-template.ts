@@ -340,6 +340,20 @@ const withInternalLinks = (
         ],
       };
 
+/** The note says how many of the source's comments the output carries and
+ *  how many had no place, where the source has any. */
+const withSourceComments = (
+  note: FormattingNote,
+  { sourceComments }: TemplatePlanReport,
+): FormattingNote =>
+  sourceComments === undefined ||
+  (sourceComments.kept === 0 && sourceComments.leftOut === 0)
+    ? note
+    : {
+        ...note,
+        items: [...note.items, { kind: "sourceComments", ...sourceComments }],
+      };
+
 /** The note says which fields of the source the output shows as text. */
 const withFieldsAsText = (
   note: FormattingNote,
@@ -621,7 +635,10 @@ export const formatOntoTemplate = async ({
     plan: built.plan,
     profile,
     note: withInternalLinks(
-      withFieldsAsText(withSourceHeaders(built.note, report), report),
+      withFieldsAsText(
+        withSourceComments(withSourceHeaders(built.note, report), report),
+        report,
+      ),
       report,
     ),
     outcome: { attempts, repairs, ...leftOf(report), pages },

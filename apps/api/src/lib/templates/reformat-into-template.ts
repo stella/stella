@@ -400,6 +400,17 @@ const noteItemsOf = (
       ),
     ];
   }
+  // The comments kept, and those that had no place.
+  if (item.kind === "sourceComments") {
+    return [
+      ...(item.kept === 0
+        ? []
+        : [{ kind: "comments_kept" as const, count: item.kept }]),
+      ...(item.leftOut === 0
+        ? []
+        : [{ kind: "comments_left_out" as const, count: item.leftOut }]),
+    ];
+  }
   // One item per cell of the letterhead that still shows the sample.
   if (item.kind === "letterheadFilled") {
     return item.left.map((cell): ReformatNoteItem => ({

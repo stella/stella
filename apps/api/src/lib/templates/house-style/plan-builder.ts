@@ -23,6 +23,7 @@ import type {
   DocxBlock,
   DocxBlockManifest,
   DocxSection,
+  SourceCommentsReport,
   SourceHeadersReport,
   TemplatePlan,
   TemplatePlanAlignment,
@@ -247,6 +248,9 @@ export type FormattingNoteItem =
    *  picture; the output is written without them, so numbers and text are
    *  text. The template's own findings are in its profile. */
   | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
+  /** How many of the source's comments the output carries, and how many
+   *  were anchored where it has no place. */
+  | ({ kind: "sourceComments" } & SourceCommentsReport)
   /** Fields of the source the output shows as their text, by kind: a
    *  form field's box or list, a citation's link, an entry of the source's
    *  contents no longer update. */
@@ -4165,6 +4169,8 @@ export const buildTemplatePlan = ({
     // The template's headers and footers stay; the source's (a notice, a
     // draft line, a logo, a page number) are added to them.
     sourceHeaders: "keep",
+    // Comments stay on the text they were made on.
+    comments: "keep",
   };
   return {
     plan,
