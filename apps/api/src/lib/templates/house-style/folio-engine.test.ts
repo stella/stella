@@ -170,12 +170,10 @@ describe("folioTemplatePlanEngine", () => {
     // Clauses keep their numbers on the template's list.
     expect(shown).toContain("1.1. The supplier provides the services.");
     expect(shown).toContain("1.2. The customer pays the fee.");
-    // The composite number no list prints is text in front of its paragraph.
-    expect(shown).toContain("I. 1)\tA point with a composite number.");
-    expect(formatted.note.items).toContainEqual(
-      expect.objectContaining({ kind: "labelConvertedToText" }),
-    );
-    expect(formatted.note.counts.labelsConvertedToText).toBe(1);
+    // The composite number no level of the template prints stays on a copy
+    // of the source's own list, which prints it.
+    expect(shown).toContain("I. 1) A point with a composite number.");
+    expect(formatted.note.counts.labelsConvertedToText).toBe(0);
   });
 
   test("reads where a document starts a page, how a paragraph is aligned and what its sections are", async () => {
@@ -454,6 +452,56 @@ describe("folioTemplatePlanEngine", () => {
         .entry("word/document.xml")
         ?.text()) ?? "";
     expect(xml).toMatch(/ REF _Ref\d+ \\h \\\* MERGEFORMAT /u);
+  });
+
+  test("a clause that cites itself through its source's field keeps the link", async () => {
+    const said = (value: string): string =>
+      `<w:r><w:t xml:space="preserve">${value}</w:t></w:r>`;
+    const char = (type: string): string =>
+      `<w:r><w:fldChar w:fldCharType="${type}"/></w:r>`;
+    const cited = [
+      char("begin"),
+      String.raw`<w:r><w:instrText xml:space="preserve"> REF _Ref1 \r \h </w:instrText></w:r>`,
+      char("separate"),
+      said("1.1"),
+      char("end"),
+    ].join("");
+    const selfCiting = await docx({
+      body: [
+        paragraph("SERVICES AGREEMENT"),
+        paragraph("Article 1"),
+        paragraph("Scope"),
+        `<w:p><w:pPr>${listed(1, 0)}</w:pPr><w:bookmarkStart w:id="1" w:name="_Ref1"/>${said("The supplier provides the services. Nothing in this Section ")}${cited}${said(" limits them.")}<w:bookmarkEnd w:id="1"/></w:p>`,
+        paragraph("A closing sentence."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: list(0, level(0, "decimal", "1.%1.")) + instance(1, 0),
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: selfCiting,
+        template: await template('<w:defaultTabStop w:val="708"/>'),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.outcome.repairs).toEqual([]);
+    const own = formatted.plan.references?.find(
+      ({ blockId, targetBlockId }) => blockId === targetBlockId,
+    );
+    expect(own).toMatchObject({ expectedText: "1.1" });
+    const output = (
+      await folioTemplatePlanEngine.analyze(formatted.docx)
+    ).unwrap();
+    const clause = output.blocks.find(({ text }) =>
+      text.startsWith("The supplier"),
+    );
+    // The paragraph's own bookmark holds the field that shows its number.
+    expect(clause?.crossReferences).toEqual([
+      expect.objectContaining({ targetBlockId: clause?.id }),
+    ]);
   });
 
   test("a dot drawn on the source's page is left out of the paragraph it sits in", async () => {

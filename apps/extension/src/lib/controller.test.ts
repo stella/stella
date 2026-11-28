@@ -42,7 +42,11 @@ type SentMessage = {
 };
 
 /** A browser session with real storage semantics and recorded tab messages. */
-const installFakeChrome = (urls: Record<number, string> = {}) => {
+const installFakeChrome = (
+  urls: Record<number, string> = {},
+  /** Where a tab is navigating to, while it loads. */
+  pendingUrls: Record<number, string> = {},
+) => {
   const session: Record<string, unknown> = {};
   const sent: SentMessage[] = [];
   Object.defineProperty(globalThis, "chrome", {
@@ -64,7 +68,11 @@ const installFakeChrome = (urls: Record<number, string> = {}) => {
         },
       },
       tabs: {
-        get: async (tabId: number) => ({ id: tabId, url: urls[tabId] }),
+        get: async (tabId: number) => ({
+          id: tabId,
+          pendingUrl: pendingUrls[tabId],
+          url: urls[tabId],
+        }),
         sendMessage: async (
           tabId: number,
           message: { controllerId: unknown },
@@ -125,6 +133,24 @@ describe("browser controller connection", () => {
       { controllerId, documentId: null, tabId: 1 },
       { controllerId, documentId: "doc-2", tabId: 2 },
     ]);
+  });
+
+  test("a stella tab still loading pairs by where it is going", async () => {
+    installFakeChrome({ 1: "" }, { 1: `${STELLA_ORIGIN}/` });
+    const paired = await pairStellaTab(1);
+    expect(paired.status).toBe("paired");
+    expect(await readBrowserController()).toMatchObject({
+      origin: STELLA_ORIGIN,
+    });
+  });
+
+  test("a stella tab navigating away does not pair", async () => {
+    installFakeChrome(
+      { 1: `${STELLA_ORIGIN}/chat` },
+      { 1: "https://example.com/" },
+    );
+    expect(await pairStellaTab(1)).toEqual({ status: "unsupported-tab" });
+    expect(await readBrowserController()).toBeNull();
   });
 
   test("pairing on another origin ends the first origin's connection", async () => {
