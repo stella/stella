@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { NALUS_DAILY_REQUEST_LIMIT } from "@stll/case-law-adapters/publisher-policy";
 import { withDocumentStageWindow } from "@stll/case-law-ingestion-core/document-stage-observation";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
@@ -16,7 +17,6 @@ import {
   NALUS_REQUEST_INTERVAL_MS,
   NalusRateLimitedError,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
-import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";

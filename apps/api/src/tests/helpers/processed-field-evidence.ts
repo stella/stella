@@ -12,6 +12,12 @@ import { panic, Result } from "better-result";
 import path from "node:path";
 import * as v from "valibot";
 
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+} from "@stll/case-law-adapters/pl-courts";
+import { assemblePlNsaDecision } from "@stll/case-law-adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@stll/case-law-adapters/pl-nsa-dataset";
 import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
 import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
 import { parseCzIsirDecision as parseCzIsirDecisionUnguarded } from "@stll/case-law-parsers/cz-isir";
@@ -44,12 +50,6 @@ import {
 import { buildBrTstDecision } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { buildCzNsSbirkaDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
 import { parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
-import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-field-inventory";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";

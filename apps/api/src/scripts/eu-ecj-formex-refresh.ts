@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { open, rename, unlink } from "node:fs/promises";
 import * as v from "valibot";
 
+import { PublisherRateLimitRefusalError } from "@stll/case-law-adapters/retry";
 import type { StoredRawReparseInput } from "@stll/case-law-ingestion-core/ingestion-types";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -12,7 +13,6 @@ import {
   isValidCelex,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";

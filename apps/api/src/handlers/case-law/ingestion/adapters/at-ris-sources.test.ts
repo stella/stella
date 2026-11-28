@@ -1,17 +1,18 @@
 import { describe, expect, it } from "bun:test";
 
-import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
-import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
-import { AT_BVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
-import { createAtRisSourceAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
-import { AT_LVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-lvwg";
-import { AT_UBAS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-ubas";
-import { AT_UMSE_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-umse";
-import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs";
-import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
-import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
-import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
-import { readGatedResponseText } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { AT_ASYLGH_SOURCE } from "@stll/case-law-adapters/at-asylgh";
+import { AT_BKS_SOURCE } from "@stll/case-law-adapters/at-bks";
+import { AT_BVWG_SOURCE } from "@stll/case-law-adapters/at-bvwg";
+import { createAtRisSourceAdapter } from "@stll/case-law-adapters/at-courts";
+import { AT_LVWG_SOURCE } from "@stll/case-law-adapters/at-lvwg";
+import { AT_UBAS_SOURCE } from "@stll/case-law-adapters/at-ubas";
+import { AT_UMSE_SOURCE } from "@stll/case-law-adapters/at-umse";
+import { AT_UVS_SOURCE } from "@stll/case-law-adapters/at-uvs";
+import { AT_VERG_SOURCE } from "@stll/case-law-adapters/at-verg";
+import { AT_VFGH_SOURCE } from "@stll/case-law-adapters/at-vfgh";
+import { AT_VWGH_SOURCE } from "@stll/case-law-adapters/at-vwgh";
+import { readGatedResponseText } from "@stll/case-law-adapters/publisher-read";
+
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 
 const SOURCES = [

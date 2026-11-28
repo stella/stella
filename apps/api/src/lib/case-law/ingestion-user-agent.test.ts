@@ -36,7 +36,7 @@ const importInEmptyEnvironment = async (
       "bun",
       `--env-file=${EMPTY_ENV_FILE}`,
       "--eval",
-      `const module = await import(${JSON.stringify(modulePath)}); console.log(${JSON.stringify(LOADED)}); console.log(module.INGESTION_USER_AGENT ?? "");`,
+      `const module = await import(${JSON.stringify(modulePath)}); console.log(${JSON.stringify(LOADED)}); console.log((typeof module.getIngestionUserAgent === "function" ? module.getIngestionUserAgent() : module.INGESTION_USER_AGENT) ?? "");`,
     ],
     env: { PATH: process.env["PATH"] ?? "", ...environment },
     stderr: "pipe",
@@ -54,7 +54,7 @@ test("the shared adapter utilities import without the API environment", async ()
   const result = await importInEmptyEnvironment(
     nodePath.resolve(
       import.meta.dir,
-      "../../handlers/case-law/ingestion/adapters/utils.ts",
+      "../../../../../packages/case-law-adapters/src/utils.ts",
     ),
   );
 

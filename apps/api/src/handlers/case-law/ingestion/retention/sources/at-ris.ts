@@ -1,3 +1,5 @@
+// Type-only: the part name stays the adapter's, without running its code.
+import type { AT_RIS_PART } from "@stll/case-law-adapters/at-ris-fields";
 import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
@@ -14,8 +16,6 @@ import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-ra
 import { load } from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 
-// Type-only: the part name stays the adapter's, without running its code.
-import type { AT_RIS_PART } from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
 
+import { PublisherRateLimitRefusalError } from "@stll/case-law-adapters/retry";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   EMPTY_AST,
@@ -15,7 +16,6 @@ import {
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
-import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import {

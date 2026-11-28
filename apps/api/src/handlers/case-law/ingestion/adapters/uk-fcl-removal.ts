@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
 
-import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
-import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
-
 import {
   readBodyText,
   readPublisher,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
+} from "@stll/case-law-adapters/publisher-read";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+
 import type { PublisherRemovalRead } from "@/api/handlers/case-law/ingestion/removal-reconciliation";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { REMOVAL_UNPROBEABLE_REASON } from "@/api/lib/legal-search/removal-reconciliation-state";
 

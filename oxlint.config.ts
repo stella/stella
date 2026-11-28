@@ -1451,7 +1451,7 @@ const bunNativeFiles = [
   "apps/api/src/db/schema/bytea.test.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj-notice.test.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
-  "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.ts",
+  "packages/case-law-adapters/src/pl-nsa.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.test.ts",
   "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts.ts",
   "apps/api/src/handlers/chat/link-icons/cache.ts",
@@ -3614,7 +3614,7 @@ const config = defineConfig({
       files: [
         "apps/api/src/db/schema.ts",
         "apps/api/src/db/auth-schema.ts",
-        "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
+        "packages/case-law-adapters/src/utils.ts",
         "apps/web/src/components/workspaces/create-property.tsx",
         "packages/chat/src/html-to-markdown.ts",
       ],
@@ -5742,6 +5742,7 @@ const config = defineConfig({
     {
       files: [
         "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        "packages/case-law-adapters/src/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture*.ts",
       ],
       excludeFiles: ["**/*.test.ts"],
@@ -5768,6 +5769,7 @@ const config = defineConfig({
       files: [
         "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
         "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        "packages/case-law-adapters/src/**/*.ts",
         "apps/api/src/lib/legal-search/parsers/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts",
       ],
@@ -6370,7 +6372,7 @@ const config = defineConfig({
               "apps/api/src/env-file-derivative-worker.ts",
               "apps/api/src/env-converter.ts",
               "apps/api/src/db-url.ts",
-              "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
+              "packages/case-law-adapters/src/utils.ts",
               // Publisher pacing must distinguish deployed runtimes without
               // importing the eager Redis environment schema at module load.
               "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
@@ -6734,9 +6736,13 @@ const config = defineConfig({
       // what authority weighting is read off. The deciding court therefore
       // comes from the record, through the shared resolver, never from a
       // constant in the adapter.
-      files: ["apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts"],
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        "packages/case-law-adapters/src/**/*.ts",
+      ],
       excludeFiles: [
         "apps/api/src/handlers/case-law/ingestion/adapters/**/*.test.ts",
+        "packages/case-law-adapters/src/**/*.test.ts",
       ],
       rules: {
         "no-literal-decision-court/no-literal-decision-court": "error",
@@ -6746,9 +6752,13 @@ const config = defineConfig({
       // Publisher decision text carries an explicit present/absent state.
       // Keep its known keys out of open metadata and require raw literals to
       // cross the TextField construction boundary before adapters emit them.
-      files: ["apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts"],
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        "packages/case-law-adapters/src/**/*.ts",
+      ],
       excludeFiles: [
         "apps/api/src/handlers/case-law/ingestion/adapters/**/*.test.ts",
+        "packages/case-law-adapters/src/**/*.test.ts",
       ],
       rules: {
         "no-raw-decision-text-fields/no-raw-decision-text-fields": "error",
@@ -6955,7 +6965,7 @@ const config = defineConfig({
       // host's browser frame (their own DOM tsconfig), not on the server.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
-        "packages/{boe,business-registries,infosoud,legal-atlas}/src/**/*.ts",
+        "packages/{boe,business-registries,case-law-adapters,infosoud,legal-atlas}/src/**/*.ts",
       ],
       excludeFiles: [
         "**/*.test.ts",
@@ -7478,10 +7488,12 @@ const config = defineConfig({
       // scripts/source-fingerprint-baseline.json.
       files: [
         "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        "packages/case-law-adapters/src/**/*.ts",
         ".oxlint-plugins/__fixtures__/raw-hash-from-source-fingerprint.fixture.ts",
       ],
       excludeFiles: [
         "apps/api/src/**/*.test.ts",
+        "packages/case-law-adapters/src/**/*.test.ts",
         "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/**",
       ],
       rules: {

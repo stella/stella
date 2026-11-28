@@ -1,0 +1,1651 @@
+// parser-output-unchanged: [pl-sn] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
+// parser-output-unchanged: [pl-sn] migrated proxy request transport to readPublisher; served response parsing is unchanged.
+// parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: a bot-management challenge fails the request as a publisher refusal; parsed decisions are unchanged.
+import { panic, Result } from "better-result";
+
+import { AdapterFetchError } from "@stll/case-law-ingestion-core/adapter-fetch-error";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@stll/case-law-ingestion-core/census-listing-identity";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+import { parsePlSnDecisionPdf } from "@stll/case-law-parsers/pl-sn";
+// parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+/**
+ * Polish Supreme Court (Sąd Najwyższy) adapter.
+ *
+ * sn.pl publishes the court's own decision database through a Joomla AJAX
+ * proxy in front of an Elasticsearch-backed API. The court's search page
+ * (`/pl/wyszukiwarka-orzeczen`) drives it with three tasks, and this adapter
+ * uses the same three:
+ *
+ *   searchOrzeczenia    listing, filtered by `data_wydania_od`/`_do`,
+ *                       paged by `strona` (1-based) and `rozmiar_strony`
+ *   detailsOrzeczenie   the chamber, the bench and the modification date
+ *   OrzeczeniePlikPdf   the decision itself, base64 inside a JSON envelope
+ *
+ * Two properties of that API shape everything below.
+ *
+ * It states no result total — the court's own page says so and renders "next"
+ * for as long as a page comes back full — so a walk ends when the publisher
+ * serves a short page, never on a missing count.
+ *
+ * And it refuses to page past the 10,000th match of a query, answering an
+ * Elasticsearch window error wrapped in a 200. The crawl therefore windows by
+ * calendar month: the busiest month observed holds between 2,000 and 2,400
+ * decisions, so the cap sits about four times above the corpus's own peak,
+ * and a year window (already past 10,000 in 2025) is not an option.
+ *
+ * Cursor format: `YYYY-MM:offset` — the month being walked and the item
+ * offset reached inside it, oldest month first; at the present month the
+ * cursor parks and re-reads only that month's tail.
+ *
+ * The listing is ordered newest decision date first, then by docket, and the
+ * API offers no keyset or publication-time key to walk instead. An offset
+ * inside a month is therefore not stable against the publisher adding a
+ * decision to it: one sorting ahead of the cursor is passed unseen and shifts
+ * every later row down by one. In the month being filled in that is every
+ * newly published decision, since the newest dates sort first. That is why
+ * the crawl is not the only path to a decision (rule 16): the day-sliced
+ * reconciliation below lists each decision date independently of this
+ * cursor, compares the identities against what is held, and ingests the
+ * difference, and its tip window covers the weeks this court takes to publish.
+ *
+ * Overlap with `pl-courts`: SAOS republished this court until 2016-06-22 and
+ * its importer has been dormant since. The two sources have separate id
+ * spaces; both store the ruling keys from `pl-sn-ruling-keys.ts`, which is
+ * what relates a row here to its SAOS copy.
+ */
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
+
+import { createCalendarDaySliceWalk } from "./calendar-day-slice-walk";
+import { logDocumentParseFailure } from "./document-parse-failure";
+import {
+  adapterErrorTag as errorTag,
+  isAdapterRecord as isRecord,
+} from "./internal-helpers";
+import { buildPlainTextItem } from "./item-build";
+import { plSupremeCourtRulingKeys } from "./pl-sn-ruling-keys";
+import { readBotChallenge } from "./publisher-page";
+import { publisherRequestIntervalMs } from "./publisher-policy";
+import {
+  readBodyText,
+  readPublisher,
+  unreadPublisherError,
+} from "./publisher-read";
+import { adapterCatch } from "./utils";
+
+// ── Publisher boundary ───────────────────────────────────
+
+const PROXY_URL = "https://sn.pl/pl/index.php";
+
+/**
+ * The only origin this adapter may reach. Every URL it fetches is built here
+ * from an opaque publisher id, and the check below is what keeps it that way
+ * if a payload ever supplies one.
+ */
+const PL_SN_HOST_POLICY = {
+  type: "exact-origin",
+  origins: ["https://sn.pl"],
+} as const;
+
+const PROXY_TASK = {
+  SEARCH: "searchOrzeczenia",
+  DETAILS: "detailsOrzeczenie",
+  DOCUMENT: "OrzeczeniePlikPdf",
+} as const;
+
+type ProxyTask = (typeof PROXY_TASK)[keyof typeof PROXY_TASK];
+
+const FETCH_STAGE_BY_PROXY_TASK = {
+  [PROXY_TASK.SEARCH]: "listing",
+  [PROXY_TASK.DETAILS]: "document",
+  [PROXY_TASK.DOCUMENT]: "document",
+} as const satisfies Record<ProxyTask, DocumentFetchStage>;
+
+/**
+ * Shortest gap between two requests to this publisher, read off the policy
+ * map that states why it is a second and enforces it on every request.
+ */
+const MIN_REQUEST_INTERVAL_MS = publisherRequestIntervalMs(ADAPTER_KEYS.PL_SN);
+
+/**
+ * Decisions the crawl lists at a time.
+ *
+ * Small, because every listed item it keeps costs a detail request and a
+ * document request behind the same one-second gate: twenty items is about
+ * forty requests, which is a page that finishes inside its timeout.
+ */
+const CRAWL_PAGE_SIZE = 20;
+
+/**
+ * Decisions a reconciliation listing asks for at a time. Five times the
+ * crawl's, because a listing walk fetches no documents, and the endpoint was
+ * observed honouring 100.
+ */
+const LISTING_PAGE_SIZE = 100;
+
+/** The publisher numbers listing pages from one. */
+const FIRST_PAGE = 1;
+
+/** The only language this source publishes; half of the fallback identity. */
+const PL_SN_LANGUAGE = "pl";
+
+const PL_SN_DATE_RANGE = ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_SN].dateRange;
+
+/** Oldest decision date the search answers with; see the manifest. */
+const PL_SN_FIRST_SLICE = PL_SN_DATE_RANGE.fromInclusive;
+
+/** The month that first slice falls in, where a fresh crawl starts. */
+const PL_SN_FIRST_MONTH = PL_SN_FIRST_SLICE.slice(0, 7);
+
+/**
+ * Slices near the tip the reconciliation re-walks on a fast cadence.
+ *
+ * A slice is a decision date, and this court publishes against a date for
+ * weeks after it, in places months. Past this window a slice is walked again
+ * only when it is already known short or on the monthly recheck, so a late
+ * arrival would wait a month or more. Two months covers most of that delay
+ * for one listing request per slice per day.
+ */
+const PL_SN_TIP_WINDOW_DAYS = 62;
+
+/**
+ * Consecutive empty months one `fetchPage` may step over before it banks the
+ * progress it made.
+ *
+ * A month with no decisions is a definitive answer about that month, so
+ * stepping past it needs no new cycle — but a cold start at 1993 would
+ * otherwise spend one cycle per empty month, and the early years are nearly
+ * all empty. Twelve keeps a page bounded (thirteen requests, thirteen
+ * seconds) while a full sweep to the present converges in a few dozen pages
+ * rather than a few hundred.
+ */
+const MAX_EMPTY_MONTH_SKIPS = 12;
+
+// ── Publisher payloads ───────────────────────────────────
+
+/** One decision as the listing states it. */
+export type PlSnListingItem = {
+  sygnatura_sprawy?: string | undefined;
+  data_wydania?: string | undefined;
+  forma_orzeczenia?: string | undefined;
+  id?: string | undefined;
+};
+
+/** One decision as `detailsOrzeczenie` states it. */
+type PlSnDetail = PlSnListingItem & {
+  jednostka_obslugujaca_sprawe?: string | undefined;
+  izby_sn?: string[] | undefined;
+  rodzaj_skladu_orzekajacego?: string | undefined;
+  sklad_orzekajacy?: string[] | undefined;
+  sklad_orzekajacy_przewodniczacy?: string[] | undefined;
+  sklad_orzekajacy_sprawozdawca?: string[] | undefined;
+  sklad_orzekajacy_wspolsprawozdawcy?: string[] | undefined;
+  sklad_orzekajacy_autor_uzasadnienia?: string | undefined;
+  zglaszajacy_zdanie_odrebne_orzeczenie?: string | undefined;
+  zglaszajacy_zdanie_odrebne_uzasadnienie?: string | undefined;
+  data_modyfikacji?: string | undefined;
+};
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.length > 0 ? value : undefined;
+
+const optionalStringArray = (value: unknown): string[] | undefined =>
+  isStringArray(value) && value.length > 0 ? value : undefined;
+
+/**
+ * Read a listing row leniently: the proxy adds fields without notice and all
+ * of them land in JSONB, so only the shape of what is read here is checked.
+ */
+export const normalizePlSnListingItem = (
+  value: Record<string, unknown>,
+): PlSnListingItem => ({
+  sygnatura_sprawy: optionalString(value["sygnatura_sprawy"]),
+  data_wydania: optionalString(value["data_wydania"]),
+  forma_orzeczenia: optionalString(value["forma_orzeczenia"]),
+  id: optionalString(value["id"]),
+});
+
+export const normalizePlSnDetail = (
+  value: Record<string, unknown>,
+): PlSnDetail => ({
+  ...normalizePlSnListingItem(value),
+  jednostka_obslugujaca_sprawe: optionalString(
+    value["jednostka_obslugujaca_sprawe"],
+  ),
+  izby_sn: optionalStringArray(value["izby_sn"]),
+  rodzaj_skladu_orzekajacego: optionalString(
+    value["rodzaj_skladu_orzekajacego"],
+  ),
+  sklad_orzekajacy: optionalStringArray(value["sklad_orzekajacy"]),
+  sklad_orzekajacy_przewodniczacy: optionalStringArray(
+    value["sklad_orzekajacy_przewodniczacy"],
+  ),
+  sklad_orzekajacy_sprawozdawca: optionalStringArray(
+    value["sklad_orzekajacy_sprawozdawca"],
+  ),
+  sklad_orzekajacy_wspolsprawozdawcy: optionalStringArray(
+    value["sklad_orzekajacy_wspolsprawozdawcy"],
+  ),
+  sklad_orzekajacy_autor_uzasadnienia: optionalString(
+    value["sklad_orzekajacy_autor_uzasadnienia"],
+  ),
+  zglaszajacy_zdanie_odrebne_orzeczenie: optionalString(
+    value["zglaszajacy_zdanie_odrebne_orzeczenie"],
+  ),
+  zglaszajacy_zdanie_odrebne_uzasadnienie: optionalString(
+    value["zglaszajacy_zdanie_odrebne_uzasadnienie"],
+  ),
+  data_modyfikacji: optionalString(value["data_modyfikacji"]),
+});
+
+/**
+ * The payload inside the proxy's two nested envelopes, or `null` for anything
+ * that is not one.
+ *
+ * The proxy answers HTTP 200 whatever the upstream said: a rate limit comes
+ * back as `{"message":401,"data":{"error":"Brak tokenu"}}` and an over-deep
+ * page as an RFC 9110 error object where the records should be. Neither is an
+ * empty result, so this returns the inner value and lets each caller state
+ * what shape it requires — an unrecognised one is a failure, never a slice
+ * with nothing in it.
+ */
+export const readPlSnEnvelope = (value: unknown): unknown => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const outer = value["data"];
+  if (!Array.isArray(outer)) {
+    return null;
+  }
+  const inner: unknown = outer.at(0);
+  return isRecord(inner) && "data" in inner ? inner["data"] : null;
+};
+
+type PlSnRefusal = { error: string; status: number | undefined };
+
+/**
+ * The upstream's refusal, which the proxy also relays inside the envelopes,
+ * where a payload belongs: `{"error":"Brak tokenu","debug":{"json_status":429}}`
+ * is its rate limit.
+ *
+ * Every task has to ask, not only the listing. Read as a payload, a refused
+ * detail is a detail with no fields and a refused document is a decision with
+ * no file, and the row is stored empty while the cursor moves on.
+ */
+export const readPlSnRefusal = (payload: unknown): PlSnRefusal | null => {
+  if (!isRecord(payload) || typeof payload["error"] !== "string") {
+    return null;
+  }
+  const debug = payload["debug"];
+  const status = isRecord(debug) ? debug["json_status"] : undefined;
+  return {
+    error: payload["error"],
+    status: typeof status === "number" ? status : undefined,
+  };
+};
+
+// ── Requests ─────────────────────────────────────────────
+
+const proxyUrl = (task: ProxyTask, params: Record<string, string>): string =>
+  `${PROXY_URL}?${new URLSearchParams({
+    option: "com_ajax",
+    plugin: "snproxy",
+    format: "json",
+    task,
+    ...params,
+  }).toString()}`;
+
+type ProxyRequestOptions = {
+  cursor: string;
+  params: Record<string, string>;
+  signal?: AbortSignal | undefined;
+  task: ProxyTask;
+  timeoutMs: number;
+};
+
+const proxyError = (
+  cursor: string,
+  message: string,
+  httpStatus?: number,
+): AdapterFetchError =>
+  new AdapterFetchError({
+    message: `sn.pl: ${message}`,
+    adapterKey: ADAPTER_KEYS.PL_SN,
+    cursor,
+    ...(httpStatus === undefined ? {} : { httpStatus }),
+  });
+
+type ProxyResponse = {
+  /** The response body verbatim, for the stored raw envelope. */
+  raw: string;
+  /** The value inside the proxy's two envelopes. */
+  payload: unknown;
+  /** The URL that answered, for a recorded fixture's provenance. */
+  url: string;
+};
+
+/**
+ * One proxy request: its verbatim body, and the payload inside the envelope.
+ *
+ * Every refusal this function can recognise comes back as an `Err`. What it
+ * cannot recognise — a dropped connection, an exhausted retry budget, a
+ * cycle abort — is raised by `fetchWithRetry` and converted once, where the
+ * caller's own contract says how a failure is reported.
+ */
+const requestProxy = async ({
+  cursor,
+  params,
+  signal,
+  task,
+  timeoutMs,
+}: ProxyRequestOptions): Promise<Result<ProxyResponse, AdapterFetchError>> => {
+  const target = restrictOutboundUrl({
+    hostPolicy: PL_SN_HOST_POLICY,
+    rawUrl: proxyUrl(task, params),
+  });
+  if (target === null) {
+    // Every URL here is built from a fixed origin and an opaque publisher id,
+    // so a rejection means the construction above changed, not the publisher.
+    return panic("sn.pl request escaped the publisher origin");
+  }
+
+  const fetched = await readPublisher(target.toString(), {
+    headers: { Accept: "application/json" },
+    redirect: "error",
+    fetchStage: FETCH_STAGE_BY_PROXY_TASK[task],
+    refusalScope:
+      FETCH_STAGE_BY_PROXY_TASK[task] === "listing" ? "source" : "document",
+    adapterKey: ADAPTER_KEYS.PL_SN,
+    signal,
+    timeoutMs,
+  });
+  if (fetched.type !== "present") {
+    const error = unreadPublisherError({
+      outcome: fetched,
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      cursor,
+      message: `sn.pl: ${task} failed`,
+    });
+    if (fetched.type === "unavailable" && fetched.cause.kind === "thrown") {
+      return await Promise.reject(
+        fetched.cause.error instanceof Error ? fetched.cause.error : error,
+      );
+    }
+    return Result.err(error);
+  }
+  const response = fetched.value;
+
+  const body = await readBodyText(fetched, signal);
+  if (body.type !== "present") {
+    const error = unreadPublisherError({
+      outcome: body,
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      cursor,
+      message: "sn.pl proxy body unread",
+    });
+    // Transport failures retain their rejection path and Error identity.
+    if (body.type === "unavailable" && body.cause.kind === "thrown") {
+      return await Promise.reject(
+        body.cause.error instanceof Error ? body.cause.error : error,
+      );
+    }
+    return Result.err(error);
+  }
+  const raw = body.value;
+  // The proxy answers 200 for whatever stands in front of it, so a challenge
+  // would otherwise read as an envelope the parser cannot find: a defect in
+  // this adapter, when it is the publisher refusing automated clients.
+  const challenge = readBotChallenge(raw, response.headers);
+  if (challenge !== null) {
+    return Result.err(
+      new AdapterFetchError({
+        message: `sn.pl: ${task} answered a bot challenge (${challenge})`,
+        adapterKey: ADAPTER_KEYS.PL_SN,
+        cursor,
+        stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+      }),
+    );
+  }
+  const parsed = Result.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => null,
+  }).unwrapOr(null);
+  const payload = readPlSnEnvelope(parsed);
+  if (payload === null) {
+    return Result.err(
+      proxyError(cursor, `${task} answered no readable envelope`),
+    );
+  }
+  const refusal = readPlSnRefusal(payload);
+  if (refusal !== null) {
+    return Result.err(
+      proxyError(
+        cursor,
+        `${task} was refused: ${refusal.error}`,
+        refusal.status,
+      ),
+    );
+  }
+  return Result.ok({ raw, payload, url: target.toString() });
+};
+
+type ListWindowOptions = {
+  cursor: string;
+  from: string;
+  offset: number;
+  pageSize: number;
+  signal?: AbortSignal | undefined;
+  to: string;
+};
+
+type ListedWindow = {
+  /** The rows at and after the offset asked for. */
+  rows: Record<string, unknown>[];
+  /**
+   * How many rows at and after the offset the publisher served, before the
+   * shape filter below: what the offset advances by.
+   */
+  served: number;
+  /**
+   * Whether the publisher served a whole page. This, not a filtered count,
+   * says whether more follows: one row the filter drops would otherwise make
+   * a full page read as the last one, and the walk would leave the rest of
+   * the month unvisited.
+   */
+  full: boolean;
+  /** The listing request these rows came back from. */
+  url: string;
+};
+
+/**
+ * One page of the publisher's listing for a closed decision-date window.
+ *
+ * `strona` is a page number and there is no per-item offset to ask for, so an
+ * offset inside a page is served by asking for the page that holds it and
+ * dropping the rows before it. A crawl parked on a month's short tail writes
+ * such an offset; read as a page start, the rows between it and the next
+ * boundary would be passed over.
+ */
+const listWindow = async ({
+  cursor,
+  from,
+  offset,
+  pageSize,
+  signal,
+  to,
+}: ListWindowOptions): Promise<Result<ListedWindow, AdapterFetchError>> => {
+  const requested = await requestProxy({
+    cursor,
+    params: {
+      data_wydania_od: from,
+      data_wydania_do: to,
+      strona: String(FIRST_PAGE + Math.floor(offset / pageSize)),
+      rozmiar_strony: String(pageSize),
+    },
+    signal,
+    task: PROXY_TASK.SEARCH,
+    timeoutMs: ADAPTER_TIMEOUT.LIST,
+  });
+  if (Result.isError(requested)) {
+    return requested;
+  }
+  const { payload, url } = requested.value;
+
+  // An array is the publisher's only statement about what a window holds; the
+  // error object it answers past its 10,000-record window is not an empty one.
+  if (!Array.isArray(payload)) {
+    return Result.err(
+      proxyError(
+        cursor,
+        `${PROXY_TASK.SEARCH} answered ${JSON.stringify(payload).slice(0, 200)} for ${from}..${to} at ${offset}`,
+      ),
+    );
+  }
+  const page: unknown[] = payload;
+  const fresh = page.slice(offset % pageSize);
+  return Result.ok({
+    rows: fresh.filter(isRecord),
+    served: fresh.length,
+    full: page.length >= pageSize,
+    url,
+  });
+};
+
+type DecisionIdOptions = {
+  cursor: string;
+  id: string;
+  signal?: AbortSignal | undefined;
+};
+
+const fetchDetail = async ({
+  cursor,
+  id,
+  signal,
+}: DecisionIdOptions): Promise<
+  Result<{ detail: PlSnDetail; raw: string } | null, AdapterFetchError>
+> => {
+  const requested = await requestProxy({
+    cursor,
+    params: { id },
+    signal,
+    task: PROXY_TASK.DETAILS,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+  });
+  if (Result.isError(requested)) {
+    return requested;
+  }
+  const { payload, raw } = requested.value;
+  return Result.ok(
+    isRecord(payload) ? { detail: normalizePlSnDetail(payload), raw } : null,
+  );
+};
+
+/** Every PDF starts with this; nothing else the proxy serves does. */
+const PDF_SIGNATURE_BYTES = new TextEncoder().encode("%PDF-");
+
+const isPdf = (bytes: Uint8Array): boolean =>
+  bytes.length >= PDF_SIGNATURE_BYTES.length &&
+  PDF_SIGNATURE_BYTES.every((byte, index) => bytes[index] === byte);
+
+/**
+ * The decision's PDF, or `undefined` where the proxy served something else.
+ *
+ * The signature is checked because this proxy answers 200 with an error
+ * object as readily as with a document: bytes taken on faith would be stored
+ * as the decision's raw payload and read as the document by every replay.
+ */
+const decodePlSnDocument = (payload: unknown): Uint8Array | undefined => {
+  const base64 = isRecord(payload) ? payload["raw"] : undefined;
+  if (typeof base64 !== "string" || base64.length === 0) {
+    return undefined;
+  }
+  const bytes = Result.try({
+    try: () => Buffer.from(base64, "base64"),
+    catch: () => null,
+  }).unwrapOr(null);
+  if (bytes === null) {
+    return undefined;
+  }
+  const view = new Uint8Array(bytes);
+  return isPdf(view) ? view : undefined;
+};
+
+const fetchDocument = async ({
+  cursor,
+  id,
+  signal,
+}: DecisionIdOptions): Promise<
+  Result<{ bytes: Uint8Array; raw: string } | undefined, AdapterFetchError>
+> => {
+  const requested = await requestProxy({
+    cursor,
+    params: { id },
+    signal,
+    task: PROXY_TASK.DOCUMENT,
+    timeoutMs: ADAPTER_TIMEOUT.PAGE,
+  });
+  if (Result.isError(requested)) {
+    return requested;
+  }
+  const { payload, raw } = requested.value;
+  const bytes = decodePlSnDocument(payload);
+  return Result.ok(bytes === undefined ? undefined : { bytes, raw });
+};
+
+// ── Normalization ────────────────────────────────────────
+
+const PL_SN_COURT = "Sąd Najwyższy";
+
+/**
+ * The benches this publisher names, and the court each of them is.
+ *
+ * The deciding body is stated in `forma_orzeczenia`, which every listed form
+ * ends with: "… SN" for the court sitting in its ordinary composition and
+ * "… SN SD" for it sitting as the disciplinary court. Both are the Supreme
+ * Court — the disciplinary bench is a composition of it, not a court of its
+ * own, and a citation names neither differently — so the distinction is kept
+ * on the row as the form rather than invented into a second court name.
+ */
+const PL_SN_BENCH_COURTS = {
+  SN: PL_SN_COURT,
+  "SN SD": PL_SN_COURT,
+} as const;
+
+type PlSnBench = keyof typeof PL_SN_BENCH_COURTS;
+
+const benchOf = (form: string): PlSnBench | null => {
+  const tokens = form.split(/\s+/u);
+  const marker = tokens.indexOf("SN");
+  if (marker === -1) {
+    return null;
+  }
+  return tokens[marker + 1] === "SD" ? "SN SD" : "SN";
+};
+
+/**
+ * The deciding court, read off the record's own decision form.
+ *
+ * Four of the forms this court lists name no bench ("orzeczenie",
+ * "zarządzenie", "opinia", "wyciąg z protokołu"); they are its own forms, and
+ * the chamber and unit on the same record place them at this court too, so
+ * the court is right for them. A form outside that vocabulary is a different
+ * matter, and the report below is what makes it visible rather than silently
+ * stored under this court's name: `court` is a required field, so there is no
+ * unknown to leave it at.
+ */
+export const plSnDecidingCourt = (form: string | undefined): string => {
+  const bench = form === undefined ? null : benchOf(form);
+  if (bench === null) {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.court_not_stated", {
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      decisionForm: form ?? "",
+    });
+    return PL_SN_COURT;
+  }
+  return PL_SN_BENCH_COURTS[bench];
+};
+
+/**
+ * Decision types in the court's own language, as rule 8 requires. The
+ * publisher's `forma_orzeczenia` prefixes one of these to the bench and the
+ * panel size, and the full string stays on the row as `decisionForm`.
+ */
+const PL_SN_DECISION_TYPES = [
+  "wyrok",
+  "postanowienie",
+  "uchwała",
+  "zarządzenie",
+  "orzeczenie",
+  "opinia",
+  "wyciąg z protokołu",
+] as const;
+
+export const plSnDecisionType = (
+  form: string | undefined,
+): string | undefined => {
+  if (form === undefined) {
+    return undefined;
+  }
+  const lowered = form.toLocaleLowerCase("pl-PL");
+  const matched = PL_SN_DECISION_TYPES.find(
+    (type) => lowered === type || lowered.startsWith(`${type} `),
+  );
+  if (matched === undefined) {
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.decision_type_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_SN,
+        decisionForm: form,
+      },
+    );
+  }
+  return matched;
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+const isoDate = (value: string | undefined): string | undefined =>
+  value !== undefined && ISO_DATE.test(value) ? value : undefined;
+
+/**
+ * The identity the ingest stores this listing item under.
+ *
+ * The publisher's own document id. A Supreme Court docket is unique within
+ * this court, but the id is what the portal keys a document on and what its
+ * detail and document tasks are addressed by, so it is what identifies a row
+ * (rule 17). Stated once so the crawl and the reconciliation cannot key the
+ * same item differently.
+ */
+export const plSnListingIdentity = (item: PlSnListingItem): ListingIdentity => {
+  const { id } = item;
+  if (id !== undefined && isPersistableSourceDocumentId(id)) {
+    return { type: "document", sourceDocumentId: id };
+  }
+  const caseNumber = item.sygnatura_sprawy;
+  return caseNumber === undefined
+    ? { type: "unidentifiable" }
+    : { type: "case-number", caseNumber, language: PL_SN_LANGUAGE };
+};
+
+const decisionUrl = (id: string): string =>
+  `https://sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=${encodeURIComponent(id)}`;
+
+const documentUrlOf = (id: string): string =>
+  proxyUrl(PROXY_TASK.DOCUMENT, { id });
+
+type PlSnBuildResult =
+  | { type: "built"; decision: IngestionResult }
+  /** No id and no docket to key on; nothing can store this item. */
+  | { type: "unkeyable" }
+  /** The proxy served no document for the id the listing states. */
+  | { type: "detail-unavailable"; decision: IngestionResult };
+
+/**
+ * The parts of the stored raw envelope, named by the response each holds.
+ * A replay reads exactly what a crawl kept, so the names are the contract.
+ */
+const RAW_PART = {
+  LISTING: "listing",
+  DETAIL: "detail",
+  DOCUMENT: "document",
+} as const;
+
+export type AssemblePlSnDecisionOptions = {
+  /** The row as the listing stated it. */
+  item: PlSnListingItem;
+  /** The detail record, where one was read. */
+  detail: PlSnDetail | null;
+  /** The document's bytes, where the proxy served one. */
+  documentBytes: Uint8Array | undefined;
+  /** Every response this observation was built from, verbatim. */
+  rawParts: SourceRawParts;
+};
+
+/**
+ * Build one decision from the responses already in hand.
+ *
+ * No I/O: the crawl, the reconciliation walk and a replay of the stored
+ * envelope all reach this with the same three payloads, so none of them can
+ * key, parse or enrich an item differently from the others. It is also what
+ * the source-field conformance fixture drives, which is why that suite needs
+ * neither a stubbed transport nor this publisher's one-second request gate.
+ */
+export const assemblePlSnDecision = async ({
+  detail,
+  documentBytes,
+  item,
+  rawParts,
+}: AssemblePlSnDecisionOptions): Promise<PlSnBuildResult> => {
+  const { id } = item;
+  if (id === undefined || !isPersistableSourceDocumentId(id)) {
+    return { type: "unkeyable" };
+  }
+  // Annotated because the union of the two payloads hides the detail-only
+  // fields below; a listing row simply states none of them.
+  const record: PlSnDetail = detail ?? item;
+  const caseNumber = record.sygnatura_sprawy ?? item.sygnatura_sprawy;
+  if (caseNumber === undefined) {
+    return { type: "unkeyable" };
+  }
+
+  const decisionForm = record.forma_orzeczenia ?? item.forma_orzeczenia;
+  const court = plSnDecidingCourt(decisionForm);
+  const decisionType = plSnDecisionType(decisionForm);
+  const decisionDate = isoDate(record.data_wydania ?? item.data_wydania);
+
+  // A parse failure is deliberately not the decision's failure: the document
+  // is stored verbatim below, so its text is recoverable by re-parsing what
+  // was kept rather than by asking the court again. The error is carried as
+  // its structural tag, which is all the report below states about it.
+  const parsed =
+    documentBytes === undefined
+      ? null
+      : await Result.tryPromise({
+          try: async () =>
+            await parsePlSnDecisionPdf({
+              pdfBytes: documentBytes,
+              caseNumber,
+              court,
+              decisionDate,
+              decisionType,
+              sourceUrl: decisionUrl(id),
+              documentUrl: documentUrlOf(id),
+              documentId: id,
+            }),
+          catch: errorTag,
+        });
+  if (parsed !== null && Result.isError(parsed)) {
+    logDocumentParseFailure({
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      caseNumber,
+      error: parsed.error,
+    });
+  }
+  const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
+  const documentAst: DocumentAst | EmptyAst =
+    document?.documentAst ?? EMPTY_AST;
+  const fulltext = document?.fulltext;
+
+  const sourceRaw = encodeSourceRawEnvelope(rawParts);
+
+  const decision: IngestionResult = plainTextIngestionResult({
+    caseNumber,
+    sourceDocumentId: id,
+    court,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_SN].country,
+    language: PL_SN_LANGUAGE,
+    decisionDate,
+    decisionType,
+    fulltext,
+    // The listing proves the document exists; without it this row carries
+    // metadata only and must never overwrite detail a later fetch recovered.
+    ...(documentBytes === undefined ? { isListingOnly: true } : {}),
+    sourceUrl: decisionUrl(id),
+    documentUrl: documentUrlOf(id),
+    // sn.pl publishes no abstract, headnote or legal sentence beside the
+    // decision; the thesis it prints is inside the document itself.
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      caseNumber,
+      court,
+      decisionDate,
+      decisionType,
+      decisionForm,
+      documentId: id,
+      chambers: record.izby_sn,
+      handlingUnit: record.jednostka_obslugujaca_sprawe,
+      panelType: record.rodzaj_skladu_orzekajacego,
+      judges: record.sklad_orzekajacy,
+      presiding: record.sklad_orzekajacy_przewodniczacy,
+      reporters: record.sklad_orzekajacy_sprawozdawca,
+      coReporters: record.sklad_orzekajacy_wspolsprawozdawcy,
+      reasonsAuthor: record.sklad_orzekajacy_autor_uzasadnienia,
+      dissentingOnDecision: record.zglaszajacy_zdanie_odrebne_orzeczenie,
+      dissentingOnReasons: record.zglaszajacy_zdanie_odrebne_uzasadnienie,
+      modifiedDate: record.data_modyfikacji,
+      rulingKeys: plSupremeCourtRulingKeys({
+        caseNumber,
+        court,
+        decisionDate,
+        decisionType,
+      }),
+    }),
+    rawHash: hashContent(sourceRaw),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN],
+    documentAst,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+
+  return documentBytes === undefined
+    ? { type: "detail-unavailable", decision }
+    : { type: "built", decision };
+};
+
+type FetchPlSnDecisionOptions = {
+  cursor: string;
+  item: PlSnListingItem;
+  /** Verbatim listing row, kept so a later parser can re-read it. */
+  listingRaw: string;
+  signal?: AbortSignal | undefined;
+};
+
+/**
+ * Fetch the detail and the document for a listed item, then assemble it.
+ *
+ * A refused request is the item's failure rather than its absence: the
+ * publisher was asked and did not answer, so the caller holds its cursor and
+ * asks again instead of storing a row that says the document does not exist.
+ */
+export const buildPlSnDecision = async ({
+  cursor,
+  item,
+  listingRaw,
+  signal,
+}: FetchPlSnDecisionOptions): Promise<
+  Result<PlSnBuildResult, AdapterFetchError>
+> => {
+  const { id } = item;
+  if (id === undefined || !isPersistableSourceDocumentId(id)) {
+    return Result.ok({ type: "unkeyable" });
+  }
+
+  const fetched = await fetchDetail({ cursor, id, signal });
+  if (Result.isError(fetched)) {
+    return fetched;
+  }
+  const requested = await fetchDocument({ cursor, id, signal });
+  if (Result.isError(requested)) {
+    return requested;
+  }
+  const detail = fetched.value;
+  const document = requested.value;
+
+  return Result.ok(
+    await assemblePlSnDecision({
+      item,
+      detail: detail?.detail ?? null,
+      documentBytes: document?.bytes,
+      rawParts: {
+        [RAW_PART.LISTING]: listingRaw,
+        ...(detail === null ? {} : { [RAW_PART.DETAIL]: detail.raw }),
+        ...(document === undefined
+          ? {}
+          : { [RAW_PART.DOCUMENT]: document.raw }),
+      },
+    }),
+  );
+};
+
+/**
+ * Re-parse a stored envelope into the decision this adapter would build from
+ * it today, without contacting the publisher.
+ *
+ * The envelope holds every response the crawl read, so a parser change is
+ * replayable across the corpus; a row stored before the adapter wrote an
+ * envelope decodes to `null` and is reported rather than guessed at.
+ */
+const reparsePlSnStoredRaw = async (
+  stored: StoredRawReparseInput,
+): Promise<StoredRawReparseOutcome> => {
+  const read = readStoredRawListing({
+    stored,
+    part: RAW_PART.LISTING,
+    identityOf: (listing) => normalizePlSnListingItem(listing).id,
+  });
+  if (read.type === "rejected") {
+    return read;
+  }
+  const { listing, parts } = read;
+  const item = normalizePlSnListingItem(listing);
+
+  const detailPart = parts[RAW_PART.DETAIL];
+  const detailPayload =
+    detailPart === undefined
+      ? null
+      : readPlSnEnvelope(
+          Result.try({
+            try: (): unknown => JSON.parse(detailPart),
+            catch: () => null,
+          }).unwrapOr(null),
+        );
+  const documentPart = parts[RAW_PART.DOCUMENT];
+  const documentPayload =
+    documentPart === undefined
+      ? null
+      : readPlSnEnvelope(
+          Result.try({
+            try: (): unknown => JSON.parse(documentPart),
+            catch: () => null,
+          }).unwrapOr(null),
+        );
+
+  const built = await assemblePlSnDecision({
+    item,
+    detail: isRecord(detailPayload) ? normalizePlSnDetail(detailPayload) : null,
+    documentBytes:
+      documentPayload === null
+        ? undefined
+        : decodePlSnDocument(documentPayload),
+    rawParts: parts,
+  });
+  return built.type === "unkeyable"
+    ? {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        detail: "the stored listing row states no id or docket",
+      }
+    : { type: "parsed", result: built.decision };
+};
+
+// ── Source-field inventory ───────────────────────────────
+
+/**
+ * Every field `detailsOrzeczenie` labels for one decision. The listing states
+ * a subset of the same names, so this list covers both per-decision payloads
+ * the adapter parses.
+ */
+const SOURCE_FIELDS = [
+  "sygnatura_sprawy",
+  "data_wydania",
+  "forma_orzeczenia",
+  "id",
+  "izby_sn",
+  "jednostka_obslugujaca_sprawe",
+  "rodzaj_skladu_orzekajacego",
+  "sklad_orzekajacy",
+  "sklad_orzekajacy_przewodniczacy",
+  "sklad_orzekajacy_sprawozdawca",
+  "sklad_orzekajacy_wspolsprawozdawcy",
+  "sklad_orzekajacy_autor_uzasadnienia",
+  "zglaszajacy_zdanie_odrebne_orzeczenie",
+  "zglaszajacy_zdanie_odrebne_uzasadnienie",
+  "data_modyfikacji",
+] as const;
+
+type PlSnPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
+
+const PL_SN_SOURCE_FIELDS = {
+  sygnatura_sprawy: {
+    disposition: "stored",
+    target: { type: "result", key: "caseNumber" },
+  },
+  data_wydania: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  // The form also carries the bench the court's name is read off; the
+  // decision type derived from it is a second reading of the same field.
+  forma_orzeczenia: {
+    disposition: "stored",
+    target: { type: "metadata", key: "decisionForm" },
+  },
+  id: { disposition: "stored", target: { type: "identity" } },
+  izby_sn: {
+    disposition: "stored",
+    target: { type: "metadata", key: "chambers" },
+  },
+  jednostka_obslugujaca_sprawe: {
+    disposition: "stored",
+    target: { type: "metadata", key: "handlingUnit" },
+  },
+  rodzaj_skladu_orzekajacego: {
+    disposition: "stored",
+    target: { type: "metadata", key: "panelType" },
+  },
+  sklad_orzekajacy: {
+    disposition: "stored",
+    target: { type: "metadata", key: "judges" },
+  },
+  sklad_orzekajacy_przewodniczacy: {
+    disposition: "stored",
+    target: { type: "metadata", key: "presiding" },
+  },
+  sklad_orzekajacy_sprawozdawca: {
+    disposition: "stored",
+    target: { type: "metadata", key: "reporters" },
+  },
+  sklad_orzekajacy_wspolsprawozdawcy: {
+    disposition: "stored",
+    target: { type: "metadata", key: "coReporters" },
+  },
+  sklad_orzekajacy_autor_uzasadnienia: {
+    disposition: "stored",
+    target: { type: "metadata", key: "reasonsAuthor" },
+  },
+  zglaszajacy_zdanie_odrebne_orzeczenie: {
+    disposition: "stored",
+    target: { type: "metadata", key: "dissentingOnDecision" },
+  },
+  zglaszajacy_zdanie_odrebne_uzasadnienie: {
+    disposition: "stored",
+    target: { type: "metadata", key: "dissentingOnReasons" },
+  },
+  data_modyfikacji: {
+    disposition: "stored",
+    target: { type: "metadata", key: "modifiedDate" },
+  },
+} as const satisfies Record<keyof PlSnPublisherRecord, SourceFieldDisposition>;
+
+/**
+ * What the publisher labels for one decision.
+ *
+ * The detail payload is the widest of the three parts: it repeats the listing
+ * row's own keys and adds the rest, and the document part is the file itself
+ * rather than a set of fields.
+ */
+const listPlSnSourceFields = (parts: SourceRawParts): readonly string[] => {
+  const inner = readPlSnEnvelope(
+    Result.try({
+      try: (): unknown => JSON.parse(parts[RAW_PART.DETAIL] ?? ""),
+      catch: () => null,
+    }).unwrapOr(null),
+  );
+  return isRecord(inner) ? Object.keys(inner) : [];
+};
+
+/**
+ * Every payload this publisher serves for one decision, and whether the row
+ * keeps it.
+ *
+ * All three the proxy answers with are kept, the document among them: the
+ * proxy wraps the file in its own JSON, so the part is text like the others.
+ * What is left out is a second rendering of that same file and two corpus-wide
+ * endpoints.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "detail",
+  "document",
+  "document-html",
+  "autocomplete",
+  "human-page",
+] as const;
+
+const PL_SN_SOURCE_SURFACES = {
+  surfaces: {
+    listing: storedSourceSurface(RAW_PART.LISTING),
+    detail: storedSourceSurface(RAW_PART.DETAIL),
+    document: storedSourceSurface(RAW_PART.DOCUMENT),
+    "document-html": excludedSourceSurface(
+      "a converted rendering of the same file the document part already carries verbatim",
+    ),
+    autocomplete: excludedSourceSurface(
+      "corpus-wide completions, not a payload about any one decision",
+    ),
+    "human-page": excludedSourceSurface(
+      "the page shell the row already records as its source address; it fetches the detail payload in the browser and states nothing else",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
+// ── Crawl cursor ─────────────────────────────────────────
+
+const CURSOR_PATTERN = /^(?<month>\d{4}-(?:0[1-9]|1[0-2])):(?<offset>\d+)$/u;
+
+type PlSnCursor = { month: string; offset: number };
+
+export const parsePlSnCursor = (cursor: string | null): PlSnCursor => {
+  const groups =
+    cursor === null ? undefined : CURSOR_PATTERN.exec(cursor)?.groups;
+  const month = groups?.["month"];
+  const offset = groups?.["offset"];
+  if (month === undefined || offset === undefined) {
+    return { month: PL_SN_FIRST_MONTH, offset: 0 };
+  }
+  const parsed = Number(offset);
+  return Number.isSafeInteger(parsed)
+    ? { month, offset: parsed }
+    : { month, offset: 0 };
+};
+
+export const encodePlSnCursor = ({ month, offset }: PlSnCursor): string =>
+  `${month}:${offset}`;
+
+const currentMonth = (): string =>
+  Temporal.Now.plainDateISO("UTC").toPlainYearMonth().toString();
+
+const monthAfter = (month: string): string | null => {
+  const next = Temporal.PlainYearMonth.from(month)
+    .add({ months: 1 })
+    .toString();
+  return next > currentMonth() ? null : next;
+};
+
+/** The publisher's own filter bounds for a month: the month, end to end. */
+const monthRange = (month: string): { from: string; to: string } => {
+  const yearMonth = Temporal.PlainYearMonth.from(month);
+  return {
+    from: `${month}-01`,
+    to: `${month}-${String(yearMonth.daysInMonth).padStart(2, "0")}`,
+  };
+};
+
+// ── Reconciliation ───────────────────────────────────────
+
+/**
+ * A reconciliation slice is one decision date, which is the axis the search
+ * filters on. `YYYY-MM-DD` sorts lexicographically in chronological order,
+ * which is the ordering the ledger relies on.
+ */
+const plSnDaySlices = createCalendarDaySliceWalk({
+  firstSlice: PL_SN_FIRST_SLICE,
+  source: ADAPTER_KEYS.PL_SN,
+});
+
+/**
+ * One page of the publisher's listing for a decision date.
+ *
+ * The API states no total, so the page count cannot be computed from one: a
+ * full page is reported as "there is at least one more", and the walk ends
+ * only where the publisher itself serves a short page. Ending on a full page
+ * with no continuation token would silently drop the remainder (rule 14); a
+ * short page is the source's own statement that the slice is done.
+ */
+const listPlSnSlicePage = async ({
+  page,
+  signal,
+  slice,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  const listed = await listWindow({
+    cursor: slice,
+    from: slice,
+    offset: page * LISTING_PAGE_SIZE,
+    pageSize: LISTING_PAGE_SIZE,
+    signal,
+    to: slice,
+  });
+  if (Result.isError(listed)) {
+    // A slice listing reports its publisher through the promise it returns:
+    // the reconciliation engine holds the slice's previous ledger row on a
+    // rejection, and would settle the slice over the outage if a refusal came
+    // back as a page instead.
+    return await Promise.reject(listed.error);
+  }
+  const { rows } = listed.value;
+
+  const items = rows.map((row) => {
+    const item = normalizePlSnListingItem(row);
+    const identity = plSnListingIdentity(item);
+    return {
+      identity,
+      payload: row,
+      ...(identity.type === "case-number"
+        ? { censusCourtEvidence: observedCensusCourt(undefined) }
+        : {}),
+    };
+  });
+
+  if (items.length === 0) {
+    return { items, totalPages: page };
+  }
+  return {
+    items,
+    totalPages: items.length < LISTING_PAGE_SIZE ? page + 1 : page + 2,
+  };
+};
+
+/**
+ * Rebuild a decision from a payload the loop stored verbatim.
+ *
+ * Renormalized rather than trusted: it may have been parked for days, and a
+ * shape the adapter no longer recognises has to be reported as unbuildable
+ * instead of parsed on faith.
+ */
+const buildPlSnFromPayload = async (
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (!isRecord(payload)) {
+    return { type: "unkeyable" };
+  }
+  const item = normalizePlSnListingItem(payload);
+  const attempted = await buildPlSnDecision({
+    cursor: item.data_wydania ?? "",
+    item,
+    listingRaw: JSON.stringify(payload),
+    ...(signal === undefined ? {} : { signal }),
+  });
+  if (Result.isError(attempted)) {
+    // Same contract as the slice listing above: the engine reads a refused
+    // item off the promise, and reporting it as an outcome would mark the
+    // identity handled while the publisher never answered for it.
+    return await Promise.reject(attempted.error);
+  }
+  const built = attempted.value;
+  switch (built.type) {
+    case "built":
+      return { type: "built", decision: built.decision };
+    case "unkeyable":
+      return { type: "unkeyable" };
+    case "detail-unavailable":
+      // Storing the listing observation here would make the identity held
+      // while its document stayed unread, and the decision would leave every
+      // later reconciliation.
+      return { type: "detail-unavailable" };
+    default: {
+      built satisfies never;
+      return panic(`Unhandled pl-sn build result: ${JSON.stringify(built)}`);
+    }
+  }
+};
+
+// ── Crawl ────────────────────────────────────────────────
+
+type CrawlWindow = {
+  month: string;
+  offset: number;
+  /**
+   * Whether `month` was listed from `offset` at all. The empty-month budget
+   * can run out on a month it stepped to but never asked about, and a walk
+   * that read that as an empty answer would step past the month unseen.
+   */
+  listed: boolean;
+  rows: Record<string, unknown>[];
+  /** Rows the publisher served for this page; see {@link ListedWindow}. */
+  served: number;
+  /** Whether the page was a whole one; see {@link ListedWindow}. */
+  full: boolean;
+  /** The listing request the rows came back from. */
+  url: string;
+};
+
+/**
+ * The next month holding decisions at or after the cursor, with its first
+ * page of rows.
+ *
+ * An empty month is a settled fact about that month, so the walk steps over
+ * it inside one page rather than spending a cycle on each. The step is
+ * bounded: past the budget the page banks where it got to, and the next cycle
+ * carries on from there.
+ */
+const advanceToPopulatedWindow = async (
+  start: PlSnCursor,
+  signal?: AbortSignal,
+): Promise<Result<CrawlWindow, AdapterFetchError>> => {
+  let { month, offset } = start;
+  let url = "";
+  for (let step = 0; step <= MAX_EMPTY_MONTH_SKIPS; step += 1) {
+    const { from, to } = monthRange(month);
+    const listed = await listWindow({
+      cursor: encodePlSnCursor({ month, offset }),
+      from,
+      offset,
+      pageSize: CRAWL_PAGE_SIZE,
+      signal,
+      to,
+    });
+    if (Result.isError(listed)) {
+      return listed;
+    }
+    const { full, rows, served } = listed.value;
+    url = listed.value.url;
+    if (served > 0) {
+      return Result.ok({
+        month,
+        offset,
+        rows,
+        served,
+        full,
+        url,
+        listed: true,
+      });
+    }
+    const next = monthAfter(month);
+    if (next === null) {
+      // The present month, with nothing after this offset: park here so the
+      // next cycle re-reads this month's tail and nothing older (rule 13).
+      return Result.ok({
+        month,
+        offset,
+        rows: [],
+        served: 0,
+        full: false,
+        url,
+        listed: true,
+      });
+    }
+    month = next;
+    offset = 0;
+  }
+  // Out of budget, standing on a month no request has asked about yet.
+  return Result.ok({
+    month,
+    offset,
+    rows: [],
+    served: 0,
+    full: false,
+    url,
+    listed: false,
+  });
+};
+
+const plSnFetchPage = async (
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<Result<SyncPage, AdapterFetchError>> => {
+  const advanced = await advanceToPopulatedWindow(
+    parsePlSnCursor(cursor),
+    signal,
+  );
+  if (Result.isError(advanced)) {
+    return advanced;
+  }
+  const window = advanced.value;
+  if (!window.listed) {
+    return Result.ok({
+      decisions: [],
+      sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      nextCursor: encodePlSnCursor(window),
+    });
+  }
+  const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
+  let aborted = false;
+
+  for (const row of window.rows) {
+    if (signal?.aborted) {
+      aborted = true;
+      break;
+    }
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_SN,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-sn decision projection");
+        }
+      },
+      build: async () =>
+        await buildPlSnDecision({
+          cursor: encodePlSnCursor(window),
+          item: normalizePlSnListingItem(row),
+          listingRaw: JSON.stringify(row),
+          signal,
+        }),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
+    if (Result.isError(attempted)) {
+      return attempted;
+    }
+    const built = attempted.value;
+    switch (built.type) {
+      case "unkeyable":
+        break;
+      // The cursor moves past this document either way, so the crawl keeps
+      // the listing-only row a document the proxy served nothing for still
+      // describes; only the reconciliation refuses it.
+      case "detail-unavailable":
+      case "built":
+        decisions.push(built.decision);
+        break;
+      default: {
+        built satisfies never;
+        panic(`Unhandled pl-sn build result: ${JSON.stringify(built)}`);
+      }
+    }
+  }
+
+  if (aborted) {
+    // The cycle stopped partway through this page, so it says nothing about
+    // the rows it never reached. Parking at the page's own start replays it
+    // next cycle rather than checkpointing past them; what was stored is
+    // re-stored under the same hash, and skipping them would be permanent.
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      nextCursor: encodePlSnCursor(window),
+    });
+  }
+
+  // Measured against what the publisher served, not what survived the shape
+  // filter: a full page with one unreadable row is still a full page, and
+  // reading it as the month's last one would leave the rest unvisited.
+  if (window.full) {
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      nextCursor: encodePlSnCursor({
+        month: window.month,
+        offset: window.offset + window.served,
+      }),
+    });
+  }
+
+  const next = monthAfter(window.month);
+  return Result.ok({
+    decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
+    sourceUrl: window.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+    nextCursor:
+      next === null
+        ? // The current month's tail, which is where the crawl lives once it
+          // is caught up. The cursor stops where the listing stopped rather
+          // than on the rows it just read: standing still re-served the same
+          // tail every cycle and spent a detail and a document request on
+          // each of its rows again, for decisions already held. New decisions
+          // sort ahead of this offset rather than after it, so they are the
+          // day slices' to find, not this cursor's.
+          encodePlSnCursor({
+            month: window.month,
+            offset: window.offset + window.served,
+          })
+        : encodePlSnCursor({ month: next, offset: 0 }),
+  });
+};
+
+// ── Adapter ──────────────────────────────────────────────
+
+export const plSnAdapter = defineSourceAdapter({
+  documentStage: "inline",
+  key: ADAPTER_KEYS.PL_SN,
+  language: PL_SN_LANGUAGE,
+  minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
+  // A page is one listing request plus a detail and a document request per
+  // item, all behind the one-second gate, plus up to a dozen empty-month
+  // steps ahead of them.
+  pageTimeoutMs: 300_000,
+  maxSyncPages: 10,
+
+  reparseStoredRaw: reparsePlSnStoredRaw,
+
+  sourceSurfaces: PL_SN_SOURCE_SURFACES,
+
+  sourceFields: {
+    status: "declared",
+    fields: PL_SN_SOURCE_FIELDS,
+    listSourceFields: listPlSnSourceFields,
+  },
+
+  /**
+   * Known blind spot: the API states no result total. The court's own search
+   * page says as much in its script and renders "next" for as long as a page
+   * comes back full, so there is no count to read and no request that would
+   * answer differently — an absence rather than a probe that failed.
+   */
+  async getTotalCount(_signal) {
+    return await Promise.resolve({ type: "no-count-endpoint" });
+  },
+
+  reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            id: payload["id"],
+            sygnatura_sprawy: payload["sygnatura_sprawy"],
+            data_wydania: payload["data_wydania"],
+            forma_orzeczenia: payload["forma_orzeczenia"],
+          }
+        : null,
+    firstSlice: PL_SN_FIRST_SLICE,
+    ...plSnDaySlices.walk,
+    tipWindowDays: PL_SN_TIP_WINDOW_DAYS,
+    // A document failure leaves a listing-only row behind; unset, that row
+    // would count as held and its document would never be hunted again.
+    heldRequiresDetail: true,
+    listSlicePage: listPlSnSlicePage,
+    buildDecision: buildPlSnFromPayload,
+  },
+
+  /**
+   * The page's own refusals come back as `Err` from the walk; this wrapper is
+   * for what the fetch layer raises instead of returning — a dropped
+   * connection, an exhausted retry budget, a cycle abort.
+   */
+  async fetchPage(cursor, _config, signal) {
+    return Result.flatten(
+      await Result.tryPromise({
+        try: async () => await plSnFetchPage(cursor, signal),
+        catch: adapterCatch(ADAPTER_KEYS.PL_SN, cursor),
+      }),
+    );
+  },
+});

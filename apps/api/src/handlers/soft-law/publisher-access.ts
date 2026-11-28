@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
 
-import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
-import { fetchWithTimeout } from "@stll/fetch";
-
 import {
   PUBLISHER_GATES,
   reservePublisherGateSlot,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+} from "@stll/case-law-adapters/publisher-policy";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+import { fetchWithTimeout } from "@stll/fetch";
+
 import type {
   SoftLawBlockReason,
   SoftLawFetch,

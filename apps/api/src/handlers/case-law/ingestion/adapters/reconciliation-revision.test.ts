@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { plNcourtAdapter } from "@stll/case-law-adapters/pl-ncourt";
+import { plNsaAdapter } from "@stll/case-law-adapters/pl-nsa";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -10,8 +12,6 @@ import {
   czUsAdapter,
   type ListedDecision,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
-import { plNcourtAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
-import { plNsaAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { plUokikAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 
 const risIdentityPayloads = ["JUT_20260101_1", "JUT_20260101_2"].map((id) => ({

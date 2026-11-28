@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq, inArray, isNull, like } from "drizzle-orm";
 import { appendFile } from "node:fs/promises";
 
+import { withPublisherRequestRateLimit } from "@stll/case-law-adapters/publisher-policy";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { initialBatchState } from "@stll/db-load-gate/health";
@@ -20,7 +21,6 @@ import {
   fetchDecisionsByCelex,
   listEcjMonthVariants,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { withPublisherRequestRateLimit } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   type EcjBackfillJournalEntry,
   type EcjBackfillMonth,

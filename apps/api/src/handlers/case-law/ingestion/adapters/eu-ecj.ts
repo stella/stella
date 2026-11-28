@@ -1,3 +1,5 @@
+// parser-output-unchanged: [eu-ecj] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
@@ -21,6 +23,23 @@ import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   type CaseLawWorkExpression,
 } from "@stll/api-contract/case-law-source-languages";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+// parser-output-unchanged: publisher reads now route through typed readPublisher/readPublisherText; served payloads and parsed decisions are unchanged.
+import {
+  type PublisherReadInit,
+  readBodyText,
+  readPublisher,
+  readPublisherText,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@stll/case-law-adapters/publisher-read";
+import { PUBLISHER_BODY_MAX_BYTES } from "@stll/case-law-adapters/publisher-response-limit";
+import { publisherTarget } from "@stll/case-law-adapters/publisher-target";
+import {
+  PublisherRateLimitRefusalError,
+  rethrowCycleStop,
+} from "@stll/case-law-adapters/retry";
+import { adapterCatch, stripHtml } from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -104,27 +123,6 @@ import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-// parser-output-unchanged: publisher reads now route through typed readPublisher/readPublisherText; served payloads and parsed decisions are unchanged.
-import {
-  type PublisherReadInit,
-  readBodyText,
-  readPublisher,
-  readPublisherText,
-  unreadPublisherError,
-  type UnreadPublisherOutcome,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-response-limit";
-import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import {
-  PublisherRateLimitRefusalError,
-  rethrowCycleStop,
-} from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  INGESTION_USER_AGENT,
-  stripHtml,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   ecjFormexDocuments,
   encodeEcjFormexArchive,
@@ -139,6 +137,7 @@ import {
   splitStoredDecisionTextMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import {
   isReadRefusal,
   readAbsent,

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { fetchPublisher } from "@stll/case-law-adapters/retry";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
@@ -38,7 +39,6 @@ import {
   abortableSleep,
   withPublisherGateFixture,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { ecjCompletionFingerprint } from "@/api/handlers/case-law/ingestion/eu-completion-protection";
 import {
   createEuCompletionStore,

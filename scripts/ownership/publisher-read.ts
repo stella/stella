@@ -4,9 +4,9 @@ export default {
   id: "publisher-read",
   capability: "Reading a case-law publisher response",
   owner: [
-    "apps/api/src/lib/errors/read-outcome.ts",
-    "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read.ts",
-    "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+    "packages/case-law-ingestion-core/src/read-outcome.ts",
+    "packages/case-law-adapters/src/publisher-read.ts",
+    "packages/case-law-adapters/src/retry.ts",
   ],
   summary:
     "readPublisher sends the gated publisher request and returns a ReadOutcome: " +
@@ -16,7 +16,7 @@ export default {
     "read-fault guard drives every enrolled adapter's reads with failures.",
   enforcement: {
     kind: "import",
-    specifiers: ["@/api/handlers/case-law/ingestion/adapters/retry"],
+    specifiers: ["@stll/case-law-adapters/retry"],
     names: ["fetchPublisher", "fetchWithRetry"],
     allowed: [],
   },

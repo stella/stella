@@ -10,6 +10,13 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import {
+  buildPlItem,
+  normalizeSaosDumpItem,
+  PL_COURTS_RULING_DECISION_TYPES,
+  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+  plCourtsAdapter,
+} from "@stll/case-law-adapters/pl-courts";
 import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
 import {
   decodeSourceRawEnvelope,
@@ -20,13 +27,6 @@ import type {
   StoredRawReparseInput,
 } from "@stll/case-law-ingestion-core/ingestion-types";
 
-import {
-  buildPlItem,
-  normalizeSaosDumpItem,
-  PL_COURTS_RULING_DECISION_TYPES,
-  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-  plCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

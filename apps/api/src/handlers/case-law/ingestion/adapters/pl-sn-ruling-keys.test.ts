@@ -14,21 +14,21 @@ import {
   rulingGroupKeys,
   rulingKeysOf,
 } from "@stll/api-contract/decision-ruling-identity";
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+} from "@stll/case-law-adapters/pl-courts";
 import {
   assemblePlSnDecision,
   normalizePlSnListingItem,
   readPlSnEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
+} from "@stll/case-law-adapters/pl-sn";
 import {
   normalizeSupremeCourtDocket,
   plSupremeCourtRulingKeys,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
+} from "@stll/case-law-adapters/pl-sn-ruling-keys";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);

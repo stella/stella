@@ -1,3 +1,5 @@
+// parser-output-unchanged: [sk-courts] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -15,6 +17,25 @@ import { panic, Result } from "better-result";
 
 import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
+import { createCalendarDaySliceWalk } from "@stll/case-law-adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import { createPagePaginatedFetch } from "@stll/case-law-adapters/pagination";
+import { validatePublisherPage } from "@stll/case-law-adapters/publisher-page";
+import {
+  PUBLISHER_BODY_MAX_BYTES,
+  readPublisher,
+  readPublisherText,
+} from "@stll/case-law-adapters/publisher-read";
+import { publisherTarget } from "@stll/case-law-adapters/publisher-target";
+import {
+  adapterCatch,
+  isNullishArrayOf,
+  isNullishNumber,
+  isNullishString,
+  isNullishValue,
+  parseCeDate,
+  toOptionalValue,
+} from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -72,16 +93,6 @@ import {
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
-import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import {
-  PUBLISHER_BODY_MAX_BYTES,
-  readPublisher,
-  readPublisherText,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
 import {
   createSkCourtRegistryReader,
@@ -94,16 +105,6 @@ import type {
   SkCourtRegistryReader,
   SkCourtRegistryRecord,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
-import {
-  adapterCatch,
-  INGESTION_USER_AGENT,
-  isNullishArrayOf,
-  isNullishNumber,
-  isNullishString,
-  isNullishValue,
-  parseCeDate,
-  toOptionalValue,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
@@ -112,6 +113,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
   type AbsenceEvidence,

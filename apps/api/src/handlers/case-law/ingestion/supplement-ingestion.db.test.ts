@@ -12,6 +12,13 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import {
+  buildPlItem,
+  normalizeSaosDumpItem,
+  PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
+  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+  plCourtsAdapter,
+} from "@stll/case-law-adapters/pl-courts";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
@@ -37,13 +44,6 @@ import {
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
-import {
-  buildPlItem,
-  normalizeSaosDumpItem,
-  PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
-  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-  plCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {

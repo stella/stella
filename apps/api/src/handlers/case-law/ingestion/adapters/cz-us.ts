@@ -1,3 +1,5 @@
+// parser-output-unchanged: [cz-us] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
@@ -14,6 +16,17 @@
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import {
+  readGatedResponseText,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
+import { PUBLISHER_BODY_MAX_BYTES } from "@stll/case-law-adapters/publisher-response-limit";
+import {
+  adapterCatch,
+  parseCeDate,
+  stripHtml,
+} from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -87,17 +100,6 @@ import {
   NalusRateLimitedError,
   type NalusRequestInit,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import {
-  readGatedResponseText,
-  unreadPublisherError,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-response-limit";
-import {
-  adapterCatch,
-  parseCeDate,
-  stripHtml,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechConstitutionalIdentifiersFromParallelCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";

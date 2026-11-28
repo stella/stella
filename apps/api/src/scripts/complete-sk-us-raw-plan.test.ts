@@ -3,6 +3,11 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  readBodyText,
+  type readPublisherText,
+} from "@stll/case-law-adapters/publisher-read";
+import type { PublisherFetchInit } from "@stll/case-law-adapters/retry";
+import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
@@ -14,17 +19,12 @@ import { assertProperty } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  readBodyText,
-  type readPublisherText,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import type { PublisherFetchInit } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
   fetchSkUsListing,
   skUsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
-import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { createSafeId } from "@/api/lib/branded-types";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import {
   readAbsent,
   type ReadOutcome,

@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  createPublisherGateSlot,
+  readPublisherCooldown,
+} from "@stll/case-law-adapters/publisher-policy";
+import {
+  PublisherRateLimitRefusalError,
+  retryPublisherRequest,
+} from "@stll/case-law-adapters/retry";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 import { createRedisClient } from "@/api/lib/redis-client";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
-import {
-  createPublisherGateSlot,
-  readPublisherCooldown,
-} from "./publisher-policy";
 import {
   abortableSleep,
   createPublisherRequestSlot,
@@ -16,7 +20,6 @@ import {
   publisherGateKeys,
   type PublisherRequestGateDependencies,
 } from "./publisher-request-gate";
-import { PublisherRateLimitRefusalError, retryPublisherRequest } from "./retry";
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 const COOLDOWN_MS = 1000;

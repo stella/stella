@@ -1,5 +1,7 @@
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+import "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import "@/api/lib/case-law/ingestion-user-agent";
 /**
  * Lazy adapter module registry.
  *
@@ -35,33 +37,47 @@ export const ADAPTER_MODULES = {
     (await import("./sk-courts")).skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: async () => (await import("./sk-us")).skUsAdapter,
   [ADAPTER_KEYS.PL_COURTS]: async () =>
-    (await import("./pl-courts")).plCourtsAdapter,
-  [ADAPTER_KEYS.PL_SN]: async () => (await import("./pl-sn")).plSnAdapter,
+    (await import("@stll/case-law-adapters/pl-courts")).plCourtsAdapter,
+  [ADAPTER_KEYS.PL_SN]: async () =>
+    (await import("@stll/case-law-adapters/pl-sn")).plSnAdapter,
   [ADAPTER_KEYS.PL_KIO]: async () => (await import("./pl-kio")).plKioAdapter,
-  [ADAPTER_KEYS.PL_TK]: async () => (await import("./pl-tk")).plTkAdapter,
-  [ADAPTER_KEYS.PL_NSA]: async () => (await import("./pl-nsa")).plNsaAdapter,
+  [ADAPTER_KEYS.PL_TK]: async () =>
+    (await import("@stll/case-law-adapters/pl-tk")).plTkAdapter,
+  [ADAPTER_KEYS.PL_NSA]: async () =>
+    (await import("@stll/case-law-adapters/pl-nsa")).plNsaAdapter,
   [ADAPTER_KEYS.PL_NCOURT]: async () =>
-    (await import("./pl-ncourt")).plNcourtAdapter,
+    (await import("@stll/case-law-adapters/pl-ncourt")).plNcourtAdapter,
   [ADAPTER_KEYS.AT_COURTS]: async () =>
-    (await import("./at-courts")).atCourtsAdapter,
-  [ADAPTER_KEYS.AT_VFGH]: async () => (await import("./at-vfgh")).atVfghAdapter,
-  [ADAPTER_KEYS.AT_VWGH]: async () => (await import("./at-vwgh")).atVwghAdapter,
-  [ADAPTER_KEYS.AT_BVWG]: async () => (await import("./at-bvwg")).atBvwgAdapter,
-  [ADAPTER_KEYS.AT_LVWG]: async () => (await import("./at-lvwg")).atLvwgAdapter,
+    (await import("@stll/case-law-adapters/at-courts")).atCourtsAdapter,
+  [ADAPTER_KEYS.AT_VFGH]: async () =>
+    (await import("@stll/case-law-adapters/at-vfgh")).atVfghAdapter,
+  [ADAPTER_KEYS.AT_VWGH]: async () =>
+    (await import("@stll/case-law-adapters/at-vwgh")).atVwghAdapter,
+  [ADAPTER_KEYS.AT_BVWG]: async () =>
+    (await import("@stll/case-law-adapters/at-bvwg")).atBvwgAdapter,
+  [ADAPTER_KEYS.AT_LVWG]: async () =>
+    (await import("@stll/case-law-adapters/at-lvwg")).atLvwgAdapter,
   [ADAPTER_KEYS.AT_ASYLGH]: async () =>
-    (await import("./at-asylgh")).atAsylghAdapter,
-  [ADAPTER_KEYS.AT_UBAS]: async () => (await import("./at-ubas")).atUbasAdapter,
-  [ADAPTER_KEYS.AT_UVS]: async () => (await import("./at-uvs")).atUvsAdapter,
-  [ADAPTER_KEYS.AT_VERG]: async () => (await import("./at-verg")).atVergAdapter,
-  [ADAPTER_KEYS.AT_UMSE]: async () => (await import("./at-umse")).atUmseAdapter,
-  [ADAPTER_KEYS.AT_BKS]: async () => (await import("./at-bks")).atBksAdapter,
+    (await import("@stll/case-law-adapters/at-asylgh")).atAsylghAdapter,
+  [ADAPTER_KEYS.AT_UBAS]: async () =>
+    (await import("@stll/case-law-adapters/at-ubas")).atUbasAdapter,
+  [ADAPTER_KEYS.AT_UVS]: async () =>
+    (await import("@stll/case-law-adapters/at-uvs")).atUvsAdapter,
+  [ADAPTER_KEYS.AT_VERG]: async () =>
+    (await import("@stll/case-law-adapters/at-verg")).atVergAdapter,
+  [ADAPTER_KEYS.AT_UMSE]: async () =>
+    (await import("@stll/case-law-adapters/at-umse")).atUmseAdapter,
+  [ADAPTER_KEYS.AT_BKS]: async () =>
+    (await import("@stll/case-law-adapters/at-bks")).atBksAdapter,
   [ADAPTER_KEYS.AT_FINDOK]: async () =>
     (await import("./at-findok")).atFindokAdapter,
   [ADAPTER_KEYS.EU_ECJ]: async () => (await import("./eu-ecj")).euEcjAdapter,
   [ADAPTER_KEYS.HU_BHGY]: async () => (await import("./hu-bhgy")).huBhgyAdapter,
   [ADAPTER_KEYS.UK_FCL]: async () => (await import("./uk-fcl")).ukFclAdapter,
-  [ADAPTER_KEYS.PL_KIS]: async () => (await import("./pl-kis")).plKisAdapter,
-  [ADAPTER_KEYS.PL_UODO]: async () => (await import("./pl-uodo")).plUodoAdapter,
+  [ADAPTER_KEYS.PL_KIS]: async () =>
+    (await import("@stll/case-law-adapters/pl-kis")).plKisAdapter,
+  [ADAPTER_KEYS.PL_UODO]: async () =>
+    (await import("@stll/case-law-adapters/pl-uodo")).plUodoAdapter,
   [ADAPTER_KEYS.PL_UOKIK]: async () =>
     (await import("./pl-uokik")).plUokikAdapter,
   [ADAPTER_KEYS.BR_TJDFT]: async () =>

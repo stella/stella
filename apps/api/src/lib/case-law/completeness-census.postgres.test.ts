@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { createCalendarDaySliceWalk } from "@stll/case-law-adapters/calendar-day-slice-walk";
 import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
 import type {
   CensusListingIdentity,
@@ -18,7 +19,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
-import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   censusScope,

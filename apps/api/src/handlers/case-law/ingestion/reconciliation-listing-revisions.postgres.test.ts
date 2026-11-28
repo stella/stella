@@ -2,6 +2,14 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import {
+  createPlNsaCrawler,
+  plNsaAdapter,
+} from "@stll/case-law-adapters/pl-nsa";
+import {
+  localFileShardSource,
+  PL_NSA_SNAPSHOT,
+} from "@stll/case-law-adapters/pl-nsa-dataset";
 import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { SourceReconciliation } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DAY_IN_MS } from "@stll/time";
@@ -14,14 +22,6 @@ import {
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
-import {
-  createPlNsaCrawler,
-  plNsaAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import {
-  localFileShardSource,
-  PL_NSA_SNAPSHOT,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
   plUokikAdapter,
   readPlUokikView,

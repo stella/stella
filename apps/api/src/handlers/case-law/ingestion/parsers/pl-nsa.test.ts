@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { assemblePlNsaDecision } from "@stll/case-law-adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@stll/case-law-adapters/pl-nsa-dataset";
+import type { PlNsaDatasetRow } from "@stll/case-law-adapters/pl-nsa-dataset";
 /**
  * The pl-nsa reader against whole rows of the dataset.
  *
@@ -18,9 +21,6 @@ import {
   plNsaStatedSuperscripts,
 } from "@stll/case-law-parsers/pl-nsa";
 
-import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { isRecord } from "@/api/lib/type-guards";
 
 const parsePlNsaDecision = guardParser(uncheckedParsePlNsaDecision);

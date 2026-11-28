@@ -792,6 +792,7 @@
       "@stll/docx-utils",
       "@stll/locales",
       "@stll/case-law-parsers",
+      "@stll/case-law-adapters",
       "@stll/case-law-ingestion-core",
       "@stll/docx-engine"
     ],
@@ -825,6 +826,7 @@
       "@stll/uuid-codec",
       "scripts/**",
       "@stll/case-law-parsers",
+      "@stll/case-law-adapters",
       "@stll/case-law-ingestion-core",
       "@stll/docx-engine"
     ],

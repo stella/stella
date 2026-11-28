@@ -1,3 +1,5 @@
+// parser-output-unchanged: [pl-uokik] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
@@ -9,6 +11,17 @@
 import { panic, Result } from "better-result";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { logDocumentParseFailure } from "@stll/case-law-adapters/document-parse-failure";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import { plCommonCourtRulingKeys } from "@stll/case-law-adapters/pl-common-court-ruling-keys";
+import { plSupremeCourtRulingKeys } from "@stll/case-law-adapters/pl-sn-ruling-keys";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+import {
+  readPublisher,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
+import { rethrowCycleStop } from "@stll/case-law-adapters/retry";
+import { adapterCatch } from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -145,16 +158,6 @@ import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
-import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  readPublisher,
-  unreadPublisherError,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,
@@ -165,7 +168,6 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { logDocumentParseFailure } from "./document-parse-failure";
 import { PL_UOKIK_METADATA_URL_SCHEMA } from "./pl-uokik.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────

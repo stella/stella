@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import { PL_COURTS_RULING_DECISION_TYPES } from "@stll/case-law-adapters/pl-courts";
 import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
@@ -10,7 +11,6 @@ import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
-import { PL_COURTS_RULING_DECISION_TYPES } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import {
   composeDecisionWithSupplements,

@@ -38,7 +38,7 @@ import path from "node:path";
 import { isPathInside } from "@stll/portable-path";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 
 import {
   CAPTURED_FIXTURE_ROOTS,

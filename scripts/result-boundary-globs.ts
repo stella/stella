@@ -446,7 +446,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/fetch/src/index.ts",
   // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
   // adapters convert its typed failures to Result at their ingestion boundary.
-  "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+  "packages/case-law-adapters/src/retry.ts",
   // The CLI entry point catches the dynamic load of the application shell so
   // a checkout without installed packages gets one actionable line; it cannot
   // import the Result library, which is one of the packages that may be missing.
@@ -638,6 +638,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
     unit: "apps/outlook/src/lib",
   },
   { reason: "unreviewed", unit: "apps/playground/src" },
+  {
+    reason:
+      "Case-law adapters throw AdapterFetchError across internal fetch/pagination helpers before converting to Result at the ingestion boundary; enroll once converted to Result.",
+    unit: "packages/case-law-adapters/src",
+  },
   { reason: "unreviewed", unit: "apps/web/src" },
   { reason: "unreviewed", unit: "apps/web/src/components" },
   { reason: "unreviewed", unit: "apps/web/src/components/ai-suggestions" },

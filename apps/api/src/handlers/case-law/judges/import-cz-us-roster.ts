@@ -17,6 +17,9 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { createPublisherGateSlot } from "@stll/case-law-adapters/publisher-policy";
+import { limitPublisherResponse } from "@stll/case-law-adapters/publisher-response-limit";
+import { parseCeDate } from "@stll/case-law-adapters/utils";
 import { CZ_ECLI_COURTS } from "@stll/case-law-ingestion-core/ecli-court-codes";
 import type {
   JudgeExternalRefs,
@@ -33,12 +36,6 @@ import type { AnyNode } from "@stll/html/nodes";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { caseLawJudges } from "@/api/db/schema";
-import { createPublisherGateSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { limitPublisherResponse } from "@/api/handlers/case-law/ingestion/adapters/publisher-response-limit";
-import {
-  INGESTION_USER_AGENT,
-  parseCeDate,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   judgeNameKey,
   stripAcademicTitles,
@@ -46,6 +43,7 @@ import {
 import { PORTRAIT_MAX_BYTES } from "@/api/handlers/case-law/judges/portrait";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
 import { logger } from "@/api/lib/observability/logger";
 

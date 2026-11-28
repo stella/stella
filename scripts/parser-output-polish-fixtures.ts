@@ -2,6 +2,38 @@ import { panic } from "better-result";
 import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+} from "@stll/case-law-adapters/pl-courts";
+import {
+  assemblePlKisDecision,
+  plKisRawPartsOf,
+  readPlKisListing,
+} from "@stll/case-law-adapters/pl-kis";
+import {
+  assemblePlNcourtDecision,
+  readPlNcourtListing,
+} from "@stll/case-law-adapters/pl-ncourt";
+import { assemblePlNsaDecision } from "@stll/case-law-adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@stll/case-law-adapters/pl-nsa-dataset";
+import {
+  assemblePlSnDecision,
+  normalizePlSnListingItem,
+  readPlSnEnvelope,
+} from "@stll/case-law-adapters/pl-sn";
+import {
+  assemblePlTkDecision,
+  parsePlTkListingPage,
+  plTkRawPartsOf,
+} from "@stll/case-law-adapters/pl-tk";
+import {
+  assemblePlUodoDecision,
+  classifyPlUodoRow,
+  normalizePlUodoRow,
+  plUodoBodyFrom,
+  plUodoRawPartsOf,
+} from "@stll/case-law-adapters/pl-uodo";
 import type {
   DecisionSupplement,
   IngestionResult,
@@ -13,41 +45,9 @@ import {
 } from "@stll/case-law-parsers/pl-tk";
 
 import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-} from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-courts";
-import {
   assemblePlKioDecision,
   readPlKioListing,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-kio";
-import {
-  assemblePlKisDecision,
-  plKisRawPartsOf,
-  readPlKisListing,
-} from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-kis";
-import {
-  assemblePlNcourtDecision,
-  readPlNcourtListing,
-} from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt";
-import { assemblePlNsaDecision } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import {
-  assemblePlSnDecision,
-  normalizePlSnListingItem,
-  readPlSnEnvelope,
-} from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-sn";
-import {
-  assemblePlTkDecision,
-  parsePlTkListingPage,
-  plTkRawPartsOf,
-} from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-tk";
-import {
-  assemblePlUodoDecision,
-  classifyPlUodoRow,
-  normalizePlUodoRow,
-  plUodoBodyFrom,
-  plUodoRawPartsOf,
-} from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo";
 import {
   assemblePlUokikDecision,
   assemblePlUokikRuling,

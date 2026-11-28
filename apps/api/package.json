@@ -142,6 +142,7 @@
     "@stll/brand": "workspace:*",
     "@stll/business-registries": "workspace:*",
     "@stll/calculations": "workspace:*",
+    "@stll/case-law-adapters": "workspace:*",
     "@stll/case-law-ingestion-core": "workspace:*",
     "@stll/case-law-parsers": "workspace:*",
     "@stll/catalogue": "workspace:*",

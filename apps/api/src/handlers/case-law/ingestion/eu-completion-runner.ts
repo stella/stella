@@ -2,6 +2,7 @@ import { type InferOk, panic, Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { TransformStream } from "node:stream/web";
 
+import { withPublisherRequestRateLimit } from "@stll/case-law-adapters/publisher-policy";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
@@ -28,7 +29,6 @@ import {
   isValidCelex,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { withPublisherRequestRateLimit } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";

@@ -88,7 +88,23 @@ const FETCH_SOURCES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
     new Set(["fetchPublisher", "fetchWithRetry"]),
   ],
   [
+    "packages/case-law-adapters/src/retry",
+    new Set(["fetchPublisher", "fetchWithRetry"]),
+  ],
+  [
+    "@stll/case-law-adapters/retry",
+    new Set(["fetchPublisher", "fetchWithRetry"]),
+  ],
+  [
     "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read",
+    new Set(["readPublisher", "readPublisherBytes", "readPublisherText"]),
+  ],
+  [
+    "packages/case-law-adapters/src/publisher-read",
+    new Set(["readPublisher", "readPublisherBytes", "readPublisherText"]),
+  ],
+  [
+    "@stll/case-law-adapters/publisher-read",
     new Set(["readPublisher", "readPublisherBytes", "readPublisherText"]),
   ],
   ["undici", new Set(["fetch", "request", "stream"])],
@@ -133,8 +149,11 @@ const TRUSTED_PROVIDER_RESTRICTIONS: ReadonlyMap<
     new Set(["restrictSkCourtDocumentUrl"]),
   ],
 ]);
-const PUBLISHER_TARGET_MODULE =
-  "apps/api/src/handlers/case-law/ingestion/adapters/publisher-target";
+const PUBLISHER_TARGET_MODULES: ReadonlySet<string> = new Set([
+  "apps/api/src/handlers/case-law/ingestion/adapters/publisher-target",
+  "packages/case-law-adapters/src/publisher-target",
+  "@stll/case-law-adapters/publisher-target",
+]);
 const PUBLISHER_TARGET_HELPER = "publisherTarget";
 const PUBLISHER_TARGET_ORIGIN = "https://publisher-host.invalid";
 const S3_MODULE = "apps/api/src/lib/s3";
@@ -1020,7 +1039,8 @@ export default eslintCompatPlugin({
           }
           const helper = resolveImport(context, initializer.callee);
           return (
-            helper?.moduleId === PUBLISHER_TARGET_MODULE &&
+            helper !== undefined &&
+            PUBLISHER_TARGET_MODULES.has(helper.moduleId) &&
             helper.imported === PUBLISHER_TARGET_HELPER
           );
         };

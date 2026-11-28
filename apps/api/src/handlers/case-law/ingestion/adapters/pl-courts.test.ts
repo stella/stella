@@ -1,6 +1,13 @@
+import "@/api/lib/observability/observe-failure";
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+  plCourtsAdapter,
+} from "@stll/case-law-adapters/pl-courts";
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@stll/case-law-adapters/pl-courts.metadata-urls";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -25,11 +32,6 @@ import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-ur
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 
-import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-  plCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
@@ -38,8 +40,6 @@ import {
 } from "@/api/tests/helpers/recording-telemetry";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
-
-import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 const testFetchState = createTestFetch();

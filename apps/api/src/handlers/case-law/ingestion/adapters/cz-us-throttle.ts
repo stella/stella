@@ -1,9 +1,17 @@
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 // parser-output-unchanged: Refusal results carry typed read outcomes; successful responses are parsed unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
+import {
+  createPublisherSlot,
+  NALUS_DAILY_REQUEST_LIMIT,
+  publisherRequestIntervalMs,
+} from "@stll/case-law-adapters/publisher-policy";
+import { unreadPublisherError } from "@stll/case-law-adapters/publisher-read";
+import { limitPublisherResponse } from "@stll/case-law-adapters/publisher-response-limit";
 import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/case-law-consts";
 import { observePublisherDocumentFetch } from "@stll/case-law-ingestion-core/document-stage-observation";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
@@ -16,19 +24,11 @@ import {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 
-import {
-  createPublisherSlot,
-  NALUS_DAILY_REQUEST_LIMIT,
-  publisherRequestIntervalMs,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
-import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import type { ReadRefusalScope } from "@/api/lib/errors/read-outcome";
 import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-
-import { unreadPublisherError } from "./publisher-read";
-import { limitPublisherResponse } from "./publisher-response-limit";
 
 /**
  * What one NALUS request costs the crawl in waiting, read off the policy map

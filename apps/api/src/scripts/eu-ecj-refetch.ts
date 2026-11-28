@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { withPublisherRequestRateLimit } from "@stll/case-law-adapters/publisher-policy";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { printError } from "@stll/errors";
 
@@ -11,7 +12,6 @@ import {
   isValidCelex,
   listCelexVariants,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { withPublisherRequestRateLimit } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";

@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { PublisherPageError } from "@stll/case-law-adapters/publisher-page";
+import { PUBLISHER_BODY_MAX_BYTES } from "@stll/case-law-adapters/publisher-read";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 /**
  * What this adapter does with the record its publisher serves.
@@ -29,8 +31,6 @@ import {
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
 
-import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   assembleSkCourtsDecision,
   reparseSkCourtsStoredMetadata,

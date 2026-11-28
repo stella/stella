@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { registerPublicReadIo } from "@stll/case-law-ingestion-core/public-read-io-hook";
 import { declareFingerprintFields } from "@stll/errors";
 import type { Fetcher, FetchWithTimeoutInit } from "@stll/fetch";
 
@@ -389,3 +390,5 @@ export const withPublicReadIo = async <T>(
     return await run(io);
   });
 };
+
+registerPublicReadIo((transport, fn) => withPublicReadIo(transport, fn));

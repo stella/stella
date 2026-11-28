@@ -7,6 +7,13 @@ import {
   test,
 } from "bun:test";
 
+import {
+  createPublisherGateSlot,
+  PUBLISHER_GATES,
+  readPublisherCooldown,
+  withImmediatePublisherSlot,
+} from "@stll/case-law-adapters/publisher-policy";
+import { fetchPublisher } from "@stll/case-law-adapters/retry";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { DAY_IN_MS, Temporal } from "@stll/time";
@@ -16,18 +23,11 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
-  createPublisherGateSlot,
-  PUBLISHER_GATES,
-  readPublisherCooldown,
-  withImmediatePublisherSlot,
-} from "./publisher-policy";
-import {
   createPublisherRequestSlot,
   publisherGateKeys,
   resetPublisherGateFixtures,
   withPublisherGateFixture,
 } from "./publisher-request-gate";
-import { fetchPublisher } from "./retry";
 
 const testFetchState = createTestFetch();
 

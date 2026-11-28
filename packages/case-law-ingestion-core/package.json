@@ -63,6 +63,10 @@
       "types": "./src/ingestion-types.ts",
       "import": "./src/ingestion-types.ts"
     },
+    "./ingestion-user-agent-hook": {
+      "types": "./src/ingestion-user-agent-hook.ts",
+      "import": "./src/ingestion-user-agent-hook.ts"
+    },
     "./judges-consts": {
       "types": "./src/judges-consts.ts",
       "import": "./src/judges-consts.ts"
@@ -95,6 +99,10 @@
       "types": "./src/plain-text-markup.ts",
       "import": "./src/plain-text-markup.ts"
     },
+    "./public-read-io-hook": {
+      "types": "./src/public-read-io-hook.ts",
+      "import": "./src/public-read-io-hook.ts"
+    },
     "./publisher-field-coverage": {
       "types": "./src/publisher-field-coverage.ts",
       "import": "./src/publisher-field-coverage.ts"
@@ -106,6 +114,10 @@
     "./publisher-request-gate-hook": {
       "types": "./src/publisher-request-gate-hook.ts",
       "import": "./src/publisher-request-gate-hook.ts"
+    },
+    "./read-outcome": {
+      "types": "./src/read-outcome.ts",
+      "import": "./src/read-outcome.ts"
     },
     "./restrict-outbound-url": {
       "types": "./src/restrict-outbound-url.ts",
@@ -126,6 +138,10 @@
     "./source-raw-envelope": {
       "types": "./src/source-raw-envelope.ts",
       "import": "./src/source-raw-envelope.ts"
+    },
+    "./source-record-fields": {
+      "types": "./src/source-record-fields.ts",
+      "import": "./src/source-record-fields.ts"
     },
     "./stored-document-replay": {
       "types": "./src/stored-document-replay.ts",

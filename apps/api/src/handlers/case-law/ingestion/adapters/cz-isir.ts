@@ -1,3 +1,5 @@
+// parser-output-unchanged: [cz-isir] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -71,6 +73,13 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+import {
+  readPublisherBytes,
+  readPublisherText,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
+import { adapterCatch } from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
 import {
@@ -146,21 +155,12 @@ import {
   readCzIsirLastId,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-feed";
 import { CZ_ISIR_INSOLVENCY_COURT_DECISION_EVENTS } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-insolvency-court-events";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  readPublisherBytes,
-  readPublisherText,
-  unreadPublisherError,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  adapterCatch,
-  INGESTION_USER_AGENT,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 const KEY = ADAPTER_KEYS.CZ_ISIR;

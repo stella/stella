@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { PublisherPageError } from "@stll/case-law-adapters/publisher-page";
 import {
   decodeSourceRawEnvelope,
   PUBLISHER_REQUEST,
@@ -16,8 +17,6 @@ import {
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
-
-import { PublisherPageError } from "./publisher-page";
 
 const DOCUMENT_ID = "b68202a0-55e4-4dea-9e93-971f0b71ae32";
 const MANIFEST_ITEM = {

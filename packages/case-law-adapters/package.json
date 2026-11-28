@@ -1,0 +1,224 @@
+{
+  "name": "@stll/case-law-adapters",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure case-law ingestion adapters and shared publisher runtime (PL, AT-RIS, and publisher transport/policy/pagination primitives)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./at-asylgh": {
+      "types": "./src/at-asylgh.ts",
+      "import": "./src/at-asylgh.ts"
+    },
+    "./at-bks": {
+      "types": "./src/at-bks.ts",
+      "import": "./src/at-bks.ts"
+    },
+    "./at-bvwg": {
+      "types": "./src/at-bvwg.ts",
+      "import": "./src/at-bvwg.ts"
+    },
+    "./at-courts": {
+      "types": "./src/at-courts.ts",
+      "import": "./src/at-courts.ts"
+    },
+    "./at-courts.metadata-urls": {
+      "types": "./src/at-courts.metadata-urls.ts",
+      "import": "./src/at-courts.metadata-urls.ts"
+    },
+    "./at-lvwg": {
+      "types": "./src/at-lvwg.ts",
+      "import": "./src/at-lvwg.ts"
+    },
+    "./at-ris-fields": {
+      "types": "./src/at-ris-fields.ts",
+      "import": "./src/at-ris-fields.ts"
+    },
+    "./at-ris-source-surfaces": {
+      "types": "./src/at-ris-source-surfaces.ts",
+      "import": "./src/at-ris-source-surfaces.ts"
+    },
+    "./at-ris-throttle": {
+      "types": "./src/at-ris-throttle.ts",
+      "import": "./src/at-ris-throttle.ts"
+    },
+    "./at-ubas": {
+      "types": "./src/at-ubas.ts",
+      "import": "./src/at-ubas.ts"
+    },
+    "./at-umse": {
+      "types": "./src/at-umse.ts",
+      "import": "./src/at-umse.ts"
+    },
+    "./at-uvs": {
+      "types": "./src/at-uvs.ts",
+      "import": "./src/at-uvs.ts"
+    },
+    "./at-verg": {
+      "types": "./src/at-verg.ts",
+      "import": "./src/at-verg.ts"
+    },
+    "./at-vfgh": {
+      "types": "./src/at-vfgh.ts",
+      "import": "./src/at-vfgh.ts"
+    },
+    "./at-vwgh": {
+      "types": "./src/at-vwgh.ts",
+      "import": "./src/at-vwgh.ts"
+    },
+    "./calendar-day-slice-walk": {
+      "types": "./src/calendar-day-slice-walk.ts",
+      "import": "./src/calendar-day-slice-walk.ts"
+    },
+    "./document-parse-failure": {
+      "types": "./src/document-parse-failure.ts",
+      "import": "./src/document-parse-failure.ts"
+    },
+    "./item-build": {
+      "types": "./src/item-build.ts",
+      "import": "./src/item-build.ts"
+    },
+    "./pagination": {
+      "types": "./src/pagination.ts",
+      "import": "./src/pagination.ts"
+    },
+    "./pl-administrative-ruling-keys": {
+      "types": "./src/pl-administrative-ruling-keys.ts",
+      "import": "./src/pl-administrative-ruling-keys.ts"
+    },
+    "./pl-common-court-ruling-keys": {
+      "types": "./src/pl-common-court-ruling-keys.ts",
+      "import": "./src/pl-common-court-ruling-keys.ts"
+    },
+    "./pl-courts": {
+      "types": "./src/pl-courts.ts",
+      "import": "./src/pl-courts.ts"
+    },
+    "./pl-courts.metadata-urls": {
+      "types": "./src/pl-courts.metadata-urls.ts",
+      "import": "./src/pl-courts.metadata-urls.ts"
+    },
+    "./pl-kis": {
+      "types": "./src/pl-kis.ts",
+      "import": "./src/pl-kis.ts"
+    },
+    "./pl-kis.metadata-urls": {
+      "types": "./src/pl-kis.metadata-urls.ts",
+      "import": "./src/pl-kis.metadata-urls.ts"
+    },
+    "./pl-ncourt": {
+      "types": "./src/pl-ncourt.ts",
+      "import": "./src/pl-ncourt.ts"
+    },
+    "./pl-nsa": {
+      "types": "./src/pl-nsa.ts",
+      "import": "./src/pl-nsa.ts"
+    },
+    "./pl-nsa-cursor": {
+      "types": "./src/pl-nsa-cursor.ts",
+      "import": "./src/pl-nsa-cursor.ts"
+    },
+    "./pl-nsa-dataset": {
+      "types": "./src/pl-nsa-dataset.ts",
+      "import": "./src/pl-nsa-dataset.ts"
+    },
+    "./pl-nsa.metadata-urls": {
+      "types": "./src/pl-nsa.metadata-urls.ts",
+      "import": "./src/pl-nsa.metadata-urls.ts"
+    },
+    "./pl-sn": {
+      "types": "./src/pl-sn.ts",
+      "import": "./src/pl-sn.ts"
+    },
+    "./pl-sn-ruling-keys": {
+      "types": "./src/pl-sn-ruling-keys.ts",
+      "import": "./src/pl-sn-ruling-keys.ts"
+    },
+    "./pl-tk": {
+      "types": "./src/pl-tk.ts",
+      "import": "./src/pl-tk.ts"
+    },
+    "./pl-tk-ruling-keys": {
+      "types": "./src/pl-tk-ruling-keys.ts",
+      "import": "./src/pl-tk-ruling-keys.ts"
+    },
+    "./pl-tk.metadata-urls": {
+      "types": "./src/pl-tk.metadata-urls.ts",
+      "import": "./src/pl-tk.metadata-urls.ts"
+    },
+    "./pl-uodo": {
+      "types": "./src/pl-uodo.ts",
+      "import": "./src/pl-uodo.ts"
+    },
+    "./publisher-gate-fixture-state": {
+      "types": "./src/publisher-gate-fixture-state.ts",
+      "import": "./src/publisher-gate-fixture-state.ts"
+    },
+    "./publisher-page": {
+      "types": "./src/publisher-page.ts",
+      "import": "./src/publisher-page.ts"
+    },
+    "./publisher-policy": {
+      "types": "./src/publisher-policy.ts",
+      "import": "./src/publisher-policy.ts"
+    },
+    "./publisher-read": {
+      "types": "./src/publisher-read.ts",
+      "import": "./src/publisher-read.ts"
+    },
+    "./publisher-response-limit": {
+      "types": "./src/publisher-response-limit.ts",
+      "import": "./src/publisher-response-limit.ts"
+    },
+    "./publisher-target": {
+      "types": "./src/publisher-target.ts",
+      "import": "./src/publisher-target.ts"
+    },
+    "./read-capped-publisher-bytes": {
+      "types": "./src/read-capped-publisher-bytes.ts",
+      "import": "./src/read-capped-publisher-bytes.ts"
+    },
+    "./retry": {
+      "types": "./src/retry.ts",
+      "import": "./src/retry.ts"
+    },
+    "./utils": {
+      "types": "./src/utils.ts",
+      "import": "./src/utils.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\\\.assert|assertProperty' src --include='*.test.ts')",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/case-law-adapters",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/case-law-adapters"
+  },
+  "dependencies": {
+    "@stll/api-contract": "workspace:*",
+    "@stll/case-law-ingestion-core": "workspace:*",
+    "@stll/case-law-parsers": "workspace:*",
+    "@stll/concurrency": "workspace:*",
+    "@stll/errors": "workspace:*",
+    "@stll/fetch": "workspace:*",
+    "@stll/html": "workspace:*",
+    "@stll/legal-ast": "workspace:*",
+    "@stll/legal-atlas": "workspace:*",
+    "@stll/sha256": "workspace:*",
+    "@stll/skills": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
+    "@stll/time": "0.4.3",
+    "better-result": "catalog:",
+    "hyparquet": "^1.33.1",
+    "slimdom": "^4.3.5",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/property-testing": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
+  }
+}

@@ -79,3 +79,42 @@ export const registerPublisherRequestGate = (
 
 export const getPublisherRequestGate = (): PublisherRequestGateImplementation =>
   activePublisherRequestGate;
+
+export const abortableSleep = async (
+  durationMs: number,
+  signal?: AbortSignal,
+): Promise<void> => {
+  if (durationMs <= 0) {
+    return;
+  }
+  if (signal?.aborted) {
+    await Promise.reject(
+      signal.reason instanceof Error
+        ? signal.reason
+        : new DOMException("Aborted", "AbortError"),
+    );
+  }
+  if (signal === undefined) {
+    await Bun.sleep(durationMs);
+    return;
+  }
+
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => {
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException("Aborted", "AbortError"),
+      );
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([Bun.sleep(durationMs), aborted]);
+  } finally {
+    if (onAbort !== undefined) {
+      signal.removeEventListener("abort", onAbort);
+    }
+  }
+};

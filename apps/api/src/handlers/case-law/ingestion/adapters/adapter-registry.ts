@@ -1,7 +1,27 @@
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+import "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import "@/api/lib/case-law/ingestion-user-agent";
 import type { Result } from "better-result";
 
+import { atAsylghAdapter } from "@stll/case-law-adapters/at-asylgh";
+import { atBksAdapter } from "@stll/case-law-adapters/at-bks";
+import { atBvwgAdapter } from "@stll/case-law-adapters/at-bvwg";
+import { atCourtsAdapter } from "@stll/case-law-adapters/at-courts";
+import { atLvwgAdapter } from "@stll/case-law-adapters/at-lvwg";
+import { atUbasAdapter } from "@stll/case-law-adapters/at-ubas";
+import { atUmseAdapter } from "@stll/case-law-adapters/at-umse";
+import { atUvsAdapter } from "@stll/case-law-adapters/at-uvs";
+import { atVergAdapter } from "@stll/case-law-adapters/at-verg";
+import { atVfghAdapter } from "@stll/case-law-adapters/at-vfgh";
+import { atVwghAdapter } from "@stll/case-law-adapters/at-vwgh";
+import { plCourtsAdapter } from "@stll/case-law-adapters/pl-courts";
+import { plKisAdapter } from "@stll/case-law-adapters/pl-kis";
+import { plNcourtAdapter } from "@stll/case-law-adapters/pl-ncourt";
+import { plNsaAdapter } from "@stll/case-law-adapters/pl-nsa";
+import { plSnAdapter } from "@stll/case-law-adapters/pl-sn";
+import { plTkAdapter } from "@stll/case-law-adapters/pl-tk";
+import { plUodoAdapter } from "@stll/case-law-adapters/pl-uodo";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -13,18 +33,7 @@ import type {
   SourceAdapter,
 } from "@stll/case-law-ingestion-core/ingestion-types";
 
-import { atAsylghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
-import { atBksAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
-import { atBvwgAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
-import { atCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import { atFindokAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
-import { atLvwgAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-lvwg";
-import { atUbasAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-ubas";
-import { atUmseAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-umse";
-import { atUvsAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-uvs";
-import { atVergAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
-import { atVfghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
-import { atVwghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
 import { brTjdftAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import { brTstAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { czIsirAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-isir";
@@ -36,14 +45,7 @@ import { czUohsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-uoh
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
-import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { plKioAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
-import { plKisAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { plNcourtAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
-import { plNsaAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { plSnAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
-import { plTkAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import { plUodoAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { plUokikAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";

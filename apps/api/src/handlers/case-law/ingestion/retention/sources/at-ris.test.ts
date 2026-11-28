@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { assembleAtRisDecision } from "@stll/case-law-adapters/at-courts";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import { assembleAtRisDecision } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import { atRisRetention } from "@/api/handlers/case-law/ingestion/retention/sources/at-ris";
 import { isRecord } from "@/api/lib/type-guards";
 import {

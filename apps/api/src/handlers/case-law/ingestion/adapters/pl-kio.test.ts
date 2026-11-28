@@ -8,6 +8,7 @@ import { Result } from "better-result";
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { buildPlDecision } from "@stll/case-law-adapters/pl-courts";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -16,7 +17,6 @@ import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-ty
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
-import { buildPlDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
   assemblePlKioDecision as uncheckedAssemblePlKioDecision,
   encodePlKioCursor,

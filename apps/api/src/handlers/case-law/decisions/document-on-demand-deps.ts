@@ -7,12 +7,13 @@
  * handle itself is resolved on first use rather than at import.
  */
 
+import { withImmediatePublisherSlot } from "@stll/case-law-adapters/publisher-policy";
+
 import {
   type OnDemandDocumentDeps,
   recordDocumentPacingOutcome,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { DEFERRED_DOCUMENT_READERS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
-import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { startDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";

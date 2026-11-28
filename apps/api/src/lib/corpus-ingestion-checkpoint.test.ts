@@ -10,6 +10,9 @@ import {
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { encodePlNsaCursor } from "@stll/case-law-adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@stll/case-law-adapters/pl-nsa-dataset";
+import { encodePlUodoCursor } from "@stll/case-law-adapters/pl-uodo";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   EMPTY_AST,
@@ -27,9 +30,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { encodePlNsaCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import { encodePlUodoCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { encodePlUokikCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";

@@ -1,16 +1,17 @@
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: [at-findok] migrated throttle wrapper to readPublisher; served response parsing is unchanged.
 import { panic } from "better-result";
 
-import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
-import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
-
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
 import {
   type PublisherReadInit,
   readPublisher,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+} from "@stll/case-law-adapters/publisher-read";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 
 /**

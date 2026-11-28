@@ -3,6 +3,34 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import {
+  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
+  encodePlKisCursor,
+  parsePlKisCursor,
+  parsePlKisProvision,
+  parsePlKisSlice,
+  PL_KIS_INCLUDED_CATEGORIES,
+  PL_KIS_LISTING_COLUMNS,
+  PL_KIS_UNDATED_SLICE,
+  PL_KIS_UNDIVIDED_DOCUMENT,
+  plKisAdapter,
+  plKisCategoryById,
+  plKisCategoryLabel,
+  plKisDay,
+  plKisDocumentIdOf,
+  plKisListingBody,
+  plKisListingIdentity,
+  plKisListingUrl,
+  plKisMonthBounds,
+  plKisNextSlice,
+  plKisPreviousSlice,
+  plKisQuarantineId,
+  plKisRawPartsOf,
+  plKisSlice,
+  readPlKisListing,
+} from "@stll/case-law-adapters/pl-kis";
+import type { PlKisBuildResult } from "@stll/case-law-adapters/pl-kis";
+import { PL_KIS_METADATA_URL_SCHEMA } from "@stll/case-law-adapters/pl-kis.metadata-urls";
+import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -28,40 +56,11 @@ import {
 } from "@stll/case-law-parsers/validate-ast";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
-import {
-  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
-  encodePlKisCursor,
-  parsePlKisCursor,
-  parsePlKisProvision,
-  parsePlKisSlice,
-  PL_KIS_INCLUDED_CATEGORIES,
-  PL_KIS_LISTING_COLUMNS,
-  PL_KIS_UNDATED_SLICE,
-  PL_KIS_UNDIVIDED_DOCUMENT,
-  plKisAdapter,
-  plKisCategoryById,
-  plKisCategoryLabel,
-  plKisDay,
-  plKisDocumentIdOf,
-  plKisListingBody,
-  plKisListingIdentity,
-  plKisListingUrl,
-  plKisMonthBounds,
-  plKisNextSlice,
-  plKisPreviousSlice,
-  plKisQuarantineId,
-  plKisRawPartsOf,
-  plKisSlice,
-  readPlKisListing,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
-
-import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
 
 const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
 

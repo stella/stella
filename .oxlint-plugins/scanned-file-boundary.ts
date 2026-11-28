@@ -138,7 +138,10 @@ const RESTRICTED_IMPORTS = new Map([
     {
       name: "publisherDocument",
       messageId: "publisherImport",
-      owners: ["apps/api/src/handlers/case-law/ingestion/adapters/"],
+      owners: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/",
+        "packages/case-law-adapters/src/",
+      ],
     },
   ],
   [

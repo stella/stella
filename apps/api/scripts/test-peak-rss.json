@@ -4280,36 +4280,12 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/case-law/ingestion/adapters/pl-common-court-text.test.ts": {
       "peakMb": 253,
       "baselineMb": 233,
       "source": {
         "runId": "44976310794",
         "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/adapters/pl-courts-document-role.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/adapters/pl-courts-normalize.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/handlers/case-law/ingestion/adapters/pl-courts-reasons.test.ts": {
@@ -4398,14 +4374,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/adapters/pl-ncourt-courts.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/handlers/case-law/ingestion/adapters/pl-ncourt.test.ts": {
@@ -4520,14 +4488,6 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/case-law/ingestion/adapters/publisher-page.property.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/case-law/ingestion/adapters/publisher-page.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
@@ -4568,22 +4528,6 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/case-law/ingestion/adapters/publisher-response-limit.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/adapters/publisher-target.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts": {
       "peakMb": 436,
       "baselineMb": 214,
@@ -4622,14 +4566,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/adapters/retry-backoff.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts": {
@@ -4814,14 +4750,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/adapters/utils.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/handlers/case-law/ingestion/adapters/validate-fixtures.test.ts": {

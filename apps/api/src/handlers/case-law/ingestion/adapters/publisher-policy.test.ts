@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, mock, test } from "bun:test";
 
-import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/case-law-consts";
-import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
-
 import {
   ADAPTER_PUBLISHER_GATES,
   createPublisherGateSlot,
@@ -13,12 +10,12 @@ import {
   publisherRequestsPerDay,
   readPublisherCooldown,
   withPublisherRequestRateLimit,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+} from "@stll/case-law-adapters/publisher-policy";
+import { fetchPublisher, fetchWithRetry } from "@stll/case-law-adapters/retry";
+import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/case-law-consts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { publisherGateKeys } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
-import {
-  fetchPublisher,
-  fetchWithRetry,
-} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

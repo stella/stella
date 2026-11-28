@@ -22,6 +22,7 @@ import {
 } from "bun:test";
 
 import { InvalidNumericTokenError } from "@stll/agent-input/numeric-token";
+import { PublisherPageError } from "@stll/case-law-adapters/publisher-page";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -72,8 +73,6 @@ import {
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
-
-import { PublisherPageError } from "./publisher-page";
 
 const testFetchState = createTestFetch();
 
