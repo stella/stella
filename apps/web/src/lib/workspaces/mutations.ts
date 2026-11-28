@@ -23,7 +23,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
-import { resourceMutation } from "@/lib/workspace-realtime";
+import {
+  resourceMutation,
+  useResourceMutation,
+} from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
@@ -294,26 +297,24 @@ type DeleteWorkspaceVars = {
 
 export const useDeleteWorkspace = () => {
   const analytics = useAnalytics();
-  const queryClient = useQueryClient();
 
-  return useMutation({
+  return useResourceMutation({
     retry: shouldRetryAPIRequest,
     // Organization scope: refresh the matter lists, not the deleted matter's
     // own readers, which would refetch into a 404.
-    mutationFn: resourceMutation({
+    resource: {
       mutation: "deleteWorkspace",
-      queryClient,
       scope: { type: "organization" },
-      mutationFn: async ({ workspaceId }: DeleteWorkspaceVars) => {
-        const response = await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .delete({});
+    },
+    mutationFn: async ({ workspaceId }: DeleteWorkspaceVars) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .delete({});
 
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-      },
-    }),
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
     onSuccess: (_data, { workspaceId }: DeleteWorkspaceVars) => {
       useTableStore.getState().dropMatter(workspaceId);
     },

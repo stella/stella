@@ -21,6 +21,7 @@ import {
   decisionReporterGrammarForJurisdiction,
 } from "@stll/api-contract/decision-reporter-grammar";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import type { CitationOpinionScope } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   type CitationScopeIndex,
   type CitationScopesRejectedError,
@@ -74,7 +75,6 @@ import {
   primaryDecisionIdentifier,
   primaryReferenceIsDocket,
 } from "@/api/lib/legal-search/decision-primary-reference";
-import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 
 /**
  * Extracted citation reference found in decision text.

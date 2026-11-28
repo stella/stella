@@ -199,6 +199,8 @@ const KNOWN_NOTE_KINDS = [
   "lineBreakSpacingKept",
   "invisibleEffectsRemoved",
   "templateBlocksKept",
+  "pageMarksDropped",
+  "pageMarksKept",
   "trackedChangesKept",
   "trackedChangesResolved",
   "fieldsAsText",
@@ -351,6 +353,26 @@ const noteItemOf = (
         reason: item.region,
         count: item.blockIds.length,
       };
+    // The place is named by the first words of the paragraph that held the
+    // marks, or of the next one when that paragraph has no words.
+    case "pageMarksDropped":
+      return {
+        kind: "page_marks_dropped",
+        blockId: item.blockId,
+        count: item.marks,
+        ...(item.paragraphOmitted === true
+          ? { reason: "paragraph_omitted" }
+          : {}),
+        ...textOf(item.nearBlockId ?? item.blockId, 0, LABEL_EXCERPT_MAX),
+      };
+    case "pageMarksKept":
+      return {
+        kind: "page_marks_kept",
+        blockId: item.blockId,
+        count: item.marks,
+        reason: "signature",
+        ...textOf(item.blockId, 0, LABEL_EXCERPT_MAX),
+      };
     case "internalLinksAsText":
       return { kind: "internal_links_as_text", count: item.links };
     case "trackedChangesResolved":
@@ -430,6 +452,11 @@ const templateHealthOf = (finding: {
   }
   if (finding.kind === "lastSectionNotBody") {
     return { kind: "template_last_section_not_body" };
+  }
+  if (finding.kind === "headingStartsPage") {
+    return "styleId" in finding && typeof finding.styleId === "string"
+      ? { kind: "template_heading_starts_page", styleId: finding.styleId }
+      : { kind: "template_heading_starts_page" };
   }
   return { kind: "other", reason: finding.kind };
 };

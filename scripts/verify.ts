@@ -18,6 +18,13 @@ import {
 } from "./verify-admission";
 import { VerifyError } from "./verify-error";
 import {
+  collectFastPreflightDiff,
+  createFastPreflightRunner,
+  formatFastPreflightPlan,
+  planFastPreflightSteps,
+  runFastPreflightSteps,
+} from "./verify-fast";
+import {
   readVerifyWorkflow,
   type VerifyWorkflowMode,
   type VerifyWorkflowStep,
@@ -27,6 +34,7 @@ export type VerifyOptions = {
   base: string;
   scope: "affected" | "all";
   mode: "check" | "fix-check" | "fix" | "list";
+  fast?: true;
   emitPatch?: true;
   concurrency?: number;
 };
@@ -47,6 +55,7 @@ export const defaultVerifyConcurrency = (): number => {
   return Math.min(4, Math.max(1, Math.floor(availableParallelism() / 2)));
 };
 export const parseVerifyArgs = (args: readonly string[]): VerifyOptions => {
+  let fast: true | undefined;
   let emitPatch: true | undefined;
   let concurrency: number | undefined;
   let base = "origin/main";
@@ -69,6 +78,9 @@ export const parseVerifyArgs = (args: readonly string[]): VerifyOptions => {
       case "--fix-only":
         mode = "fix";
         break;
+      case "--fast":
+        fast = true;
+        break;
       case "--list":
         mode = "list";
         break;
@@ -88,10 +100,14 @@ export const parseVerifyArgs = (args: readonly string[]): VerifyOptions => {
         throw new VerifyError(`Unknown verify argument: ${argument}`);
     }
   }
+  if (fast && (mode === "fix" || mode === "fix-check")) {
+    throw new VerifyError("--fast cannot be combined with --fix or --fix-only");
+  }
   return {
     base,
     scope,
     mode,
+    ...(fast === undefined ? {} : { fast }),
     ...(emitPatch === undefined ? {} : { emitPatch }),
     ...(concurrency === undefined ? {} : { concurrency }),
   };
@@ -644,7 +660,25 @@ if (import.meta.main) {
   try {
     const args = process.argv.slice(2);
     const options = parseVerifyArgs(args);
-    if (options.mode === "list") {
+    if (options.fast) {
+      const diff = collectFastPreflightDiff(repo, options.base);
+      const steps = planFastPreflightSteps(
+        diff.changedFiles,
+        diff.base,
+        diff.context,
+      );
+      if (options.mode === "list") {
+        for (const line of formatFastPreflightPlan(steps)) {
+          console.log(line);
+        }
+      } else {
+        process.exitCode = await runFastPreflightSteps(
+          steps,
+          createFastPreflightRunner(repo),
+          options.concurrency ?? defaultVerifyConcurrency(),
+        );
+      }
+    } else if (options.mode === "list") {
       for (const step of readVerifyWorkflow({ root: repo, mode: "verify" })) {
         console.log(`${step.phase}: ${step.job} / ${step.name}`);
       }

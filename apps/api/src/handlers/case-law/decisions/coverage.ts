@@ -7,6 +7,15 @@ import {
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  ADAPTER_MANIFESTS,
+  type AdapterEdition,
+  IMPORT_SOURCE_MANIFESTS,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  CASE_LAW_SOURCE_ROWS_BOUND,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import { classifyFailure } from "@stll/errors";
 
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
@@ -77,15 +86,6 @@ import {
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import {
-  ADAPTER_MANIFESTS,
-  type AdapterEdition,
-  IMPORT_SOURCE_MANIFESTS,
-} from "@/api/lib/legal-search/adapter-manifest";
-import {
-  ADAPTER_KEYS,
-  CASE_LAW_SOURCE_ROWS_BOUND,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import {
   createUnrecognizedSourceReporter,

@@ -7,8 +7,8 @@ import {
   encodeSourceRawEnvelope,
   StoredRawReadError,
   type StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
-import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
+} from "./ingestion-types";
+import { readStoredDocumentObject } from "./stored-document-replay";
 
 const bytes = new TextEncoder().encode("stored document");
 const input = {

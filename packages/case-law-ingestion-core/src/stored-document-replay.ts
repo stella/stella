@@ -6,7 +6,7 @@ import {
   decodeSourceRawEnvelopeObjects,
   StoredRawReadError,
   type StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "./ingestion-types";
 
 /** Read only the object the envelope names; absence never triggers a publisher read. */
 export const readStoredDocumentObject = async (

@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { declareFingerprintFields } from "@stll/errors";
 
 import {
@@ -26,7 +27,6 @@ import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import type { IngestionFailureIdentityKind } from "@/api/lib/case-law/ingestion-failure-identity";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 export class IngestionFailureEvidenceError extends TaggedError(
   "IngestionFailureEvidenceError",

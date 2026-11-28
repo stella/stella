@@ -1,14 +1,15 @@
 import { panic } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { republishedRulingCourtPredicate } from "@/api/lib/case-law/ruling-identity-match";
 import { lockCaseLawRepublication } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { isRecord } from "@/api/lib/type-guards";

@@ -3,21 +3,15 @@ import { expect, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { type PopupTab, runPopupAction } from "./popup-actions";
-import { popupView } from "./popup-view";
 
-const renderedTab = {
-  id: 1,
-  url: "https://app.stll.app",
-} satisfies PopupTab;
-const currentTab = { ...renderedTab, id: 2 };
+const currentTab = { id: 2, url: "https://example.com/" } satisfies PopupTab;
 
 const createDependencies = () => {
   const calls: string[] = [];
-  const pairedTabs: (PopupTab | null)[] = [];
+  const connectedTabs: (number | null)[] = [];
   const adoptedTabs: (PopupTab | null)[] = [];
   const access = Promise.withResolvers<boolean>();
   const deps = {
-    renderedTab,
     requestAccess: async () => {
       calls.push("requestAccess");
       return access.promise;
@@ -26,16 +20,13 @@ const createDependencies = () => {
       calls.push("readActiveTab");
       return currentTab;
     },
-    pair: async (tab: PopupTab | null) => {
-      calls.push("pair");
-      pairedTabs.push(tab);
+    connectWebsite: async (tabId: number | null) => {
+      calls.push("connectWebsite");
+      connectedTabs.push(tabId);
     },
     adopt: async (tab: PopupTab | null) => {
       calls.push("adopt");
       adoptedTabs.push(tab);
-    },
-    openStella: async () => {
-      calls.push("openStella");
     },
     disconnect: async () => {
       calls.push("disconnect");
@@ -47,80 +38,50 @@ const createDependencies = () => {
       calls.push("render");
     },
   } satisfies Parameters<typeof runPopupAction>[1];
-  return { access, adoptedTabs, calls, deps, pairedTabs };
+  return { access, adoptedTabs, calls, connectedTabs, deps };
 };
 
-for (const action of ["grant", "grant-and-connect"] as const) {
+for (const tabId of [1, null]) {
   for (const granted of [true, false]) {
-    test(`${action} requests access within the click before any other dependency, then handles ${granted ? "approval" : "denial"}`, async () => {
-      const { access, calls, deps, pairedTabs } = createDependencies();
-      const view = popupView({
-        activeTab:
-          action === "grant-and-connect"
-            ? {
-                kind: "stella",
-                origin: new URL(renderedTab.url).origin,
-                tabId: renderedTab.id,
-              }
-            : { kind: "controllable" },
-        controller: null,
-        granted: false,
-      });
-      expect(view.primary?.action).toBe(action);
-
-      const completion = runPopupAction(action, deps);
+    test(`Connect ${tabId === null ? "elsewhere" : "on a stella tab"} asks for access within the click before anything else, then handles ${granted ? "approval" : "denial"}`, async () => {
+      const { access, calls, connectedTabs, deps } = createDependencies();
+      const completion = runPopupAction(
+        { action: "connect-website", askAccess: true, tabId },
+        deps,
+      );
       // No await: permission prompts must start before the click yields.
       expect(calls).toEqual(["requestAccess"]);
       await Promise.resolve();
       expect(calls).toEqual(["requestAccess"]);
-      expect(pairedTabs).toEqual([]);
 
       access.resolve(granted);
       await completion;
-      if (!granted) {
-        expect(calls).toEqual(["requestAccess", "render"]);
-        expect(pairedTabs).toEqual([]);
-      } else if (action === "grant-and-connect") {
-        expect(calls).toEqual(["requestAccess", "pair"]);
-        expect(pairedTabs).toHaveLength(1);
-        expect(pairedTabs.at(0)).toBe(renderedTab);
-        expect(pairedTabs.at(0)).not.toBe(currentTab);
+      if (granted) {
+        expect(calls).toEqual(["requestAccess", "connectWebsite"]);
+        expect(connectedTabs).toEqual([tabId]);
       } else {
         expect(calls).toEqual(["requestAccess", "render"]);
-        expect(pairedTabs).toEqual([]);
+        expect(connectedTabs).toEqual([]);
       }
     });
   }
 }
 
-for (const action of ["connect", "adopt"] as const) {
-  test(`${action} uses the current active tab`, async () => {
-    const { adoptedTabs, calls, deps, pairedTabs } = createDependencies();
-    await runPopupAction(action, deps);
-    expect(calls).toEqual([
-      "readActiveTab",
-      action === "connect" ? "pair" : "adopt",
-    ]);
-    expect(pairedTabs).toEqual(action === "connect" ? [currentTab] : []);
-    expect(adoptedTabs).toEqual(action === "adopt" ? [currentTab] : []);
-  });
-}
+test("Connect with access already granted connects without asking", async () => {
+  const { calls, connectedTabs, deps } = createDependencies();
+  await runPopupAction(
+    { action: "connect-website", askAccess: false, tabId: null },
+    deps,
+  );
+  expect(calls).toEqual(["connectWebsite"]);
+  expect(connectedTabs).toEqual([null]);
+});
 
-test("open-stella brings stella forward, then shows what that tab offers", async () => {
-  const { adoptedTabs, calls, deps, pairedTabs } = createDependencies();
-  const opening = Promise.withResolvers<undefined>();
-  deps.openStella = async () => {
-    calls.push("openStella");
-    return opening.promise;
-  };
-  const completion = runPopupAction("open-stella", deps);
-  expect(calls).toEqual(["openStella"]);
-  opening.resolve(undefined);
-  await completion;
-  // Connecting stays a separate step on the stella tab.
-  expect(calls).toEqual(["openStella", "render"]);
-  expect(pairedTabs).toEqual([]);
-  expect(adoptedTabs).toEqual([]);
+test("adopt uses the current active tab", async () => {
+  const { adoptedTabs, calls, deps } = createDependencies();
+  await runPopupAction({ action: "adopt" }, deps);
+  expect(calls).toEqual(["readActiveTab", "adopt"]);
+  expect(adoptedTabs).toEqual([currentTab]);
 });
 
 for (const action of ["disconnect", "revoke"] as const) {
@@ -131,7 +92,7 @@ for (const action of ["disconnect", "revoke"] as const) {
       calls.push(action);
       return operation.promise;
     };
-    const completion = runPopupAction(action, deps);
+    const completion = runPopupAction({ action }, deps);
     expect(calls).toEqual([action]);
     operation.resolve(undefined);
     await completion;
@@ -139,12 +100,15 @@ for (const action of ["disconnect", "revoke"] as const) {
   });
 }
 
-test("a rejected permission request propagates without pairing or rendering success", async () => {
-  const { access, calls, deps, pairedTabs } = createDependencies();
-  const completion = runPopupAction("grant-and-connect", deps);
+test("a rejected permission request propagates without connecting", async () => {
+  const { access, calls, connectedTabs, deps } = createDependencies();
+  const completion = runPopupAction(
+    { action: "connect-website", askAccess: true, tabId: 1 },
+    deps,
+  );
   const failure = { message: "Permission request failed" };
   access.reject(failure);
   expect(await rejectionOf(completion)).toBe(failure);
   expect(calls).toEqual(["requestAccess"]);
-  expect(pairedTabs).toEqual([]);
+  expect(connectedTabs).toEqual([]);
 });

@@ -2,17 +2,17 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
-
-import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   approveMetadataUrls,
   META_URL_DIAGNOSTICS,
-} from "@/api/lib/legal-search/metadata-urls";
+} from "@stll/case-law-ingestion-core/metadata-urls";
+import { assertProperty } from "@stll/property-testing";
+
+import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { czNssFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 import { extractNssPublisherMetadata } from "./cz-nss-publisher-metadata";

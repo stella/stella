@@ -5,7 +5,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { revokeOrganizationScimToken } from "@/api/lib/auth/scim-management";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapScimManagementError } from "./sso-error-map";
 
@@ -19,6 +18,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   params: paramsSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Serialized inside @better-auth/scim managed-connection native transactions.",
+  },
 } satisfies HandlerConfig;
 
 const revokeOrganizationScimTokenHandler = createSafeRootHandler(
@@ -50,11 +54,5 @@ const revokeOrganizationScimTokenHandler = createSafeRootHandler(
     return Result.ok(revoked.value);
   },
 );
-
-declareAggregateMutation(revokeOrganizationScimTokenHandler, {
-  type: "independent",
-  reason:
-    "Serialized inside @better-auth/scim managed-connection native transactions.",
-});
 
 export default revokeOrganizationScimTokenHandler;

@@ -7,15 +7,15 @@ import {
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
+  ADAPTER_MANIFESTS,
+  decisionDocketGrammarForCountry,
+} from "./adapter-manifest";
+import {
   CZ_ECLI_COURTS,
   EU_ECLI_COURTS,
   SK_ECLI_COURTS,
-} from "@/api/lib/case-law/ecli-court-codes";
-import {
-  ADAPTER_MANIFESTS,
-  decisionDocketGrammarForCountry,
-} from "@/api/lib/legal-search/adapter-manifest";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+} from "./ecli-court-codes";
+import { ADAPTER_KEYS } from "./ingestion-constants";
 
 describe("case-law adapter manifests", () => {
   test("cover every adapter key exactly once", () => {

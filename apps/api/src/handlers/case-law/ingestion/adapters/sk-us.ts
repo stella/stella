@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: [sk-us] locating a stored row in its month's listing changes no parsed decision.
@@ -19,6 +21,53 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-field";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  RawIngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationListingItem,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+  SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
+import { readStoredDocumentObject } from "@stll/case-law-ingestion-core/stored-document-replay";
 import { parseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 /**
@@ -64,11 +113,6 @@ import { sha256Hex } from "@stll/sha256/bun";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { Temporal } from "@stll/time";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -80,8 +124,6 @@ import {
   INGESTION_USER_AGENT,
   normalizeMetadataValues,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -106,48 +148,6 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  RawIngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationListingItem,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseValue,
-  SyncPage,
-  UnreadListedItem,
-  UnreadOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
-import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -383,11 +383,6 @@ const PDF_SIGNATURE = "%PDF-";
 const PDF_SIGNATURE_BYTES = new TextEncoder().encode(PDF_SIGNATURE);
 
 /** A per-decision read (the PDF, or a response the build needs) that failed. */
-const detailReadFailed = failureSink({
-  event: "case_law.ingestion.detail_fetch_failed",
-  expected: [],
-});
-
 const isPdf = (bytes: Uint8Array): boolean =>
   bytes.length >= PDF_SIGNATURE_BYTES.length &&
   PDF_SIGNATURE_BYTES.every((byte, index) => bytes[index] === byte);
@@ -467,7 +462,7 @@ const fetchPdfBytes = async (
   // unavailable, so an unreachable portal is told apart from documents it
   // does not serve.
   const unavailable = (cause: ReadUnavailableCause): SkUsPdfRead => {
-    observeFailure(
+    getIngestionDiagnosticsSink().observeFailure(
       classifyFailure(
         readFailureError({
           url: DOC_DOWNLOAD_URL,
@@ -477,7 +472,7 @@ const fetchPdfBytes = async (
         "upstream_unavailable",
       ),
       {
-        sink: detailReadFailed,
+        event: "case_law.ingestion.detail_fetch_failed",
         ctx: { adapterKey: ADAPTER_KEYS.SK_US, documentId },
       },
     );
@@ -1901,11 +1896,14 @@ export const buildSkUsDecision = async (
     // Complete as its search row, so it is `built`: `detail-unavailable`
     // would have the reconciliation refuse a row no later read can complete.
     case "quarantined":
-      logger.warn("case_law.ingestion.record_quarantined", {
-        adapterKey: ADAPTER_KEYS.SK_US,
-        sourceDocumentId: identity.sourceDocumentId,
-        reason: SK_US_QUARANTINE_REASON,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.record_quarantined",
+        {
+          adapterKey: ADAPTER_KEYS.SK_US,
+          sourceDocumentId: identity.sourceDocumentId,
+          reason: SK_US_QUARANTINE_REASON,
+        },
+      );
       return {
         type: "built",
         decision: quarantinedSkUsDecision(doc, identity.sourceDocumentId),
@@ -3402,12 +3400,15 @@ export const skUsAdapter = defineSourceAdapter({
           // No sub-window states a count: empty and wholly refused years are
           // indistinguishable. Reconciliation audits historical months; the
           // current frontier rechecks one window until it can be read again.
-          logger.warn("case_law.ingestion.unserved_crawl_window", {
-            adapterKey: ADAPTER_KEYS.SK_US,
-            year,
-            offset,
-            reconciliation: "monthly_listing_reports_unserved_records",
-          });
+          getIngestionDiagnosticsSink().warn(
+            "case_law.ingestion.unserved_crawl_window",
+            {
+              adapterKey: ADAPTER_KEYS.SK_US,
+              year,
+              offset,
+              reconciliation: "monthly_listing_reports_unserved_records",
+            },
+          );
           return {
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
@@ -3448,13 +3449,16 @@ export const skUsAdapter = defineSourceAdapter({
           switch (item.type) {
             case "unserved":
               failed++;
-              logger.warn("case_law.ingestion.unserved_listing_record", {
-                adapterKey: ADAPTER_KEYS.SK_US,
-                cursor: encodeCursor({ year, offset }),
-                resultIndex: item.offset,
-                outcome: "deterministic_refusal",
-                reconciliation: "reports_unserved",
-              });
+              getIngestionDiagnosticsSink().warn(
+                "case_law.ingestion.unserved_listing_record",
+                {
+                  adapterKey: ADAPTER_KEYS.SK_US,
+                  cursor: encodeCursor({ year, offset }),
+                  resultIndex: item.offset,
+                  outcome: "deterministic_refusal",
+                  reconciliation: "reports_unserved",
+                },
+              );
               continue;
             case "served":
               break;
@@ -3525,13 +3529,16 @@ export const skUsAdapter = defineSourceAdapter({
             // is what recovers it; reported so a build failing on every row
             // is not read as a page with nothing on it.
             failed++;
-            logger.warn("case_law.ingestion.item_build_failed", {
-              adapterKey: ADAPTER_KEYS.SK_US,
-              ...(typeof doc.documentId === "string"
-                ? { documentId: doc.documentId }
-                : {}),
-              "error.type": errorTag(error),
-            });
+            getIngestionDiagnosticsSink().warn(
+              "case_law.ingestion.item_build_failed",
+              {
+                adapterKey: ADAPTER_KEYS.SK_US,
+                ...(typeof doc.documentId === "string"
+                  ? { documentId: doc.documentId }
+                  : {}),
+                "error.type": errorTag(error),
+              },
+            );
             continue;
           }
         }

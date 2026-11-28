@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DAY_IN_MS } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -16,7 +17,6 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import {
   countReconciliationItems,
   countTerminalReconciliationItemsBySlice,

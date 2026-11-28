@@ -10,6 +10,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { FIXTURE_SOURCE_KEYS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import { compareCodeUnit } from "@stll/collation";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
@@ -39,7 +40,6 @@ import { inBackfillTransaction } from "@/api/lib/case-law/provision-state-backfi
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
-import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import {

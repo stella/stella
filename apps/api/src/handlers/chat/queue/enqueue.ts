@@ -37,7 +37,6 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
@@ -62,6 +61,10 @@ const config = {
     "checks as a send's, and deleted when the message is removed.",
   params: chatQueueThreadParams,
   body: v.object({ send: queuedChatSendSchema }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 const chatQueueFull = () =>
@@ -242,9 +245,5 @@ const enqueueChatMessage = createSafeRootHandler(
 
 // Every queue change locks the member's thread first, the row its turns
 // lock, and writes only that thread's queue.
-declareAggregateMutation(enqueueChatMessage, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default enqueueChatMessage;

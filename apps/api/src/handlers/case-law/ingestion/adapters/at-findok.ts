@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: sections-from-ast moved verbatim to @stll/legal-ast without behavior changes.
@@ -10,6 +12,37 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result, TaggedError } from "better-result";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  sourceTotalRead,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceAdapter,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import {
   listFindokDocumentFields,
   parseFindokDecisionXml,
@@ -23,11 +56,6 @@ import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import {
   FINDOK_REQUEST_INTERVAL_MS,
   readAtFindok,
@@ -51,40 +79,7 @@ import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceAdapter,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
-
-const itemBuildFailed = failureSink({
-  event: "case_law.ingestion.item_build_failed",
-  expected: [],
-});
 
 const FINDOK_ORIGIN = "https://findok.bmf.gv.at";
 const IWG_ROOT = `${FINDOK_ORIGIN}/findok/iwg`;
@@ -989,7 +984,7 @@ export const assembleAtFindokDecision = (
   }
   const parsed = parseResult.value;
   if (parsed.textFidelity !== undefined) {
-    logger.error(AST_CONTENT_LOST, {
+    getIngestionDiagnosticsSink().error(AST_CONTENT_LOST, {
       parser: ADAPTER_KEYS.AT_FINDOK,
       caseNumber: item.gz,
       language: LANGUAGE,
@@ -1493,10 +1488,10 @@ const buildFindokPageItems = async ({
           ) {
             throw attempt.error;
           }
-          observeFailure(
+          getIngestionDiagnosticsSink().observeFailure(
             classifyFailure(attempt.error, "upstream_unavailable"),
             {
-              sink: itemBuildFailed,
+              event: "case_law.ingestion.item_build_failed",
               ctx: {
                 adapterKey: ADAPTER_KEYS.AT_FINDOK,
                 documentId: item.dokumentId,

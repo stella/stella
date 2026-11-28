@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result, TaggedError } from "better-result";
@@ -71,6 +73,50 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  BR_TST_PRECEDENTS_SLICE,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  ListingIdentity,
+  PublisherRequest,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import {
   parseBrTstDespacho,
   parseBrTstHtml,
@@ -93,8 +139,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { MAX_SLICE_PAGES } from "@/api/handlers/case-law/ingestion/slice-listing";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   absentDecisionTextFields,
   absentTextField,
@@ -104,48 +148,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  BR_TST_PRECEDENTS_SLICE,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  ListingIdentity,
-  PublisherRequest,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const ADAPTER_KEY = ADAPTER_KEYS.BR_TST;
@@ -697,11 +699,14 @@ const reportPlaceholderDrift = (
     );
   });
   if (drifted.length > 0) {
-    logger.warn("case_law.ingestion.br_tst_placeholder_carries_value", {
-      adapterKey: ADAPTER_KEY,
-      documentId: sourceDocumentId,
-      fields: drifted.join(","),
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.br_tst_placeholder_carries_value",
+      {
+        adapterKey: ADAPTER_KEY,
+        documentId: sourceDocumentId,
+        fields: drifted.join(","),
+      },
+    );
   }
 };
 
@@ -1803,12 +1808,15 @@ const afterWindow = (
     // A record of a type no part names: the walk cannot list it, and holding
     // the cursor would stop every later day. The day's reconciliation slice
     // fails its count, which is where the shortfall stays visible.
-    logger.error("case_law.ingestion.br_tst_split_day_short", {
-      adapterKey: ADAPTER_KEY,
-      day: window.day,
-      dayTotal: cursor.split.dayTotal,
-      partsTotal,
-    });
+    getIngestionDiagnosticsSink().error(
+      "case_law.ingestion.br_tst_split_day_short",
+      {
+        adapterKey: ADAPTER_KEY,
+        day: window.day,
+        dayTotal: cursor.split.dayTotal,
+        partsTotal,
+      },
+    );
   }
   return afterDay(window.day, cursor.regime, now);
 };
@@ -1834,11 +1842,14 @@ const collect = async (
     }
     const built = captured.value;
     if (built.type === "unbuildable") {
-      logger.warn("case_law.ingestion.br_tst_record_unbuildable", {
-        adapterKey: ADAPTER_KEY,
-        documentId: built.decision.sourceDocumentId,
-        reason: built.reason,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.br_tst_record_unbuildable",
+        {
+          adapterKey: ADAPTER_KEY,
+          documentId: built.decision.sourceDocumentId,
+          reason: built.reason,
+        },
+      );
       failures += 1;
     }
     decisions.push(built.decision);
@@ -1935,13 +1946,16 @@ export const brTstFetchPage = async (
     if (moved) {
       // On the frontier the court is still indexing the day; the walk keeps
       // its place, and the day's reconciliation slice verifies it.
-      logger.warn("case_law.ingestion.br_tst_frontier_window_moved", {
-        adapterKey: ADAPTER_KEY,
-        window: JSON.stringify(walk.window),
-        offset: walk.rowsRead,
-        reportedBefore: walk.reported,
-        reportedNow: reported,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.br_tst_frontier_window_moved",
+        {
+          adapterKey: ADAPTER_KEY,
+          window: JSON.stringify(walk.window),
+          offset: walk.rowsRead,
+          reportedBefore: walk.reported,
+          reportedNow: reported,
+        },
+      );
     }
     if (reported > BR_TST_OFFSET_CEILING) {
       if (walk.window.type === "day" && walk.window.part === "all") {

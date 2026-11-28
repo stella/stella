@@ -11,13 +11,14 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
-import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   defineSourceAdapter,
   type SourceAdapter,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
+import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 
 import {
   type RecordSourceTotalOptions,

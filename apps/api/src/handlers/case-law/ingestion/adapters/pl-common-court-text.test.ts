@@ -11,6 +11,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
@@ -27,7 +28,6 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@/api/lib/case-law/decision-text";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);

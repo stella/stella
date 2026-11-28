@@ -17,7 +17,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { answerRunRequest } from "@/api/lib/desktop-runner/request-answers";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -45,6 +44,11 @@ const config = {
     requestId: v.pipe(v.string(), v.uuid()),
   }),
   body: chatLocalRunRequestAnswerRequestSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Queues one answer to the caller's own run in the desktop runner store, which takes the caller's runner capacity lock inside its own transaction, as the runner's other writes do; a dismissal stops the turn through the turn stop, which locks the thread itself.",
+  },
 } satisfies HandlerConfig;
 
 /** One answer type for every branch, so the route infers the whole union. */
@@ -113,11 +117,5 @@ const answerChatTurnRequest = createSafeRootHandler(
       : answered(outcome);
   },
 );
-
-declareAggregateMutation(answerChatTurnRequest, {
-  type: "independent",
-  reason:
-    "Queues one answer to the caller's own run in the desktop runner store, which takes the caller's runner capacity lock inside its own transaction, as the runner's other writes do; a dismissal stops the turn through the turn stop, which locks the thread itself.",
-});
 
 export default answerChatTurnRequest;

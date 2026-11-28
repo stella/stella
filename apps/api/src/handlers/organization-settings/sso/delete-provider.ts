@@ -5,7 +5,6 @@ import { deleteOrgSsoProvider } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapSsoManagementError } from "./sso-error-map";
 
@@ -19,6 +18,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   params: paramsSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Serialized inside rootDb via withAggregateTransaction and withAggregateLock on organization.",
+  },
 } satisfies HandlerConfig;
 
 const deleteOrganizationSsoProviderHandler = createSafeRootHandler(
@@ -49,11 +53,5 @@ const deleteOrganizationSsoProviderHandler = createSafeRootHandler(
     return Result.ok({ deleted: true as const, id: deleted.value.id });
   },
 );
-
-declareAggregateMutation(deleteOrganizationSsoProviderHandler, {
-  type: "independent",
-  reason:
-    "Serialized inside rootDb via withAggregateTransaction and withAggregateLock on organization.",
-});
 
 export default deleteOrganizationSsoProviderHandler;

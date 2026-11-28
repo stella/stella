@@ -1368,15 +1368,18 @@ describe("AI provider canary wrapped generate errors", () => {
   });
 
   test("keeps a wrapped Anthropic overload retryable with its class named", () => {
-    const overloaded = new HandlerError({
-      status: 502,
-      code: "529",
-      message: "529 Overloaded",
-      cause: {
-        type: "error",
-        error: { type: "overloaded_error", message: "Overloaded" },
-      },
-    });
+    const overloaded = Object.assign(
+      new HandlerError({
+        status: 502,
+        code: "upstream_unavailable",
+        message: "529 Overloaded",
+        cause: {
+          type: "error",
+          error: { type: "overloaded_error", message: "Overloaded" },
+        },
+      }),
+      { code: "529" },
+    );
 
     expect(errorSummary(overloaded, signal)).toBe(
       "provider HTTP 529 (overloaded_error)",

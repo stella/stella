@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { useDebounce } from "use-debounce";
 
@@ -10,6 +10,7 @@ import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker
 import { readChatDraftText } from "@/lib/anonymize/use-chat-anonymize.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 
 /**
  * Watch a TipTap editor's plain-text content. Returns the
@@ -78,8 +79,9 @@ export const useChatAnonymizePreview = ({
 }): readonly ChatAnonPair[] | null => {
   const [debouncedText] = useDebounce(text, ANON_PREVIEW_DEBOUNCE_MS);
   const shouldRun = enabled && debouncedText.trim().length > 0;
-  const result = useQuery({
+  const result = useResourceQuery({
     queryKey: ["chat-anon-preview", workspaceId, debouncedText],
+    resourceReads: { type: "independent" },
     queryFn: async () =>
       await anonymizeChatTextInWorker({ text: debouncedText, workspaceId }),
     enabled: shouldRun,

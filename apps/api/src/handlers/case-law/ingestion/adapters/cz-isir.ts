@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 /**
@@ -69,6 +71,43 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  defineSourceAdapter,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import {
   type CzIsirParagraph,
   type CzIsirParseFailure,
@@ -90,7 +129,6 @@ import {
 import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { Temporal } from "@stll/time";
 
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   CZ_ISIR_ACTION_SKIP,
   CZ_ISIR_DECISION_SCOPE,
@@ -118,48 +156,12 @@ import {
   adapterCatch,
   INGESTION_USER_AGENT,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
-import {
-  defineSourceAdapter,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  PUBLISHER_REQUEST,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-  UnreadListedItem,
-  UnreadOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { logger } from "@/api/lib/observability/logger";
 
 const KEY = ADAPTER_KEYS.CZ_ISIR;
 const ORIGIN = "https://isir.justice.cz:8443";
@@ -839,10 +841,13 @@ const crawlPage = async ({
         // A listed decision the reader cannot address: counted, never
         // taken for an update without a document.
         failed += 1;
-        logger.warn("case_law.ingestion.cz_isir_document_reference_malformed", {
-          adapterKey: KEY,
-          actionId: action.id,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.cz_isir_document_reference_malformed",
+          {
+            adapterKey: KEY,
+            actionId: action.id,
+          },
+        );
       }
       continue;
     }
@@ -875,12 +880,15 @@ const crawlPage = async ({
       failed += 1;
       decisions.push(czIsirListingOnlyDecision(action, selected.documentId));
     }
-    logger.info("case_law.ingestion.cz_isir_decision_unbuilt", {
-      adapterKey: KEY,
-      sourceDocumentId: selected.documentId,
-      reason: read.value.reason,
-      detail: read.value.detail ?? "",
-    });
+    getIngestionDiagnosticsSink().info(
+      "case_law.ingestion.cz_isir_decision_unbuilt",
+      {
+        adapterKey: KEY,
+        sourceDocumentId: selected.documentId,
+        reason: read.value.reason,
+        detail: read.value.detail ?? "",
+      },
+    );
   }
   const lastId = page.value.lastId;
   return Result.ok({

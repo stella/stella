@@ -1,13 +1,13 @@
 import { Result } from "better-result";
 
+// parser-output-unchanged: the existing canonical corpus payload moves unchanged into a pure owner.
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
 
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
-// parser-output-unchanged: the existing canonical corpus payload moves unchanged into a pure owner.
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 export const decisionSections = (
   result: Pick<IngestionResult, "sections" | "fulltext">,

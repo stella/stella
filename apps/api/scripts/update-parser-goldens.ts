@@ -1,7 +1,8 @@
+import { PARSER_VERSIONS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { writeParserFingerprint } from "@/api/handlers/case-law/ingestion/adapters/replay-parser-fingerprints";
 import { PARSER_PARITY_MANIFEST } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
-import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   buildCaseLawFixture,

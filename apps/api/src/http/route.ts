@@ -5,6 +5,7 @@ import type { HttpStringInput } from "@stll/api-contract/http-input";
 
 import type { RouteCachePolicy } from "@/api/http/cache";
 import type { RequestContext } from "@/api/http/context";
+import type { AggregateMutationDisposition } from "@/api/http/handler-config-types";
 import type { BodyMode } from "@/api/http/input";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import {
@@ -100,7 +101,9 @@ export type RouteRequest = {
  * remainder is what lets a config that reads no input (a token or session
  * route) still be a route config; each factory keeps its own config exact.
  */
-type RouteDefinitionConfig = RouteConfig & Readonly<Record<string, unknown>>;
+type RouteDefinitionConfig = RouteConfig &
+  AggregateMutationDisposition &
+  Readonly<Record<string, unknown>>;
 
 export type RouteDefinition = {
   readonly config: RouteDefinitionConfig;

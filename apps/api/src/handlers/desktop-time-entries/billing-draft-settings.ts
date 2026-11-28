@@ -24,7 +24,6 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import {
   isTimestampCasToken,
@@ -270,103 +269,101 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
   { readView = readSettingsView }: SettingsUpdateDependencies = {},
 ) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        body: desktopBillingDraftSettingsRequestSchema,
-        response: safePublicHandlerResponseSchemasWithStatusText(
-          desktopBillingDraftSettingsUpdateResponseSchema,
-        ),
+  createSafeBoundedPublicHandler(
+    {
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      body: desktopBillingDraftSettingsRequestSchema,
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopBillingDraftSettingsUpdateResponseSchema,
+      ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Updates only the authenticated person's consent and preference through the organization/user primary-key upsert; no shared aggregate state is mutated.",
       },
-      async function* ({ request, body }) {
-        // A withdrawal needs only the linked account: whoever could consent
-        // can always take it back, also once the feature or its deployment
-        // is off. Every other change needs the feature.
-        const account = yield* Result.await(
-          authorizeDesktopCaller(request, authorizeAccount),
-        );
-        if (body.type !== "withdraw_consent" && !account.timeEntriesAvailable) {
-          return Result.err(
-            new HandlerError({
-              status: 403,
-              message: "Draft time entries are unavailable",
-            }),
-          );
-        }
-        const recordAuditEvent = createAuditRecorder({
-          organizationId: account.organizationId,
-          userId: account.userId,
-          workspaceId: null,
-          request,
-          server: null,
-        });
-        // The write commits on its own: nothing read afterwards can undo a
-        // withdrawal.
-        const own = yield* Result.await(
-          account.safeDb(
-            async (tx) =>
-              await writeOwnBillingDraftSettings({
-                tx,
-                organizationId: account.organizationId,
-                userId: account.userId,
-                change: body,
-                recordAuditEvent,
-              }),
-          ),
-        );
-        if (own === undefined) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "Billing draft settings changed; reload before retrying",
-            }),
-          );
-        }
-        const view = await account.safeDb(
-          async (tx) =>
-            await readView({
-              tx,
-              organizationId: account.organizationId,
-              timeEntriesAvailable: account.timeEntriesAvailable,
-              own,
-            }),
-        );
-        // The change is committed whatever this read does, so the answer
-        // always names the committed row and its revision: a client retrying
-        // with the old revision would only meet a 409. Without the view the
-        // drafting the caller gets is unknown and answers `off` until the
-        // next read names it.
-        if (view.isErr()) {
-          observeFailure(view.error, {
-            sink: settingsViewReadFailed,
-            ctx: { operation: body.type },
-          });
-        }
-        const settings = view.isOk()
-          ? view.value
-          : {
-              effectiveMode: "off" as const,
-              consent: own.consentAt
-                ? ("granted" as const)
-                : ("revoked" as const),
-              preference: own.preference,
-            };
-        return Result.ok(
-          projectionPayload(desktopBillingDraftSettingsUpdateResponseSchema, {
-            revision: timestampCasTokenText(own.revision),
-            ...settings,
+    },
+    async function* ({ request, body }) {
+      // A withdrawal needs only the linked account: whoever could consent
+      // can always take it back, also once the feature or its deployment
+      // is off. Every other change needs the feature.
+      const account = yield* Result.await(
+        authorizeDesktopCaller(request, authorizeAccount),
+      );
+      if (body.type !== "withdraw_consent" && !account.timeEntriesAvailable) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "Draft time entries are unavailable",
           }),
         );
-      },
-    ),
-    {
-      type: "independent",
-      reason:
-        "Updates only the authenticated person's consent and preference through the organization/user primary-key upsert; no shared aggregate state is mutated.",
+      }
+      const recordAuditEvent = createAuditRecorder({
+        organizationId: account.organizationId,
+        userId: account.userId,
+        workspaceId: null,
+        request,
+        server: null,
+      });
+      // The write commits on its own: nothing read afterwards can undo a
+      // withdrawal.
+      const own = yield* Result.await(
+        account.safeDb(
+          async (tx) =>
+            await writeOwnBillingDraftSettings({
+              tx,
+              organizationId: account.organizationId,
+              userId: account.userId,
+              change: body,
+              recordAuditEvent,
+            }),
+        ),
+      );
+      if (own === undefined) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Billing draft settings changed; reload before retrying",
+          }),
+        );
+      }
+      const view = await account.safeDb(
+        async (tx) =>
+          await readView({
+            tx,
+            organizationId: account.organizationId,
+            timeEntriesAvailable: account.timeEntriesAvailable,
+            own,
+          }),
+      );
+      // The change is committed whatever this read does, so the answer
+      // always names the committed row and its revision: a client retrying
+      // with the old revision would only meet a 409. Without the view the
+      // drafting the caller gets is unknown and answers `off` until the
+      // next read names it.
+      if (view.isErr()) {
+        observeFailure(view.error, {
+          sink: settingsViewReadFailed,
+          ctx: { operation: body.type },
+        });
+      }
+      const settings = view.isOk()
+        ? view.value
+        : {
+            effectiveMode: "off" as const,
+            consent: own.consentAt
+              ? ("granted" as const)
+              : ("revoked" as const),
+            preference: own.preference,
+          };
+      return Result.ok(
+        projectionPayload(desktopBillingDraftSettingsUpdateResponseSchema, {
+          revision: timestampCasTokenText(own.revision),
+          ...settings,
+        }),
+      );
     },
   );
 

@@ -8,10 +8,10 @@
 
 import { panic } from "better-result";
 
+import type { SourceAdapter } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
-import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 
 /**
  * How old a recorded total may be before its source is asked again.

@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
@@ -7,6 +9,51 @@
 import { panic, Result } from "better-result";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseValue,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+import { readStoredDocumentObject } from "@stll/case-law-ingestion-core/stored-document-replay";
 import {
   parsePlUokikDocument,
   plUokikDocumentLines,
@@ -98,11 +145,6 @@ import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
@@ -121,46 +163,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  STORED_RAW_REPLAY_STATUS,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseValue,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -1109,11 +1111,14 @@ const fetchFile = async ({
         status: PL_UOKIK_FILE_STATUS.REDIRECTED,
       });
     case "too-large":
-      logger.warn("case_law.ingestion.document_too_large", {
-        adapterKey: ADAPTER_KEYS.PL_UOKIK,
-        sourceDocumentId: unid,
-        maxBytes: FILE_MAX_BYTES,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.document_too_large",
+        {
+          adapterKey: ADAPTER_KEYS.PL_UOKIK,
+          sourceDocumentId: unid,
+          maxBytes: FILE_MAX_BYTES,
+        },
+      );
       return Result.ok({
         name: file.name,
         status: PL_UOKIK_FILE_STATUS.TOO_LARGE,
@@ -1417,10 +1422,13 @@ const pageMetadataOf = ({ detail, files, id, row }: PageMetadataOptions) => {
       : [],
   );
   if (otherFields.length > 0) {
-    logger.warn("case_law.ingestion.source_field_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_UOKIK,
-      fields: otherFields.map(({ label }) => label).join(", "),
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.source_field_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_UOKIK,
+        fields: otherFields.map(({ label }) => label).join(", "),
+      },
+    );
   }
   const unlabelled = fields.flatMap((field) =>
     field.label === undefined ? [{ text: field.text, files: field.files }] : [],
@@ -1523,10 +1531,13 @@ export const assemblePlUokikDecision = async ({
       : (parsePlUokikDetail(detailHtml) ?? undefined);
   const missing = missingDetailOf({ quarantined, detail, detailStatus });
   if (quarantined) {
-    logger.warn("case_law.ingestion.record_quarantined", {
-      adapterKey: ADAPTER_KEYS.PL_UOKIK,
-      sourceDocumentId: id,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.record_quarantined",
+      {
+        adapterKey: ADAPTER_KEYS.PL_UOKIK,
+        sourceDocumentId: id,
+      },
+    );
   }
 
   const number =
@@ -1560,7 +1571,7 @@ export const assemblePlUokikDecision = async ({
     register === undefined ? undefined : AUTHORITY_OF_REGISTER.get(register);
   // A row stored without its page names no register; its status says why.
   if (detail !== undefined && court === undefined) {
-    logger.warn("case_law.ingestion.court_not_stated", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.court_not_stated", {
       adapterKey: ADAPTER_KEYS.PL_UOKIK,
       sourceDocumentId: id,
       court: register ?? "",
@@ -1780,11 +1791,14 @@ export const assemblePlUokikRuling = async ({
         });
   const parsed = document.type === "read" ? document.output : undefined;
   if (status !== undefined) {
-    logger.warn("case_law.ingestion.record_quarantined", {
-      adapterKey: ADAPTER_KEYS.PL_UOKIK,
-      sourceDocumentId: id,
-      reason: status,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.record_quarantined",
+      {
+        adapterKey: ADAPTER_KEYS.PL_UOKIK,
+        sourceDocumentId: id,
+        reason: status,
+      },
+    );
   }
   const sourceRaw = encodeSourceRawEnvelope({
     ...plUokikRawPartsOf(entry, detailHtml),
@@ -2532,10 +2546,13 @@ const collectDecisions = async (
         decisions.push(built.decision, ...rulings);
         break;
       case "unkeyable":
-        logger.warn("case_law.ingestion.record_unidentifiable", {
-          adapterKey: ADAPTER_KEYS.PL_UOKIK,
-          cursor,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.record_unidentifiable",
+          {
+            adapterKey: ADAPTER_KEYS.PL_UOKIK,
+            cursor,
+          },
+        );
         break;
       default: {
         built satisfies never;
@@ -2610,7 +2627,7 @@ const plUokikFetchPage = async (
     return located;
   }
   if (located.value === null) {
-    logger.warn("case_law.ingestion.crawl_anchor_lost", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.crawl_anchor_lost", {
       adapterKey: ADAPTER_KEYS.PL_UOKIK,
       cursor: encoded,
     });

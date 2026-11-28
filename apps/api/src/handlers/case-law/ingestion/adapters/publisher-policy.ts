@@ -1,3 +1,5 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: the cz-isir adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -27,28 +29,26 @@
 import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { DAY_IN_MS } from "@stll/time";
-
-import {
-  createPublisherRequestSlot,
-  publisherGateReserves,
-  PublisherPacingStopped,
-  type PublisherRequestGateDependencies,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   PUBLISHER_GATES,
   type PublisherGateId,
-} from "@/api/lib/legal-search/publisher-gates";
+} from "@stll/case-law-ingestion-core/publisher-gates";
+import {
+  getPublisherRequestGate,
+  PublisherPacingStopped,
+  type PublisherRequestGateDependencies,
+} from "@stll/case-law-ingestion-core/publisher-request-gate-hook";
+import { DAY_IN_MS } from "@stll/time";
 
 export {
   NALUS_DAILY_REQUEST_LIMIT,
   PUBLISHER_GATES,
-} from "@/api/lib/legal-search/publisher-gates";
-export type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
+} from "@stll/case-law-ingestion-core/publisher-gates";
+export type { PublisherGateId } from "@stll/case-law-ingestion-core/publisher-gates";
 
 const MILLISECONDS_PER_SECOND = 1000;
 const MAX_PUBLISHER_REQUESTS_PER_SECOND = 2;
@@ -148,7 +148,7 @@ const createPublisherGateSlotAtInterval = ({
   dependencies,
 }: CreatePublisherGateSlotWithIntervalOptions) => {
   const { publisher } = PUBLISHER_GATES[gateId];
-  return createPublisherRequestSlot(
+  return getPublisherRequestGate().createPublisherRequestSlot(
     {
       intervalMs: Math.max(PUBLISHER_GATES[gateId].intervalMs, intervalMs),
       key: gateId,
@@ -314,7 +314,7 @@ export const reservePublisherGateSlot = async (
     await runLimit.gateSlot(signal);
     return;
   }
-  if (!publisherGateReserves()) {
+  if (!getPublisherRequestGate().publisherGateReserves()) {
     return;
   }
   await getPublisherGateSlot(gateId)(signal);

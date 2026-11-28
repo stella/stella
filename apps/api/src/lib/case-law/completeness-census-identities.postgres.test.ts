@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import type { CensusListingIdentity } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionAliases,
@@ -12,7 +14,6 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { readCompletenessCensusQuery } from "@/api/lib/case-law/completeness-census";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
-import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 // Leases are checked against the database clock, so a held one expires far ahead of it.

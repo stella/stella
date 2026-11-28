@@ -2,6 +2,11 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type {
+  IngestionResult,
+  UnreadListedItem,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -21,11 +26,6 @@ import {
   type StoredReadUnavailable,
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
-import type {
-  IngestionResult,
-  UnreadListedItem,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const listing = (id: string): UnreadListedItem["listing"] => ({
   ...plainTextIngestionResult({

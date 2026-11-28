@@ -122,13 +122,43 @@ type IdentifierPathOptions = PathExpressionOptions & {
   resolve: (options: PathExpressionOptions) => PathExpressionResult;
 };
 
-let identifierBindingCache:
-  | {
-      source: string;
-      code: string;
-      expressions: Map<string, readonly string[] | undefined>;
-    }
-  | undefined;
+type IdentifierBindings = {
+  source: string;
+  code: string;
+  expressions: Map<string, readonly string[] | undefined>;
+};
+type NamedImport = {
+  local: string | undefined;
+  original: string | undefined;
+  target: string;
+};
+type ImportedModule = { source: string; code: string; file: string };
+// Following one identifier visits its own file and every module it imports,
+// so a census revisits the same files and names many times. One census parses
+// each file's bindings and named imports and reads each imported module once;
+// fixture roots change between censuses, so nothing outlives one.
+type CensusMemo = {
+  bindings: Map<string, IdentifierBindings>;
+  imports: Map<string, readonly NamedImport[]>;
+  modules: Map<string, ImportedModule | undefined>;
+};
+let censusMemo: CensusMemo | undefined;
+let identifierBindingCache: IdentifierBindings | undefined;
+
+const identifierBindings = (source: string, code: string) => {
+  const cached = censusMemo?.bindings.get(source) ?? identifierBindingCache;
+  if (cached?.source === source && cached.code === code) {
+    return cached;
+  }
+  const bindings: IdentifierBindings = {
+    source,
+    code,
+    expressions: new Map(),
+  };
+  identifierBindingCache = bindings;
+  censusMemo?.bindings.set(source, bindings);
+  return bindings;
+};
 
 const identifierExpressions = ({
   expression: text,
@@ -136,13 +166,7 @@ const identifierExpressions = ({
   source,
 }: Pick<PathExpressionOptions, "expression" | "code" | "source">):
   readonly string[] | undefined => {
-  if (
-    identifierBindingCache?.source !== source ||
-    identifierBindingCache.code !== code
-  ) {
-    identifierBindingCache = { source, code, expressions: new Map() };
-  }
-  const cache = identifierBindingCache.expressions;
+  const cache = identifierBindings(source, code).expressions;
   if (cache.has(text)) {
     return cache.get(text);
   }
@@ -185,6 +209,48 @@ type ImportedConstantOptions = {
   code: string;
   name: string;
 };
+const namedImports = (file: string, source: string, code: string) => {
+  const imports: NamedImport[] = [];
+  for (const declaration of source.matchAll(
+    /\bimport\s*\{([^}]+)\}\s*from\s*["'](\.[^"']+)["']/gu,
+  )) {
+    if (!code.slice(declaration.index).startsWith("import")) {
+      continue;
+    }
+    const target = path.posix.join(
+      path.posix.dirname(file),
+      declaration[2] ?? "",
+    );
+    for (const binding of (declaration[1] ?? "").split(",")) {
+      const [original, separator, alias] = binding.trim().split(/\s+/u);
+      imports.push({
+        local: separator === "as" ? alias : original,
+        original,
+        target,
+      });
+    }
+  }
+  return imports;
+};
+
+const importedModule = (root: string, target: string) => {
+  const importedFile = [
+    target,
+    ...[".ts", ".tsx", ".js", ".mjs", ".cjs"].map(
+      (extension) => `${target}${extension}`,
+    ),
+  ].find(
+    (candidate) =>
+      path.posix.extname(candidate) !== "" &&
+      existsSync(path.join(root, candidate)),
+  );
+  if (importedFile === undefined) {
+    return undefined;
+  }
+  const source = readFileSync(path.join(root, importedFile), "utf-8");
+  return { source, code: maskSourceNonCode(source), file: importedFile };
+};
+
 const importedConstants = ({
   root,
   file,
@@ -192,56 +258,28 @@ const importedConstants = ({
   code,
   name,
 }: ImportedConstantOptions) => {
-  const constants: {
-    expression: string;
-    source: string;
-    code: string;
-    file: string;
-  }[] = [];
-  for (const declaration of source.matchAll(
-    /\bimport\s*\{([^}]+)\}\s*from\s*["'](\.[^"']+)["']/gu,
-  )) {
-    if (!code.slice(declaration.index).startsWith("import")) {
+  const memo = censusMemo;
+  const importsKey = `${root}\0${file}`;
+  let imports = memo?.imports.get(importsKey);
+  if (imports === undefined) {
+    imports = namedImports(file, source, code);
+    memo?.imports.set(importsKey, imports);
+  }
+  const constants: (ImportedModule & { expression: string })[] = [];
+  for (const { local, original, target } of imports) {
+    if (local !== name || original === undefined || target.startsWith("../")) {
       continue;
     }
-    for (const binding of (declaration[1] ?? "").split(",")) {
-      const [original, separator, alias] = binding.trim().split(/\s+/u);
-      if (
-        (separator === "as" ? alias : original) !== name ||
-        original === undefined
-      ) {
-        continue;
-      }
-      const target = path.posix.join(
-        path.posix.dirname(file),
-        declaration[2] ?? "",
-      );
-      if (target.startsWith("../")) {
-        continue;
-      }
-      const importedFile = [
-        target,
-        ...[".ts", ".tsx", ".js", ".mjs", ".cjs"].map(
-          (extension) => `${target}${extension}`,
-        ),
-      ].find(
-        (candidate) =>
-          path.posix.extname(candidate) !== "" &&
-          existsSync(path.join(root, candidate)),
-      );
-      if (importedFile === undefined) {
-        continue;
-      }
-      const importedSource = readFileSync(
-        path.join(root, importedFile),
-        "utf-8",
-      );
-      constants.push({
-        expression: original,
-        source: importedSource,
-        code: maskSourceNonCode(importedSource),
-        file: importedFile,
-      });
+    const moduleKey = `${root}\0${target}`;
+    let imported: ImportedModule | undefined;
+    if (memo?.modules.has(moduleKey) === true) {
+      imported = memo.modules.get(moduleKey);
+    } else {
+      imported = importedModule(root, target);
+      memo?.modules.set(moduleKey, imported);
+    }
+    if (imported !== undefined) {
+      constants.push({ expression: original, ...imported });
     }
   }
   return constants;
@@ -741,24 +779,99 @@ const declaredMarkdownReaderCommand = ({
   return words;
 };
 
-const sourceFiles = (root: string): readonly string[] => {
-  // Tracked sources avoid traversing installed dependency trees. Temporary
-  // repositories in selector tests have no Git metadata and use a small glob.
+const SOURCE_DIRECTORIES = [
+  "scripts",
+  "apps",
+  "packages",
+  ".oxlint-plugins",
+  ".claude",
+] as const;
+const SOURCE_FILE = /\.[cm]?[jt]sx?$/u;
+const SOURCE_EXTENSIONS = ["", "c", "m"].flatMap((module) =>
+  ["j", "t"].flatMap((language) =>
+    ["", "x"].map((jsx) => `${module}${language}s${jsx}`),
+  ),
+);
+
+// Every source the census parses passes isReaderSource. Each of its
+// alternatives contains one of these literal tokens, so a file that holds none
+// of them is skipped without being read.
+const READER_SOURCE_TOKENS = [
+  "readFile",
+  "readText",
+  "readdir",
+  "spawnSync",
+  "Bun.file",
+  "Bun.Glob",
+  "astro/loaders",
+  "CI_MARKDOWN_READER_INPUTS",
+  '.md"',
+  ".md'",
+  '.mdx"',
+  ".mdx'",
+] as const;
+export const isReaderSource = (source: string) =>
+  /\b(?:readFileSync|readFile|readText|readdirSync|readdir|spawnSync|Bun\.(?:file|Glob))\b/u.test(
+    source,
+  ) ||
+  source.includes("astro/loaders") ||
+  /\bconst\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/u.test(source) ||
+  /\b(?:from|import)\s*["'][^"'\n]+\.mdx?["']/u.test(source);
+
+const trackedSourceFiles = (root: string) => {
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {
     cwd: root,
     stdout: "pipe",
     stderr: "pipe",
   });
-  if (tracked.exitCode === 0) {
-    return tracked.stdout
-      .toString()
-      .split("\0")
-      .filter(
-        (file) =>
-          /^(?:scripts|apps|packages|\.oxlint-plugins|\.claude)\//u.test(
-            file,
-          ) && /\.[cm]?[jt]sx?$/u.test(file),
-      );
+  if (tracked.exitCode !== 0) {
+    return undefined;
+  }
+  return tracked.stdout
+    .toString()
+    .split("\0")
+    .filter(
+      (file) =>
+        SOURCE_DIRECTORIES.some((directory) =>
+          file.startsWith(`${directory}/`),
+        ) && SOURCE_FILE.test(file),
+    );
+};
+
+// Only about a tenth of tracked sources can hold a reader; one multi-threaded
+// fixed-string search selects them instead of decoding the whole tree here.
+export const readerCandidateFiles = (root: string): readonly string[] => {
+  const files = sourceFiles(root);
+  // git grep exits 1 when nothing matches; any other status reads everything.
+  const search = Bun.spawnSync(
+    [
+      "git",
+      "grep",
+      "-l",
+      "-z",
+      "-F",
+      ...READER_SOURCE_TOKENS.flatMap((token) => ["-e", token]),
+      "--",
+      // A pathspec wildcard crosses directories, so these cover SOURCE_FILE.
+      ...SOURCE_DIRECTORIES.flatMap((directory) =>
+        SOURCE_EXTENSIONS.map((extension) => `${directory}/*.${extension}`),
+      ),
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (search.exitCode !== 0 && search.exitCode !== 1) {
+    return files;
+  }
+  const candidates = new Set(search.stdout.toString().split("\0"));
+  return files.filter((file) => candidates.has(file));
+};
+
+const sourceFiles = (root: string): readonly string[] => {
+  // Tracked sources avoid traversing installed dependency trees. Temporary
+  // repositories in selector tests have no Git metadata and use a small glob.
+  const tracked = trackedSourceFiles(root);
+  if (tracked !== undefined) {
+    return tracked;
   }
   // Gitlinks belong to a separate source repository. An exported checkout
   // must enumerate the same first-party files as git ls-files above.
@@ -1216,32 +1329,18 @@ const finalizeMarkdownReaders = ({
   }
   return readers;
 };
-export const markdownReaders = (
-  root = ROOT,
-  sourceFileOrder?: readonly string[],
-): readonly MarkdownReader[] => {
-  // Fixture roots remain uncached so tests can change their declarations.
-  const cached = sourceFileOrder === undefined ? rootReaders : undefined;
-  if (root === ROOT && cached !== undefined) {
-    return cached;
-  }
+const collectMarkdownReaders = (
+  root: string,
+  sourceFileOrder: readonly string[] | undefined,
+) => {
   const policyReaders = markdownPolicyReaders(root);
   const readers: MarkdownReader[] = [...policyReaders];
-  for (const file of sourceFileOrder ?? sourceFiles(root)) {
+  for (const file of sourceFileOrder ?? readerCandidateFiles(root)) {
     const source = readFileSync(path.join(root, file), "utf-8").replace(
       /^#![^\n]*/u,
       "",
     );
-    if (
-      !/\b(?:readFileSync|readFile|readText|readdirSync|readdir|spawnSync|Bun\.(?:file|Glob))\b/u.test(
-        source,
-      ) &&
-      !source.includes("astro/loaders") &&
-      !/\bconst\s+CI_MARKDOWN_READER_INPUTS(?:_[A-Za-z_$][\w$]*)?\b/u.test(
-        source,
-      ) &&
-      !/\b(?:from|import)\s*["'][^"'\n]+\.mdx?["']/u.test(source)
-    ) {
+    if (!isReaderSource(source)) {
       continue;
     }
     const imports = new Bun.Transpiler({
@@ -1416,6 +1515,24 @@ export const markdownReaders = (
     }
   }
   return finalizeMarkdownReaders({ root, sourceFileOrder, readers });
+};
+
+export const markdownReaders = (
+  root = ROOT,
+  sourceFileOrder?: readonly string[],
+): readonly MarkdownReader[] => {
+  // Fixture roots remain uncached so tests can change their declarations.
+  const cached = sourceFileOrder === undefined ? rootReaders : undefined;
+  if (root === ROOT && cached !== undefined) {
+    return cached;
+  }
+  const outerMemo = censusMemo;
+  censusMemo = { bindings: new Map(), imports: new Map(), modules: new Map() };
+  try {
+    return collectMarkdownReaders(root, sourceFileOrder);
+  } finally {
+    censusMemo = outerMemo;
+  }
 };
 
 export const hasDeclaredMarkdownReader = (file: string, root = ROOT) =>

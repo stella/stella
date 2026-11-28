@@ -38,6 +38,17 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
   "line_break_spacing_kept",
   "invisible_effects_removed",
   "template_blocks_kept",
+  /** Drawn marks of the source's page layout (dots, rules, lines placed at
+   *  coordinates of that page) were left out: `count` of them, anchored in
+   *  the paragraph `text` starts, or in a paragraph without words in front
+   *  of it. `reason` is `paragraph_omitted` when the paragraph held
+   *  nothing else and went with them. Check the place against the
+   *  source. */
+  "page_marks_dropped",
+  /** Such marks next to the words of a signature were kept, `count` of
+   *  them: one may be the line to sign on. They may stand in the wrong
+   *  place. */
+  "page_marks_kept",
   /** The document's tracked changes are in the output as tracked changes;
    *  `count` is how many. Change tracking is switched off there. */
   "tracked_changes_kept",
@@ -93,5 +104,9 @@ export const REFORMAT_TEMPLATE_HEALTH_KINDS = [
    *  signature page, a landscape annex): the output takes its page setup,
    *  headers and footers from the last of them. Check the output's pages. */
   "template_last_section_not_body",
+  /** The template's style for article headings, clauses or party lines
+   *  (`styleId`) starts every paragraph on a new page: every one of them
+   *  in the output starts a page, as the template says. */
+  "template_heading_starts_page",
   "other",
 ] as const;

@@ -166,11 +166,13 @@ export const createProviderCallError = ({
   status,
   code,
 }: CreateProviderCallErrorOptions) => {
+  const providerEvidence =
+    code === undefined ? evidence : { code, cause: evidence };
   const input = new HandlerError({
     message: PROVIDER_CALL_ERROR_MESSAGE,
     status,
-    code: code ?? "internal_error",
-    cause: evidence,
+    code: providerCallErrorCode(code) ?? "internal_error",
+    cause: providerEvidence,
   });
   return new ProviderCallError({
     model,

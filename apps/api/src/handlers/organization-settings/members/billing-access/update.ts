@@ -5,7 +5,6 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { setMemberBillingAccess } from "@/api/lib/auth";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 export const createMemberBillingAccessHandler = (
@@ -30,6 +29,11 @@ export const createMemberBillingAccessHandler = (
         memberId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
       }),
       body: v.strictObject({ billingAccess: v.boolean() }),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Updates one member attribute. The scoped transaction locks the actor and target rows in ID order and rechecks authority under those locks; no aggregate state spans members.",
+      },
     },
     async function* ({
       safeDb,
@@ -55,11 +59,5 @@ export const createMemberBillingAccessHandler = (
   );
 
 const updateMemberBillingAccess = createMemberBillingAccessHandler();
-
-declareAggregateMutation(updateMemberBillingAccess, {
-  type: "independent",
-  reason:
-    "Updates one member attribute. The scoped transaction locks the actor and target rows in ID order and rechecks authority under those locks; no aggregate state spans members.",
-});
 
 export default updateMemberBillingAccess;

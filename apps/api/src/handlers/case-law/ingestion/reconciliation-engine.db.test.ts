@@ -12,6 +12,19 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  EMPTY_AST,
+  listingIdentityKey,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceReconciliation,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { createSha256 } from "@stll/sha256/node";
@@ -58,20 +71,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import {
-  EMPTY_AST,
-  listingIdentityKey,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceReconciliation,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";

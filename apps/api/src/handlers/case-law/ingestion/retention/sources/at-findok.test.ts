@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -9,8 +11,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { atFindokRetention } from "@/api/handlers/case-law/ingestion/retention/sources/at-findok";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { atFindokFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 const PARSERS_DIR = new URL("../../parsers/__fixtures__/", import.meta.url);

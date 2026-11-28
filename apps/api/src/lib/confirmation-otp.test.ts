@@ -125,11 +125,14 @@ describe("consumeConfirmationOtp (burn survives an enclosing rollback)", () => {
       purpose: "delete-account",
       email,
       code: "333333",
-      errorCode: { invalid: "otp_invalid", expired: "otp_expired" },
+      errorCode: {
+        invalid: "account_deletion_otp_invalid",
+        expired: "account_deletion_otp_expired",
+      },
     });
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error.code).toBe("otp_expired");
+      expect(result.error.code).toBe("account_deletion_otp_expired");
     }
     expect(await countOtp(identifier)).toBe(0);
   });

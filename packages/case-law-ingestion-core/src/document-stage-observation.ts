@@ -21,11 +21,10 @@ import {
   observeDocumentStageSafely,
 } from "@stll/legal-atlas/document-stage-observer";
 
-import { getIngestionDiagnosticsSink } from "@/api/lib/case-law/ingestion-diagnostics-sink";
-import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
-import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
-
+import type { AdapterFetchError } from "./adapter-fetch-error";
+import type { AdapterKey } from "./ingestion-constants";
+import { getIngestionDiagnosticsSink } from "./ingestion-diagnostics-sink";
+import type { SyncPage } from "./ingestion-types";
 import { OBSERVATION_DETAIL, observationDetailOf } from "./partial-observation";
 
 type DocumentWindowContext = {

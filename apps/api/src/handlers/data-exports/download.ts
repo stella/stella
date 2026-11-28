@@ -20,7 +20,6 @@ import {
   dataExportMatterIdsSql,
   readableStoredDataExports,
 } from "@/api/lib/data-export/stored-export-access";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { requireCurrentOrganizationMemberPermission } from "@/api/lib/db/member-authority";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOrganizationPermissionReplay } from "@/api/lib/idempotency/organization-replay-authorization";
@@ -75,6 +74,11 @@ const config = {
       v.strictObject({ type: v.literal(DOWNLOAD_FILE.MANIFEST) }),
     ]),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Creates a temporary download link and records its audit event; it changes no matter or export source rows.",
+  },
 } satisfies HandlerConfig;
 
 const downloadDataExport = createSafeRootHandler(
@@ -238,11 +242,5 @@ const downloadDataExport = createSafeRootHandler(
     },
   },
 );
-
-declareAggregateMutation(downloadDataExport, {
-  type: "independent",
-  reason:
-    "Creates a temporary download link and records its audit event; it changes no matter or export source rows.",
-});
 
 export default downloadDataExport;

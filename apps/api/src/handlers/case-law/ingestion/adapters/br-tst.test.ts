@@ -12,6 +12,12 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { BR_TST_PRECEDENTS_SLICE } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { compareCodeUnit } from "@stll/collation";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
@@ -40,12 +46,6 @@ import {
   SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { BR_TST_PRECEDENTS_SLICE } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import {

@@ -50,27 +50,6 @@
   "statusConnected": {
     "message": "Prisijungta"
   },
-  "statusNotConnected": {
-    "message": "Neprisijungta"
-  },
-  "statusWebsiteAccessNeeded": {
-    "message": "Reikia prieigos prie svetainių"
-  },
-  "statusOpenStella": {
-    "message": "Norėdami prisijungti, atverkite „stella“"
-  },
-  "allowAndConnect": {
-    "message": "Leisti prieigą ir prisijungti"
-  },
-  "allowWebsiteAccess": {
-    "message": "Leisti prieigą prie svetainių"
-  },
-  "connectStella": {
-    "message": "Prijungti „stella“"
-  },
-  "openStella": {
-    "message": "Atverti „stella“"
-  },
   "adoptTab": {
     "message": "Naudoti šį skirtuką su „stella“"
   },
@@ -80,28 +59,25 @@
   "revokeAccess": {
     "message": "Pašalinti prieigą"
   },
-  "checkingAccess": {
-    "message": "Tikrinamas ryšys…"
-  },
-  "statusConnectedElsewhere": {
-    "message": "Prisijungta kitur"
-  },
-  "connectStellaInstead": {
-    "message": "Vietoj to prijungti „stella“ čia"
-  },
-  "allowDesktop": {
-    "message": "Naudoti su stella desktop"
-  },
-  "desktopConnected": {
-    "message": "stella desktop prijungta"
-  },
-  "desktopNotRunning": {
-    "message": "stella desktop neveikia"
-  },
   "desktopUpdateNeeded": {
     "message": "Atnaujinkite stella desktop ir šį plėtinį"
   },
-  "desktopConnecting": {
-    "message": "Jungiamasi prie „stella desktop“…"
+  "lineWebsite": {
+    "message": "stella svetainė"
+  },
+  "lineDesktop": {
+    "message": "stella darbalaukio programa"
+  },
+  "lineConnect": {
+    "message": "Prijungti"
+  },
+  "lineConnecting": {
+    "message": "Jungiamasi…"
+  },
+  "lineOpenApp": {
+    "message": "Atidarykite programą"
+  },
+  "lineUpdateApp": {
+    "message": "Atnaujinkite programą"
   }
 }

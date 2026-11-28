@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
@@ -11,6 +13,48 @@
 // parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
 import { panic, Result } from "better-result";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import {
   huBhgyHeaderLabelsOf,
   parseHuBhgyDecision,
@@ -74,11 +118,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 // parser-output-unchanged: publisher reads now route through typed readPublisherText/readPublisherBytes; served payloads and parsed decisions are unchanged.
@@ -101,43 +140,6 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-  UnreadListedItem,
-  UnreadOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -810,7 +812,7 @@ export const assembleHuBhgyDecision = async ({
   // publishes for every court of the country.
   const court = row.MeghozoBirosag ?? "";
   if (court.length === 0) {
-    logger.warn("case_law.ingestion.court_not_stated", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.court_not_stated", {
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       caseNumber,
     });
@@ -842,15 +844,18 @@ export const assembleHuBhgyDecision = async ({
   }
   const read = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
   if (read !== null && read.readerWarnings.length > 0) {
-    logger.warn("case_law.ingestion.ast_structure_degraded", {
-      parser: ADAPTER_KEYS.HU_BHGY,
-      caseNumber,
-      language: HU_BHGY_LANGUAGE,
-      url: decisionUrl(row),
-      codes: "READER_UNHANDLED_MARKUP",
-      issues: read.readerWarnings.join("; "),
-      blockCount: read.documentAst.blocks.length,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.ast_structure_degraded",
+      {
+        parser: ADAPTER_KEYS.HU_BHGY,
+        caseNumber,
+        language: HU_BHGY_LANGUAGE,
+        url: decisionUrl(row),
+        codes: "READER_UNHANDLED_MARKUP",
+        issues: read.readerWarnings.join("; "),
+        blockCount: read.documentAst.blocks.length,
+      },
+    );
   }
   const documentAst: DocumentAst | EmptyAst = read?.documentAst ?? EMPTY_AST;
 
@@ -1975,7 +1980,7 @@ const tipPage = async (
     // The walk is further behind the publisher than a catch-up should ever
     // get. It keeps going — the rows below it are the ones nothing else will
     // collect — and says so, because the depth is what an operator acts on.
-    logger.warn("case_law.ingestion.tip_catch_up_deep", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.tip_catch_up_deep", {
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       offset: nextOffset,
       frontier: start.frontier,

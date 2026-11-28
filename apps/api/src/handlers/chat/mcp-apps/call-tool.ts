@@ -31,7 +31,6 @@ import {
   chatMcpAppByUri,
 } from "@/api/lib/chat/mcp-app-catalog";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -56,6 +55,11 @@ const config = {
     type: "none",
     reason:
       "Answers an app's read in the MCP result shape; it returns no stored-file grant.",
+  },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Runs one read an app asks for and writes nothing; the POST only carries the app's arguments.",
   },
 } satisfies HandlerConfig;
 
@@ -285,11 +289,5 @@ export const createCallChatMcpAppTool = ({
   );
 
 const callChatMcpAppTool = createCallChatMcpAppTool();
-
-declareAggregateMutation(callChatMcpAppTool, {
-  type: "independent",
-  reason:
-    "Runs one read an app asks for and writes nothing; the POST only carries the app's arguments.",
-});
 
 export default callChatMcpAppTool;

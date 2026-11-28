@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: ReadonlyMap court-name lookup preserves identical runtime output
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
@@ -8,6 +10,51 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  DecisionSupplement,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationListingItem,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { parsePlCommonCourtDecision } from "@stll/case-law-parsers/pl-courts";
 import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
 import type { PlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
@@ -76,11 +123,6 @@ import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagno
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
@@ -95,7 +137,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {
   absentDecisionTextFields,
@@ -106,46 +147,7 @@ import {
 import { type ReadOutcome, readPresent } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
-import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  DecisionJudgeInput,
-  DecisionSupplement,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationListingItem,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -742,7 +744,7 @@ const documentRoleOf = (
   const roles: (DecisionDocumentRole | undefined)[] = [];
   for (const component of components) {
     if (!isKnownComponent(component)) {
-      logger.warn(DOCUMENT_ROLE_UNMAPPED, {
+      getIngestionDiagnosticsSink().warn(DOCUMENT_ROLE_UNMAPPED, {
         adapterKey: ADAPTER_KEYS.PL_NCOURT,
         publisherValue: component,
       });
@@ -814,7 +816,7 @@ const courtNameOf = (courtId: string | undefined): CourtName | undefined => {
   if (name !== undefined) {
     return { name, known: true };
   }
-  logger.warn("case_law.ingestion.court_unmapped", {
+  getIngestionDiagnosticsSink().warn("case_law.ingestion.court_unmapped", {
     adapterKey: ADAPTER_KEYS.PL_NCOURT,
     courtId,
   });
@@ -917,10 +919,13 @@ const typeOf = (
     components.some((component) => !isKnownComponent(component)) ||
     (rawType !== undefined && decisionType === undefined)
   ) {
-    logger.warn("case_law.ingestion.decision_type_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      decisionForm: rawType ?? "",
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.decision_type_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        decisionForm: rawType ?? "",
+      },
+    );
   }
   return { components, decisionType, documentRole: documentRoleOf(components) };
 };
@@ -959,13 +964,16 @@ const unmappedFieldsOf = ({
   }
   const unmapped: Record<string, string> = Object.fromEntries(unmappedMap);
   for (const name of unmappedMap.keys()) {
-    logger.warn("case_law.ingestion.source_field_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      field: name,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.source_field_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        field: name,
+      },
+    );
   }
   for (const name of arrayOrEmpty(content?.unmappedMarkup)) {
-    logger.warn("case_law.ingestion.markup_unmapped", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.markup_unmapped", {
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
       element: name,
     });
@@ -1671,11 +1679,14 @@ export const fetchPlNcourtDecision = async ({
     timeoutMs: ADAPTER_TIMEOUT.LIST,
   });
   if (detail.outcome.type === "absent") {
-    logger.warn("case_law.ingestion.listed_record_not_found", {
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      cursor,
-      sourceDocumentId: id,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.listed_record_not_found",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+        sourceDocumentId: id,
+      },
+    );
     return Result.ok(
       assemblePlNcourtDecision({
         listingXml,
@@ -1702,11 +1713,14 @@ export const fetchPlNcourtDecision = async ({
       ? readPlNcourtDetail(detailAnswer.body)
       : null;
   if (record?.type === "not-found") {
-    logger.warn("case_law.ingestion.listed_record_not_found", {
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      cursor,
-      sourceDocumentId: id,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.listed_record_not_found",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+        sourceDocumentId: id,
+      },
+    );
     return Result.ok(
       assemblePlNcourtDecision({
         listingXml,
@@ -1819,11 +1833,14 @@ const quarantineAt = async ({
   if (Result.isError(next)) {
     return next;
   }
-  logger.warn("case_law.ingestion.listing_row_quarantined", {
-    adapterKey: ADAPTER_KEYS.PL_NCOURT,
-    cursor,
-    offset,
-  });
+  getIngestionDiagnosticsSink().warn(
+    "case_law.ingestion.listing_row_quarantined",
+    {
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+      cursor,
+      offset,
+    },
+  );
   return Result.ok({
     query,
     offset,
@@ -2366,7 +2383,7 @@ const plNcourtFetchPage = async (
     return await fetchUnreadableWindow(cursor, listed.value.url, signal);
   }
   if (listed.value.type === "shifted") {
-    logger.warn("case_law.ingestion.listing_shifted", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.listing_shifted", {
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
       cursor: encoded,
       found: listed.value.found ?? "",

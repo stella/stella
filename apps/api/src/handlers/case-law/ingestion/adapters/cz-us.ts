@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
@@ -12,6 +14,49 @@
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  CzechDeclinedDecisionJudge,
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  PrintedDecisionJudge,
+  RawIngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { parseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
 import {
   legacyQuarantineHtmlText,
@@ -35,11 +80,6 @@ import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import { czUsOpeningBench } from "@/api/handlers/case-law/ingestion/adapters/cz-us-bench";
 import {
   fetchNalus,
@@ -59,7 +99,6 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechConstitutionalIdentifiersFromParallelCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
@@ -83,45 +122,6 @@ import {
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  CzechDeclinedDecisionJudge,
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  PrintedDecisionJudge,
-  RawIngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
@@ -1079,11 +1079,6 @@ type ParseDecisionPageOptions = {
 };
 
 /** A served page the structured parser could not read. */
-const documentParseFailed = failureSink({
-  event: "case_law.ingestion.document_parse_failed",
-  expected: [],
-});
-
 const parseDecisionPage = ({
   html,
   recordCard,
@@ -1172,8 +1167,8 @@ const parseDecisionPage = ({
     // page is kept for a later re-parse. Reported, so a parser that starts
     // failing across the corpus is told apart from decisions that carry
     // unstructured text.
-    observeFailure(error, {
-      sink: documentParseFailed,
+    getIngestionDiagnosticsSink().observeFailure(error, {
+      event: "case_law.ingestion.document_parse_failed",
       ctx: { adapterKey: ADAPTER_KEYS.CZ_US, documentId: sourceDocumentId },
     });
   }
@@ -1573,12 +1568,15 @@ const afterUnconfirmedSlice = (
   if (state.phase === SWEEP_PHASE.HISTORICAL) {
     return restartSlice(state);
   }
-  logger.warn("case_law.ingestion.cz_us_recent_window_unconfirmed", {
-    adapterKey: ADAPTER_KEYS.CZ_US,
-    availableFrom: addUtcDays(state.verifiedThrough, 1),
-    availableTo: state.availableTo,
-    reason,
-  });
+  getIngestionDiagnosticsSink().warn(
+    "case_law.ingestion.cz_us_recent_window_unconfirmed",
+    {
+      adapterKey: ADAPTER_KEYS.CZ_US,
+      availableFrom: addUtcDays(state.verifiedThrough, 1),
+      availableTo: state.availableTo,
+      reason,
+    },
+  );
   return recentFrontier(state.availableTo, now);
 };
 
@@ -2440,11 +2438,6 @@ const buildCzUsDecision = ({
 };
 
 /** A page beside the document that the court did not answer for. */
-const detailReadFailed = failureSink({
-  event: "case_law.ingestion.detail_fetch_failed",
-  expected: [],
-});
-
 /** A page read for one decision, named as the failure report names it. */
 type NalusPage = "text" | "record-card" | "abstract";
 
@@ -2500,7 +2493,7 @@ const fetchListedDecision = async (
   // A refusal is reported with its typed `ReadRefusal`; a failed read with
   // the court's status or its own thrown error.
   const reportUnreadPage = (part: NalusPage, read: UnreadNalusPage): void => {
-    observeFailure(
+    getIngestionDiagnosticsSink().observeFailure(
       classifyFailure(
         read.type === "refused"
           ? unreadPublisherError({
@@ -2513,7 +2506,7 @@ const fetchListedDecision = async (
         "upstream_unavailable",
       ),
       {
-        sink: detailReadFailed,
+        event: "case_law.ingestion.detail_fetch_failed",
         ctx: {
           adapterKey: ADAPTER_KEYS.CZ_US,
           documentId: listed.sourceDocumentId,

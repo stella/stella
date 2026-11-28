@@ -44,7 +44,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
@@ -230,18 +229,24 @@ const responseSchemas = safePublicHandlerResponseSchemasWithStatusText(
   desktopTimeEntryBatchResponseSchema,
 );
 
+const desktopTimeEntryBatchConfig = {
+  contract: "patch",
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: { type: "internal", reason: "auth_plumbing" },
+  cache: { kind: "none" },
+  body: desktopTimeEntryBatchSchema,
+  response: responseSchemas,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["desktopBatch"],
+  },
+} as const;
+
 export const createDesktopTimeEntryBatchEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
 ) =>
   createSafeBoundedPublicHandler(
-    {
-      contract: "patch",
-      accountAccess: ACCOUNT_ACCESS.sandbox,
-      mcp: { type: "internal", reason: "auth_plumbing" },
-      cache: { kind: "none" },
-      body: desktopTimeEntryBatchSchema,
-      response: responseSchemas,
-    },
+    desktopTimeEntryBatchConfig,
     async function* ({ request, body }) {
       const account = yield* Result.await(
         authorizeDesktopTimeEntries(request, authorizeAccount),
@@ -439,9 +444,5 @@ const desktopTimeEntryBatchEndpoint = createDesktopTimeEntryBatchEndpoint();
 
 // Batch receipts serialize on the desktopBatch aggregate lock per account
 // and idempotency key.
-declareAggregateMutation(desktopTimeEntryBatchEndpoint, {
-  type: "aggregate",
-  aggregates: ["desktopBatch"],
-});
 
 export default desktopTimeEntryBatchEndpoint;

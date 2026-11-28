@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
@@ -17,6 +19,48 @@ import * as v from "valibot";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionItem,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { opaqueMetadataValue } from "@stll/case-law-ingestion-core/metadata-urls";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { parsePlCommonCourtDecision } from "@stll/case-law-parsers/pl-courts";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { classifyFailure } from "@stll/errors";
@@ -31,11 +75,6 @@ import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
@@ -61,7 +100,6 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
@@ -72,46 +110,8 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionItem,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
-import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
-import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
@@ -441,7 +441,7 @@ const documentRoleOf = (
   if (isSaosJudgmentType(value)) {
     return SAOS_DOCUMENT_ROLE[value];
   }
-  logger.warn(DOCUMENT_ROLE_UNMAPPED, {
+  getIngestionDiagnosticsSink().warn(DOCUMENT_ROLE_UNMAPPED, {
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     judgmentType: value,
   });
@@ -949,7 +949,7 @@ const normalizeDecisionDate = ({
     return fromUpstreamId;
   }
 
-  logger.warn(DECISION_DATE_UNREADABLE, {
+  getIngestionDiagnosticsSink().warn(DECISION_DATE_UNREADABLE, {
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     statedDate: stated ?? "",
     ...(typeof saosId === "number" ? { saosId } : {}),
@@ -977,11 +977,6 @@ export type PlCourtsDetailReadState =
   (typeof PL_COURTS_DETAIL_READ_STATE)[keyof typeof PL_COURTS_DETAIL_READ_STATE];
 
 /** A per-judgment read that failed: the request, its status or its body. */
-const detailReadFailed = failureSink({
-  event: "case_law.ingestion.detail_fetch_failed",
-  expected: [],
-});
-
 /** The publisher's rate-limit refusal. */
 const RATE_LIMITED_STATUS = 429;
 
@@ -1008,7 +1003,7 @@ type SaosDetailFetch =
 
 /** Report a failed detail read, graded as the upstream being unavailable. */
 const reportDetailRead = (id: number, error: unknown): void => {
-  observeFailure(
+  getIngestionDiagnosticsSink().observeFailure(
     classifyFailure(
       typeof error === "object" && error !== null
         ? error
@@ -1016,7 +1011,7 @@ const reportDetailRead = (id: number, error: unknown): void => {
       "upstream_unavailable",
     ),
     {
-      sink: detailReadFailed,
+      event: "case_law.ingestion.detail_fetch_failed",
       ctx: { adapterKey: ADAPTER_KEYS.PL_COURTS, documentId: String(id) },
     },
   );
@@ -1429,11 +1424,6 @@ const fetchDetailForItem = async (
 };
 
 /** A judgment text the structured parser could not read. */
-const documentParseFailed = failureSink({
-  event: "case_law.ingestion.document_parse_failed",
-  expected: [],
-});
-
 type BuildPlDecisionOptions = {
   /** The item exactly as the publisher listed it. */
   listingItem: SaosItem;
@@ -1572,8 +1562,8 @@ export const buildPlDecision = ({
       // in for the document and the raw payload is kept for a re-parse.
       // Reported, so a parser that starts failing across the source is told
       // apart from decisions that carry unstructured text.
-      observeFailure(error, {
-        sink: documentParseFailed,
+      getIngestionDiagnosticsSink().observeFailure(error, {
+        event: "case_law.ingestion.document_parse_failed",
         ctx: {
           adapterKey: ADAPTER_KEYS.PL_COURTS,
           documentId: String(saosId ?? caseNumber),

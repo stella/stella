@@ -3,7 +3,7 @@ import { AssertionError, fail as panic } from "node:assert";
 export const PARSER_ENTRY_DIRECTORY =
   "apps/api/src/lib/legal-search/parser-entries/";
 export const PARSER_REGISTRY_OUTPUT =
-  "apps/api/src/lib/legal-search/parser-registry.gen.ts";
+  "packages/case-law-ingestion-core/src/parser-registry.gen.ts";
 
 export const PARSER_REGISTRY_NAMES = [
   "ADAPTER_KEYS",

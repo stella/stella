@@ -32,7 +32,6 @@ import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import { routes } from "@/api/http/route";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { logger } from "@/api/lib/observability/logger";
 import { releaseLoadAllowed } from "@/api/lib/scheduler/release-load-deployment";
@@ -106,7 +105,14 @@ const readScheduledLoadJobs = defineEndpoint.public(
 );
 
 const bringScheduledLoadJobsForward = defineEndpoint.public(
-  { bodyMode: "none" },
+  {
+    bodyMode: "none",
+    aggregateMutation: {
+      type: "independent",
+      reason:
+        "Moves the next run of fixed recurring corpus jobs to now on a non-production deployment. The scheduler's lease claim arbitrates with every replica, so the update shares no aggregate with a request.",
+    },
+  },
   async ({ request }) => {
     if (!isAuthorizedReleaseLoadCaller(request)) {
       return notAvailable();
@@ -120,12 +126,6 @@ const bringScheduledLoadJobsForward = defineEndpoint.public(
   },
 );
 
-declareAggregateMutation(bringScheduledLoadJobsForward, {
-  type: "independent",
-  reason:
-    "Moves the next run of fixed recurring corpus jobs to now on a non-production deployment. The scheduler's lease claim arbitrates with every replica, so the update shares no aggregate with a request.",
-});
-
 const unknownJourney = () => new Response("Unknown journey", { status: 400 });
 
 /**
@@ -134,7 +134,14 @@ const unknownJourney = () => new Response("Unknown journey", { status: 400 });
  * The journey is parsed only after them, as the session route's principal.
  */
 const bringJourneyPrerequisiteJobsForward = defineEndpoint.public(
-  { bodyMode: "none" },
+  {
+    bodyMode: "none",
+    aggregateMutation: {
+      type: "independent",
+      reason:
+        "Moves the next run of a journey's declared recurring jobs ahead of every due job on a non-production deployment. The scheduler's lease claim arbitrates with every replica, so the update shares no aggregate with a request.",
+    },
+  },
   async ({ request }) => {
     if (!isAuthorizedReleaseLoadCaller(request)) {
       return notAvailable();
@@ -154,12 +161,6 @@ const bringJourneyPrerequisiteJobsForward = defineEndpoint.public(
     return { dueAt: dueAt.toISOString(), jobIds: jobs.map(({ id }) => id) };
   },
 );
-
-declareAggregateMutation(bringJourneyPrerequisiteJobsForward, {
-  type: "independent",
-  reason:
-    "Moves the next run of a journey's declared recurring jobs ahead of every due job on a non-production deployment. The scheduler's lease claim arbitrates with every replica, so the update shares no aggregate with a request.",
-});
 
 const readJourneyPrerequisiteJobs = defineEndpoint.public(
   { bodyMode: "none" },

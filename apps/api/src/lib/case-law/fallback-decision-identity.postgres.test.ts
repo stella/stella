@@ -1,18 +1,19 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { FALLBACK_DECISION_UNIQUE_INDEXES } from "@/api/db/online-unique-indexes";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
+} from "@stll/case-law-ingestion-core/decision-text";
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+
+import { FALLBACK_DECISION_UNIQUE_INDEXES } from "@/api/db/online-unique-indexes";
 import {
   decisionFallbackState,
   decisionStorageIdentity,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import { FALLBACK_DECISION_NONUNIQUE_INDEXES } from "@/api/lib/case-law/fallback-decision-identity-index";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 

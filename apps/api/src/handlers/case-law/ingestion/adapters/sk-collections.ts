@@ -1,7 +1,11 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: listing-stage labels do not alter collection parsing.
 // parser-output-unchanged: publisher reads use readPublisher with identical status handling; collection parsing is unchanged.
 import { panic, Result } from "better-result";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -16,7 +20,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   SK_COLLECTION_PARSER_VERSION,
   SK_COLLECTION_SERIES,
@@ -27,7 +30,6 @@ import {
   type SkCollectionReadOutcome,
   type SkCollectionSeries,
 } from "@/api/lib/legal-search/sk-collection-enrichment";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 const PUBLISHERS = {
   [SK_COLLECTION_SERIES.NS_R]: {

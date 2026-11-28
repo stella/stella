@@ -19,7 +19,7 @@ import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
   type PartialObservation,
-} from "./partial-observation";
+} from "@stll/case-law-ingestion-core/partial-observation";
 
 export {
   OBSERVATION_DETAIL,

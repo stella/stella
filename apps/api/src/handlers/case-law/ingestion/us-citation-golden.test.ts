@@ -13,6 +13,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { canonicalUsReporterCitation } from "@stll/api-contract/us-reporter-citation";
+import type { CitationOpinionScope } from "@stll/case-law-ingestion-core/ingestion-types";
 import { load } from "@stll/html";
 import { isTag, isText } from "@stll/html/nodes";
 import type { AnyNode } from "@stll/html/nodes";
@@ -26,7 +27,6 @@ import type {
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { annotateUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-annotations";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 
 const unbounded = () => ({ limit: Number.POSITIVE_INFINITY, spent: 0 });
 

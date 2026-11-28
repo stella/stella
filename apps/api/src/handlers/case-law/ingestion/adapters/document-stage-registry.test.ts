@@ -1,6 +1,15 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { observePublisherDocumentFetch } from "@stll/case-law-ingestion-core/document-stage-observation";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  encodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { SyncPage } from "@stll/case-law-ingestion-core/ingestion-types";
+import { PUBLISHER_FIELD_COVERAGE_EVENT } from "@stll/case-law-ingestion-core/publisher-field-coverage";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
@@ -13,15 +22,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { plKioAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
-import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  encodeSourceRawEnvelope,
-  PUBLISHER_REQUEST,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
-import { PUBLISHER_FIELD_COVERAGE_EVENT } from "@/api/lib/legal-search/publisher-field-coverage";
 import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";

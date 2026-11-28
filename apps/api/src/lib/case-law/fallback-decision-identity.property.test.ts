@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
-
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
+} from "@stll/case-law-ingestion-core/decision-text";
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { assertProperty } from "@stll/property-testing";
+
 import {
   decisionFallbackState,
   decisionStorageIdentity,
@@ -14,8 +16,6 @@ import {
   fallbackDecisionIdentityKey,
   parseFallbackDecisionIdentityKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const text = fc
   .array(

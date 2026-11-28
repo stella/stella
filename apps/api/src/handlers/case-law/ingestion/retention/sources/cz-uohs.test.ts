@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -16,7 +17,6 @@ import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { czUohsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

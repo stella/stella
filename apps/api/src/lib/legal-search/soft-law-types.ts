@@ -1,15 +1,14 @@
 import { panic, TaggedError } from "better-result";
 import type { Result } from "better-result";
 
-import type { GuidanceKind } from "@stll/legal-ast/document-kind";
-
 import type {
   SourceFieldInventory,
   SourceSliceWalk,
   SourceSurfaceCensus,
   SourceTotalCount,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { PublisherGateId } from "@stll/case-law-ingestion-core/publisher-gates";
+import type { GuidanceKind } from "@stll/legal-ast/document-kind";
 
 import {
   SOFT_LAW_BLOCK_REASONS,

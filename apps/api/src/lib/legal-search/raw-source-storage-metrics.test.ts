@@ -2,6 +2,11 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
+
+import {
   openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
@@ -9,10 +14,6 @@ import {
   writeRawSourcePayload,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,

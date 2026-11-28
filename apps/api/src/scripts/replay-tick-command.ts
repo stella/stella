@@ -4,6 +4,15 @@ import { eq, type SQLWrapper } from "drizzle-orm";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import type {
+  SourceAdapter,
+  StoredRawReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
   type BatchState,
   type HealthConfig,
   isHeldTooLong,
@@ -40,15 +49,6 @@ import type {
   CaseLawSourceIngestionLease,
   holdCaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
-import type {
-  SourceAdapter,
-  StoredRawReader,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isLocalTestRun } from "@/api/runtime-mode";
 
 const now = () => Temporal.Now.instant().epochMilliseconds;

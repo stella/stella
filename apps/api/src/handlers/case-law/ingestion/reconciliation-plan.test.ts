@@ -16,6 +16,10 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { DAY_IN_MS } from "@stll/time";
 
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
@@ -39,10 +43,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { toUtcDateString } from "@/api/lib/dates";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
-import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-} from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 
 const NOW = new Date("2026-08-11T09:30:00.000Z");

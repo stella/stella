@@ -21,7 +21,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -50,6 +49,10 @@ const config = {
     turnId: resourceIdSchema("chatTurn"),
   }),
   body: chatLocalRunSteerRequestSchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 /** One answer type for every branch, so the route infers the whole union. */
@@ -199,9 +202,5 @@ const steerChatTurn = createSafeRootHandler(
 // A queued message's steer mark is written under the member's thread lock,
 // the row its turns and queue changes lock; the runner command is serialized
 // by the runner store, and the turn itself is not written.
-declareAggregateMutation(steerChatTurn, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default steerChatTurn;

@@ -19,6 +19,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -32,7 +33,6 @@ import {
   caseLawSources,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {

@@ -291,7 +291,8 @@
     "./matter-duplicates": "./src/matter-duplicates.ts",
     "./document-name": "./src/document-name.ts",
     "./matter-reference": "./src/matter-reference.ts",
-    "./matter-reference-edit": "./src/matter-reference-edit.ts"
+    "./matter-reference-edit": "./src/matter-reference-edit.ts",
+    "./refusal-codes": "./src/refusal-codes.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

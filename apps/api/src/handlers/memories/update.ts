@@ -50,6 +50,10 @@ const config = {
     pinned: v.optional(v.boolean()),
     content: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(4000))),
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["memory"],
+  },
 } satisfies HandlerConfig;
 
 const REDACTED_AUDIT_VALUE = "[redacted]";

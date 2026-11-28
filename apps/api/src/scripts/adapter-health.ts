@@ -18,17 +18,17 @@ import { panic } from "better-result";
  */
 import { eq } from "drizzle-orm";
 
+import {
+  CASE_LAW_SOURCE_ROWS_BOUND,
+  CASE_LAW_SOURCE_ROWS_INVARIANT,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { SourceTotalCount } from "@stll/case-law-ingestion-core/ingestion-types";
 import { printError } from "@stll/errors";
 
 import { caseLawSources } from "@/api/db/schema";
 import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { boundedAll } from "@/api/lib/db/bounded-all";
-import {
-  CASE_LAW_SOURCE_ROWS_BOUND,
-  CASE_LAW_SOURCE_ROWS_INVARIANT,
-} from "@/api/lib/legal-search/ingestion-constants";
-import type { SourceTotalCount } from "@/api/lib/legal-search/ingestion-types";
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,

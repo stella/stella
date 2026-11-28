@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   validateAndLog,
   type ValidationSourcePolicy,
@@ -14,7 +15,6 @@ import {
   type RetentionTextAbsence,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { errorTag } from "@/api/lib/errors/error-tag";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** A parsed decision whose retention the pipeline could not measure. */

@@ -218,7 +218,7 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
         context: createFailingDbContext(
           new HandlerError({
             status: 409,
-            code: "handler_specific_code",
+            code: "version_conflict",
             message: "The requested change conflicts with current state",
             hint: "Refresh the resource and retry the change.",
             retryable: true,
@@ -235,7 +235,7 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
           issues: [
             {
               path: "",
-              code: "handler_specific_code",
+              code: "version_conflict",
               message: "The requested change conflicts with current state",
             },
           ],
@@ -312,7 +312,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
         const result = internalFailureResult(
           new HandlerError({
             status,
-            code: "handler_specific_code",
+            code: "version_conflict",
             message: "The caller must correct the request",
             hint: "Correct the request and call the tool again.",
             retryable,
@@ -328,7 +328,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
             issues: [
               {
                 path: "",
-                code: "handler_specific_code",
+                code: "version_conflict",
                 message: "The caller must correct the request",
               },
             ],

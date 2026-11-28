@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -27,6 +29,40 @@ import {
   DECISION_DASH_CLASS_SOURCE,
   polishAdministrativeDocketOf,
 } from "@stll/api-contract/decision-docket-grammar";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import {
   parsePlNsaDecision,
   PL_NSA_TEXT_SECTIONS,
@@ -46,7 +82,6 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import {
@@ -70,7 +105,6 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {
   absentDecisionTextFields,
@@ -80,36 +114,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  DecisionJudgeInput,
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
@@ -675,14 +680,17 @@ export const plNsaCourt = (
   }
   const fromName = courtOfName(published);
   if (fromName === null) {
-    logger.warn("case_law.ingestion.court_unrecognised", {
-      adapterKey: ADAPTER_KEYS.PL_NSA,
-      court: published,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.court_unrecognised",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NSA,
+        court: published,
+      },
+    );
     return { name: published, level: "unrecognised", statedBy: "court-name" };
   }
   if (fromForm !== null && fromForm.name !== fromName.name) {
-    logger.warn("case_law.ingestion.court_conflict", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.court_conflict", {
       adapterKey: ADAPTER_KEYS.PL_NSA,
       court: published,
       decisionForm: decisionForm ?? "",
@@ -741,10 +749,13 @@ export const plNsaDecisionKind = (label: string | null): PlNsaDecisionKind => {
   const first = label?.split(" ").at(0) ?? "";
   const type = isDecisionKindWord(first) ? DECISION_KINDS[first] : undefined;
   if (type === undefined && label !== null) {
-    logger.warn("case_law.ingestion.decision_type_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_NSA,
-      decisionForm: label,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.decision_type_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NSA,
+        decisionForm: label,
+      },
+    );
   }
   const bench =
     label === null
@@ -967,7 +978,7 @@ const quarantined = ({
   source,
   sourceRaw,
 }: QuarantineOptions): IngestionResult => {
-  logger.warn("case_law.ingestion.row_quarantined", {
+  getIngestionDiagnosticsSink().warn("case_law.ingestion.row_quarantined", {
     adapterKey: ADAPTER_KEYS.PL_NSA,
     reason,
     documentId: identity.id,
@@ -1068,11 +1079,14 @@ export const assemblePlNsaDecision = ({
   const row = normalizePlNsaRow(source);
   const identity = plNsaIdentityOf(source);
   if (identity.kind !== "portal") {
-    logger.warn("case_law.ingestion.document_id_unrecognised", {
-      adapterKey: ADAPTER_KEYS.PL_NSA,
-      documentId: identity.id,
-      identityKind: identity.kind,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.document_id_unrecognised",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NSA,
+        documentId: identity.id,
+        identityKind: identity.kind,
+      },
+    );
   }
 
   const snapshotPart: SnapshotPart = {

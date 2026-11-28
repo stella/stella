@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   CYCLE_OUTCOME,
   INGESTION_PAUSE_REASON,
@@ -28,7 +29,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

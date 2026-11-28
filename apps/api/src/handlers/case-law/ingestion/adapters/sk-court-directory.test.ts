@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { getSkCourtSuccessionEdges } from "@stll/api-contract/sk-court-succession";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 
 import {
   createSkCourtRegistryReader,
@@ -12,14 +20,6 @@ import {
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { replayCapturedSkDocument } from "@/api/tests/helpers/sk-document-raw-storage";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

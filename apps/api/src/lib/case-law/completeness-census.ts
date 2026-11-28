@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 import { and, count, eq, gte, inArray, lte, sql } from "drizzle-orm";
 
+import { CASE_LAW_SOURCE_ROWS_BOUND } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { SourceSliceWalk } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { caseLawCompletenessCensus as censusTable } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -16,8 +19,6 @@ import {
   CENSUS_MEASURED_OUTCOMES,
 } from "@/api/lib/case-law/completeness-census-values";
 import { readBounded } from "@/api/lib/db/read-bounded";
-import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
-import type { SourceSliceWalk } from "@/api/lib/legal-search/ingestion-types";
 
 const CENSUS_SCOPE_SLICE_LIMIT = 100_000;
 

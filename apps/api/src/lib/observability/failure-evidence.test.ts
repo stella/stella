@@ -491,11 +491,14 @@ describe("provider status provenance", () => {
   });
 
   test("a HandlerError's own status is not a provider status", () => {
-    const wrapped = new HandlerError({
-      status: 502,
-      code: "429",
-      message: "x",
-    });
+    const wrapped = Object.assign(
+      new HandlerError({
+        status: 502,
+        code: "upstream_unavailable",
+        message: "x",
+      }),
+      { code: "429" },
+    );
 
     expect(readProviderStatus(wrapped)).toEqual({
       status: 429,

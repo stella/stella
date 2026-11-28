@@ -11,7 +11,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -24,6 +23,10 @@ const config = {
     threadId: resourceIdSchema("chatThread"),
     toolName: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread", "chatToolGrants"],
+  },
 } satisfies HandlerConfig;
 
 const notGrantable = () =>
@@ -139,10 +142,5 @@ const createChatToolGrant = createSafeRootHandler(
     return stored;
   },
 );
-
-declareAggregateMutation(createChatToolGrant, {
-  type: "aggregate",
-  aggregates: ["chatThread", "chatToolGrants"],
-});
 
 export default createChatToolGrant;

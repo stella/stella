@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { parseUsReporterReference } from "@stll/api-contract/us-reporter-citation";
+import type { CitationOpinionScope } from "@stll/case-law-ingestion-core/ingestion-types";
 import { CitationScopesRejectedError } from "@stll/case-law-parsers/citation-scopes";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import type {
@@ -27,7 +28,6 @@ import {
   US_CITATION_OCCURRENCE_LIMIT,
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 
 const paragraph = (
   id: string,

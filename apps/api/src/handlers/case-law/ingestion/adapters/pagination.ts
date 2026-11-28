@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
 /**
@@ -10,11 +12,24 @@ import { panic, Result } from "better-result";
  */
 import * as v from "valibot";
 
+// parser-output-unchanged: listing reads use readPublisher with identical status, retry, and error classification; parsed decisions are unchanged.
+import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/case-law-consts";
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
+// parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  DecisionSupplement,
+  IngestionItem,
+  IngestionResult,
+  SyncPage,
+  UnreadListedItem,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
-// parser-output-unchanged: listing reads use readPublisher with identical status, retry, and error classification; parsed decisions are unchanged.
-import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   readPublisher,
   unreadPublisherError,
@@ -22,19 +37,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
-// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
-// parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
-// parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
-import type {
-  DecisionSupplement,
-  IngestionItem,
-  IngestionResult,
-  SyncPage,
-  UnreadListedItem,
-} from "@/api/lib/legal-search/ingestion-types";
-import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -699,12 +701,15 @@ const parsePageItems = async ({
     processedThroughIndex = i + chunk.length;
   }
   if (itemsSkipped > 0) {
-    logger.warn("case_law.ingestion.page_items_skipped", {
-      adapterKey,
-      page,
-      skipped: itemsSkipped,
-      total: items.length,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.page_items_skipped",
+      {
+        adapterKey,
+        page,
+        skipped: itemsSkipped,
+        total: items.length,
+      },
+    );
   }
   return {
     decisions,
@@ -916,11 +921,14 @@ export const createPagePaginatedFetch = <TResponse>(
             // Same rule as the timeout skip above: a publisher-side 5xx
             // is operational, logged per page, and aggregated by the
             // coverage ledger rather than captured per attempt.
-            logger.warn("case_law.ingestion.page_skipped_server_error", {
-              adapterKey: opts.adapterKey,
-              httpStatus: String(failedStatus),
-              page: String(page),
-            });
+            getIngestionDiagnosticsSink().warn(
+              "case_law.ingestion.page_skipped_server_error",
+              {
+                adapterKey: opts.adapterKey,
+                httpStatus: String(failedStatus),
+                page: String(page),
+              },
+            );
             return Result.ok({
               decisions: [],
               publisherRequest: PUBLISHER_REQUEST.FAILED,
@@ -955,11 +963,14 @@ export const createPagePaginatedFetch = <TResponse>(
             }
             const contentType =
               response.headers.get("content-type") ?? "unknown";
-            logger.warn("case_law.ingestion.page_unparseable_retry", {
-              adapterKey: opts.adapterKey,
-              page,
-              mediaType: contentType,
-            });
+            getIngestionDiagnosticsSink().warn(
+              "case_law.ingestion.page_unparseable_retry",
+              {
+                adapterKey: opts.adapterKey,
+                page,
+                mediaType: contentType,
+              },
+            );
             // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- retries the page URL from the adapter's own buildRequest over its fixed publisher base
             const retryOutcome = await readPublisher(url, {
               ...init,
@@ -1030,19 +1041,22 @@ export const createPagePaginatedFetch = <TResponse>(
         } = parsedItems;
 
         const totalMs = Math.round(performance.now() - fetchT0);
-        logger.info("case_law.ingestion.page_completed", {
-          adapterKey: opts.adapterKey,
-          page,
-          offset,
-          skippedOffsetItems: itemsAlreadyFetched,
-          decisions: decisions.length,
-          supplements: supplements.length,
-          items: items.length,
-          skipped: itemsSkipped,
-          totalMs,
-          fetchMs,
-          ...(total !== undefined ? { sourceTotal: total } : {}),
-        });
+        getIngestionDiagnosticsSink().info(
+          "case_law.ingestion.page_completed",
+          {
+            adapterKey: opts.adapterKey,
+            page,
+            offset,
+            skippedOffsetItems: itemsAlreadyFetched,
+            decisions: decisions.length,
+            supplements: supplements.length,
+            items: items.length,
+            skipped: itemsSkipped,
+            totalMs,
+            fetchMs,
+            ...(total !== undefined ? { sourceTotal: total } : {}),
+          },
+        );
 
         const fetched = pageStartOffset + fetchedItems.length;
         const hasMore =
@@ -1094,13 +1108,16 @@ export const createPagePaginatedFetch = <TResponse>(
           !signal?.aborted &&
           !hasMore
         ) {
-          logger.info("case_law.ingestion.traversal_advanced", {
-            adapterKey: opts.adapterKey,
-            from: walk.mode.name,
-            to: successor,
-            offset: fetched,
-            ...(total !== undefined ? { sourceTotal: total } : {}),
-          });
+          getIngestionDiagnosticsSink().info(
+            "case_law.ingestion.traversal_advanced",
+            {
+              adapterKey: opts.adapterKey,
+              from: walk.mode.name,
+              to: successor,
+              offset: fetched,
+              ...(total !== undefined ? { sourceTotal: total } : {}),
+            },
+          );
           nextCursor = encodeTraversalCursor(successor, 0);
         }
 

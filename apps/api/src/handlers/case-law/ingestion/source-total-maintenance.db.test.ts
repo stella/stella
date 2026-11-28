@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
 import { defaultConfig } from "@stll/db-load-gate/health";
 
 import {
@@ -14,14 +16,12 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { createSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
 import {

@@ -27,7 +27,6 @@ import {
   lockBillingArrangement,
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -55,6 +54,10 @@ const createClientInvoice = createSafeRootHandler(
     realtime: invoiceRealtimeUpdates,
     params: v.object({ clientId: resourceIdSchema("contact") }),
     body: clientInvoiceBody,
+    aggregateMutation: {
+      type: "aggregate",
+      aggregates: ["workspace"],
+    },
   },
   async function* ({
     safeDb,
@@ -257,9 +260,5 @@ const createClientInvoice = createSafeRootHandler(
     },
   },
 );
-declareAggregateMutation(createClientInvoice, {
-  type: "aggregate",
-  aggregates: ["workspace"],
-});
 
 export default createClientInvoice;

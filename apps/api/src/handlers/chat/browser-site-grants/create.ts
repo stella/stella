@@ -15,7 +15,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { lockChatOwnerStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { pushSiteGrantsToRuns } from "@/api/lib/desktop-runner/site-grants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -35,6 +34,10 @@ const config = {
       v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
     ),
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatOwnerStoredContentEgress", "chatToolGrants"],
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -143,10 +146,5 @@ const createBrowserSiteGrant = createSafeRootHandler(
   },
   { authorize: authorizeOrganizationReplay },
 );
-
-declareAggregateMutation(createBrowserSiteGrant, {
-  type: "aggregate",
-  aggregates: ["chatOwnerStoredContentEgress", "chatToolGrants"],
-});
 
 export default createBrowserSiteGrant;

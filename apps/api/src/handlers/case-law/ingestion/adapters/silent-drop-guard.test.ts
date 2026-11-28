@@ -1,16 +1,16 @@
 import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  type StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { isExcludedHtmlTag } from "@stll/case-law-parsers/visible-html-text";
 import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  type StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   brTjdftFixture,

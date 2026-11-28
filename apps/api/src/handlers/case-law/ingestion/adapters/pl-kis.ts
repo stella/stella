@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
@@ -9,6 +11,44 @@
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+import { readStoredDocumentObject } from "@stll/case-law-ingestion-core/stored-document-replay";
 import {
   parsePlKisDocumentHtml,
   parsePlKisDocumentPdf,
@@ -78,7 +118,6 @@ import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagno
 import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -97,40 +136,6 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  PUBLISHER_REQUEST,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseValue,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -1555,7 +1560,7 @@ export const assemblePlKisDecision = async ({
   // service holds documents of several authorities, so none is assumed.
   const court = authorities[0] ?? "";
   if (court.length === 0) {
-    logger.warn("case_law.ingestion.court_not_stated", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.court_not_stated", {
       adapterKey: ADAPTER_KEYS.PL_KIS,
       sourceDocumentId: id,
     });
@@ -1587,7 +1592,7 @@ export const assemblePlKisDecision = async ({
   if (parsed?.output.structure.type === "undivided") {
     // The text is all there, but the reading told none of its parts apart:
     // the shape a layout it does not know leaves, whatever the category.
-    logger.warn(AST_STRUCTURE_DEGRADED, {
+    getIngestionDiagnosticsSink().warn(AST_STRUCTURE_DEGRADED, {
       parser: ADAPTER_KEYS.PL_KIS,
       caseNumber,
       language: LANGUAGE,
@@ -1603,10 +1608,13 @@ export const assemblePlKisDecision = async ({
 
   const unmapped = plKisUnmappedFields(row, detail);
   if (unmapped.length > 0) {
-    logger.warn("case_law.ingestion.source_field_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_KIS,
-      fields: unmapped.join(", "),
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.source_field_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_KIS,
+        fields: unmapped.join(", "),
+      },
+    );
   }
 
   const statusId = detailString(detail, "STATUS_INFORMACJI");
@@ -2562,11 +2570,14 @@ const tipPage = async (
     // The next page is past what the search serves. The rows between here and
     // the frontier belong to the reconciliation ledger, whose recent slices
     // list them by issue month; the tip resumes at the head.
-    logger.warn("case_law.ingestion.tip_catch_up_window_exhausted", {
-      adapterKey: ADAPTER_KEYS.PL_KIS,
-      frontier: start.frontier,
-      pending,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.tip_catch_up_window_exhausted",
+      {
+        adapterKey: ADAPTER_KEYS.PL_KIS,
+        frontier: start.frontier,
+        pending,
+      },
+    );
     return Result.ok({
       decisions,
       ...(itemBuildFailures === 0

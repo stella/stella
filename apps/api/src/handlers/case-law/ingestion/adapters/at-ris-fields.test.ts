@@ -12,7 +12,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
 import { assembleAtRisDecision } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import type { AtRisSourceDefinition } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import {

@@ -11,6 +11,17 @@ import {
   API_CLIENT_REQUEST_METHODS,
 } from "../.oxlint-plugins/api-client-chain.ts";
 
+const routeCallSegmentParts = (call: ts.CallExpression): string[] => {
+  const argument = call.arguments.at(0);
+  if (!argument || !ts.isObjectLiteralExpression(argument)) {
+    return [":dynamic"];
+  }
+  return argument.properties.map(
+    (item) =>
+      `:${item.name ? (propertyName(item.name) ?? "dynamic") : "dynamic"}`,
+  );
+};
+
 const MUTATIONS = new Set(["useMutation", "mutationOptions"]);
 // The retry-stable mutation hook runs its caller's mutationFn once per
 // submission, as useMutation does, so its options are read in place. Only
@@ -18,6 +29,14 @@ const MUTATIONS = new Set(["useMutation", "mutationOptions"]);
 const IDEMPOTENT_MUTATION = {
   file: "apps/web/src/lib/idempotency/use-idempotent-mutation.ts",
   name: "useIdempotentMutation",
+} as const;
+const RESOURCE_MUTATION_HOOK = {
+  file: "apps/web/src/lib/workspace-realtime.ts",
+  name: "useResourceMutation",
+} as const;
+const RESOURCE_QUERY_HOOK = {
+  file: "apps/web/src/lib/workspace-realtime.ts",
+  name: "useResourceQuery",
 } as const;
 /** Route helpers that take the query client first and the query options
  *  second (`apps/web/src/lib/react-query.ts`). The census and the
@@ -1297,10 +1316,18 @@ class CensusAnalyzer {
       return undefined;
     }
     if (
-      module.file === IDEMPOTENT_MUTATION.file &&
-      imported.imported === IDEMPOTENT_MUTATION.name
+      (module.file === IDEMPOTENT_MUTATION.file &&
+        imported.imported === IDEMPOTENT_MUTATION.name) ||
+      (module.file === RESOURCE_MUTATION_HOOK.file &&
+        imported.imported === RESOURCE_MUTATION_HOOK.name)
     ) {
       return "useMutation";
+    }
+    if (
+      module.file === RESOURCE_QUERY_HOOK.file &&
+      imported.imported === RESOURCE_QUERY_HOOK.name
+    ) {
+      return "useQuery";
     }
     seen.add(`${module.file}:${imported.imported}`);
     const reexport = module.reexports.get(imported.imported);
@@ -1709,6 +1736,23 @@ class CensusAnalyzer {
     }
     return undefined;
   };
+  inlineRouteHelperBody = (
+    call: ts.CallExpression,
+  ): ts.Expression | undefined => {
+    const callee = unwrap(call.expression);
+    if (!ts.isIdentifier(callee)) {
+      return undefined;
+    }
+    const binding = this.bindingFor(callee);
+    const initializer =
+      binding && !isOwnedApiRoot(this.moduleFor(callee), binding)
+        ? constBindingValue(binding)
+        : undefined;
+    const fn = initializer && unwrap(initializer);
+    return fn && ts.isArrowFunction(fn) && !ts.isBlock(fn.body)
+      ? fn.body
+      : undefined;
+  };
   routeOf = (call: ts.CallExpression): CensusRoute | undefined => {
     const auth = this.authClientOperation(call);
     if (auth) {
@@ -1760,16 +1804,12 @@ class CensusAnalyzer {
         if (isApiRequestCall(node)) {
           return undefined;
         }
-        const argument = node.arguments.at(0);
-        if (argument && ts.isObjectLiteralExpression(argument)) {
-          for (const item of argument.properties.toReversed()) {
-            parts.unshift(
-              `:${item.name ? (propertyName(item.name) ?? "dynamic") : "dynamic"}`,
-            );
-          }
-        } else {
-          parts.unshift(":dynamic");
+        const helperBody = this.inlineRouteHelperBody(node);
+        if (helperBody) {
+          node = helperBody;
+          continue;
         }
+        parts.unshift(...routeCallSegmentParts(node));
         node = node.expression;
         continue;
       }

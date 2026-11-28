@@ -12,6 +12,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: v.object({ policy: v.picklist([...PERSONAL_API_KEY_POLICIES]) }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Updates the standalone personal API key policy column without touching a shared aggregate.",
+  },
 } satisfies HandlerConfig;
 
 export default createSafeRootHandler(

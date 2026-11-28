@@ -6,9 +6,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  EMPTY_AST,
+  StoredRawReadError,
+  toPlainTextIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -21,11 +27,6 @@ import {
   StoredCorpusValidationError,
 } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import {
-  EMPTY_AST,
-  StoredRawReadError,
-  toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
 import {
   parseEcjFormexRefreshIds,
   runEcjFormexRefresh as runRefresh,

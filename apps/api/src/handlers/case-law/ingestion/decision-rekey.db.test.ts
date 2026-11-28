@@ -15,6 +15,10 @@ import {
   directoryCourtIdentities,
   isPrintedCourtJurisdiction,
 } from "@stll/api-contract/court-identity";
+import { STATED_ECLI_IDENTITY } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -42,10 +46,6 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];

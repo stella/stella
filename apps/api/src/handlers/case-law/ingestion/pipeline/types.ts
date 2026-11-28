@@ -1,3 +1,6 @@
+import type { StatedEcliIdentity } from "@stll/case-law-ingestion-core/adapter-manifest";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { CitationArrivalDrainOwner } from "@/api/handlers/case-law/citation-arrivals";
 import type {
@@ -10,10 +13,8 @@ import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/o
 import type { SourceRetention } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { StatedEcliIdentity } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 export const CONTENTION_RECONCILIATION = {

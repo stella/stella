@@ -1,6 +1,17 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  SourceRawObjects,
+  SourceRawParts,
+  StoredRawReadError,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { SkUsListingFetchOutcome } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
@@ -9,17 +20,6 @@ import {
   pgTimestampCursorBoundary,
   pgTimestampCursorValue,
 } from "@/api/lib/db-pagination";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  SourceRawObjects,
-  SourceRawParts,
-  StoredRawReadError,
-} from "@/api/lib/legal-search/ingestion-types";
 
 export type SkUsRawCursor = {
   createdAt: string;

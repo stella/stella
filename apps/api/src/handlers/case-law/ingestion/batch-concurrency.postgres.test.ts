@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { fileURLToPath } from "node:url";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { deferred, waitFor } from "@stll/test-kit";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -25,7 +26,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {

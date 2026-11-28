@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: Named fetchDecisionContent options preserve its body, argument values and evaluation order.
@@ -15,6 +17,49 @@ import {
   DECISION_TEXT_FIELD_KEYS,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredDocumentBuildInput,
+  StoredDocumentBuildOutcome,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
 import { classifyFailure } from "@stll/errors";
 import { load } from "@stll/html";
@@ -24,12 +69,6 @@ import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { nssDocumentReferenceMatches } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-document-identity";
 import {
@@ -62,7 +101,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechReporterIdentifiersFromCitationLabel } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { CzechAppealReview } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   absentDecisionTextFields,
@@ -83,44 +121,6 @@ import {
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredDocumentBuildInput,
-  StoredDocumentBuildOutcome,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { extractNssPublisherMetadata } from "./cz-nss-publisher-metadata";
@@ -619,11 +619,14 @@ export const parseResultRows = (html: string): ParsedRow[] => {
     ) {
       // Skip malformed or overly long case numbers
       if (publishedCaseNumber) {
-        logger.warn("case_law.ingestion.malformed_case_number_skipped", {
-          adapterKey: ADAPTER_KEYS.CZ_NSS,
-          caseNumberLength: publishedCaseNumber.length,
-          caseNumberSample: publishedCaseNumber.slice(0, 50),
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.malformed_case_number_skipped",
+          {
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            caseNumberLength: publishedCaseNumber.length,
+            caseNumberSample: publishedCaseNumber.slice(0, 50),
+          },
+        );
       }
       continue;
     }
@@ -706,28 +709,8 @@ const publisherReadFailure = (error: unknown): object =>
   );
 
 /** The detail-page parser threw on a page the portal served. */
-const detailParseFailed = failureSink({
-  event: "case_law.ingestion.detail_parse_failed",
-  expected: [],
-});
-
-const detailReadFailed = failureSink({
-  event: "case_law.ingestion.detail_fetch_failed",
-  expected: [],
-});
-
 /** A document endpoint's read failed; `phase` names which one. */
-const documentReadFailed = failureSink({
-  event: "case_law.ingestion.document_fetch_failed",
-  expected: [],
-});
-
 /** The parser threw on a rich document the portal served. */
-const documentParseFailed = failureSink({
-  event: "case_law.ingestion.document_parse_failed",
-  expected: [],
-});
-
 /**
  * Shortest plain-text payload this adapter reads as a document. Below it the
  * endpoint answered with a portal notice rather than a decision, and the crawl
@@ -794,7 +777,7 @@ const observeDocumentReadFailed = ({
   DecisionContentRead,
   { type: "unavailable" }
 > => {
-  observeFailure(
+  getIngestionDiagnosticsSink().observeFailure(
     publisherReadFailure(
       unreadPublisherError({
         outcome: read,
@@ -804,7 +787,7 @@ const observeDocumentReadFailed = ({
       }),
     ),
     {
-      sink: documentReadFailed,
+      event: "case_law.ingestion.document_fetch_failed",
       ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId, phase },
     },
   );
@@ -935,8 +918,8 @@ const fetchDecisionContent = async ({
   // the portal serves as plain text. It is observed unclassified, as the
   // parser's own failure.
   if (Result.isError(parsed)) {
-    observeFailure(parsed.error, {
-      sink: documentParseFailed,
+    getIngestionDiagnosticsSink().observeFailure(parsed.error, {
+      event: "case_law.ingestion.document_parse_failed",
       ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
     });
   }
@@ -1132,8 +1115,8 @@ const fetchRegistryDocument = async ({
     catch: (cause: unknown) => cause,
   });
   if (Result.isError(parsed)) {
-    observeFailure(parsed.error, {
-      sink: documentParseFailed,
+    getIngestionDiagnosticsSink().observeFailure(parsed.error, {
+      event: "case_law.ingestion.document_parse_failed",
       ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
     });
     return {
@@ -1868,7 +1851,7 @@ const fetchDetailMetadata = async (
       return { type: "fetched", detail: EMPTY_DETAIL, html: null };
     case "refused":
     case "unavailable":
-      observeFailure(
+      getIngestionDiagnosticsSink().observeFailure(
         publisherReadFailure(
           unreadPublisherError({
             outcome: read,
@@ -1878,7 +1861,7 @@ const fetchDetailMetadata = async (
           }),
         ),
         {
-          sink: detailReadFailed,
+          event: "case_law.ingestion.detail_fetch_failed",
           ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
         },
       );
@@ -1898,8 +1881,8 @@ const fetchDetailMetadata = async (
   if (Result.isError(parsed)) {
     // Observed unclassified, as the parser's own failure, and the row is held
     // like an unread one.
-    observeFailure(parsed.error, {
-      sink: detailParseFailed,
+    getIngestionDiagnosticsSink().observeFailure(parsed.error, {
+      event: "case_law.ingestion.detail_parse_failed",
       ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
     });
     return { type: "unavailable", readOutcome: null };
@@ -3580,12 +3563,15 @@ export const czNssAdapter = defineSourceAdapter({
           invalidateSession();
           const attempts = missingCountAttempts + 1;
           if (attempts < CZ_NSS_MISSING_COUNT_ATTEMPTS) {
-            logger.warn("case_law.ingestion.nss_count_retry", {
-              adapterKey: ADAPTER_KEYS.CZ_NSS,
-              date,
-              page,
-              attempts,
-            });
+            getIngestionDiagnosticsSink().warn(
+              "case_law.ingestion.nss_count_retry",
+              {
+                adapterKey: ADAPTER_KEYS.CZ_NSS,
+                date,
+                page,
+                attempts,
+              },
+            );
             return {
               decisions: [],
               publisherRequest: PUBLISHER_REQUEST.FAILED,
@@ -3596,13 +3582,16 @@ export const czNssAdapter = defineSourceAdapter({
               }),
             };
           }
-          logger.warn("case_law.ingestion.nss_unsettled_day", {
-            adapterKey: ADAPTER_KEYS.CZ_NSS,
-            type: "missing-result-count",
-            date,
-            attempts,
-            repair: "calendar_reconciliation",
-          });
+          getIngestionDiagnosticsSink().warn(
+            "case_law.ingestion.nss_unsettled_day",
+            {
+              adapterKey: ADAPTER_KEYS.CZ_NSS,
+              type: "missing-result-count",
+              date,
+              attempts,
+              repair: "calendar_reconciliation",
+            },
+          );
           const next = nextDay(date);
           return {
             decisions: [],
@@ -3665,15 +3654,18 @@ export const czNssAdapter = defineSourceAdapter({
         });
         const gap = Math.max(0, expectedRows - rows.length);
         if (gap > 0) {
-          logger.warn("case_law.ingestion.nss_listing_gap", {
-            adapterKey: ADAPTER_KEYS.CZ_NSS,
-            date,
-            page,
-            type: "item_build_failed",
-            count: gap,
-            expectedRows,
-            parsedRows: rows.length,
-          });
+          getIngestionDiagnosticsSink().warn(
+            "case_law.ingestion.nss_listing_gap",
+            {
+              adapterKey: ADAPTER_KEYS.CZ_NSS,
+              date,
+              page,
+              type: "item_build_failed",
+              count: gap,
+              expectedRows,
+              parsedRows: rows.length,
+            },
+          );
         }
         const decisions: IngestionResult[] = [];
         let failed = gap;

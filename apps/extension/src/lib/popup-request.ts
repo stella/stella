@@ -20,6 +20,12 @@ const popupRequestSchema = v.variant("type", [
     tabId: tabIdSchema,
     type: v.literal("adopt"),
   }),
+  // Opens or brings forward a stella tab and connects it, in the worker:
+  // the popup closes as soon as another tab comes to the front.
+  v.strictObject({
+    source: v.literal(POPUP_REQUEST_SOURCE),
+    type: v.literal("open-and-pair"),
+  }),
   v.strictObject({
     source: v.literal(POPUP_REQUEST_SOURCE),
     type: v.literal("disconnect"),
@@ -58,7 +64,9 @@ export type PopupResponse = v.InferOutput<typeof popupResponseSchema>;
 
 type PopupRequestInput =
   | { tabId: number; type: "adopt" | "pair" }
-  | { type: "disconnect" | "revoke" | "take-download-notices" };
+  | {
+      type: "disconnect" | "open-and-pair" | "revoke" | "take-download-notices";
+    };
 
 /** Sends a popup action to the worker and reads its verdict. */
 export const sendPopupRequest = async (

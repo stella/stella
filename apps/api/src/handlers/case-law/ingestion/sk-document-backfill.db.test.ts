@@ -12,6 +12,10 @@ import { PDF } from "@libpdf/core";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -20,7 +24,6 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";

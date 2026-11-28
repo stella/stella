@@ -1,3 +1,5 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: [pl-nsa] migrated shard range and redirect transport to readPublisher; served response parsing is unchanged.
 import { panic, Result } from "better-result";
 import type { AsyncBuffer, FileMetaData } from "hyparquet";
@@ -29,13 +31,19 @@ import { appendFile, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  PUBLISHER_REQUEST,
+  type PublisherRequest,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 import type { Sha256Hasher } from "@stll/sha256/types";
 import { readCappedBytes } from "@stll/skills/streaming";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   readPublisher,
   unreadPublisherError,
@@ -43,12 +51,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  PUBLISHER_REQUEST,
-  type PublisherRequest,
-} from "@/api/lib/legal-search/ingestion-types";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 // ── The pinned snapshot ──────────────────────────────────
 

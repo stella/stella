@@ -36,6 +36,10 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
+import {
+  type DeferredDocumentAdapterKey,
+  isDeferredDocumentAdapterKey,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
 import { declareFailureClass, type FailureReason } from "@stll/errors";
 
 import type {
@@ -45,10 +49,6 @@ import type {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
-import {
-  type DeferredDocumentAdapterKey,
-  isDeferredDocumentAdapterKey,
-} from "@/api/lib/legal-search/adapter-manifest";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import type {
   BackfilledDocument,

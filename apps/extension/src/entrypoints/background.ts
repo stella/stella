@@ -63,6 +63,7 @@ import {
   takeDownloadNotices,
 } from "../lib/download-guard";
 import { executeAtMostOnce } from "../lib/execution-ledger";
+import { openOrFocusStella } from "../lib/open-stella";
 import {
   forgetOpenedTab,
   judgeOpenedTab,
@@ -98,7 +99,10 @@ import {
   readControlledTabId,
   replaceControlledTab,
 } from "../lib/tab-executor";
-import { trustedStellaOriginFromUrl } from "../lib/trusted-origin";
+import {
+  STELLA_START_ORIGIN,
+  trustedStellaOriginFromUrl,
+} from "../lib/trusted-origin";
 import { rememberWebDownloadTarget } from "../lib/web-download-target";
 
 /**
@@ -550,6 +554,30 @@ const handlePopupRequest = async (
     case "pair":
       return await session.change<PopupResponse>(async () => {
         const paired = await pairStellaTab(request.tabId);
+        return paired.status === "paired"
+          ? { status: "done" }
+          : { status: "unsupported-tab" };
+      });
+    case "open-and-pair":
+      return await session.change<PopupResponse>(async () => {
+        const opened = await openOrFocusStella(
+          {
+            activateTab: async (tabId) =>
+              await chrome.tabs.update(tabId, { active: true }),
+            createTab: async (url) => await chrome.tabs.create({ url }),
+            focusWindow: async (windowId) =>
+              await chrome.windows.update(windowId, { focused: true }),
+            queryTabs: async () => await chrome.tabs.query({}),
+          },
+          {
+            originFromUrl: trustedStellaOriginFromUrl,
+            startOrigin: STELLA_START_ORIGIN,
+          },
+        );
+        if (opened.status === "no-origin" || opened.status === "not-opened") {
+          return { status: "unsupported-tab" };
+        }
+        const paired = await pairStellaTab(opened.tabId);
         return paired.status === "paired"
           ? { status: "done" }
           : { status: "unsupported-tab" };

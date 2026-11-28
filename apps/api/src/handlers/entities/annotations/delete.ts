@@ -8,7 +8,6 @@ import { Result } from "better-result";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { deleteReaderAnnotationRows } from "@/api/lib/legal-search/reader-annotations/delete";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
@@ -27,6 +26,10 @@ const config = {
     entityId: resourceIdSchema("entity"),
     annotationId: resourceIdSchema("legalReaderAnnotation"),
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["readerAnnotation"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const deleteDocumentAnnotation = createSafeHandler(
@@ -61,10 +64,5 @@ const deleteDocumentAnnotation = createSafeHandler(
     return Result.ok({ ok: true as const });
   },
 );
-
-declareAggregateMutation(deleteDocumentAnnotation, {
-  type: "aggregate",
-  aggregates: ["readerAnnotation"],
-});
 
 export default deleteDocumentAnnotation;

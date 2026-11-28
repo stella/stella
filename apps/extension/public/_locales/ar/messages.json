@@ -50,27 +50,6 @@
   "statusConnected": {
     "message": "متصل"
   },
-  "statusNotConnected": {
-    "message": "غير متصل"
-  },
-  "statusWebsiteAccessNeeded": {
-    "message": "يلزم السماح بالوصول إلى المواقع"
-  },
-  "statusOpenStella": {
-    "message": "افتح stella للاتصال"
-  },
-  "allowAndConnect": {
-    "message": "السماح بالوصول والاتصال"
-  },
-  "allowWebsiteAccess": {
-    "message": "السماح بالوصول إلى المواقع"
-  },
-  "connectStella": {
-    "message": "اتصال stella"
-  },
-  "openStella": {
-    "message": "فتح stella"
-  },
   "adoptTab": {
     "message": "استخدام علامة التبويب هذه مع stella"
   },
@@ -80,28 +59,25 @@
   "revokeAccess": {
     "message": "إزالة الوصول"
   },
-  "checkingAccess": {
-    "message": "جارٍ التحقق من الاتصال…"
-  },
-  "statusConnectedElsewhere": {
-    "message": "متصل في مكان آخر"
-  },
-  "connectStellaInstead": {
-    "message": "اتصال stella هنا بدلاً من ذلك"
-  },
-  "allowDesktop": {
-    "message": "استخدام مع stella desktop"
-  },
-  "desktopConnected": {
-    "message": "stella desktop متصل"
-  },
-  "desktopNotRunning": {
-    "message": "stella desktop لا يعمل"
-  },
   "desktopUpdateNeeded": {
     "message": "حدّث stella desktop وهذه الإضافة"
   },
-  "desktopConnecting": {
-    "message": "جارٍ الاتصال بـ stella desktop…"
+  "lineWebsite": {
+    "message": "موقع stella"
+  },
+  "lineDesktop": {
+    "message": "تطبيق stella لسطح المكتب"
+  },
+  "lineConnect": {
+    "message": "اتصال"
+  },
+  "lineConnecting": {
+    "message": "جارٍ الاتصال…"
+  },
+  "lineOpenApp": {
+    "message": "افتح التطبيق"
+  },
+  "lineUpdateApp": {
+    "message": "حدّث التطبيق"
   }
 }

@@ -14,6 +14,7 @@ import {
   type LegalResolveResponse,
   legalResolveResponseSchema,
 } from "@stll/api-contract/legal-resolve";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { assertProperty } from "@stll/property-testing";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -27,7 +28,6 @@ import {
 } from "@/api/handlers/legal-resolve/decision-constraints";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 
 const organizationId =

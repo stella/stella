@@ -3,30 +3,30 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
-
-import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { createSafeId } from "@/api/lib/branded-types";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   STORED_RAW_REPARSE_REJECTION,
   STORED_RAW_REPLAY_STATUS,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   IngestionResult,
   StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
-import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
-import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
-import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
+import { assertProperty } from "@stll/property-testing";
+
+import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { createSafeId } from "@/api/lib/branded-types";
+import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
+import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
 import { skCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

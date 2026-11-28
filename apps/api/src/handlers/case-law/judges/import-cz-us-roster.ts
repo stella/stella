@@ -17,6 +17,13 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { CZ_ECLI_COURTS } from "@stll/case-law-ingestion-core/ecli-court-codes";
+import type {
+  JudgeExternalRefs,
+  PortraitSource,
+} from "@stll/case-law-ingestion-core/judges-consts";
+import { PORTRAIT_SOURCE } from "@stll/case-law-ingestion-core/judges-consts";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { load } from "@stll/html";
@@ -32,11 +39,6 @@ import {
   INGESTION_USER_AGENT,
   parseCeDate,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import type {
-  JudgeExternalRefs,
-  PortraitSource,
-} from "@/api/handlers/case-law/judges/consts";
-import { PORTRAIT_SOURCE } from "@/api/handlers/case-law/judges/consts";
 import {
   judgeNameKey,
   stripAcademicTitles,
@@ -44,10 +46,8 @@ import {
 import { PORTRAIT_MAX_BYTES } from "@/api/handlers/case-law/judges/portrait";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { CZ_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
 import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 /* -- the source ---------------------------------------------------------- */
 

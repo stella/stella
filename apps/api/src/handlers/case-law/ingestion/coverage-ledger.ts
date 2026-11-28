@@ -13,12 +13,13 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
  * describes the latest attempt.
  */
 
+import type { SliceCoverage } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawCoverageSlices } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
-import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
 
 export type RecordSliceCoverageInput = {
   sourceId: SafeId<"caseLawSource">;

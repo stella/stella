@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import type { CensusListingIdentity } from "@stll/case-law-ingestion-core/ingestion-types";
 import { chunk } from "@stll/concurrency/chunk";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -19,7 +20,6 @@ import {
   readStoredListingIdentities,
 } from "@/api/lib/case-law/stored-listing-identities";
 import { lockCaseLawSourceIngestionLease } from "@/api/lib/db/aggregate-lock";
-import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,

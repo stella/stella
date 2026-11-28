@@ -1,3 +1,5 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -13,6 +15,50 @@ import { panic, Result } from "better-result";
 
 import type { SkCourtsSourceUrlStatus } from "@stll/api-contract/case-law-text-field";
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseValue,
+  SyncPage,
+  UnreadListedItem,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
+import { readStoredDocumentObject } from "@stll/case-law-ingestion-core/stored-document-replay";
 import {
   sanitizeUrl,
   toMetadataUrl,
@@ -26,11 +72,6 @@ import {
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
@@ -63,7 +104,6 @@ import {
   parseCeDate,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
@@ -90,49 +130,11 @@ import {
   AdapterFetchError,
   FetchBoundaryError,
 } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_RAW_CAPTURE } from "@/api/lib/legal-search/document-raw-capture";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  DOCUMENT_DELIVERY,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  STORED_RAW_REPLAY_STATUS,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseValue,
-  SyncPage,
-  UnreadListedItem,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-parser";
 import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
-import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
-import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";
@@ -206,11 +208,14 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
       safeError instanceof Error
         ? safeError.message
         : "Invalid document target";
-    logger.warn("case_law.ingestion.document_target_refused", {
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      reason,
-      url: sanitizeQueryErrorText(target.error.url),
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.document_target_refused",
+      {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        reason,
+        url: sanitizeQueryErrorText(target.error.url),
+      },
+    );
     return { type: "refused-target", reason };
   }
   const fetched = await Result.tryPromise({
@@ -227,7 +232,7 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
     catch: (error) => error,
   });
   if (Result.isError(fetched)) {
-    logger.warn(
+    getIngestionDiagnosticsSink().warn(
       "case_law.ingestion.sk_document_fetch_failed",
       skDocumentErrorDiagnostics(sanitizeErrorForOutput(fetched.error)),
     );
@@ -241,7 +246,7 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
         diagnostics.contentTypeClass !== "pdf" &&
         diagnostics.contentTypeClass !== "binary"
       ) {
-        logger.warn(
+        getIngestionDiagnosticsSink().warn(
           "case_law.ingestion.sk_document_fetch_response",
           diagnostics,
         );
@@ -253,7 +258,7 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
       return read;
     case "unavailable":
       if (read.cause.kind === "thrown") {
-        logger.warn(
+        getIngestionDiagnosticsSink().warn(
           "case_law.ingestion.sk_document_fetch_failed",
           skDocumentErrorDiagnostics(sanitizeErrorForOutput(read.cause.error)),
         );
@@ -438,10 +443,13 @@ const parseSkDate = (raw: string | null | undefined): string | undefined => {
   }
   const result = parseCeDate(raw);
   if (!result) {
-    logger.warn("case_law.ingestion.unexpected_date_format", {
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      value: raw,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.unexpected_date_format",
+      {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        value: raw,
+      },
+    );
   }
   return result;
 };
@@ -463,11 +471,14 @@ const fetchDetail = async (
     headers: { Accept: "application/json" },
   });
   if (read.type !== "present") {
-    logger.warn("case_law.ingestion.detail_fetch_failed", {
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      guid,
-      ...readDiagnostics(read),
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.detail_fetch_failed",
+      {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        guid,
+        ...readDiagnostics(read),
+      },
+    );
     return read;
   }
   const json = parseJsonOrNull(read.value);
@@ -1110,14 +1121,17 @@ export const buildSkCourtsDecision = async (
       : await readCourt(registreGuid, signal);
   if (registry.isErr()) {
     const safeError = sanitizeErrorForOutput(registry.error);
-    logger.warn("case_law.ingestion.court_registry_unavailable", {
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      ...(registreGuid === undefined ? {} : { registreGuid }),
-      reason:
-        safeError instanceof Error
-          ? safeError.message
-          : "Court registry unavailable",
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.court_registry_unavailable",
+      {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        ...(registreGuid === undefined ? {} : { registreGuid }),
+        reason:
+          safeError instanceof Error
+            ? safeError.message
+            : "Court registry unavailable",
+      },
+    );
     return { type: "read-failed", error: registry.error };
   }
   if (fetched.type === "unavailable") {
@@ -1153,7 +1167,7 @@ const parseItemWithDetail = async (
   options: SkCourtsBuildOptions = {},
 ): Promise<SkCourtsParsedItem> => {
   if (!isSkApiItem(raw)) {
-    logger.warn("case_law.ingestion.item_build_failed", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.item_build_failed", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       identity: JSON.stringify(skCourtsListingIdentity(raw)),
       reason: "Invalid listing member",

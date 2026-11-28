@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { withDocumentStageWindow } from "@stll/case-law-ingestion-core/document-stage-observation";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
@@ -16,9 +19,6 @@ import {
 import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

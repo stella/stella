@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import {
   GENERATED_VISUAL_URI_PREFIX,
   generatedVisualPageSchema,
@@ -37,6 +38,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 
 import { readVisualThemeOrOmit } from "./generated-visual-theme";
 import { parseVisualHostMessage } from "./generated-visual.logic";
@@ -69,8 +71,12 @@ const GeneratedVisualFrame = ({
     part.resource.uri.slice(GENERATED_VISUAL_URI_PREFIX.length),
   );
   const sandboxUrl = visualSandboxUrl();
-  const page = useQuery({
+  const page = useResourceQuery({
     queryKey: ["generated-visual", organizationId, threadRef.threadId, fileId],
+    resourceReads: {
+      resources: [RESOURCE_TYPE.USER_FILE],
+      scope: { type: "organization", organizationId },
+    },
     queryFn: async ({ signal }) => {
       const response = await api["user-files"]({ fileId }).visual.get({
         fetch: { signal },

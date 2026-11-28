@@ -1,19 +1,19 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { load } from "@stll/html";
-import { sha256Hex } from "@stll/sha256/bun";
-import { Temporal } from "@stll/time";
-
 import {
   excludedSourceField,
   excludedSourceSurface,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   SourceFieldDisposition,
   SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { load } from "@stll/html";
+import { sha256Hex } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
+
 import type {
   SoftLawFetch,
   SoftLawResponse,

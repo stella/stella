@@ -1,9 +1,49 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result } from "better-result";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  PrintedDecisionJudge,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { inlineStyleIsItalic } from "@stll/case-law-parsers/inline-style";
 import {
   listPlTkPageFields,
@@ -83,7 +123,6 @@ import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PL_TK_RULING_FAMILY,
@@ -106,7 +145,6 @@ import {
   rethrowCycleStop,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -114,39 +152,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  PrintedDecisionJudge,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -987,10 +992,13 @@ export const plTkDecisionType = (
     .at(0);
   const matched = PL_TK_DECISION_TYPES.find((type) => type === head);
   if (matched === undefined) {
-    logger.warn("case_law.ingestion.decision_type_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_TK,
-      decisionForm: form,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.decision_type_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        decisionForm: form,
+      },
+    );
   }
   return matched;
 };
@@ -1185,7 +1193,7 @@ export const assemblePlTkDecision = ({
     courtAsPrinted: ruling?.courtAsPrinted,
   });
   if (deciding.type === "unknown") {
-    logger.warn("case_law.ingestion.court_not_stated", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.court_not_stated", {
       adapterKey: ADAPTER_KEYS.PL_TK,
       caseNumber,
       courtAsPrinted: deciding.courtAsPrinted ?? "",
@@ -1422,11 +1430,14 @@ export const buildPlTkDecision = async ({
       // Redirected with a fresh session too: the case, not the session. The
       // row is kept listing-only, which the reconciliation does not count as
       // held, so a later walk asks again.
-      logger.warn("case_law.ingestion.document_unavailable", {
-        adapterKey: ADAPTER_KEYS.PL_TK,
-        caseNumber: docket,
-        documentId: row.documentId,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.document_unavailable",
+        {
+          adapterKey: ADAPTER_KEYS.PL_TK,
+          caseNumber: docket,
+          documentId: row.documentId,
+        },
+      );
       return listingOnly();
     }
     if (response.status !== 200) {

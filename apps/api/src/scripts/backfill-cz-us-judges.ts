@@ -15,7 +15,8 @@
  * budget, so it runs under an operator who reads the report.
  */
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
 import { runCzUsJudgesBackfill } from "@/api/handlers/case-law/ingestion/cz-us-judges-backfill";
 import { runCaseLawSourceBackfill } from "@/api/scripts/case-law-source-backfill";
 

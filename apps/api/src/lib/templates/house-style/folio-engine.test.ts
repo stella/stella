@@ -456,6 +456,109 @@ describe("folioTemplatePlanEngine", () => {
     expect(xml).toMatch(/ REF _Ref\d+ \\h \\\* MERGEFORMAT /u);
   });
 
+  test("a clause that cites itself through its source's field keeps the link", async () => {
+    const said = (value: string): string =>
+      `<w:r><w:t xml:space="preserve">${value}</w:t></w:r>`;
+    const char = (type: string): string =>
+      `<w:r><w:fldChar w:fldCharType="${type}"/></w:r>`;
+    const cited = [
+      char("begin"),
+      String.raw`<w:r><w:instrText xml:space="preserve"> REF _Ref1 \r \h </w:instrText></w:r>`,
+      char("separate"),
+      said("1.1"),
+      char("end"),
+    ].join("");
+    const selfCiting = await docx({
+      body: [
+        paragraph("SERVICES AGREEMENT"),
+        paragraph("Article 1"),
+        paragraph("Scope"),
+        `<w:p><w:pPr>${listed(1, 0)}</w:pPr><w:bookmarkStart w:id="1" w:name="_Ref1"/>${said("The supplier provides the services. Nothing in this Section ")}${cited}${said(" limits them.")}<w:bookmarkEnd w:id="1"/></w:p>`,
+        paragraph("A closing sentence."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: list(0, level(0, "decimal", "1.%1.")) + instance(1, 0),
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: selfCiting,
+        template: await template('<w:defaultTabStop w:val="708"/>'),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.outcome.repairs).toEqual([]);
+    const own = formatted.plan.references?.find(
+      ({ blockId, targetBlockId }) => blockId === targetBlockId,
+    );
+    expect(own).toMatchObject({ expectedText: "1.1" });
+    const output = (
+      await folioTemplatePlanEngine.analyze(formatted.docx)
+    ).unwrap();
+    const clause = output.blocks.find(({ text }) =>
+      text.startsWith("The supplier"),
+    );
+    // The paragraph's own bookmark holds the field that shows its number.
+    expect(clause?.crossReferences).toEqual([
+      expect.objectContaining({ targetBlockId: clause?.id }),
+    ]);
+  });
+
+  test("a dot drawn on the source's page is left out of the paragraph it sits in", async () => {
+    const WP =
+      "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+    const A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    const WPS =
+      "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
+    const MC = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    // A floating dot whose place is counted from the page, no text of its
+    // own and no picture.
+    const dot = `<w:r><mc:AlternateContent xmlns:mc="${MC}"><mc:Choice xmlns:wps="${WPS}" Requires="wps"><w:drawing><wp:anchor xmlns:wp="${WP}" distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>967105</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>1197610</wp:posOffset></wp:positionV><wp:extent cx="59055" cy="59055"/><wp:wrapNone/><wp:docPr id="1" name="Shape 1"/><a:graphic xmlns:a="${A}"><a:graphicData uri="${WPS}"><wps:wsp><wps:spPr/><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></mc:Choice><mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent></w:r>`;
+    const marked = await docx({
+      body: [
+        paragraph("SERVICES AGREEMENT"),
+        paragraph("Article 1"),
+        paragraph("Scope"),
+        `<w:p><w:pPr>${listed(1, 0)}</w:pPr>${dot}<w:r><w:t xml:space="preserve">The supplier provides the services.</w:t></w:r></w:p>`,
+        paragraph("A closing sentence."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: list(0, level(0, "decimal", "1.%1.")) + instance(1, 0),
+    });
+    const read = (await folioTemplatePlanEngine.analyze(marked)).unwrap();
+    const clause = read.blocks.find(({ text }) =>
+      text.startsWith("The supplier"),
+    );
+    expect(clause).toMatchObject({ inlineObjects: 1, pageShapes: 1 });
+    if (clause === undefined) {
+      throw new Error("the source has no supplier clause");
+    }
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: marked,
+        template: await template(),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.note.items).toContainEqual({
+      kind: "pageMarksDropped",
+      blockId: clause.id,
+      marks: 1,
+    });
+    const output = (
+      await folioTemplatePlanEngine.analyze(formatted.docx)
+    ).unwrap();
+    // The paragraph keeps its text and nothing of the drawing.
+    expect(
+      output.blocks.find(({ text }) => text.startsWith("The supplier")),
+    ).toMatchObject({ inlineObjects: 0 });
+  });
+
   test("formats one view of a document with tracked changes: accepted unless the caller asks for the rejected one", async () => {
     const tracked = await docx({
       body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,

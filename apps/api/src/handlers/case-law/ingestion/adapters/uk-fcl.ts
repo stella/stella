@@ -1,3 +1,5 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: Page publisher-request status affects ingestion freshness, not decision fields parsed from stored XML.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -7,12 +9,7 @@ import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { GBR_EWHC_DIVISIONS } from "@stll/api-contract/decision-docket-grammar";
-import { load } from "@stll/html";
-import { readCappedBytes } from "@stll/skills/streaming";
-import { Temporal } from "@stll/time";
-
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   defineSourceAdapter,
   excludedSourceSurface,
@@ -21,15 +18,20 @@ import {
   sourceTotalProbeFailed,
   sourceTotalRead,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   IngestionResult,
   SourceFieldDisposition,
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+import { load } from "@stll/html";
+import { readCappedBytes } from "@stll/skills/streaming";
+import { Temporal } from "@stll/time";
+
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 import { publisherRequestIntervalMs } from "./publisher-policy";
 import { readPublisher, unreadPublisherError } from "./publisher-read";

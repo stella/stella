@@ -1,6 +1,17 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  StoredRawReadError,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -14,17 +25,6 @@ import {
   czUohsAdapter,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-  StoredRawReadError,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

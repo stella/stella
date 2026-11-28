@@ -1,4 +1,10 @@
 import { ownEntry } from "@stll/api-contract/own-key";
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  IMPORT_SOURCE_KEYS,
+  type ImportSourceKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import { courtListenerValidationPolicy } from "@stll/case-law-parsers/courtlistener/validation-policy";
 import type { ValidationSourcePolicy } from "@stll/case-law-parsers/validate-ast";
 
@@ -32,12 +38,6 @@ import { skCourtsRetention } from "@/api/handlers/case-law/ingestion/retention/s
 import { skUsRetention } from "@/api/handlers/case-law/ingestion/retention/sources/sk-us";
 import { ukFclRetention } from "@/api/handlers/case-law/ingestion/retention/sources/uk-fcl";
 import { usCourtlistenerRetention } from "@/api/handlers/case-law/ingestion/retention/sources/us-courtlistener";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-  IMPORT_SOURCE_KEYS,
-  type ImportSourceKey,
-} from "@/api/lib/legal-search/ingestion-constants";
 
 /**
  * Every registered source's retention policy. Total over the adapter and

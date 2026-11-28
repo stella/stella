@@ -3,6 +3,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -25,8 +28,6 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

@@ -5,6 +5,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -16,8 +18,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import type { PlNcourtBuild } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { plNcourtRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
 

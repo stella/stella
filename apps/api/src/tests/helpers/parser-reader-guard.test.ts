@@ -60,7 +60,7 @@ test("asynchronous parser fixtures use the same reader guard", async () => {
 
 test("every registered source owns a parser fixture guard", async () => {
   const { ADAPTER_KEYS, IMPORT_SOURCE_KEYS } =
-    await import("@/api/lib/legal-search/ingestion-constants");
+    await import("@stll/case-law-ingestion-core/ingestion-constants");
   const { PARSER_FIXTURE_OWNERS } = await import("./parser-fixture-owners");
   expect(Object.keys(PARSER_FIXTURE_OWNERS).toSorted()).toEqual(
     [

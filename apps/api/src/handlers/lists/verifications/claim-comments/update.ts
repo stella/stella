@@ -10,7 +10,6 @@ import * as v from "valibot";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
@@ -53,6 +52,10 @@ const config = {
     annotationId: resourceIdSchema("legalReaderAnnotation"),
   }),
   body: bodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["readerAnnotation"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const updateClaimComment = createSafeHandler(
@@ -89,10 +92,5 @@ const updateClaimComment = createSafeHandler(
     return Result.ok({ ok: true as const });
   },
 );
-
-declareAggregateMutation(updateClaimComment, {
-  type: "aggregate",
-  aggregates: ["readerAnnotation"],
-});
 
 export default updateClaimComment;

@@ -12,6 +12,14 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  DecisionSupplement,
+  IngestionResult,
+  StoredRawResultReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -58,14 +66,6 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { sweepCaseLawRawDecision } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
-import type {
-  DecisionSupplement,
-  IngestionResult,
-  StoredRawResultReader,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,

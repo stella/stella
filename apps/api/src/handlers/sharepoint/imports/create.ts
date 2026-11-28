@@ -22,7 +22,6 @@ import {
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -76,6 +75,11 @@ const config = {
     consumesServices: true,
   },
   body: requestBody,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Each file is written through the document create and version owners, which lock the rows they change; a repeated import converges on the stored content digest.",
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const uploadFlowsFailure = failureSink({
@@ -190,11 +194,5 @@ const importSharepointFiles = createSafeHandler(
     return Result.ok({ results });
   },
 );
-
-declareAggregateMutation(importSharepointFiles, {
-  type: "independent",
-  reason:
-    "Each file is written through the document create and version owners, which lock the rows they change; a repeated import converges on the stored content digest.",
-});
 
 export default importSharepointFiles;

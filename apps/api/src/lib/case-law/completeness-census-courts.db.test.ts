@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { CensusListingIdentity } from "@stll/case-law-ingestion-core/ingestion-types";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -17,7 +18,6 @@ import {
   CENSUS_IDENTITY_BATCH_SIZE,
   readStoredListingIdentities,
 } from "@/api/lib/case-law/stored-listing-identities";
-import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

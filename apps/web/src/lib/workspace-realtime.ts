@@ -1,9 +1,19 @@
 import {
+  type DefaultError,
+  type DefinedInitialDataOptions,
+  type DefinedUseQueryResult,
   hashKey,
   matchQuery,
   partialMatchKey,
   type QueryClient,
   type QueryKey,
+  useMutation,
+  type UseMutationOptions,
+  type UseMutationResult,
+  useQuery,
+  useQueryClient,
+  type UseQueryOptions,
+  type UseQueryResult,
 } from "@tanstack/react-query";
 import type { revokeOtherSessions, updateUser } from "better-auth/api";
 import type { OrganizationCreator } from "better-auth/plugins";
@@ -161,6 +171,50 @@ export const resourceQueryOptions = <
   ...options,
   meta: { ...options.meta, resourceReads },
 });
+
+/**
+ * A TanStack Query hook that requires a compile-time `resourceReads`
+ * declaration and attaches it via `resourceQueryOptions(...)` without
+ * changing cache identity.
+ */
+export function useResourceQuery<
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  options: DefinedInitialDataOptions<TQueryFnData, TError, TData, TQueryKey> & {
+    resourceReads: ResourceReads;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError>;
+export function useResourceQuery<
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  options: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey> & {
+    resourceReads: ResourceReads;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError>;
+export function useResourceQuery<
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  {
+    resourceReads,
+    ...options
+  }: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey> & {
+    resourceReads: ResourceReads;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> {
+  return useQuery(resourceQueryOptions(options, resourceReads), queryClient);
+}
 
 export const RESOURCE_MUTATION_CONTRACTS = {
   updateUser: {
@@ -780,6 +834,86 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
   },
+  createTimeEntry: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/time-entries/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.TIME_ENTRY],
+  },
+  updateTimeEntry: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/time-entries/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.TIME_ENTRY],
+  },
+  deleteTimeEntry: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/time-entries/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.TIME_ENTRY],
+  },
+  decideTimeSuggestion: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/time-entries/:workspaceId/suggestions/decisions",
+      },
+    ],
+    resources: [RESOURCE_TYPE.TIME_ENTRY],
+  },
+  updateExpense: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/expenses/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.EXPENSE],
+  },
+  deleteExpense: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/expenses/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.EXPENSE],
+  },
+  updateProperty: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/properties/:workspaceId/property/:propertyId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.PROPERTY],
+  },
+  deleteProperty: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/properties/:workspaceId/property/:propertyId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.PROPERTY],
+  },
 } as const;
 
 type ResourceMutationName = keyof typeof RESOURCE_MUTATION_CONTRACTS;
@@ -943,6 +1077,58 @@ const workspaceMutationScope = (
  * naming a `changedEntity` variable refreshes only that entity's queries and
  * the entity collections, never every cached entity detail.
  */
+type AnyResourceMutationScope =
+  | { type: "workspace" }
+  | { type: "organization" }
+  | OrganizationProjectionMutationScope
+  | PublicTokenMutationScope;
+
+const wrapResourceMutation =
+  <TVariables, TData, TRest extends unknown[]>({
+    mutation,
+    queryClient,
+    mutationFn,
+    scope,
+  }: ResourceMutationOptions<ResourceMutationName, TVariables, TData, TRest> & {
+    scope?: AnyResourceMutationScope | undefined;
+  }): ((variables: TVariables, ...rest: TRest) => Promise<TData>) =>
+  async (variables: TVariables, ...rest: TRest) => {
+    if (scope?.type === "public-token") {
+      return await mutationFn(variables, ...rest);
+    }
+    const owner = captureSessionQueryOwner(queryClient);
+    const data = await mutationFn(variables, ...rest);
+    if (scope?.type === "organization-projection") {
+      if (
+        scope.organizationId !== null &&
+        owner?.userId === scope.userId &&
+        owner.organizationId === scope.organizationId &&
+        isObservedSessionQueryOwner(queryClient, owner)
+      ) {
+        await invalidateResourceQueries(
+          queryClient,
+          organizationResourceQueryActions({
+            queryClient,
+            organizationId: scope.organizationId,
+            resources: RESOURCE_MUTATION_CONTRACTS[mutation].resources,
+            owner,
+          }),
+        );
+      }
+      return data;
+    }
+    await invalidateAfterResourceMutation({
+      mutation,
+      queryClient,
+      scope:
+        scope?.type === "organization"
+          ? scope
+          : workspaceMutationScope(mutation, variables),
+      owner,
+    });
+    return data;
+  };
+
 export function resourceMutation<
   TMutation extends PrimaryResourceMutationName,
   TVariables extends { workspaceId: string } & Record<
@@ -992,48 +1178,114 @@ export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   mutationFn,
   scope,
 }: ResourceMutationOptions<ResourceMutationName, TVariables, TData, TRest> & {
-  scope?:
-    | { type: "workspace" }
-    | { type: "organization" }
-    | OrganizationProjectionMutationScope
-    | PublicTokenMutationScope;
+  scope?: AnyResourceMutationScope;
 }): (variables: TVariables, ...rest: TRest) => Promise<TData> {
-  return async (variables: TVariables, ...rest: TRest) => {
-    if (scope?.type === "public-token") {
-      return await mutationFn(variables, ...rest);
-    }
-    const owner = captureSessionQueryOwner(queryClient);
-    const data = await mutationFn(variables, ...rest);
-    if (scope?.type === "organization-projection") {
-      if (
-        scope.organizationId !== null &&
-        owner?.userId === scope.userId &&
-        owner.organizationId === scope.organizationId &&
-        isObservedSessionQueryOwner(queryClient, owner)
-      ) {
-        await invalidateResourceQueries(
-          queryClient,
-          organizationResourceQueryActions({
-            queryClient,
-            organizationId: scope.organizationId,
-            resources: RESOURCE_MUTATION_CONTRACTS[mutation].resources,
-            owner,
-          }),
-        );
+  return wrapResourceMutation({ mutation, queryClient, mutationFn, scope });
+}
+
+type ResourceMutationNoCacheOptOut = {
+  type: "none";
+  reason: string;
+};
+
+type UseResourceMutationBaseOptions<TData, TError, TVariables, TContext> = Omit<
+  UseMutationOptions<TData, TError, TVariables, TContext>,
+  "mutationFn"
+> & {
+  mutationFn: (variables: TVariables) => Promise<TData>;
+};
+
+/**
+ * A TanStack Query mutation hook that requires a compile-time resource
+ * declaration. Resource writes wrap `mutationFn` in `resourceMutation(...)`
+ * with the ambient `QueryClient`; non-cached or client-only mutations opt out
+ * explicitly via `{ type: "none", reason }`.
+ */
+export function useResourceMutation<
+  TMutation extends PrimaryResourceMutationName,
+  TData = unknown,
+  TError = DefaultError,
+  TVariables extends { workspaceId: string } & Record<
+    ChangedEntityVariable<TMutation>,
+    string
+  > = { workspaceId: string } & Record<
+    ChangedEntityVariable<TMutation>,
+    string
+  >,
+  TContext = unknown,
+>(
+  options: UseResourceMutationBaseOptions<
+    TData,
+    TError,
+    TVariables,
+    TContext
+  > & {
+    resource: {
+      mutation: TMutation;
+      scope?: { type: "workspace" };
+    };
+  },
+): UseMutationResult<TData, TError, TVariables, TContext>;
+export function useResourceMutation<
+  TData = unknown,
+  TError = DefaultError,
+  TVariables = void,
+  TContext = unknown,
+>(
+  options: UseResourceMutationBaseOptions<
+    TData,
+    TError,
+    TVariables,
+    TContext
+  > & {
+    resource:
+      | {
+          mutation: OrganizationResourceMutationName;
+          scope: { type: "organization" };
+        }
+      | {
+          mutation: "updateUser";
+          scope: OrganizationProjectionMutationScope;
+        }
+      | {
+          mutation: PublicTokenResourceMutationName;
+          scope: PublicTokenMutationScope;
+        }
+      | ResourceMutationNoCacheOptOut;
+  },
+): UseMutationResult<TData, TError, TVariables, TContext>;
+export function useResourceMutation<
+  TData = unknown,
+  TError = DefaultError,
+  TVariables = void,
+  TContext = unknown,
+>({
+  resource,
+  mutationFn,
+  ...options
+}: UseResourceMutationBaseOptions<TData, TError, TVariables, TContext> & {
+  resource:
+    | {
+        mutation: ResourceMutationName;
+        scope?: AnyResourceMutationScope;
       }
-      return data;
-    }
-    await invalidateAfterResourceMutation({
-      mutation,
-      queryClient,
-      scope:
-        scope?.type === "organization"
-          ? scope
-          : workspaceMutationScope(mutation, variables),
-      owner,
-    });
-    return data;
-  };
+    | ResourceMutationNoCacheOptOut;
+}): UseMutationResult<TData, TError, TVariables, TContext> {
+  const queryClient = useQueryClient();
+  const wrappedMutationFn =
+    "mutation" in resource
+      ? wrapResourceMutation({
+          mutation: resource.mutation,
+          queryClient,
+          mutationFn,
+          scope: resource.scope,
+        })
+      : mutationFn;
+
+  return useMutation({
+    ...options,
+    mutationFn: wrappedMutationFn,
+  });
 }
 
 export const parseWorkspaceRealtimeMessage = (

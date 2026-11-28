@@ -1,8 +1,8 @@
+import type { SyncPage } from "@stll/case-law-ingestion-core/ingestion-types";
 import { printError } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 // parser-output-unchanged: fixture provenance hashes the same captured bytes through the Bun owner.
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
-import { Temporal } from "@stll/time";
 /**
  * Update adapter test fixtures from live APIs.
  *
@@ -16,13 +16,13 @@ import { Temporal } from "@stll/time";
  *   bun run apps/api/src/tests/case-law/update-adapter-fixtures.ts
  *   bun run apps/api/src/tests/case-law/update-adapter-fixtures.ts --adapter sk-courts
  */
+import { Temporal } from "@stll/time";
 
 import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
-import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import {
   formatProvenance,
   provenancePathOf,

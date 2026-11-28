@@ -9,7 +9,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 
@@ -20,6 +19,10 @@ const config = {
   description: "Permanently delete your reader answer and all its messages.",
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params: answerParamsSchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["readerAnswer"],
+  },
 } satisfies HandlerConfig;
 export const deleteReaderAnswerHandler = async (
   scope: AnnotationAuthorScope & { answerId: SafeId<"legalReaderAnswer"> },
@@ -73,8 +76,4 @@ const deleteReaderAnswer = createSafeRootHandler(
     );
   },
 );
-declareAggregateMutation(deleteReaderAnswer, {
-  type: "aggregate",
-  aggregates: ["readerAnswer"],
-});
 export default deleteReaderAnswer;

@@ -10,7 +10,6 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
@@ -30,6 +29,11 @@ const config = {
   params: v.object({ threadId: resourceIdSchema("chatThread") }),
   body: browserDownloadBodySchema,
   requestBodyMaxBytes: BROWSER_DOWNLOAD_REQUEST_MAX_BYTES,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Adds one document (or one chat file) with its audit event and storage object, or names a document the matter already holds; it changes no aggregate's ordered state.",
+  },
 } satisfies HandlerConfig;
 
 export type ChatThreadBrowserDownloadDependencies = {
@@ -84,11 +88,5 @@ export const createFileChatThreadBrowserDownload = (
   );
 
 const fileChatThreadBrowserDownload = createFileChatThreadBrowserDownload();
-
-declareAggregateMutation(fileChatThreadBrowserDownload, {
-  type: "independent",
-  reason:
-    "Adds one document (or one chat file) with its audit event and storage object, or names a document the matter already holds; it changes no aggregate's ordered state.",
-});
 
 export default fileChatThreadBrowserDownload;

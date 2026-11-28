@@ -20,6 +20,14 @@ import {
   DECISION_TEXT_FIELD,
 } from "@stll/api-contract/case-law-text-field";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -51,14 +59,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

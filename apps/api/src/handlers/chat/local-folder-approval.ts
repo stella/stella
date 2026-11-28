@@ -10,7 +10,6 @@ import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -26,6 +25,11 @@ const config = {
     desktopId: v.pipe(v.string(), v.uuid()),
     linkId: v.pipe(v.string(), v.uuid()),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "One conditional UPDATE adds a link id to the caller's own runner rows of one computer, with its audit event in the same transaction; no aggregate spans other rows.",
+  },
 } satisfies HandlerConfig;
 
 type FolderApprovalDependencies = {
@@ -91,11 +95,5 @@ const createApproveLocalFolder = (dependencies?: FolderApprovalDependencies) =>
   );
 
 const approveLocalFolder = createApproveLocalFolder();
-
-declareAggregateMutation(approveLocalFolder, {
-  type: "independent",
-  reason:
-    "One conditional UPDATE adds a link id to the caller's own runner rows of one computer, with its audit event in the same transaction; no aggregate spans other rows.",
-});
 
 export default approveLocalFolder;

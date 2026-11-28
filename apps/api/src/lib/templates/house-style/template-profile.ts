@@ -90,6 +90,12 @@ export type TemplateHealthFinding =
    *  and its headers and footers from the template's last section. Ending
    *  the template with the body's section mends it. */
   | { kind: "lastSectionNotBody"; bodySection: number; lastSection: number }
+  /** `headingStartsPage`: the style the template sets `role` in (an
+   *  article heading, a clause, a party's line) starts every paragraph on
+   *  a new page, so every such paragraph of a document starts one. The
+   *  output does as the template says; a style without the page break
+   *  mends it where that is not meant. */
+  | { kind: "headingStartsPage"; role: PageRole; styleId: string }
   | { kind: "textDrawnAsPicture"; styleId: string | null }
   | {
       kind: "levelSetApart";
@@ -201,6 +207,11 @@ export type TemplateProfile = {
   /** What the template could have mended at its source. Absent from a
    *  profile inferred before the template was read for it. */
   health?: TemplateHealthFinding[];
+  /** The section of the template, counted from 0, its sample body stands
+   *  in, where later sections (an annex, a signature page) follow it: the
+   *  output's pages are built from it. Absent where the body's section is
+   *  the last. */
+  bodySection?: number;
   /** What becomes of a level the template sets apart from its siblings
    *  (`levelSetApart`): `even`, the default, places it in a sibling's
    *  style; `asTemplate` keeps the style the template gives it. */
@@ -1081,6 +1092,30 @@ const collectedStyles = (
     .map(({ styleId }) => styleId);
 };
 
+/** Roles whose style the paragraph after a table of contents is in when
+ *  it heads the sample body. */
+const HEADING_ROLES = [
+  ...BODY_START_ROLES,
+  "title",
+  "annexHeading",
+] as const satisfies readonly HouseStyleRole[];
+
+/**
+ * Whether the block a table of contents ends in is the next heading's
+ * paragraph (the field's end was left in front of it): a paragraph with
+ * text in a heading style of the template, not a style of the contents.
+ * It is sample text, not part of the contents, and the contents are kept
+ * without it.
+ */
+const endsInNextHeading = (
+  end: DocxBlock | undefined,
+  roles: TemplateProfile["roles"],
+): boolean =>
+  end?.kind === "paragraph" &&
+  end.text.trim() !== "" &&
+  !NAME.contents.test(end.styleName ?? end.styleId ?? "") &&
+  HEADING_ROLES.some((role) => roles[role]?.styleId === end.styleId);
+
 const inferRegions = ({
   inspection: { fields, styles },
   structure: { topLevel, nestedOf },
@@ -1120,7 +1155,8 @@ const inferRegions = ({
       ) {
         contents.push(caption.id);
       }
-      contents.push(...order.slice(from, to + 1));
+      const endsInHeading = to > from && endsInNextHeading(topLevel[to], roles);
+      contents.push(...order.slice(from, endsInHeading ? to : to + 1));
       contentsStyles = collectedStyles(contentsField.instruction, styles);
     }
   }
@@ -1270,6 +1306,16 @@ const STRUCTURAL_ROLES = [
 
 type StructuralRole = (typeof STRUCTURAL_ROLES)[number];
 
+/** Roles whose style starting a page would start one for every
+ *  paragraph of the role. */
+const PAGE_ROLES = [
+  "articleHeading",
+  "clause1",
+  "party",
+] as const satisfies readonly HouseStyleRole[];
+
+type PageRole = (typeof PAGE_ROLES)[number];
+
 /** A list has nine levels; a template has some lists and some styles. A
  *  template with more findings than this is reported up to here: the
  *  profile stays readable, and so many say the same thing anyway. */
@@ -1396,28 +1442,23 @@ const inferHealth = (
       findings.set(`apart ${finding.role}`, finding);
     }
   }
+  for (const role of PAGE_ROLES) {
+    const styleId = roles[role]?.styleId;
+    const style = inspection.styles.find(
+      (candidate) => candidate.styleId === styleId,
+    );
+    if (styleId !== undefined && style?.pageBreakBefore === true) {
+      findings.set(`page ${role}`, {
+        kind: "headingStartsPage",
+        role,
+        styleId,
+      });
+    }
+  }
   const unread = STRUCTURAL_ROLES.filter((role) => roles[role] === null);
-  // The body's section: that of the first paragraph in a heading or
-  // clause style of the template.
-  const bodyStyles = new Set(
-    BODY_START_ROLES.flatMap((role) => {
-      const styleId = roles[role]?.styleId;
-      return styleId === undefined ? [] : [styleId];
-    }),
-  );
-  const bodySection = inspection.blocks.find(({ styleId }) =>
-    bodyStyles.has(styleId ?? ""),
-  )?.sectionIndex;
-  const lastSection = Math.max(
-    0,
-    ...inspection.blocks.map(({ sectionIndex }) => sectionIndex),
-  );
-  if (bodySection !== undefined && bodySection < lastSection) {
-    findings.set("sections", {
-      kind: "lastSectionNotBody",
-      bodySection,
-      lastSection,
-    });
+  const sections = bodySectionOf(inspection, roles);
+  if (sections !== null) {
+    findings.set("sections", { kind: "lastSectionNotBody", ...sections });
   }
   const health = [...findings.values()];
   // First, so the cap never drops it: it says more than any other.
@@ -1426,6 +1467,33 @@ const inferHealth = (
       ? [{ kind: "rolesNotRead" as const, roles: unread }, ...health]
       : health
   ).slice(0, HEALTH_FINDINGS_MAX);
+};
+
+/**
+ * The section of the template its sample body stands in (that of its first
+ * paragraph in a heading or clause style), where later sections follow it:
+ * null where the body's section is the last, or none is read.
+ */
+const bodySectionOf = (
+  { blocks }: TemplateInspection,
+  roles: TemplateProfile["roles"],
+): { bodySection: number; lastSection: number } | null => {
+  const bodyStyles = new Set(
+    BODY_START_ROLES.flatMap((role) => {
+      const styleId = roles[role]?.styleId;
+      return styleId === undefined ? [] : [styleId];
+    }),
+  );
+  const bodySection = blocks.find(({ styleId }) =>
+    bodyStyles.has(styleId ?? ""),
+  )?.sectionIndex;
+  const lastSection = Math.max(
+    0,
+    ...blocks.map(({ sectionIndex }) => sectionIndex),
+  );
+  return bodySection !== undefined && bodySection < lastSection
+    ? { bodySection, lastSection }
+    : null;
 };
 
 /**
@@ -1635,6 +1703,7 @@ export const inferTemplateProfile = (
     roles.articleHeading,
   );
   const kinds = [...new Set(inspection.fields.map(({ kind }) => kind))];
+  const bodySections = bodySectionOf(inspection, roles);
   const structural = STRUCTURAL_ROLES.map(
     (role) => roles[role]?.confidence ?? 0,
   );
@@ -1675,6 +1744,7 @@ export const inferTemplateProfile = (
         ({ type, isDefault }) => type === "paragraph" && isDefault,
       )?.alignment ?? null,
     health: inferHealth(inspection, roles),
+    ...(bodySections === null ? {} : { bodySection: bodySections.bodySection }),
     // A template without sample text shows no role in use, and one whose
     // body runs in columns is not filled by column yet.
     confidence:
@@ -1793,19 +1863,32 @@ const headerFieldIssues = (
 /**
  * An issue for every field over several blocks that the regions keep in
  * part: a field is kept whole, in one run and in its order, or not at all.
+ * A table of contents that ends in the next heading's paragraph is kept
+ * without it.
  */
 const fieldsKeptInPart = (
+  profile: TemplateProfile,
   inspection: TemplateInspection,
   { order, emitted }: { order: readonly string[]; emitted: readonly string[] },
 ): TemplateProfileIssue[] => {
   const issues: TemplateProfileIssue[] = [];
-  for (const { blockId, endBlockId } of inspection.fields) {
+  for (const { kind, blockId, endBlockId } of inspection.fields) {
     if (blockId === undefined || endBlockId === undefined) {
       continue;
     }
+    // A table of contents that ends in the next heading's paragraph is
+    // kept without it.
+    const tail =
+      kind === CONTENTS_FIELD &&
+      endBlockId !== blockId &&
+      endsInNextHeading(
+        inspection.blocks.find(({ id }) => id === endBlockId),
+        profile.roles,
+      ) &&
+      !emitted.includes(endBlockId);
     const span = order.slice(
       order.indexOf(blockId),
-      order.indexOf(endBlockId) + 1,
+      order.indexOf(endBlockId) + (tail ? 0 : 1),
     );
     const first = emitted.findIndex((id) => span.includes(id));
     const whole =
@@ -1929,7 +2012,7 @@ export const validateTemplateProfile = (
   // Every region that keeps template blocks, in the order they are placed:
   // the front blocks, then the contents.
   issues.push(
-    ...fieldsKeptInPart(inspection, {
+    ...fieldsKeptInPart(profile, inspection, {
       order,
       emitted: [...keepBefore, ...contents],
     }),
@@ -2103,6 +2186,11 @@ const profileSchema = v.strictObject({
             styleId: v.nullable(textSchema),
           }),
           v.strictObject({
+            kind: v.literal("headingStartsPage"),
+            role: v.picklist(PAGE_ROLES),
+            styleId: textSchema,
+          }),
+          v.strictObject({
             kind: v.literal("lastSectionNotBody"),
             bodySection: v.pipe(v.number(), v.integer(), v.minValue(0)),
             lastSection: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -2128,6 +2216,7 @@ const profileSchema = v.strictObject({
     ),
   ),
   levelLooks: v.exactOptional(v.picklist(["even", "asTemplate"])),
+  bodySection: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
   confidence: confidenceSchema,
 });
 

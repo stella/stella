@@ -3,9 +3,10 @@ import { expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { STORED_RAW_REPARSE_REJECTION } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { caseLawDecisions, caseLawReplayBlocked } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 import { caseLawParsedInputStateStatements } from "@/api/tests/pglite-schema";
 
 import type { BackgroundReplayBatch } from "./background-replay";

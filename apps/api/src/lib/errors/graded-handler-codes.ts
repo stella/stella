@@ -5,6 +5,8 @@
 // Imports only a type, so the ratchet census of unclassified handler failures
 // (`scripts/ratchet.ts`) loads the same list the grader reads.
 
+import type { GatewayErrorCode } from "@/api/lib/errors/tagged-errors";
+
 export const GRADED_HANDLER_CODE_REASON = {
   limiter_store_unavailable: "limiter_store_unavailable",
   action_admission_configuration_incomplete:
@@ -15,4 +17,7 @@ export const GRADED_HANDLER_CODE_REASON = {
   upstream_unavailable: "upstream_unavailable",
   // A token endpoint's refusal: only new credentials or configuration fix it.
   mcp_oauth_refresh_refused: "upstream_unavailable",
-} as const;
+} as const satisfies Record<
+  Exclude<GatewayErrorCode, "configuration_unavailable">,
+  string
+>;

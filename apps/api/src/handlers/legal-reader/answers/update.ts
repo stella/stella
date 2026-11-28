@@ -14,7 +14,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 
@@ -27,6 +26,10 @@ const config = {
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params: answerParamsSchema,
   body: answerVisibilityBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["readerAnswer"],
+  },
 } satisfies HandlerConfig;
 const updateReaderAnswerHandler = async (
   scope: AnnotationAuthorScope & {
@@ -85,8 +88,4 @@ const updateReaderAnswer = createSafeRootHandler(
     );
   },
 );
-declareAggregateMutation(updateReaderAnswer, {
-  type: "aggregate",
-  aggregates: ["readerAnswer"],
-});
 export default updateReaderAnswer;

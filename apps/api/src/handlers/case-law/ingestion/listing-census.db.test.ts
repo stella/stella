@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { ReconciliationListingItem } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -22,7 +24,6 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type { ReconciliationListingItem } from "@/api/lib/legal-search/ingestion-types";
 
 // A census is a fold over slices with a durable accumulator. What is asserted
 // is the fold's contract rather than one run: however the calls are cut, by

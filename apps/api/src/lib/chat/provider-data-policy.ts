@@ -7,6 +7,7 @@ import { panic, Result } from "better-result";
 import { BYOK_MODEL_OPTIONS, getModelRate } from "@stll/ai-catalog";
 import type { AIProvider } from "@stll/ai-catalog";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 
@@ -16,7 +17,6 @@ import type {
   ManagedAIResidency,
 } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 type ManagedProvider = AIProvider | DecisionModelProvider | "agent_sandbox";
 

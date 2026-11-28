@@ -23,11 +23,12 @@ const APP_TOKENS = {
     "--muted-foreground": "--muted-foreground",
     "--primary": "--primary",
     "--primary-foreground": "--primary-foreground",
+    "--border": "--border",
     "--secondary": "--input",
     "--secondary-foreground": "--secondary-foreground",
-    "--status-access-needed": "--warning-foreground",
     "--status-connected": "--success-foreground",
     "--status-idle": "--ring",
+    "--status-warning": "--warning-foreground",
   },
   light: { "--background": "--background" },
 } as const satisfies Record<ColorScheme, Record<string, string>>;
@@ -176,14 +177,17 @@ const expectReadable = async (
 };
 
 for (const colorScheme of ["light", "dark"] as const) {
-  test(`the popup follows the ${colorScheme} system theme and offers to open stella`, async () => {
+  test(`the popup follows the ${colorScheme} system theme and connects the stella website in one click`, async () => {
     const harness = await launchExtensionHarness({ colorScheme });
     try {
       const popup = await openPopup(harness);
-      // The popup is the tab in front, so no stella tab is there to connect.
-      await expect(popup.locator("#status-text")).toHaveText(
-        "Open stella to connect",
-      );
+      // Website access is granted but nothing is connected yet.
+      const websiteConnect = popup.getByRole("button", {
+        name: "Connect stella website",
+      });
+      await expect(websiteConnect).toBeVisible();
+      await expect(websiteConnect).toHaveText("Connect");
+      await expect(popup.locator("#website-status")).toBeHidden();
 
       // Every mirrored token paints as the web app's own value.
       const body = popup.locator("body");
@@ -220,17 +224,11 @@ for (const colorScheme of ["light", "dark"] as const) {
         ),
       );
 
-      // The status reads as a status, not as a control.
-      const status = popup.locator("#status");
-      await expect(status).toHaveAttribute("role", "status");
-      await expect(status).not.toHaveCSS("cursor", "pointer");
-      await expect(status).toHaveCSS("border-top-style", "none");
-      await expect(status).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-
-      // Until stella desktop is allowed, its row is the link alone.
+      // Until stella desktop is allowed, its line is the Connect button
+      // alone.
       await expect(popup.locator("#desktop-status")).toBeHidden();
       await expect(
-        popup.getByRole("button", { name: "Use with stella desktop" }),
+        popup.getByRole("button", { name: "Connect stella desktop app" }),
       ).toBeVisible();
 
       // The mark is the extension's own icon, the one the toolbar shows.
@@ -251,11 +249,12 @@ for (const colorScheme of ["light", "dark"] as const) {
       });
       await expect(mark).toHaveCSS("width", "32px");
 
-      const primary = popup.locator("#primary");
-      await expect(primary).toHaveText("Open stella");
-      await expect(primary).toBeEnabled();
-      await expectReadable(popup, primary, { against: "own", minimum: 4.5 });
-      await expectReadable(popup, popup.locator("#status-text"), {
+      await expect(websiteConnect).toBeEnabled();
+      await expectReadable(popup, websiteConnect, {
+        against: "own",
+        minimum: 4.5,
+      });
+      await expectReadable(popup, popup.locator("#website-name"), {
         against: "page",
         minimum: 4.5,
       });
@@ -268,31 +267,32 @@ for (const colorScheme of ["light", "dark"] as const) {
         popup.getByRole("button", { name: "Remove access" }),
         { against: "page", minimum: 4.5 },
       );
-      // A status dot is a graphic: 3:1 against the page.
-      expect(
-        contrast(
-          await paintedColour(
-            popup,
-            await computed(
-              popup.locator("#status .status-marker"),
-              "background-color",
-            ),
-          ),
-          await paintedColour(popup, await computed(body, "background-color")),
-        ),
-      ).toBeGreaterThanOrEqual(3);
 
-      // Opening brings the open stella tab forward; the popup then offers
-      // the usual connect step for it.
-      await primary.click();
+      // One click brings the open stella tab forward and connects it.
+      await websiteConnect.click();
       await expect
         .poll(async () => await activeTabUrl(harness))
         .toBe(`${harness.stellaOrigin}/chat`);
-      await expect(primary).toHaveText("Connect stella");
-      await primary.click();
-      await expect(popup.locator("#status-text")).toHaveText("Connected");
-      const disconnect = popup.getByRole("button", { name: "Disconnect" });
-      await expectReadable(popup, disconnect, { against: "own", minimum: 4.5 });
+      const status = popup.locator("#website-status");
+      await expect(popup.locator("#website-status-text")).toHaveText(
+        "Connected",
+      );
+      // The address it connected is read out with the status.
+      await expect(popup.locator("#website-origin")).toHaveText(
+        harness.stellaOrigin,
+      );
+      await expect(websiteConnect).toBeHidden();
+
+      // The status reads as a status, not as a control.
+      await expect(status).toHaveAttribute("role", "status");
+      await expect(status).not.toHaveCSS("cursor", "pointer");
+      await expect(status).toHaveCSS("border-top-style", "none");
+      await expect(status).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expectReadable(popup, popup.locator("#website-status-text"), {
+        against: "page",
+        minimum: 4.5,
+      });
+      // A status dot is a graphic: 3:1 against the page.
       expect(
         contrast(
           await paintedColour(
@@ -305,6 +305,11 @@ for (const colorScheme of ["light", "dark"] as const) {
           await paintedColour(popup, await computed(body, "background-color")),
         ),
       ).toBeGreaterThanOrEqual(3);
+      await expectReadable(
+        popup,
+        popup.getByRole("button", { name: "Disconnect" }),
+        { against: "page", minimum: 4.5 },
+      );
     } finally {
       await harness.close();
     }

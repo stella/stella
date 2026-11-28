@@ -13,6 +13,10 @@ import {
   sql,
 } from "drizzle-orm";
 
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   type BatchState,
@@ -55,10 +59,6 @@ import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionLifecycle } from "@/api/lib/db/transitions";
 import { escapeLike } from "@/api/lib/escape-like";
 import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
