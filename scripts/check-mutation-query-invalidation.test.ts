@@ -2116,7 +2116,7 @@ export const RESOURCE_MUTATION_CONTRACTS = {
 `,
   };
   const sources = [
-    validSources[0],
+    ...validSources.slice(0, 1),
     realtimeWithRealHook,
     {
       file: "apps/web/src/features.ts",
