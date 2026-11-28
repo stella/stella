@@ -23,7 +23,10 @@ import {
   acceptDecisions,
   collectAmbiguities,
 } from "@/api/lib/templates/house-style/ambiguity";
-import type { AmbiguityResolver } from "@/api/lib/templates/house-style/ambiguity";
+import type {
+  AmbiguityItem,
+  AmbiguityResolver,
+} from "@/api/lib/templates/house-style/ambiguity";
 import { closeNumberParts } from "@/api/lib/templates/house-style/designators";
 import {
   TemplateEngineError,
@@ -53,6 +56,7 @@ import {
   isBulleted,
   proposeBlockRoles,
 } from "@/api/lib/templates/house-style/role-proposer";
+import type { HouseStyleRole } from "@/api/lib/templates/house-style/role-proposer";
 import {
   inferTemplateProfile,
   validateTemplateProfile,
@@ -210,7 +214,12 @@ export type Formatted = {
   profile: TemplateProfile;
   note: FormattingNote;
   outcome: FormattingOutcome;
+  /** The role questions no answer decided: each block and the roles it was
+   *  offered, the one it was placed as first. */
+  roleQuestions: RoleQuestion[];
 };
+
+type RoleQuestion = { blockId: string; options: HouseStyleRole[] };
 
 type Exclusions = {
   numbering: Set<string>;
@@ -420,6 +429,44 @@ const leftOf = ({
   droppedComments: dropped.comments,
   droppedSectionBreaks: dropped.sectionBreaks,
 });
+
+/** The role questions no answer decided, with the roles each was offered. */
+const roleQuestionsLeft = (
+  open: readonly AmbiguityItem[],
+  decisions: ReadonlyMap<string, string>,
+): RoleQuestion[] =>
+  open.flatMap((item) =>
+    item.kind === "blockRole" && !decisions.has(item.id)
+      ? [
+          {
+            blockId: item.blockId,
+            options: item.options.map(({ role }) => role),
+          },
+        ]
+      : [],
+  );
+
+/** Source and output page counts, when the engine can lay both out. */
+const measurePages = async (
+  engine: TemplatePlanEngine,
+  source: Uint8Array,
+  output: Uint8Array,
+): Promise<PageCounts> => {
+  if (engine.layout === undefined) {
+    return { status: "notMeasured" };
+  }
+  const [before, after] = await Promise.all([
+    engine.layout(source),
+    engine.layout(output),
+  ]);
+  return before.isOk() && after.isOk()
+    ? {
+        status: "measured",
+        source: before.value.pages,
+        output: after.value.pages,
+      }
+    : { status: "notMeasured" };
+};
 
 /**
  * The manifest a document is formatted from. One that tracks changes is
@@ -643,20 +690,7 @@ export const formatOntoTemplate = async ({
   }
 
   const { built, docx, report } = settled;
-  let pages: PageCounts = { status: "notMeasured" };
-  if (engine.layout !== undefined) {
-    const [before, after] = await Promise.all([
-      engine.layout(source),
-      engine.layout(docx),
-    ]);
-    if (before.isOk() && after.isOk()) {
-      pages = {
-        status: "measured",
-        source: before.value.pages,
-        output: after.value.pages,
-      };
-    }
-  }
+  const pages = await measurePages(engine, source, docx);
   return Result.ok({
     docx,
     manifest,
@@ -670,5 +704,6 @@ export const formatOntoTemplate = async ({
       report,
     ),
     outcome: { attempts, repairs, ...leftOf(report), pages },
+    roleQuestions: roleQuestionsLeft(open, decisions),
   });
 };

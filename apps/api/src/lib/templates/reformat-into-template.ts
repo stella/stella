@@ -38,6 +38,7 @@ import {
   HOUSE_STYLE_TEMPLATE_TAG,
   type REFORMAT_NOTE_ITEM_KINDS,
   type REFORMAT_NUMBERING_MODES,
+  type REFORMAT_PARAGRAPH_ROLES,
   type REFORMAT_REFUSAL_CODES,
   type REFORMAT_TEMPLATE_HEALTH_KINDS,
   type REFORMAT_TRACKED_CHANGES,
@@ -180,6 +181,9 @@ export type ReformatNote = {
   items: ReformatNoteItem[];
   itemsOmitted: number;
   templateHealth: ReformatTemplateHealth[];
+  /** Only when the caller asked for them. */
+  roleQuestions?: ReformatRoleQuestion[];
+  roleQuestionsOmitted?: number;
 };
 
 type NoteSource = FormattingNoteItem;
@@ -502,7 +506,51 @@ type ReformatOptions = {
   /** What to do with the document's tracked changes. Left out, a document
    *  that has any is refused by name: the choice is the caller's. */
   trackedChanges?: (typeof REFORMAT_TRACKED_CHANGES)[number];
+  /** The caller's answers to role questions of an earlier call: a block and
+   *  one of the roles it was offered. Any other answer is ignored. */
+  roleDecisions?: readonly ReformatRoleDecision[];
+  /** Return the role questions left open, for the caller to answer in a
+   *  second call. Off by default. */
+  askRoleQuestions?: boolean;
 };
+
+type ReformatRoleDecision = {
+  blockId: string;
+  role: (typeof REFORMAT_PARAGRAPH_ROLES)[number];
+};
+
+/** A paragraph the formatter was unsure of: the roles it may take, the one
+ *  it was placed as first. */
+type ReformatRoleQuestion = {
+  blockId: string;
+  text?: string;
+  options: (typeof REFORMAT_PARAGRAPH_ROLES)[number][];
+};
+
+/** Role questions returned; the rest are counted. */
+const ROLE_QUESTIONS_MAX = 100;
+
+/**
+ * Answers the role questions the caller has decided and leaves every other
+ * item to `fallback`. An answer is still checked against the options the
+ * question offered.
+ */
+const withRoleDecisions =
+  (
+    fallback: AmbiguityResolver,
+    roleDecisions: readonly ReformatRoleDecision[],
+  ): AmbiguityResolver =>
+  async (items) => {
+    const decided = new Map(
+      roleDecisions.map(({ blockId, role }) => [blockId, role]),
+    );
+    return (await fallback(items)).map((decision) => {
+      const item = items.find(({ id }) => id === decision.id);
+      const role =
+        item?.kind === "blockRole" ? decided.get(item.blockId) : undefined;
+      return role === undefined ? decision : { id: decision.id, choice: role };
+    });
+  };
 
 /** Every open decision left open: a reference stays text, a role as read. */
 const leaveDecisionsOpen: AmbiguityResolver = async (items) =>
@@ -520,6 +568,8 @@ export const reformatDocxOntoTemplate = async ({
   numbering,
   acceptSuggestedDecisions,
   trackedChanges,
+  roleDecisions = [],
+  askRoleQuestions = false,
 }: ReformatOptions): Promise<
   Result<{ docx: Uint8Array; note: ReformatNote }, ReformatRefusedError>
 > => {
@@ -556,9 +606,10 @@ export const reformatDocxOntoTemplate = async ({
     source,
     template,
     mode: NUMBERING_MODE[numbering],
-    resolveAmbiguities: acceptSuggestedDecisions
-      ? resolveAmbiguitiesByRule
-      : leaveDecisionsOpen,
+    resolveAmbiguities: withRoleDecisions(
+      acceptSuggestedDecisions ? resolveAmbiguitiesByRule : leaveDecisionsOpen,
+      roleDecisions,
+    ),
     ...(trackedChanges === undefined ? {} : { trackedChanges }),
   });
   const read = formatted.isOk() ? formatted.value.manifest : lastRead;
@@ -623,8 +674,14 @@ export const reformatDocxOntoTemplate = async ({
   }
 
   const done: Formatted = formatted.value;
-  const { docx, note, outcome, profile } = done;
+  const { docx, note, outcome, profile, roleQuestions } = done;
   const items = note.items.flatMap((item) => noteItemsOf(item, blocks));
+  const questions = roleQuestions.map(
+    ({ blockId, options }): ReformatRoleQuestion => {
+      const text = excerptOf(blocks.get(blockId)?.text ?? "");
+      return { blockId, ...(text === "" ? {} : { text }), options };
+    },
+  );
   return Result.ok({
     docx,
     note: {
@@ -652,6 +709,15 @@ export const reformatDocxOntoTemplate = async ({
       items: items.slice(0, NOTE_ITEMS_MAX),
       itemsOmitted: Math.max(0, items.length - NOTE_ITEMS_MAX),
       templateHealth: arrayOrEmpty(profile.health).map(templateHealthOf),
+      ...(askRoleQuestions
+        ? {
+            roleQuestions: questions.slice(0, ROLE_QUESTIONS_MAX),
+            roleQuestionsOmitted: Math.max(
+              0,
+              questions.length - ROLE_QUESTIONS_MAX,
+            ),
+          }
+        : {}),
     },
   });
 };

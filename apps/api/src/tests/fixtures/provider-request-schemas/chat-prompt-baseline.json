@@ -80,6 +80,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 37222
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 37633
       }
     ],
     "anthropic/extended": [
@@ -162,6 +166,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 37712
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 38123
       }
     ],
     "bedrock/default": [
@@ -240,6 +248,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 37487
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 37898
       }
     ],
     "bedrock/extended": [
@@ -318,6 +330,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 37976
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 38387
       }
     ],
     "google/default": [
@@ -392,6 +408,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 36203
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 36614
       }
     ],
     "google/extended": [
@@ -462,6 +482,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 36681
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 37092
       }
     ],
     "mistral/default": [
@@ -540,6 +564,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 38816
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 39264
       }
     ],
     "mistral/extended": [
@@ -618,6 +646,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 39343
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 39790
       }
     ],
     "openai/default": [
@@ -696,6 +728,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 38387
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 38834
       }
     ],
     "openai/extended": [
@@ -774,6 +810,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 38903
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 39350
       }
     ],
     "openrouter-anthropic/default": [
@@ -852,6 +892,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 38763
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 39193
       }
     ],
     "openrouter-anthropic/extended": [
@@ -930,6 +974,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 39275
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 39705
       }
     ],
     "openrouter/default": [
@@ -1008,6 +1056,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 38763
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 39193
       }
     ],
     "openrouter/extended": [
@@ -1086,6 +1138,10 @@
       {
         "reason": "reformat_into_template joins chat's write tools",
         "tokens": 39275
+      },
+      {
+        "reason": "reformat_into_template takes role questions and answers",
+        "tokens": 39705
       }
     ]
   },

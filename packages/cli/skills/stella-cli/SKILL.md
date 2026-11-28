@@ -391,7 +391,8 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: values
 - `stella template reformat`
   - `--entity-id` — Document entity ID to reformat (string)
-  - optional: --version-id, --template-id, --numbering (keep_source|house_scheme), --accept-suggested-decisions, --tracked-changes (keep|accept|reject)
+  - optional: --version-id, --template-id, --numbering (keep_source|house_scheme), --accept-suggested-decisions, --ask-role-questions, --tracked-changes (keep|accept|reject)
+  - via `--input` only: role_decisions
 - `stella template save-filled new-document`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)

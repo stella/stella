@@ -5,6 +5,9 @@ import { ZipArchive } from "@stll/docx-core/zip";
 import { resolveAmbiguitiesByRule } from "@/api/lib/templates/house-style/ambiguity";
 import { folioTemplatePlanEngine } from "@/api/lib/templates/house-style/folio-engine";
 import { formatOntoTemplate } from "@/api/lib/templates/house-style/format-onto-template";
+import { HOUSE_STYLE_ROLES } from "@/api/lib/templates/house-style/role-proposer";
+import { reformatDocxOntoTemplate } from "@/api/lib/templates/reformat-into-template";
+import { REFORMAT_PARAGRAPH_ROLES } from "@/api/lib/templates/reformat-into-template-contract";
 
 // Invented documents, built part by part.
 const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
@@ -637,5 +640,57 @@ describe("folioTemplatePlanEngine", () => {
         .blocks.map(({ text }) => text);
     expect(await textsOf("accept")).toContain("Kept inserted.");
     expect(await textsOf("reject")).toContain("Kept deleted.");
+  });
+});
+
+describe("role questions a caller answers", () => {
+  const marked = async () =>
+    await docx({
+      body: [
+        paragraph("Confidential draft"),
+        paragraph("SERVICES AGREEMENT"),
+        paragraph("Article 1"),
+        paragraph("Scope"),
+        paragraph("The supplier provides the services.", listed(1, 0)),
+        paragraph("The customer pays the fee.", listed(1, 0)),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: list(0, level(0, "decimal", "1.%1.")) + instance(1, 0),
+    });
+  const reformat = async (
+    options: Partial<Parameters<typeof reformatDocxOntoTemplate>[0]>,
+  ) =>
+    (
+      await reformatDocxOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: await marked(),
+        template: await template(),
+        numbering: "keep_source",
+        acceptSuggestedDecisions: false,
+        ...options,
+      })
+    ).unwrap().note;
+
+  test("the caller's vocabulary is the formatter's roles", () => {
+    expect([...REFORMAT_PARAGRAPH_ROLES].toSorted()).toEqual(
+      [...HOUSE_STYLE_ROLES].toSorted(),
+    );
+  });
+
+  test("are returned only when asked for, and an answer settles one", async () => {
+    expect(await reformat({})).not.toHaveProperty("roleQuestions");
+    const asked = await reformat({ askRoleQuestions: true });
+    const question = asked.roleQuestions?.find(
+      ({ text }) => text === "Confidential draft",
+    );
+    expect(question?.options).toEqual(["body", "title"]);
+    const answered = await reformat({
+      askRoleQuestions: true,
+      roleDecisions: [{ blockId: question?.blockId ?? "", role: "title" }],
+    });
+    expect(
+      answered.roleQuestions?.some(({ text }) => text === "Confidential draft"),
+    ).toBe(false);
   });
 });

@@ -6791,6 +6791,49 @@
           "type": "boolean",
           "description": "Link a cross-reference whose target the rules clearly prefer; by default an uncertain one stays text"
         },
+        "ask_role_questions": {
+          "type": "boolean",
+          "description": "Also return the paragraphs whose role was uncertain, with the roles each may take"
+        },
+        "role_decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "block_id": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "blockId of a role question"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "party",
+                  "recital",
+                  "articleHeading",
+                  "clause1",
+                  "clause2",
+                  "clause3",
+                  "letter",
+                  "roman",
+                  "bullet",
+                  "continuation",
+                  "signature",
+                  "annexList",
+                  "annexHeading",
+                  "heading",
+                  "body"
+                ],
+                "type": "string",
+                "description": "One of the roles the question offered"
+              }
+            },
+            "required": ["block_id", "role"],
+            "additionalProperties": false
+          },
+          "maxItems": 500,
+          "description": "Answers to the role questions of an earlier call; any other answer is ignored"
+        },
         "tracked_changes": {
           "enum": ["keep", "accept", "reject"],
           "type": "string",
@@ -6926,6 +6969,16 @@
                     "type": "object",
                     "additionalProperties": true
                   }
+                },
+                "roleQuestions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "roleQuestionsOmitted": {
+                  "type": "integer"
                 }
               },
               "required": [
