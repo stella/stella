@@ -133,6 +133,7 @@
     "test": "bun --bun turbo run test",
     "test:property": "bun --bun turbo run test:property",
     "verify": "bash scripts/verify.sh",
+    "verify:fast": "bash scripts/verify.sh --fast",
     "autofix": "bash scripts/autofix-local.sh",
     "resolve-derived": "bun --no-install --no-env-file scripts/generated-conflicts.ts resolve-derived",
     "db:push": "bun --filter @stll/api db:push",
