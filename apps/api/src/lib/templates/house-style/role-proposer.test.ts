@@ -228,6 +228,38 @@ describe("proposeBlockRoles", () => {
     expect(roles["Beta a.s., se sídlem Krátká "]).toBe("party");
   });
 
+  test("numbered lines under the line that announces the parties are parties, named or not yet", () => {
+    const roles = rolesOf(
+      manifestOf([
+        "CONVERTIBLE LOAN AGREEMENT",
+        "BETWEEN:",
+        numbered("(1)", "[] (the Company) as borrower;", 5),
+        numbered("(2)", "[] (the Investor) as lender.", 5),
+        "IT IS AGREED as follows:",
+        numbered("1.", "Interpretation", 9),
+        numbered("1.1", "Terms defined here apply throughout.", 9),
+      ]),
+    );
+    expect(roles["[] (the Company) as borrower"]).toBe("party");
+    expect(roles["[] (the Investor) as lender."]).toBe("party");
+    expect(roles["Terms defined here apply thr"]).toBe("clause1");
+  });
+
+  test("the announcement of the parties ends at the words that lead into the provisions", () => {
+    const roles = rolesOf(
+      manifestOf([
+        "CONVERTIBLE LOAN AGREEMENT",
+        "BETWEEN:",
+        numbered("(1)", "[] (the Company) as borrower;", 5),
+        numbered("(2)", "[] (the Investor) as lender.", 5),
+        "IT IS AGREED as follows:",
+        numbered("(3)", "The Investor lends the Company the loan.", 5),
+      ]),
+    );
+    expect(roles["[] (the Investor) as lender."]).toBe("party");
+    expect(roles["The Investor lends the Compa"]).not.toBe("party");
+  });
+
   test("numbered lines that head the parties are parties, and the provisions begin behind them", () => {
     const numberedParties = manifestOf([
       "KUPNÍ SMLOUVA",
@@ -439,6 +471,45 @@ describe("proposeBlockRoles", () => {
       "uzavřená mezi stranami:": "body",
       "Nadpis 1": "articleHeading",
       "Znění 1.1.": "clause1",
+    });
+  });
+
+  test("text under a numbered provision of an annex continues it", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPředmět",
+      numbered("1.", "Zhotovitel provede dílo.", 1),
+      "Příloha č. 1",
+      "Definice",
+      numbered("1.", "Pojmy", 2),
+      numbered("1.1", "Následující pojmy mají tento význam:", 2),
+      "Dílem se rozumí stavba podle projektové dokumentace.",
+      numbered("2.", "Rozhodné právo", 2),
+      "Tato příloha se řídí českým právem.",
+    ]);
+    expect(rolesOf(manifest)).toMatchObject({
+      "Dílem se rozumí stavba podle": "continuation",
+      "Tato příloha se řídí českým ": "continuation",
+    });
+  });
+
+  test("a drafter's note under a provision is plain text", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPředmět",
+      numbered("1.", "Zhotovitel provede dílo.", 1),
+      "[Pozn. pro uchazeče: doplní uchazeč podle nabídky.]",
+      "Hinweis: Die Parteien können abweichend vereinbaren.",
+      "Note that the price is fixed for the whole term.",
+      "[Noteholders may convert their Notes at any time.]",
+      "[Alternative 1: The price is fixed for the whole term.]",
+    ]);
+    expect(rolesOf(manifest)).toMatchObject({
+      "[Pozn. pro uchazeče: doplní ": "body",
+      "Hinweis: Die Parteien können": "body",
+      "Note that the price is fixed": "continuation",
+      "[Noteholders may convert the": "continuation",
+      "[Alternative 1: The price is": "continuation",
     });
   });
 
