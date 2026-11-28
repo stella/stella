@@ -136,21 +136,20 @@ const run = async (
   cwd: string,
   command: readonly string[],
   extraEnv?: Readonly<Record<string, string | undefined>>,
-) =>
-  await withSubprocessSlot(async () => {
-    const child = Bun.spawn([...command], {
-      cwd,
-      env: spawnEnv(extraEnv),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const [code, stdout, stderr] = await Promise.all([
-      child.exited,
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-    ]);
-    return { code, output: stdout + stderr };
+) => {
+  const child = Bun.spawn([...command], {
+    cwd,
+    env: spawnEnv(extraEnv),
+    stdout: "pipe",
+    stderr: "pipe",
   });
+  const [code, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  return { code, output: stdout + stderr };
+};
 const succeed = async (cwd: string, command: readonly string[]) => {
   const result = await run(cwd, command);
   expect(result, result.output).toMatchObject({ code: 0 });
@@ -285,43 +284,48 @@ type CloneOptions = {
 const withClone = async (
   exercise: (root: string) => Promise<void>,
   options?: string | CloneOptions,
-) => {
-  const branch = typeof options === "string" ? options : options?.branch;
-  const mutableOrigin =
-    typeof options === "object" && options.mutableOrigin === true;
-  const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-derived-totals-"));
-  const clone = path.join(temporary, "clone");
-  try {
-    const seed =
-      branch !== undefined || mutableOrigin
-        ? (() => {
-            const fresh = path.join(temporary, "seed");
-            createSeedRepository(fresh, branch);
-            return fresh;
-          })()
-        : getSharedSeed();
-    await git(
-      temporary,
-      "clone",
-      "--quiet",
-      // Keep each fixture's object database independent of its seed.
-      "--no-local",
-      ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
-      seed,
-      clone,
+) =>
+  await withSubprocessSlot(async () => {
+    const branch = typeof options === "string" ? options : options?.branch;
+    const mutableOrigin =
+      typeof options === "object" && options.mutableOrigin === true;
+    const temporary = mkdtempSync(
+      path.join(tmpdir(), "ratchet-derived-totals-"),
     );
-    await git(clone, "config", "user.name", "Ratchet fixture");
-    await git(clone, "config", "user.email", "ratchet@example.invalid");
-    symlinkSync(
-      path.join(ROOT, "node_modules"),
-      path.join(clone, "node_modules"),
-      "dir",
-    );
-    await exercise(clone);
-  } finally {
-    rmSync(temporary, { recursive: true, force: true });
-  }
-};
+    const clone = path.join(temporary, "clone");
+    try {
+      const seed =
+        branch !== undefined || mutableOrigin
+          ? (() => {
+              const fresh = path.join(temporary, "seed");
+              createSeedRepository(fresh, branch);
+              return fresh;
+            })()
+          : getSharedSeed();
+      await git(
+        temporary,
+        "clone",
+        "--quiet",
+        // Keep each fixture's object database independent of its seed.
+        "--no-local",
+        ...(branch === undefined
+          ? []
+          : ["--single-branch", "--branch", branch]),
+        seed,
+        clone,
+      );
+      await git(clone, "config", "user.name", "Ratchet fixture");
+      await git(clone, "config", "user.email", "ratchet@example.invalid");
+      symlinkSync(
+        path.join(ROOT, "node_modules"),
+        path.join(clone, "node_modules"),
+        "dir",
+      );
+      await exercise(clone);
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
 
 test("the definition paths list the guard's whole import closure", () => {
   const listed = new Set(
@@ -404,74 +408,69 @@ test.concurrent(
 );
 
 // timeout: exercises five real ratchet checks in an isolated Git clone.
-test.concurrent(
-  "per-file shrink-only metrics follow Git-detected file moves",
-  async () => {
-    await withClone(async (root) => {
-      const source = "apps/web/src/numeric-source.ts";
-      const destination = "apps/web/src/moved/numeric-destination.ts";
-      const numericCalls = (count: number) =>
-        `${Array.from(
-          { length: count },
-          (_, index) =>
-            `export const numeric${index} = Number(source${index});`,
-        ).join("\n")}\n`;
-      write({ root, relative: source, contents: numericCalls(20) });
-      await commit(root, "add numeric fixture");
-      const base = await git(root, "rev-parse", "HEAD");
-      await git(root, "update-ref", "refs/remotes/origin/main", base);
+test("per-file shrink-only metrics follow Git-detected file moves", async () => {
+  await withClone(async (root) => {
+    const source = "apps/web/src/numeric-source.ts";
+    const destination = "apps/web/src/moved/numeric-destination.ts";
+    const numericCalls = (count: number) =>
+      `${Array.from(
+        { length: count },
+        (_, index) => `export const numeric${index} = Number(source${index});`,
+      ).join("\n")}\n`;
+    write({ root, relative: source, contents: numericCalls(20) });
+    await commit(root, "add numeric fixture");
+    const base = await git(root, "rev-parse", "HEAD");
+    await git(root, "update-ref", "refs/remotes/origin/main", base);
 
-      const reset = async () => {
-        await git(root, "reset", "--hard", base);
-        await git(root, "clean", "-fd");
-      };
-      const move = async (contents = numericCalls(20)) => {
-        mkdirSync(path.dirname(path.join(root, destination)), {
-          recursive: true,
-        });
-        await git(root, "mv", source, destination);
-        write({ root, relative: destination, contents });
-        await commit(root, "move numeric fixture");
-        return await check(root);
-      };
+    const reset = async () => {
+      await git(root, "reset", "--hard", base);
+      await git(root, "clean", "-fd");
+    };
+    const move = async (contents = numericCalls(20)) => {
+      mkdirSync(path.dirname(path.join(root, destination)), {
+        recursive: true,
+      });
+      await git(root, "mv", source, destination);
+      write({ root, relative: destination, contents });
+      await commit(root, "move numeric fixture");
+      return await check(root);
+    };
 
-      expect((await move()).code).toBe(0);
+    expect((await move()).code).toBe(0);
 
-      await reset();
-      const increased = await move(numericCalls(21));
-      expect(increased.code, increased.output).toBe(1);
-      expect(increased.output).toContain(
-        `raw-numeric-coercions (${destination}): actual increase 1`,
-      );
-      expect(increased.output).toContain(`${destination}: 20 -> 21`);
+    await reset();
+    const increased = await move(numericCalls(21));
+    expect(increased.code, increased.output).toBe(1);
+    expect(increased.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 1`,
+    );
+    expect(increased.output).toContain(`${destination}: 20 -> 21`);
 
-      await reset();
-      expect((await move(numericCalls(19))).code).toBe(0);
+    await reset();
+    expect((await move(numericCalls(19))).code).toBe(0);
 
-      await reset();
-      write({ root, relative: destination, contents: numericCalls(20) });
-      await commit(root, "copy numeric fixture");
-      const copied = await check(root);
-      expect(copied.code, copied.output).toBe(1);
-      expect(copied.output).toContain(
-        `raw-numeric-coercions (${destination}): actual increase 20`,
-      );
+    await reset();
+    write({ root, relative: destination, contents: numericCalls(20) });
+    await commit(root, "copy numeric fixture");
+    const copied = await check(root);
+    expect(copied.code, copied.output).toBe(1);
+    expect(copied.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 20`,
+    );
 
-      await reset();
-      const dissimilar = await move(
-        "export const replacement = Number(replacement);\n",
-      );
-      expect(dissimilar.code, dissimilar.output).toBe(1);
-      expect(dissimilar.output).toContain(
-        `raw-numeric-coercions (${destination}): actual increase 1`,
-      );
-      expect(dissimilar.output).toContain(
-        "edits below Git's similarity threshold are treated as a deletion plus an addition",
-      );
-    });
-  },
-  30_000,
-);
+    await reset();
+    const dissimilar = await move(
+      "export const replacement = Number(replacement);\n",
+    );
+    expect(dissimilar.code, dissimilar.output).toBe(1);
+    expect(dissimilar.output).toContain(
+      `raw-numeric-coercions (${destination}): actual increase 1`,
+    );
+    expect(dissimilar.output).toContain(
+      "edits below Git's similarity threshold are treated as a deletion plus an addition",
+    );
+  });
+}, 30_000);
 
 test.concurrent(
   "the measured base overrides stale headroom and explicit merge-group bases",
@@ -511,7 +510,7 @@ test.concurrent(
   30_000,
 );
 
-test.concurrent.each([
+test.each([
   { label: "all-branch clone", branch: undefined },
   { label: "single-branch clone", branch: "feature-only" },
 ])(
@@ -1319,69 +1318,63 @@ test.concurrent(
 );
 
 // Measured p95: 10.2 s; this must run the ratchet repeatedly in a real Git clone.
-test.concurrent(
-  "untracked files cannot increase file, duplication, directory or dependency metrics",
-  async () => {
-    await withClone(async (root) => {
-      const libFile = "apps/api/src/lib/domain/helper.ts";
-      const helper = `export const duplicateHelperBinding = () => { ${Array.from(
-        { length: 25 },
-        (_, index) => `const value${index} = source${index} + ${index};`,
-      ).join(" ")} };\n`;
-      write({ root, relative: libFile, contents: helper });
-      await commit(root, "tracked helper");
-      await git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
-      const before = await check(root);
-      expect(before.code, before.output).toBe(0);
-      const untrackedFiles = [
-        ["apps/api/src/untracked.ts", casts(10)],
-        ["apps/api/src/lib/untracked/helper.ts", helper],
-        ["apps/web/src/lib/domain/helper.ts", helper],
-        [
-          "packages/untracked/package.json",
-          '{"dependencies":{"untracked-dependency":"1.0.0"}}\n',
-        ],
-      ] as const;
-      for (const [relative, contents] of untrackedFiles) {
-        write({ root, relative, contents });
-      }
-      const after = await check(root);
-      const report = await ratchet(root);
-      expect(report).toMatch(/as-casts\s+6\s+\(baseline 6, 0\)/u);
-      expect(report).toMatch(
-        /cross-app-lib-path-copies\s+0\s+\(baseline 0, 0\)/u,
-      );
-      expect(after.code, after.output).toBe(0);
-      expect(after.output).toContain("ratchet --check: OK");
-      // Removing the tracked-set boundary makes the same tree regress.
-      const script = path.join(root, "scripts/ratchet.ts");
-      const original = readFileSync(script, "utf-8");
-      const mutant = original.replaceAll(
-        "const tree = openSourceTree(REPO_ROOT, { trackedFiles });",
-        "const tree = openSourceTree(REPO_ROOT);",
-      );
-      expect(mutant).not.toBe(original);
-      writeFileSync(script, mutant);
-      const rejected = await check(root);
-      expect(rejected.code, rejected.output).toBe(1);
-      expect(rejected.output).toContain("as-casts: 6 -> 16");
-      expect(rejected.output).toContain("cross-app-lib-path-copies");
-      expect(rejected.output).toContain("duplicate-token-blocks");
-      expect(rejected.output).toContain(
-        "cross-workspace-duplicate-export-names",
-      );
-      expect(rejected.output).toContain("api-lib-top-level-entries");
-      expect(rejected.output).toContain("direct-third-party-declarations");
-      writeFileSync(script, original);
-      // Staged additions belong to the head scan, and local tracked edits remain visible.
-      await git(root, "add", "apps/api/src/untracked.ts");
-      const staged = await check(root);
-      expect(staged.code, staged.output).toBe(1);
-      expect(staged.output).toContain("as-casts: 6 -> 16");
-    });
-  },
-  25_000,
-);
+test("untracked files cannot increase file, duplication, directory or dependency metrics", async () => {
+  await withClone(async (root) => {
+    const libFile = "apps/api/src/lib/domain/helper.ts";
+    const helper = `export const duplicateHelperBinding = () => { ${Array.from(
+      { length: 25 },
+      (_, index) => `const value${index} = source${index} + ${index};`,
+    ).join(" ")} };\n`;
+    write({ root, relative: libFile, contents: helper });
+    await commit(root, "tracked helper");
+    await git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    const before = await check(root);
+    expect(before.code, before.output).toBe(0);
+    const untrackedFiles = [
+      ["apps/api/src/untracked.ts", casts(10)],
+      ["apps/api/src/lib/untracked/helper.ts", helper],
+      ["apps/web/src/lib/domain/helper.ts", helper],
+      [
+        "packages/untracked/package.json",
+        '{"dependencies":{"untracked-dependency":"1.0.0"}}\n',
+      ],
+    ] as const;
+    for (const [relative, contents] of untrackedFiles) {
+      write({ root, relative, contents });
+    }
+    const after = await check(root);
+    const report = await ratchet(root);
+    expect(report).toMatch(/as-casts\s+6\s+\(baseline 6, 0\)/u);
+    expect(report).toMatch(
+      /cross-app-lib-path-copies\s+0\s+\(baseline 0, 0\)/u,
+    );
+    expect(after.code, after.output).toBe(0);
+    expect(after.output).toContain("ratchet --check: OK");
+    // Removing the tracked-set boundary makes the same tree regress.
+    const script = path.join(root, "scripts/ratchet.ts");
+    const original = readFileSync(script, "utf-8");
+    const mutant = original.replaceAll(
+      "const tree = openSourceTree(REPO_ROOT, { trackedFiles });",
+      "const tree = openSourceTree(REPO_ROOT);",
+    );
+    expect(mutant).not.toBe(original);
+    writeFileSync(script, mutant);
+    const rejected = await check(root);
+    expect(rejected.code, rejected.output).toBe(1);
+    expect(rejected.output).toContain("as-casts: 6 -> 16");
+    expect(rejected.output).toContain("cross-app-lib-path-copies");
+    expect(rejected.output).toContain("duplicate-token-blocks");
+    expect(rejected.output).toContain("cross-workspace-duplicate-export-names");
+    expect(rejected.output).toContain("api-lib-top-level-entries");
+    expect(rejected.output).toContain("direct-third-party-declarations");
+    writeFileSync(script, original);
+    // Staged additions belong to the head scan, and local tracked edits remain visible.
+    await git(root, "add", "apps/api/src/untracked.ts");
+    const staged = await check(root);
+    expect(staged.code, staged.output).toBe(1);
+    expect(staged.output).toContain("as-casts: 6 -> 16");
+  });
+}, 25_000);
 
 test.concurrent(
   "malformed ledger and dependency schemas fail in both measurement roles",
