@@ -23,7 +23,7 @@ const baselineCounts = (baselinePath: string) => {
 
 type CreateTestDeterminismRuleOptions = {
   guard: string;
-  baselinePath: string;
+  baselinePath?: string;
   message: string;
   createDetector: (context: Context) => (node: ESTree.Node) => boolean;
 };
@@ -42,11 +42,14 @@ export const createTestDeterminismRule = (
     messages: {
       nondeterminism: message,
       escapedSlot: `Escaped occurrences still need a baseline slot. ${message}`,
-      stale: `{{file}} now has {{count}} occurrences (baseline {{baseline}}). Shrink ${baselinePath} in this change.`,
+      stale: `{{file}} now has {{count}} occurrences (baseline {{baseline}}). Shrink ${baselinePath ?? "the baseline"} in this change.`,
     },
   },
   createOnce(context: Context) {
-    const counts = baselineCounts(baselinePath);
+    const counts =
+      baselinePath === undefined
+        ? new Map<string, number>()
+        : baselineCounts(baselinePath);
     const detects = createDetector(context);
     let filename = "";
     let enabled = false;
