@@ -94,6 +94,8 @@ const PARTY_MARKER = new RegExp(
   String.raw`${PARTY_IDENTITY_SOURCE}|\(dále jen|\(hereinafter|\((?:the )?["“„]|\(nachfolgend|\(im Folgenden`,
   "iu",
 );
+/** The words that close a preamble and lead into the provisions. */
+const AS_FOLLOWS = /\bas follows\b|takto:|wie folgt/iu;
 const PREAMBLE_MARKER =
   /uzavřel[yi]|uzavírají|se dohodl[yi]|preambule|whereas|have agreed|have concluded|agree as follows|präambel|vereinbaren/iu;
 /** A sentence that ends by naming who follows as the parties (`…
@@ -429,7 +431,16 @@ const partyHeadsOf = (
       first !== undefined &&
       above !== undefined &&
       ENDS_IN_JOINER.test(above.text.trim());
-    if (!identified && !joined && !introduced) {
+    // The announcement covers the parties only: a numbered line behind the
+    // preamble (`IT IS AGREED as follows:`) is a provision.
+    const announced =
+      introduced &&
+      !blocks
+        .slice(heads.at(-1)?.position ?? introducedAt, entry.position)
+        .some(
+          ({ text }) => PREAMBLE_MARKER.test(text) || AS_FOLLOWS.test(text),
+        );
+    if (!identified && !joined && !announced) {
       break;
     }
     heads.push(entry);
@@ -685,7 +696,7 @@ const sectionHeading = (): Reading =>
  */
 const NOTE_WORDS = String.raw`(?:drafting note|guidance(?: note)?|notes?|hinweise?|anmerkung(?:en)?|pozn(?:ámka|\.)|pokyny?|instrukce|bitte wählen)`;
 const EDITORIAL_NOTE = new RegExp(
-  String.raw`^(?:[[(]\s*${NOTE_WORDS}|${NOTE_WORDS}\s*(?:[:.\]–-]|$))`,
+  String.raw`^(?:[[(]\s*${NOTE_WORDS}(?![\p{L}])|${NOTE_WORDS}\s*(?:[:.\]–-]|$))`,
   "iu",
 );
 

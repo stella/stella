@@ -1053,10 +1053,19 @@ const openNumbered = (
 const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
   const { shape } = row.raw;
   if (shape.keyword === "annex") {
-    // A line set to the right in front of the first article names the
+    // A line set to the right in front of the first provision names the
     // annex the whole document is (`Příloha č. 7` over `K Metodickému
     // pokynu …`): a marking of the document, no heading of an annex in it.
-    const marking = row.block.alignment === "right" && !walk.sawArticle;
+    // A line of a list of the annexes stays a listed entry.
+    const firstProvisionAhead =
+      !walk.sawArticle &&
+      walk.article === null &&
+      walk.clauses.length === 0 &&
+      walk.annex === null;
+    const marking =
+      row.block.alignment === "right" &&
+      firstProvisionAhead &&
+      !isAnnexListLine(walk.rows, row.position);
     return isAnnexRow(row) && !marking ? openAnnex(walk, row) : null;
   }
   if (walk.partHeadings.has(row.position)) {

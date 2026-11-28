@@ -245,6 +245,21 @@ describe("proposeBlockRoles", () => {
     expect(roles["Terms defined here apply thr"]).toBe("clause1");
   });
 
+  test("the announcement of the parties ends at the words that lead into the provisions", () => {
+    const roles = rolesOf(
+      manifestOf([
+        "CONVERTIBLE LOAN AGREEMENT",
+        "BETWEEN:",
+        numbered("(1)", "[] (the Company) as borrower;", 5),
+        numbered("(2)", "[] (the Investor) as lender.", 5),
+        "IT IS AGREED as follows:",
+        numbered("(3)", "The Investor lends the Company the loan.", 5),
+      ]),
+    );
+    expect(roles["[] (the Investor) as lender."]).toBe("party");
+    expect(roles["The Investor lends the Compa"]).not.toBe("party");
+  });
+
   test("numbered lines that head the parties are parties, and the provisions begin behind them", () => {
     const numberedParties = manifestOf([
       "KUPNÍ SMLOUVA",
@@ -486,12 +501,14 @@ describe("proposeBlockRoles", () => {
       "[Pozn. pro uchazeče: doplní uchazeč podle nabídky.]",
       "Hinweis: Die Parteien können abweichend vereinbaren.",
       "Note that the price is fixed for the whole term.",
+      "[Noteholders may convert their Notes at any time.]",
       "[Alternative 1: The price is fixed for the whole term.]",
     ]);
     expect(rolesOf(manifest)).toMatchObject({
       "[Pozn. pro uchazeče: doplní ": "body",
       "Hinweis: Die Parteien können": "body",
       "Note that the price is fixed": "continuation",
+      "[Noteholders may convert the": "continuation",
       "[Alternative 1: The price is": "continuation",
     });
   });
