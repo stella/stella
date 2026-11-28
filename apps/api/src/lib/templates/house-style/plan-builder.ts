@@ -2388,7 +2388,7 @@ const hangValuesAtTheirStop = (context: Context, placed: Placed): void => {
     if (stop === undefined || indent === undefined || !sourceHangs) {
       continue;
     }
-    const start = indent.left - hanging;
+    const start = (indent.left ?? 0) - hanging;
     if (hanging > 0 && stop > start) {
       placed.itemIndents.set(blockId, { left: stop, hanging: stop - start });
     }
