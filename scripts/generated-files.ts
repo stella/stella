@@ -697,6 +697,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/env-soft-law.ts",
     "apps/api/src/db/role-names.ts",
     "apps/api/src/lib/*",
+    "apps/api/src/lib/case-law/decision-headnote.ts",
     "apps/api/src/lib/case-law/derived-ai-mode.ts",
     "apps/api/src/lib/case-law/search-guidance-mode.ts",
     "apps/api/src/lib/case-law/sitemap-shard-budget.ts",
@@ -1535,6 +1536,7 @@ const GENERATOR_DECLARATIONS = [
     inputs: [
       "scripts/generate-case-law-publication-migration.ts",
       "apps/api/src/lib/case-law/published-decisions-sql.ts",
+      "apps/api/src/lib/legal-search/partial-observation.ts",
       "apps/api/src/lib/legal-search/partial-observation-sql.ts",
       "apps/api/drizzle/20260916110000_published_statute_citation_counts/migration.sql",
     ],

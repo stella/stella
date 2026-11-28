@@ -15,7 +15,6 @@ import { sql } from "drizzle-orm";
 import {
   OBSERVATION_DETAIL,
   OBSERVATION_DETAIL_RANK,
-  type ObservationDetail,
   observationDetailOf,
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
@@ -29,7 +28,7 @@ export {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 };
-export type { ObservationDetail, PartialObservation };
+export type { PartialObservation };
 
 /**
  * Rows this reader would answer `isListingOnly: false` for, as a predicate

@@ -33,9 +33,5 @@ export const registerIngestionDiagnosticsSink = (
   activeSink = sink;
 };
 
-export const resetIngestionDiagnosticsSink = (): void => {
-  activeSink = NOOP_INGESTION_DIAGNOSTICS_SINK;
-};
-
 export const getIngestionDiagnosticsSink = (): IngestionDiagnosticsSink =>
   activeSink;
