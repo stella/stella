@@ -2644,9 +2644,11 @@ const sharedSourceStops = (
   first: number,
 ): TemplatePlanTabStop[] | null => {
   const keys = new Set(
-    run.map(({ blockId }) =>
-      JSON.stringify(blockById.get(blockId)?.tabStops ?? []),
-    ),
+    run.map(({ blockId }) => {
+      const own = blockById.get(blockId)?.tabStops;
+      // A line without stops of its own keys alike, listed empty or not.
+      return own === undefined || own.length === 0 ? "" : JSON.stringify(own);
+    }),
   );
   const [line] = run;
   const stops =
