@@ -170,12 +170,10 @@ describe("folioTemplatePlanEngine", () => {
     // Clauses keep their numbers on the template's list.
     expect(shown).toContain("1.1. The supplier provides the services.");
     expect(shown).toContain("1.2. The customer pays the fee.");
-    // The composite number no list prints is text in front of its paragraph.
-    expect(shown).toContain("I. 1)\tA point with a composite number.");
-    expect(formatted.note.items).toContainEqual(
-      expect.objectContaining({ kind: "labelConvertedToText" }),
-    );
-    expect(formatted.note.counts.labelsConvertedToText).toBe(1);
+    // The composite number no level of the template prints stays on a copy
+    // of the source's own list, which prints it.
+    expect(shown).toContain("I. 1) A point with a composite number.");
+    expect(formatted.note.counts.labelsConvertedToText).toBe(0);
   });
 
   test("reads where a document starts a page, how a paragraph is aligned and what its sections are", async () => {

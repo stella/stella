@@ -1132,7 +1132,7 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
       numbered("2.", "", 7),
       "Supplier",
     ]);
-    const citing = "The party identified at Item 2 of the details.";
+    const citing = "The party identified at Item 2 of this Agreement.";
     const block = {
       ...manifestOf([citing]).blocks[0],
       id: "p9",
