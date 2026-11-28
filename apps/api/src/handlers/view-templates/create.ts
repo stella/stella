@@ -13,7 +13,6 @@ import {
 } from "@/api/lib/auth/feature-access/view-eligibility";
 import { displayNameSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -53,6 +52,10 @@ const config = {
     consumesServices: false,
   },
   body: createViewTemplateBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["personalCatalog"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const createViewTemplate = createSafeHandler(
@@ -205,10 +208,5 @@ const createViewTemplate = createSafeHandler(
     return Result.ok({ id: insertResult.id });
   },
 );
-
-declareAggregateMutation(createViewTemplate, {
-  type: "aggregate",
-  aggregates: ["personalCatalog"],
-});
 
 export default createViewTemplate;

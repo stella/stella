@@ -5,7 +5,6 @@ import { enqueueAccountExport } from "@/api/lib/account-export/enqueue";
 import { requestOrganizationAuditExport } from "@/api/lib/account-export/store";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -28,6 +27,11 @@ const config = {
   ),
   // Deleting an organization is a signed-in owner's decision in the web app.
   mcp: { type: "internal", reason: "account_lifecycle" },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "The export store serializes the request under the account and export aggregate locks in one audited transaction.",
+  },
 } satisfies HandlerConfig;
 
 const requestOrganizationAuditArchive = createSafeRootHandler(
@@ -66,11 +70,5 @@ const requestOrganizationAuditArchive = createSafeRootHandler(
     );
   },
 );
-
-declareAggregateMutation(requestOrganizationAuditArchive, {
-  type: "independent",
-  reason:
-    "The export store serializes the request under the account and export aggregate locks in one audited transaction.",
-});
 
 export default requestOrganizationAuditArchive;

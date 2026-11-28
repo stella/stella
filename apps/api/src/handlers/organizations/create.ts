@@ -13,7 +13,6 @@ import {
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
 import { createOrganizationInTransaction } from "@/api/lib/auth/create-organization-in-transaction";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { newOrganizationEvaluation } from "@/api/lib/usage/organization-access-state";
 
@@ -36,6 +35,11 @@ const createOrganization = createSafeSessionHandler(
       consumesServices: false,
     },
     description: `Create an organization that you will own after human approval. Evaluation periods are limited to ${ORGANIZATION_EVALUATION_LIMIT} per account for its lifetime; ${ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE} refuses further trials, including after deletion. Existing paid organizations keep their access. Requires stella:organization_create account consent for OAuth callers. Omit slug to generate an opaque organization address. Explicit slug conflicts return organization_slug_conflict; restricted accounts return account_access_unavailable. Send Idempotency-Key to safely replay a creation. The current organization stays active. Run stella auth login and select the returned organization before acting in it.`,
+    aggregateMutation: {
+      type: "independent",
+      reason:
+        "The owner transaction binds Better Auth and all creation lifecycle writes. Account-locked evaluation grants, organization creation, account audit and replay receipts commit together.",
+    },
   },
   async function* ({ user, body: { name, slug }, request }) {
     const organization = yield* Result.await(
@@ -60,11 +64,5 @@ const createOrganization = createSafeSessionHandler(
     });
   },
 );
-
-declareAggregateMutation(createOrganization, {
-  type: "independent",
-  reason:
-    "The owner transaction binds Better Auth and all creation lifecycle writes. Account-locked evaluation grants, organization creation, account audit and replay receipts commit together.",
-});
 
 export default createOrganization;

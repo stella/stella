@@ -160,11 +160,6 @@
     "reason": "Existing DELETE route awaits ownership declaration at its route definition."
   },
   {
-    "key": "DELETE /v1/saved-searches/:savedSearchId",
-    "count": 1,
-    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
-  },
-  {
     "key": "DELETE /v1/saved-time-narratives/:id",
     "count": 1,
     "reason": "Existing DELETE route awaits ownership declaration at its route definition."
@@ -430,11 +425,6 @@
     "reason": "Existing PATCH route awaits ownership declaration at its route definition."
   },
   {
-    "key": "PATCH /v1/memories/:memoryId",
-    "count": 1,
-    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
-  },
-  {
     "key": "PATCH /v1/number-series/:numberSeriesId",
     "count": 1,
     "reason": "Existing PATCH route awaits ownership declaration at its route definition."
@@ -571,46 +561,6 @@
   },
   {
     "key": "POST /v1/ai-config/validate-provider",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/api-keys",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/api-keys/personal",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/api-keys/personal/organization/revoke",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/api-keys/personal/policy",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/api-keys/personal/revoke",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/api-keys/personal/rotate",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/api-keys/revoke",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/api-keys/rotate",
     "count": 1,
     "reason": "Existing POST route awaits ownership declaration at its route definition."
   },
@@ -1045,11 +995,6 @@
     "reason": "Existing POST route awaits ownership declaration at its route definition."
   },
   {
-    "key": "POST /v1/feedback",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
     "key": "POST /v1/fields/:workspaceId",
     "count": 1,
     "reason": "Existing POST route awaits ownership declaration at its route definition."
@@ -1195,11 +1140,6 @@
     "reason": "Existing POST route awaits ownership declaration at its route definition."
   },
   {
-    "key": "POST /v1/mcp/connectors/:slug/connect",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
     "key": "POST /v1/mcp/connectors/probe",
     "count": 1,
     "reason": "Existing POST route awaits ownership declaration at its route definition."
@@ -1226,16 +1166,6 @@
   },
   {
     "key": "POST /v1/memories/firm",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/notifications/announcements",
-    "count": 1,
-    "reason": "Existing POST route awaits ownership declaration at its route definition."
-  },
-  {
-    "key": "POST /v1/notifications/read-all",
     "count": 1,
     "reason": "Existing POST route awaits ownership declaration at its route definition."
   },

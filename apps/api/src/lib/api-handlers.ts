@@ -25,6 +25,7 @@ import { env } from "@/api/env";
 import type { RouteCachePolicy } from "@/api/http/cache";
 import type { ResponseSet } from "@/api/http/context";
 import type {
+  AggregateMutationDisposition,
   CapabilityAccess,
   CapabilityDescription,
   CapabilityTransportDisposition,
@@ -67,6 +68,7 @@ import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { hasVisibleMoney } from "@/api/lib/billing/money-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
+import { assertValidAggregateMutationDeclaration } from "@/api/lib/db/aggregate-mutation-declaration";
 import { databaseConstraintRefusal } from "@/api/lib/db/constraint-refusals";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
@@ -243,18 +245,20 @@ const safeHandlerAccountAccess = new WeakMap<
 
 const recordSafeHandler = <
   TDefinition extends {
-    config: WriteContract & {
-      accountAccess: AccountAccess;
-      permissions?: PermissionInput;
-      body?: unknown;
-      description?: string;
-    };
+    config: WriteContract &
+      AggregateMutationDisposition & {
+        accountAccess: AccountAccess;
+        permissions?: PermissionInput;
+        body?: unknown;
+        description?: string;
+      };
     access: RouteAccess;
     handler: object;
   },
 >(
   definition: TDefinition,
 ): TDefinition => {
+  assertValidAggregateMutationDeclaration(definition.config.aggregateMutation);
   recordWriteContract(definition.handler, definition.config);
   safeHandlerAccountAccess.set(definition.handler, definition.config);
   return definition;
@@ -282,6 +286,7 @@ type SessionCapabilityAuthority =
     };
 
 export type SessionHandlerConfig = InputSchema &
+  AggregateMutationDisposition &
   SessionCapabilityAuthority &
   WriteContract &
   CapabilityDescription &
@@ -2219,6 +2224,7 @@ export type RawRouteInput = {
 };
 
 export type TokenHandlerConfig = InputSchema &
+  AggregateMutationDisposition &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
@@ -2294,6 +2300,7 @@ export const createSafeTokenHandler = <
 };
 
 export type PublicHandlerConfig = InputSchema &
+  AggregateMutationDisposition &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &

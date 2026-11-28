@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { acknowledgeFolioCollabSeed } from "@/api/lib/folio-collab-rooms";
 
@@ -24,6 +23,10 @@ const config = {
       v.regex(/^[0-9a-f]{64}$/u),
     ),
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["workspace", "folioCollabRoom"],
+  },
 } satisfies TokenHandlerConfig;
 
 const acknowledgeSeed = createSafeTokenHandler(
@@ -60,10 +63,5 @@ const acknowledgeSeed = createSafeTokenHandler(
     }
   },
 );
-
-declareAggregateMutation(acknowledgeSeed, {
-  type: "aggregate",
-  aggregates: ["workspace", "folioCollabRoom"],
-});
 
 export default acknowledgeSeed;

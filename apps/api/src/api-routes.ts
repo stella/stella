@@ -139,7 +139,6 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { mount, routes, servedIfLoaded } from "@/api/http/route";
 import { getAuth } from "@/api/lib/auth";
 import { AUTH_API_ROUTE } from "@/api/lib/auth/auth-paths";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { createPublicCorpusRateLimitComposition } from "@/api/lib/rate-limit/public-corpus-rate-limit-composition";
@@ -154,16 +153,16 @@ const localDevRoutes = isLocalDevOpen()
   : undefined;
 
 /** Better Auth owns its endpoints, their bodies and their cookies. */
-const betterAuthHandler = declareAggregateMutation(
-  defineEndpoint.public(
-    { bodyMode: "none" },
-    async ({ request }) => await getAuth().handler(request),
-  ),
+const betterAuthHandler = defineEndpoint.public(
   {
-    type: "independent",
-    reason:
-      "Better Auth owns its account, session and organization tables and writes them through its own adapter.",
+    bodyMode: "none",
+    aggregateMutation: {
+      type: "independent",
+      reason:
+        "Better Auth owns its account, session and organization tables and writes them through its own adapter.",
+    },
   },
+  async ({ request }) => await getAuth().handler(request),
 );
 
 const agentAuthBudget = rateLimit({

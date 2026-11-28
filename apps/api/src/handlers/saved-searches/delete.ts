@@ -15,6 +15,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   params: savedSearchParamsSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Deletes one user-owned saved search row with no cross-table aggregate invariant.",
+  },
 } satisfies HandlerConfig;
 
 const deleteSavedSearch = createSafeRootHandler(

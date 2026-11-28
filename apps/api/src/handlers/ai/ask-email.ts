@@ -19,7 +19,6 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type {
   EntityGlobalSearchHit,
   GlobalSearchHit,
@@ -47,6 +46,11 @@ const config = {
   mcp: { type: "internal", reason: "native_tool_ui" },
   body: askEmailBodySchema,
   requiresUsage: { actionType: "chat", modelTask: EMAIL_GENERATION_TASK },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Reads the named matter's search results and generates text; writes only its own usage rows, with no cross-row invariant.",
+  },
 } satisfies HandlerConfig;
 
 const isEntityHit = (hit: GlobalSearchHit): hit is EntityGlobalSearchHit =>
@@ -200,11 +204,5 @@ const askEmail = createSafeRootHandler(
     } satisfies OutlookAIAskResponse);
   },
 );
-
-declareAggregateMutation(askEmail, {
-  type: "independent",
-  reason:
-    "Reads the named matter's search results and generates text; writes only its own usage rows, with no cross-row invariant.",
-});
 
 export default askEmail;

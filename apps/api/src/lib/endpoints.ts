@@ -7,6 +7,7 @@
  * factories in `lib/api-handlers.ts`.
  */
 import type { RouteCachePolicy } from "@/api/http/cache";
+import type { AggregateMutationDisposition } from "@/api/http/handler-config-types";
 import { decodeRequestInput } from "@/api/http/input";
 import type {
   RouteConfig,
@@ -28,13 +29,15 @@ import type {
 } from "@/api/lib/auth";
 import type { HandoffAccessMetadata } from "@/api/lib/auth/handoff-step-up-policy";
 import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
+import { assertValidAggregateMutationDeclaration } from "@/api/lib/db/aggregate-mutation-declaration";
 
-type EndpointConfig = RouteConfig & {
-  /** How long a successful answer may be cached; absent means not at all. */
-  readonly cache?: RouteCachePolicy;
-  /** `own`: the endpoint answers CORS itself (an any-origin discovery document). */
-  readonly cors?: "own";
-};
+type EndpointConfig = RouteConfig &
+  AggregateMutationDisposition & {
+    /** How long a successful answer may be cached; absent means not at all. */
+    readonly cache?: RouteCachePolicy;
+    /** `own`: the endpoint answers CORS itself (an any-origin discovery document). */
+    readonly cors?: "own";
+  };
 
 type Handler<TContext, TAnswer> = (ctx: TContext) => TAnswer | Promise<TAnswer>;
 
@@ -70,10 +73,13 @@ export type WorkspaceEndpointContext<TConfig extends EndpointConfig = NoInput> =
  */
 const PLUMBING_ACCESS: HandoffAccessMetadata = {};
 
-const policyOf = (config: EndpointConfig) => ({
-  ...(config.cache === undefined ? {} : { cache: config.cache }),
-  ...(config.cors === undefined ? {} : { cors: config.cors }),
-});
+const policyOf = (config: EndpointConfig) => {
+  assertValidAggregateMutationDeclaration(config.aggregateMutation);
+  return {
+    ...(config.cache === undefined ? {} : { cache: config.cache }),
+    ...(config.cors === undefined ? {} : { cors: config.cors }),
+  };
+};
 
 /** Anyone may call it. */
 const publicEndpoint = <TConfig extends EndpointConfig, TAnswer>(

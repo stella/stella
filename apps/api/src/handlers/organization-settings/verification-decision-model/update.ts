@@ -6,7 +6,6 @@ import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { updateVerificationDecisionModel } from "@/api/lib/lists/verification/verdict-decider-setting";
@@ -31,6 +30,11 @@ const config = {
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   mcp: { type: "internal", reason: "provider_secret" },
   body: v.strictObject({ enabled: v.boolean() }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "One column of the organization's settings row, written only while it still holds the value read; a concurrent save fails instead of overwriting it.",
+  },
 } satisfies HandlerConfig;
 
 const updateVerificationDecisionModelRoute = createSafeRootHandler(
@@ -87,11 +91,5 @@ const updateVerificationDecisionModelRoute = createSafeRootHandler(
     }
   },
 );
-
-declareAggregateMutation(updateVerificationDecisionModelRoute, {
-  type: "independent",
-  reason:
-    "One column of the organization's settings row, written only while it still holds the value read; a concurrent save fails instead of overwriting it.",
-});
 
 export default updateVerificationDecisionModelRoute;

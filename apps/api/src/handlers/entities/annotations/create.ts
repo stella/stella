@@ -18,7 +18,6 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
 import {
   documentFileNotFound,
@@ -110,6 +109,10 @@ const config = {
     fieldId: resourceIdSchema("field"),
   }),
   body: bodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["workspace"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const createDocumentAnnotation = createSafeHandler(
@@ -180,10 +183,5 @@ const createDocumentAnnotation = createSafeHandler(
     });
   },
 );
-
-declareAggregateMutation(createDocumentAnnotation, {
-  type: "aggregate",
-  aggregates: ["workspace"],
-});
 
 export default createDocumentAnnotation;

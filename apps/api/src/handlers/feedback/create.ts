@@ -76,6 +76,11 @@ const config = {
       }),
     ),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Appends a standalone user feedback submission row with no shared aggregate invariant.",
+  },
 } satisfies HandlerConfig;
 
 type FeedbackBody = v.InferOutput<(typeof config)["body"]>;

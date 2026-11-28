@@ -8,7 +8,6 @@ import {
 } from "@/api/handlers/notifications/read-model";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -32,6 +31,11 @@ const config = {
   ),
   access: "write",
   params: notificationParamsSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Updates one caller-owned notification idempotently; unread count is a read-only response projection.",
+  },
 } satisfies HandlerConfig;
 
 const markNotificationRead = createSafeRootHandler(
@@ -89,11 +93,5 @@ const markNotificationRead = createSafeRootHandler(
     return Result.ok({ unreadCount });
   },
 );
-
-declareAggregateMutation(markNotificationRead, {
-  type: "independent",
-  reason:
-    "Updates one caller-owned notification idempotently; unread count is a read-only response projection.",
-});
 
 export default markNotificationRead;

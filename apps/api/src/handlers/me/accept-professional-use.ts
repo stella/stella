@@ -11,7 +11,6 @@ import {
 } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const STATEMENT_VERSION_MAX_LENGTH = 32;
@@ -32,6 +31,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   body: requestBody,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["professionalUseAcceptance"],
+  },
 } satisfies SessionHandlerConfig;
 
 const acceptProfessionalUse = createSafeSessionHandler(
@@ -56,10 +59,5 @@ const acceptProfessionalUse = createSafeSessionHandler(
     return Result.ok(professionalUseResponse(state));
   },
 );
-
-declareAggregateMutation(acceptProfessionalUse, {
-  type: "aggregate",
-  aggregates: ["professionalUseAcceptance"],
-});
 
 export default acceptProfessionalUse;

@@ -21,7 +21,6 @@ import {
   resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const invoiceParamsSchema = workspaceParams({
   invoiceId: resourceIdSchema("invoice"),
@@ -68,6 +67,10 @@ const recordInvoicePaymentHandler = createSafeHandler(
     },
     params: invoiceParamsSchema,
     body: recordPaymentBodySchema,
+    aggregateMutation: {
+      type: "aggregate",
+      aggregates: ["workspace"],
+    },
   },
   async function* ({
     safeDb,
@@ -99,10 +102,5 @@ const recordInvoicePaymentHandler = createSafeHandler(
     return Result.ok(invoicePaymentView(payment));
   },
 );
-
-declareAggregateMutation(recordInvoicePaymentHandler, {
-  type: "aggregate",
-  aggregates: ["workspace"],
-});
 
 export default recordInvoicePaymentHandler;

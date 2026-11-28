@@ -24,7 +24,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { removeQueuedChatMessageOnTx } from "@/api/lib/db/chat-queue-gate";
 
 const config = {
@@ -45,6 +44,10 @@ const config = {
     files: v.picklist(Object.values(QUEUED_MESSAGE_FILES_ON_REMOVE)),
     revision: numberFromString(v.pipe(v.number(), v.integer(), v.minValue(0))),
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 const NO_FILES_DELETED = { type: "deleted", cleanup: [] } as const;
@@ -141,9 +144,5 @@ const cancelQueuedChatMessage = createSafeRootHandler(
 
 // Every queue change locks the member's thread first, the row its turns
 // lock, and writes only that thread's queue.
-declareAggregateMutation(cancelQueuedChatMessage, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default cancelQueuedChatMessage;

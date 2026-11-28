@@ -21,7 +21,6 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
@@ -66,6 +65,11 @@ const config = {
   realtime: noResourceSetUpdates(
     "Stores a temporary export download; nothing a web view lists changes.",
   ),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Reads one skill and writes only a temporary export object and its download audit event; no skill row changes.",
+  },
 } satisfies HandlerConfig;
 
 export const createSkillExport = (
@@ -165,11 +169,5 @@ export const createSkillExport = (
   );
 
 const exportSkill = createSkillExport();
-
-declareAggregateMutation(exportSkill, {
-  type: "independent",
-  reason:
-    "Reads one skill and writes only a temporary export object and its download audit event; no skill row changes.",
-});
 
 export default exportSkill;

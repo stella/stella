@@ -5,7 +5,6 @@ import type { TimerActivityDeviceRemovalResponse } from "@stll/api-contract/time
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { unregisterTimerActivityDevice } from "@/api/lib/push/timer-activity-devices";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -25,6 +24,10 @@ const config = {
   ),
   access: "write",
   params: timerActivityDeviceParamsSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason: "Deletes at most the caller's own phone row by its device id.",
+  },
 } satisfies HandlerConfig;
 
 /** `DELETE /v1/me/timer-activity-devices/:deviceId`: only the caller's own row. */
@@ -43,10 +46,5 @@ const unregisterTimerActivityDeviceEndpoint = createSafeRootHandler(
     return Result.ok({ removed } satisfies TimerActivityDeviceRemovalResponse);
   },
 );
-
-declareAggregateMutation(unregisterTimerActivityDeviceEndpoint, {
-  type: "independent",
-  reason: "Deletes at most the caller's own phone row by its device id.",
-});
 
 export default unregisterTimerActivityDeviceEndpoint;

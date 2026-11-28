@@ -27,7 +27,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -42,6 +41,10 @@ const config = {
     toolCallId: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
   }),
   body: v.unknown(),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 type PendingRequestOptions = {
@@ -245,9 +248,5 @@ const submitConnector = createSafeRootHandler(
 );
 // The thread fence comes first; the request's turn fence follows in rank
 // order inside the same transaction.
-declareAggregateMutation(submitConnector, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default submitConnector;

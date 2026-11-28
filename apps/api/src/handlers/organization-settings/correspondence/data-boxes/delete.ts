@@ -5,7 +5,6 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   dataBoxIdSchema,
   organizationDataBoxesChangeResult,
@@ -26,6 +25,10 @@ const config = {
     consumesServices: false,
   },
   params: v.object({ boxId: dataBoxIdSchema }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["organizationDataBoxes"],
+  },
 } satisfies HandlerConfig;
 
 const removeOrganizationDataBox = createSafeRootHandler(
@@ -46,10 +49,5 @@ const removeOrganizationDataBox = createSafeRootHandler(
     return organizationDataBoxesChangeResult(saved);
   },
 );
-
-declareAggregateMutation(removeOrganizationDataBox, {
-  type: "aggregate",
-  aggregates: ["organizationDataBoxes"],
-});
 
 export default removeOrganizationDataBox;

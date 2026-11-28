@@ -20,7 +20,6 @@ import {
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   authorizeDesktopTranscriptSave,
   type DesktopTranscriptAccount,
@@ -108,50 +107,46 @@ export const createDesktopDictationTranscriptAudioEndpoint = ({
   readMatter?: typeof readDesktopTranscriptMatter;
   finalizeAudio?: typeof finalizeAudioUpload;
 } = {}) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        body: desktopDictationTranscriptAudioBodySchema,
-        response: safePublicHandlerResponseSchemasWithStatusText(
-          desktopDictationTranscriptAudioSavedSchema,
-        ),
-      },
-      async function* ({ request, body }) {
-        const account = yield* Result.await(
-          authorizeDesktopTranscriptSave(request, authorizeAccount),
-        );
-        const workspace = yield* Result.await(
-          readMatter(account, body.matterId),
-        );
-        const access = authorizeDocumentWriteAccess({
-          authority: account.memberRole,
-          workspace,
-          operation: { type: "create", workspaceId: body.matterId },
-        });
-        if (Result.isError(access)) {
-          return Result.err(documentWriteRefusalHandlerError(access.error));
-        }
-        const saved = yield* Result.await(
-          finalizeAudio({
-            account,
-            request,
-            matterId: access.value.operation.workspaceId,
-            uploadId: body.uploadId,
-          }),
-        );
-        return Result.ok({
-          fileName: saved.fileName,
-        } satisfies DesktopDictationTranscriptAudioSaved);
-      },
-    ),
+  createSafeBoundedPublicHandler(
     {
-      type: "independent",
-      reason:
-        "Finalizes one upload the member reserved through the shared upload finalize, which claims the upload row and takes its own workspace and entity locks.",
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      body: desktopDictationTranscriptAudioBodySchema,
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopDictationTranscriptAudioSavedSchema,
+      ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Finalizes one upload the member reserved through the shared upload finalize, which claims the upload row and takes its own workspace and entity locks.",
+      },
+    },
+    async function* ({ request, body }) {
+      const account = yield* Result.await(
+        authorizeDesktopTranscriptSave(request, authorizeAccount),
+      );
+      const workspace = yield* Result.await(readMatter(account, body.matterId));
+      const access = authorizeDocumentWriteAccess({
+        authority: account.memberRole,
+        workspace,
+        operation: { type: "create", workspaceId: body.matterId },
+      });
+      if (Result.isError(access)) {
+        return Result.err(documentWriteRefusalHandlerError(access.error));
+      }
+      const saved = yield* Result.await(
+        finalizeAudio({
+          account,
+          request,
+          matterId: access.value.operation.workspaceId,
+          uploadId: body.uploadId,
+        }),
+      );
+      return Result.ok({
+        fileName: saved.fileName,
+      } satisfies DesktopDictationTranscriptAudioSaved);
     },
   );
 

@@ -10,7 +10,6 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { workspaceResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
@@ -29,6 +28,10 @@ const config = {
   params: workspaceParams({
     linkId: resourceIdSchema("legislationMatterLink"),
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["workspace"],
+  },
 } satisfies WorkspaceHandlerConfig;
 const deleteLegislationMatterLink = createSafeHandler(
   config,
@@ -80,10 +83,5 @@ const deleteLegislationMatterLink = createSafeHandler(
     );
   },
 );
-
-declareAggregateMutation(deleteLegislationMatterLink, {
-  type: "aggregate",
-  aggregates: ["workspace"],
-});
 
 export default deleteLegislationMatterLink;

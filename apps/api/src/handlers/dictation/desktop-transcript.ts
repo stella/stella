@@ -28,7 +28,6 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   authorizeDesktopTranscriptSave,
   type DesktopTranscriptAccount,
@@ -216,201 +215,196 @@ export const createDesktopDictationTranscriptEndpoint = ({
   createFolder?: typeof createTranscriptFolder;
   reserveAudio?: typeof reserveAudioUpload;
 } = {}) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        body: desktopDictationTranscriptBodySchema,
-        response: safePublicHandlerResponseSchemasWithStatusText(
-          desktopDictationTranscriptSavedSchema,
-        ),
+  createSafeBoundedPublicHandler(
+    {
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      body: desktopDictationTranscriptBodySchema,
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopDictationTranscriptSavedSchema,
+      ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Creates a folder and documents in an authorized matter through the shared folder and document creates, which take their own workspace and entity locks, and reserves one upload through the shared presign.",
       },
-      async function* ({ request, body }) {
-        if (
-          body.folder === undefined &&
-          (body.cleaned !== undefined || body.audio !== undefined)
-        ) {
-          return Result.err(
-            new HandlerError({
-              code: "transcript_folder_required",
-              status: 422,
-              message:
-                "Cleaned-up text and a recording are filed only in a folder",
-            }),
-          );
-        }
-        const account = yield* Result.await(
-          authorizeDesktopTranscriptSave(request, authorizeAccount),
-        );
-        const workspace = yield* Result.await(
-          readMatter(account, body.matterId),
-        );
-        const access = authorizeDocumentWriteAccess({
-          authority: account.memberRole,
-          workspace,
-          operation: { type: "create", workspaceId: body.matterId },
-        });
-        if (Result.isError(access)) {
-          return Result.err(documentWriteRefusalHandlerError(access.error));
-        }
-        const workspaceId = access.value.operation.workspaceId;
-        const recordAuditEvent = createAuditRecorder({
-          organizationId: account.organizationId,
-          userId: account.userId,
-          workspaceId: body.matterId,
-          request,
-          server: null,
-        });
-        const fileDocument = async ({
-          buffer,
-          name,
-          parentId,
-        }: {
-          buffer: ArrayBuffer;
-          name: string;
-          parentId: SafeId<"entity"> | null;
-        }) =>
-          await createEntity({
-            // The request authorized the member's create access above.
-            authority: CALLER_AUTHORIZED,
-            scopedDb: account.scopedDb,
-            organizationId: account.organizationId,
-            workspaceId,
-            userId: account.userId,
-            recordAuditEvent,
-            buffer,
-            fileName: sanitizeFilenamePreservingExtension(`${name}.docx`),
-            mimeType: DOCX_MIME_TYPE,
-            encryption: serverBuiltFileEncryption(),
-            parentId,
-          }).then((result) => Result.mapError(result, toHandlerError));
-
-        const transcript = yield* Result.await(renderedTranscript(body));
-        const { folder } = body;
-        if (folder === undefined) {
-          const created = yield* Result.await(
-            fileDocument({
-              buffer: transcript,
-              name: body.title,
-              parentId: null,
-            }),
-          );
-          return Result.ok({
-            fileName: created.fileName,
-          } satisfies DesktopDictationTranscriptSaved);
-        }
-
-        // Every document is laid out before the folder exists, so a text
-        // that cannot be rendered leaves nothing behind.
-        const cleaned =
-          body.cleaned === undefined
-            ? null
-            : yield* Result.await(
-                cleanedTranscriptDocx({
-                  markdown: body.cleaned.markdown,
-                  instructions: body.cleaned.instructions,
-                  instructionsLabel: folder.instructionsLabel,
-                }).then((result) =>
-                  Result.mapError(
-                    result,
-                    documentLayoutError(
-                      "The cleaned-up text could not be laid out as a document",
-                    ),
-                  ),
-                ),
-              );
-        const created = yield* Result.await(
-          createFolder({
-            scopedDb: account.scopedDb,
-            workspaceId,
-            userId: account.userId,
-            title: body.title,
-            // The folder and the transcript, then the cleaned-up text and a
-            // recording that will be uploaded; one left out takes no place.
-            entityCount:
-              2 +
-              (cleaned === null ? 0 : 1) +
-              (body.audio !== undefined && fitsMatterDocument(body.audio)
-                ? 1
-                : 0),
-            recordAuditEvent,
+    },
+    async function* ({ request, body }) {
+      if (
+        body.folder === undefined &&
+        (body.cleaned !== undefined || body.audio !== undefined)
+      ) {
+        return Result.err(
+          new HandlerError({
+            code: "transcript_folder_required",
+            status: 422,
+            message:
+              "Cleaned-up text and a recording are filed only in a folder",
           }),
         );
-        // A transcript that cannot be filed fails the save and leaves only
-        // the empty folder, so a retry files it once, in a new folder.
-        const filedTranscript = yield* Result.await(
+      }
+      const account = yield* Result.await(
+        authorizeDesktopTranscriptSave(request, authorizeAccount),
+      );
+      const workspace = yield* Result.await(readMatter(account, body.matterId));
+      const access = authorizeDocumentWriteAccess({
+        authority: account.memberRole,
+        workspace,
+        operation: { type: "create", workspaceId: body.matterId },
+      });
+      if (Result.isError(access)) {
+        return Result.err(documentWriteRefusalHandlerError(access.error));
+      }
+      const workspaceId = access.value.operation.workspaceId;
+      const recordAuditEvent = createAuditRecorder({
+        organizationId: account.organizationId,
+        userId: account.userId,
+        workspaceId: body.matterId,
+        request,
+        server: null,
+      });
+      const fileDocument = async ({
+        buffer,
+        name,
+        parentId,
+      }: {
+        buffer: ArrayBuffer;
+        name: string;
+        parentId: SafeId<"entity"> | null;
+      }) =>
+        await createEntity({
+          // The request authorized the member's create access above.
+          authority: CALLER_AUTHORIZED,
+          scopedDb: account.scopedDb,
+          organizationId: account.organizationId,
+          workspaceId,
+          userId: account.userId,
+          recordAuditEvent,
+          buffer,
+          fileName: sanitizeFilenamePreservingExtension(`${name}.docx`),
+          mimeType: DOCX_MIME_TYPE,
+          encryption: serverBuiltFileEncryption(),
+          parentId,
+        }).then((result) => Result.mapError(result, toHandlerError));
+
+      const transcript = yield* Result.await(renderedTranscript(body));
+      const { folder } = body;
+      if (folder === undefined) {
+        const created = yield* Result.await(
           fileDocument({
             buffer: transcript,
-            name: folder.transcriptName,
-            parentId: created.folderId,
+            name: body.title,
+            parentId: null,
           }),
         );
-        const files: NonNullable<DesktopDictationTranscriptSaved["files"]> = [
-          { kind: "transcript", fileName: filedTranscript.fileName },
-        ];
-        const notFiled: NonNullable<
-          DesktopDictationTranscriptSaved["notFiled"]
-        > = [];
-        if (cleaned !== null) {
-          // Once the transcript is filed the save succeeds: the reply says
-          // what the folder holds and what was left out, so the desktop
-          // never files the transcript twice by retrying the whole save.
-          // A create that rejects instead of answering is left out the
-          // same way as one that refuses.
-          const attempted = await Result.tryPromise({
-            try: async () =>
-              await fileDocument({
-                buffer: cleaned,
-                name: folder.cleanedName,
-                parentId: created.folderId,
-              }),
-            catch: (cause: unknown) => cause,
-          });
-          const filedCleaned = attempted.andThen((answered) => answered);
-          if (Result.isOk(filedCleaned)) {
-            files.push({
-              kind: "cleaned",
-              fileName: filedCleaned.value.fileName,
-            });
-          } else {
-            const failure: unknown = filedCleaned.error;
-            observeFailure(failure, { sink: cleanedFilingFailure });
-            notFiled.push({
-              kind: "cleaned",
-              message: HandlerError.is(failure)
-                ? failure.message
-                : "The cleaned-up text could not be filed.",
-            });
-          }
-        }
-        const audio =
-          body.audio === undefined
-            ? undefined
-            : await audioOutcome(
-                {
-                  account,
-                  matterId: workspaceId,
-                  folderId: created.folderId,
-                  audio: body.audio,
-                },
-                reserveAudio,
-              );
         return Result.ok({
-          fileName: filedTranscript.fileName,
-          folderName: created.folderName,
-          files,
-          ...(notFiled.length === 0 ? {} : { notFiled }),
-          ...(audio === undefined ? {} : { audio }),
+          fileName: created.fileName,
         } satisfies DesktopDictationTranscriptSaved);
-      },
-    ),
-    {
-      type: "independent",
-      reason:
-        "Creates a folder and documents in an authorized matter through the shared folder and document creates, which take their own workspace and entity locks, and reserves one upload through the shared presign.",
+      }
+
+      // Every document is laid out before the folder exists, so a text
+      // that cannot be rendered leaves nothing behind.
+      const cleaned =
+        body.cleaned === undefined
+          ? null
+          : yield* Result.await(
+              cleanedTranscriptDocx({
+                markdown: body.cleaned.markdown,
+                instructions: body.cleaned.instructions,
+                instructionsLabel: folder.instructionsLabel,
+              }).then((result) =>
+                Result.mapError(
+                  result,
+                  documentLayoutError(
+                    "The cleaned-up text could not be laid out as a document",
+                  ),
+                ),
+              ),
+            );
+      const created = yield* Result.await(
+        createFolder({
+          scopedDb: account.scopedDb,
+          workspaceId,
+          userId: account.userId,
+          title: body.title,
+          // The folder and the transcript, then the cleaned-up text and a
+          // recording that will be uploaded; one left out takes no place.
+          entityCount:
+            2 +
+            (cleaned === null ? 0 : 1) +
+            (body.audio !== undefined && fitsMatterDocument(body.audio)
+              ? 1
+              : 0),
+          recordAuditEvent,
+        }),
+      );
+      // A transcript that cannot be filed fails the save and leaves only
+      // the empty folder, so a retry files it once, in a new folder.
+      const filedTranscript = yield* Result.await(
+        fileDocument({
+          buffer: transcript,
+          name: folder.transcriptName,
+          parentId: created.folderId,
+        }),
+      );
+      const files: NonNullable<DesktopDictationTranscriptSaved["files"]> = [
+        { kind: "transcript", fileName: filedTranscript.fileName },
+      ];
+      const notFiled: NonNullable<DesktopDictationTranscriptSaved["notFiled"]> =
+        [];
+      if (cleaned !== null) {
+        // Once the transcript is filed the save succeeds: the reply says
+        // what the folder holds and what was left out, so the desktop
+        // never files the transcript twice by retrying the whole save.
+        // A create that rejects instead of answering is left out the
+        // same way as one that refuses.
+        const attempted = await Result.tryPromise({
+          try: async () =>
+            await fileDocument({
+              buffer: cleaned,
+              name: folder.cleanedName,
+              parentId: created.folderId,
+            }),
+          catch: (cause: unknown) => cause,
+        });
+        const filedCleaned = attempted.andThen((answered) => answered);
+        if (Result.isOk(filedCleaned)) {
+          files.push({
+            kind: "cleaned",
+            fileName: filedCleaned.value.fileName,
+          });
+        } else {
+          const failure: unknown = filedCleaned.error;
+          observeFailure(failure, { sink: cleanedFilingFailure });
+          notFiled.push({
+            kind: "cleaned",
+            message: HandlerError.is(failure)
+              ? failure.message
+              : "The cleaned-up text could not be filed.",
+          });
+        }
+      }
+      const audio =
+        body.audio === undefined
+          ? undefined
+          : await audioOutcome(
+              {
+                account,
+                matterId: workspaceId,
+                folderId: created.folderId,
+                audio: body.audio,
+              },
+              reserveAudio,
+            );
+      return Result.ok({
+        fileName: filedTranscript.fileName,
+        folderName: created.folderName,
+        files,
+        ...(notFiled.length === 0 ? {} : { notFiled }),
+        ...(audio === undefined ? {} : { audio }),
+      } satisfies DesktopDictationTranscriptSaved);
     },
   );
 

@@ -34,6 +34,11 @@ const config = {
   // itself durable access outside the consent flow that granted it its own.
   mcp: { type: "internal", reason: "provider_secret" },
   body: createApiKeyBody,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Inserts a new organization API key row with no cross-table aggregate invariant.",
+  },
 } satisfies HandlerConfig;
 
 /**

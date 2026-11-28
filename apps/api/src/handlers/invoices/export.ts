@@ -19,7 +19,6 @@ import {
   toExportRecords,
 } from "@/api/lib/billing/invoice-export-records";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
@@ -73,6 +72,11 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
       realtime: noResourceSetUpdates(
         "Stores a generated export download; nothing a web view lists changes.",
       ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Reads issued invoices and writes only a temporary export object and its download audit event; no matter or invoice row changes.",
+      },
     },
     async function* ({
       safeDb,
@@ -194,11 +198,5 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
   );
 
 const exportInvoices = createInvoicesExport();
-
-declareAggregateMutation(exportInvoices, {
-  type: "independent",
-  reason:
-    "Reads issued invoices and writes only a temporary export object and its download audit event; no matter or invoice row changes.",
-});
 
 export default exportInvoices;

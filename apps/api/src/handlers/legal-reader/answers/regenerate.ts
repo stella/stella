@@ -8,7 +8,6 @@ import {
 } from "@/api/handlers/legal-reader/answers/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -20,6 +19,10 @@ const config = {
   requiresUsage: { actionType: "chat", laneRouting: true },
   params: answerParamsSchema,
   body: regenerateBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["readerAnswer"],
+  },
 } satisfies HandlerConfig;
 
 const regenerateReaderAnswer = createSafeRootHandler(
@@ -39,8 +42,4 @@ const regenerateReaderAnswer = createSafeRootHandler(
     return Result.ok(request.stream(prepared));
   },
 );
-declareAggregateMutation(regenerateReaderAnswer, {
-  type: "aggregate",
-  aggregates: ["readerAnswer"],
-});
 export default regenerateReaderAnswer;

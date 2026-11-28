@@ -6,7 +6,6 @@ import type { PushDeviceRemovalResponse } from "@stll/api-contract/mobile-push";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { unregisterPushDevice } from "@/api/lib/push/push-devices";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -26,6 +25,10 @@ const config = {
   ),
   access: "write",
   params: v.object({ token: pushDeviceTokenSchema }),
+  aggregateMutation: {
+    type: "independent",
+    reason: "Deletes at most the caller's own device row by its token.",
+  },
 } satisfies HandlerConfig;
 
 /** `DELETE /v1/me/push-devices/:token`: only the caller's own row. */
@@ -44,10 +47,5 @@ const unregisterPushDeviceEndpoint = createSafeRootHandler(
     return Result.ok({ removed } satisfies PushDeviceRemovalResponse);
   },
 );
-
-declareAggregateMutation(unregisterPushDeviceEndpoint, {
-  type: "independent",
-  reason: "Deletes at most the caller's own device row by its token.",
-});
 
 export default unregisterPushDeviceEndpoint;

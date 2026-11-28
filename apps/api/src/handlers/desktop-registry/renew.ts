@@ -17,7 +17,6 @@ import {
   renewDesktopCredential,
 } from "@/api/lib/business-registries/desktop/renewal";
 import { userIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type DesktopRenewalResponse = {
@@ -52,6 +51,10 @@ const renewDesktopAccount = createSafeBoundedPublicHandler(
         }),
       }),
     ),
+    aggregateMutation: {
+      type: "aggregate",
+      aggregates: ["desktopMembership", "desktopCredential"],
+    },
   },
   async function* ({
     request,
@@ -114,9 +117,5 @@ const renewDesktopAccount = createSafeBoundedPublicHandler(
 
 // The renewal owner locks desktopMembership then desktopCredential through
 // the aggregate lock owner inside its own transaction.
-declareAggregateMutation(renewDesktopAccount, {
-  type: "aggregate",
-  aggregates: ["desktopMembership", "desktopCredential"],
-});
 
 export default renewDesktopAccount;
