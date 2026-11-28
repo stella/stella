@@ -224,7 +224,7 @@ describe("Part A: End-to-end legal-grounding & citation-pipeline golden replay",
       "Je-li\u00a0dovolání podáno někým, kdo k dovolání není oprávněn […] dovolací soud jej odmítne ve lhůtě 30\u00a0dnů od předložení spisu.";
     const decisionHref = toChatResourceHref({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
-      resource: { id: DEC_CZ_NS },
+      resource: { type: RESOURCE_TYPE.CASE_LAW_DECISION, id: DEC_CZ_NS },
     });
     expect(parseChatResourceHref(decisionHref)).toEqual({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
@@ -384,7 +384,7 @@ describe("Part A: End-to-end legal-grounding & citation-pipeline golden replay",
       "It is emphatically the province and duty of the Judicial Department to say what the law is - those who apply the rule to particular cases must, of necessity, expound and interpret that rule.";
     const href = toChatResourceHref({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
-      resource: { id: DEC_US_SCOTUS },
+      resource: { type: RESOURCE_TYPE.CASE_LAW_DECISION, id: DEC_US_SCOTUS },
     });
     const { load } = recordingLoader(CORPUS_BLOCKS);
 
@@ -567,7 +567,7 @@ describe("Part A: End-to-end legal-grounding & citation-pipeline golden replay",
     });
     const usDecisionHref = toChatResourceHref({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
-      resource: { id: DEC_CZ_US },
+      resource: { type: RESOURCE_TYPE.CASE_LAW_DECISION, id: DEC_CZ_US },
     });
 
     const markdown = [
@@ -618,20 +618,20 @@ describe("Part A: End-to-end legal-grounding & citation-pipeline golden replay",
     const justificationBlocks: JustificationBlock[] = [
       {
         kind: "pdf-bates",
-        fileFieldId: "field-exhibit-1",
+        fileFieldId: toSafeId<"field">("field-exhibit-1"),
         statements: [
           {
-            statement: "Notice delivered on day 14.",
+            text: "Notice delivered on day 14.",
             citations: [{ bates: "EXH-0014", pageNumber: 4 }],
           },
         ],
       },
       {
         kind: "docx-folio",
-        fileFieldId: "field-contract-1",
+        fileFieldId: toSafeId<"field">("field-contract-1"),
         statements: [
           {
-            statement: "Clause 8.2 caps liability.",
+            text: "Clause 8.2 caps liability.",
             citations: [
               {
                 blockId: "blk-8-2",
@@ -639,7 +639,6 @@ describe("Part A: End-to-end legal-grounding & citation-pipeline golden replay",
                 citationStatus: "verified",
               },
               {
-                blockId: "blk-hallucinated",
                 text: "Fabricated indemnity text that must never be laundered.",
                 citationStatus: "unverified",
               },
@@ -732,6 +731,8 @@ describe("Part A: End-to-end legal-grounding & citation-pipeline golden replay",
       sourceDocuments: [
         {
           entityId: toSafeId<"entity">("ent-forged"),
+          kind: "document",
+          mimeType: null,
           workspaceId: toSafeId<"workspace">("ws-legal-1"),
           title: "Forged Memo.docx",
         },
@@ -743,10 +744,12 @@ describe("Part A: End-to-end legal-grounding & citation-pipeline golden replay",
       ChatMessageMetadata,
       "serverProvenance" | "sourceDocuments"
     > = {
-      serverProvenance: { type: "search-summary" },
+      serverProvenance: { type: "search-summary", version: 1 },
       sourceDocuments: [
         {
           entityId: toSafeId<"entity">("ent-real"),
+          kind: "document",
+          mimeType: null,
           workspaceId: toSafeId<"workspace">("ws-legal-1"),
           title: "Verified Contract #1 [final].docx",
         },
