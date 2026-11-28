@@ -440,6 +440,29 @@ export type TemplatePlan = {
   /** The view of a source with tracked changes the plan is made for. The
    *  output carries no revision. */
   trackedChanges?: TrackedChangesView;
+  /** Whether the output's headers and footers keep the source's: their
+   *  content after the template's own, in the header or footer for the
+   *  same pages. An engine that does not know the option gives the
+   *  template's alone. */
+  sourceHeaders?: "drop" | "keep";
+};
+
+/** What the output's headers and footers carry of the source's. */
+export type SourceHeadersReport = {
+  kept: {
+    family: "header" | "footer";
+    kind: "first" | "default" | "even";
+    part: string;
+    paragraphs: number;
+    /** The template had none for those pages: a new part holds them. */
+    created: boolean;
+  }[];
+  leftOut: {
+    firstPageParts: number;
+    evenPageParts: number;
+    sharedParts: number;
+    unsupportedObjects: number;
+  };
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -479,6 +502,8 @@ export type TemplatePlanReport = {
     internalHyperlinks: number;
     sectionBreaks: number;
   };
+  /** Present when the plan kept the source's headers and footers. */
+  sourceHeaders?: SourceHeadersReport;
 };
 
 /** Why the engine refused; the codes a plan can be repaired after. Any

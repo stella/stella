@@ -207,6 +207,29 @@ const unreadNoteItem = (item: { kind: string }): ReformatNoteItem =>
     ? { kind: "other", reason: item.kind, blockId: item.blockId }
     : { kind: "other", reason: item.kind };
 
+/** The note items one finding of the formatter is worded as: one per
+ *  header or footer that kept the document's, and one per kind of thing
+ *  that had no place; one for any other finding. */
+const noteItemsOf = (
+  item: NoteSource,
+  blocks: ReadonlyMap<string, DocxBlock>,
+): ReformatNoteItem[] =>
+  item.kind === "sourceHeaders"
+    ? [
+        ...item.kept.map(({ family, kind, paragraphs }): ReformatNoteItem => ({
+          kind: "source_header_kept",
+          reason: `${family}:${kind}`,
+          count: paragraphs,
+        })),
+        ...Object.entries(item.leftOut).flatMap(
+          ([reason, count]): ReformatNoteItem[] =>
+            count === 0
+              ? []
+              : [{ kind: "source_header_left_out", reason, count }],
+        ),
+      ]
+    : [noteItemOf(item, blocks)];
+
 const noteItemOf = (
   item: NoteSource,
   blocks: ReadonlyMap<string, DocxBlock>,
@@ -450,7 +473,7 @@ export const reformatDocxOntoTemplate = async ({
 
   const done: Formatted = formatted.value;
   const { docx, note, outcome, profile } = done;
-  const items = note.items.map((item) => noteItemOf(item, blocks));
+  const items = note.items.flatMap((item) => noteItemsOf(item, blocks));
   return Result.ok({
     docx,
     note: {

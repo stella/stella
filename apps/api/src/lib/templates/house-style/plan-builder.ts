@@ -23,6 +23,7 @@ import type {
   DocxBlock,
   DocxBlockManifest,
   DocxSection,
+  SourceHeadersReport,
   TemplatePlan,
   TemplatePlanAlignment,
   TemplatePlanHighlight,
@@ -230,6 +231,9 @@ export type FormattingNoteItem =
    *  form field's box or list, a citation's link, an entry of the source's
    *  contents no longer update. */
   | { kind: "fieldsAsText"; fields: { kind: string; count: number }[] }
+  /** What the output's headers and footers kept of the source's, and what
+   *  had no place there. */
+  | ({ kind: "sourceHeaders" } & SourceHeadersReport)
   /** The template's style for a numbered level sets it apart from its
    *  sibling levels (bold, or another size). `blocks` paragraphs of the
    *  role were placed in the sibling's style instead, on their own level of
@@ -3720,6 +3724,9 @@ export const buildTemplatePlan = ({
     ...(context.keptSections.last === undefined
       ? {}
       : { lastSection: context.keptSections.last }),
+    // The template's headers and footers stay; the source's (a notice, a
+    // draft line, a logo, a page number) are added to them.
+    sourceHeaders: "keep",
   };
   return {
     plan,

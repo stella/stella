@@ -303,6 +303,25 @@ const bulletIdsOf = ({ blocks }: DocxBlockManifest): Set<string> =>
 const sum = (entries: readonly { count: number }[]): number =>
   entries.reduce((total, { count }) => total + count, 0);
 
+/** The note says what the output's headers kept of the source's and what
+ *  they left out, where the source's headers held anything. */
+const withSourceHeaders = (
+  note: FormattingNote,
+  { sourceHeaders }: TemplatePlanReport,
+): FormattingNote => {
+  if (
+    sourceHeaders === undefined ||
+    (sourceHeaders.kept.length === 0 &&
+      Object.values(sourceHeaders.leftOut).every((count) => count === 0))
+  ) {
+    return note;
+  }
+  return {
+    ...note,
+    items: [...note.items, { kind: "sourceHeaders", ...sourceHeaders }],
+  };
+};
+
 /** The note says which fields of the source the output shows as text. */
 const withFieldsAsText = (
   note: FormattingNote,
@@ -561,7 +580,7 @@ export const formatOntoTemplate = async ({
     manifest,
     plan: built.plan,
     profile,
-    note: withFieldsAsText(built.note, report),
+    note: withFieldsAsText(withSourceHeaders(built.note, report), report),
     outcome: { attempts, repairs, ...leftOf(report), pages },
   });
 };
