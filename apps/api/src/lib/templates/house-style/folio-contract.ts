@@ -230,6 +230,10 @@ export type TemplateStyle = {
   size?: number | null;
   /** Whether the style keeps its paragraph with the next one. */
   keepNext?: boolean;
+  /** Whether the style starts its paragraphs on a new page, inheritance
+   *  and the document's defaults resolved. Absent from an inspection read
+   *  before it was reported. */
+  pageBreakBefore?: boolean;
   /** The left indent the style gives its paragraphs, in twentieths of a
    *  point; null when none states one. Absent from an inspection read
    *  before it was reported. */

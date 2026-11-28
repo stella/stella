@@ -250,6 +250,59 @@ describe("inferTemplateProfile", () => {
     expect(inferTemplateProfile(without).contentsStyles).toBeUndefined();
   });
 
+  test("a contents field that ends in the next heading's paragraph keeps that heading out of the contents", () => {
+    const template = contractTemplate();
+    const blocks = template.blocks.map((block) =>
+      block.id === "p7"
+        ? {
+            ...block,
+            text: "Definitions",
+            styleId: "Article",
+            styleName: "Heading article",
+          }
+        : block,
+    );
+    const tailed = { ...template, blocks };
+    const profile = inferTemplateProfile(tailed);
+    expect(profile.regions.contents).toEqual(["p4", "p5", "p6"]);
+    expect(profile.regions.filler).toContain("p7");
+    // The field kept without its last block is no field kept in part.
+    expect(validateTemplateProfile(profile, tailed)).toEqual([]);
+    // An empty last paragraph of the field stays with the contents.
+    expect(inferTemplateProfile(template).regions.contents).toEqual([
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+    ]);
+  });
+
+  test("a heading style that starts a page says so in the health", () => {
+    const template = contractTemplate();
+    const paged = {
+      ...template,
+      styles: template.styles.map((style) =>
+        style.styleId === "Article"
+          ? { ...style, pageBreakBefore: true }
+          : style,
+      ),
+    };
+    const profile = inferTemplateProfile(paged);
+    expect(profile.health).toContainEqual({
+      kind: "headingStartsPage",
+      role: "articleHeading",
+      styleId: "Article",
+    });
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    expect(
+      inferTemplateProfile(template).health?.some(
+        ({ kind }) => kind === "headingStartsPage",
+      ),
+    ).toBe(false);
+  });
+
   test("a table in front of the sample is kept; sample parties and signatures are slots", () => {
     const { regions, slots } = inferTemplateProfile(
       contractTemplate({ front: LETTERHEAD }),

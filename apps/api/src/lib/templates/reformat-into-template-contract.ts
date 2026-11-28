@@ -93,5 +93,9 @@ export const REFORMAT_TEMPLATE_HEALTH_KINDS = [
    *  signature page, a landscape annex): the output takes its page setup,
    *  headers and footers from the last of them. Check the output's pages. */
   "template_last_section_not_body",
+  /** The template's style for article headings, clauses or party lines
+   *  (`styleId`) starts every paragraph on a new page: every one of them
+   *  in the output starts a page, as the template says. */
+  "template_heading_starts_page",
   "other",
 ] as const;
