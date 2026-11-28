@@ -829,5 +829,11 @@
     "parserVersion": 35,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "hu-bhgy",
+    "parserVersion": 34,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
   }
 ]

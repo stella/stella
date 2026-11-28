@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  courtNumberPositions,
   huDecisionDateFrom,
   huDecisionTypeFrom,
   huDocketFrom,
@@ -936,6 +937,61 @@ describe("reading a document folio handed over", () => {
       "h1:section-heading:Indokolás",
       "h2:section-heading:A felülvizsgálat alapjául szolgáló tényállás",
       "p:argumentation#1:Az alperes közgyűlése.",
+    ]);
+  });
+
+  test("a quoted paragraph keeps its own bracketed number as text, not as the court's", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "[114]\tAz Alkotmánybíróság a következőket állapította meg:" },
+      {
+        text: "[43] Az Alkotmánybíróság ezen megállapításait az Alaptörvény hatálybalépését követően is irányadónak tekinti.",
+      },
+      { text: "[115]\tA kereset ezért nem alapos." },
+      { text: "[116]\tA perköltségről a bíróság döntött." },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation#114:Az Alkotmánybíróság a következőket állapította meg:",
+      "p:argumentation:[43] Az Alkotmánybíróság ezen megállapításait az Alaptörvény hatálybalépését követően is irányadónak tekinti.",
+      "p:argumentation#115:A kereset ezért nem alapos.",
+      "p:argumentation#116:A perköltségről a bíróság döntött.",
+    ]);
+  });
+
+  test("the court's numbering may skip forward or restart, while a quotation numbered off its run is left out", () => {
+    const court = (numbers: readonly (number | undefined)[]) =>
+      [...courtNumberPositions(numbers)]
+        .toSorted((left, right) => left - right)
+        .map((position) => numbers[position]);
+    // A quoted paragraph below the court's run.
+    expect(court([114, 43, 115, 116])).toEqual([114, 115, 116]);
+    // A quoted run above it, which the court's own numbers then resume.
+    expect(court([114, 143, 144, 115, 116])).toEqual([114, 115, 116]);
+    // A step the court skips stays, though a quotation follows it.
+    expect(court([11, 13, 4, 14])).toEqual([11, 13, 14]);
+    expect(court([10, 12, 13])).toEqual([10, 12, 13]);
+    // Lines without a bracketed number are passed over.
+    expect(court([undefined, 5, undefined, 6])).toEqual([5, 6]);
+    // Numbering restarts at a [1] followed by a [2], and only there.
+    expect(court([1, 2, 3, 1, 2])).toEqual([1, 2, 3, 1, 2]);
+    expect(court([30, 1, 31])).toEqual([30, 31]);
+  });
+
+  test("a quoted run between two court paragraphs leaves the court's next number in place", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "[114]\tA Kúria a következő döntéseket idézi:" },
+      { text: "[143] Az első idézett bekezdés." },
+      { text: "[144] A második idézett bekezdés." },
+      { text: "[115]\tA kereset ezért nem alapos." },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation#114:A Kúria a következő döntéseket idézi:",
+      "p:argumentation:[143] Az első idézett bekezdés.",
+      "p:argumentation:[144] A második idézett bekezdés.",
+      "p:argumentation#115:A kereset ezért nem alapos.",
     ]);
   });
 
