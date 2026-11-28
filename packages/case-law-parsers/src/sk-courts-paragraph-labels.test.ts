@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 /**
  * Slovak courts' printed paragraph labels, read from recorded decisions
  * through the one label grammar: a sub-paragraph (`1.2.`, `5.5.`) opens its
@@ -5,15 +6,15 @@
  * not, and the court's `2.`, `3.` become the paragraph's number.
  */
 
-import { describe, expect, test } from "bun:test";
-
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 
-const FIXTURES = new URL("__fixtures__/", import.meta.url);
+const FIXTURES = PARSER_FIXTURES_DIR;
 
 type Read = { number: number | undefined; text: string };
 

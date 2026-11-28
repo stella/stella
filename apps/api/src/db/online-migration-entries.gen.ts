@@ -11,6 +11,7 @@ export { default as constraints_chat_turns_handed_over_constraints } from "./onl
 export { default as constraints_citation_polarity_evidence_constraints } from "./online-migration-entries/constraints-citation-polarity-evidence-constraints";
 export { default as constraints_client_invoice_constraints } from "./online-migration-entries/constraints-client-invoice-constraints";
 export { default as constraints_contact_vat_id_constraints } from "./online-migration-entries/constraints-contact-vat-id-constraints";
+export { default as constraints_corpus_projection_append_request_cap_constraints } from "./online-migration-entries/constraints-corpus-projection-append-request-cap-constraints";
 export { default as constraints_corpus_projection_cleanup_stall_constraints } from "./online-migration-entries/constraints-corpus-projection-cleanup-stall-constraints";
 export { default as constraints_corpus_projection_delete_receipt_constraints } from "./online-migration-entries/constraints-corpus-projection-delete-receipt-constraints";
 export { default as constraints_corpus_projection_document_language_constraints } from "./online-migration-entries/constraints-corpus-projection-document-language-constraints";
@@ -199,6 +200,7 @@ export { default as repairs_client_invoice_backfill } from "./online-migration-e
 export { default as repairs_client_invoice_constraint_validations } from "./online-migration-entries/repairs-client-invoice-constraint-validations";
 export { default as repairs_client_invoice_tenant_key } from "./online-migration-entries/repairs-client-invoice-tenant-key";
 export { default as repairs_contact_vat_id_repair } from "./online-migration-entries/repairs-contact-vat-id-repair";
+export { default as repairs_corpus_projection_append_request_cap_constraint_validations } from "./online-migration-entries/repairs-corpus-projection-append-request-cap-constraint-validations";
 export { default as repairs_corpus_projection_applied_revision_settled } from "./online-migration-entries/repairs-corpus-projection-applied-revision-settled";
 export { default as repairs_corpus_projection_cleanup_stall_repair } from "./online-migration-entries/repairs-corpus-projection-cleanup-stall-repair";
 export { default as repairs_corpus_projection_delete_receipt_repair } from "./online-migration-entries/repairs-corpus-projection-delete-receipt-repair";

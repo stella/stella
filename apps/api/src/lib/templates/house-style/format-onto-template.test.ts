@@ -33,6 +33,8 @@ type Answer =
       labelLost?: string[];
       /** The template brings a field that counts its own number. */
       countingFieldLeft?: true;
+      /** The output shows two form check boxes as text. */
+      fieldsAsText?: true;
     };
 
 type FakeEngine = TemplatePlanEngine & { plans: TemplatePlan[] };
@@ -111,7 +113,8 @@ const fakeEngine = (
       },
       dropped: {
         comments: 2,
-        sourceFields: [],
+        sourceFields:
+          "fieldsAsText" in answer ? [{ kind: "FORMCHECKBOX", count: 2 }] : [],
         internalHyperlinks: 0,
         sectionBreaks: 1,
       },
@@ -192,6 +195,15 @@ describe("formatOntoTemplate", () => {
     expect(formatted.plan.highlights).toEqual([
       expect.objectContaining({ blockId: citing, color: "magenta" }),
     ]);
+  });
+
+  test("says which fields of the source the output shows as text", async () => {
+    const engine = fakeEngine(manifest, [{ fieldsAsText: true }]);
+    const result = await format(engine);
+    expect(result.isOk() && result.value.note.items).toContainEqual({
+      kind: "fieldsAsText",
+      fields: [{ kind: "FORMCHECKBOX", count: 2 }],
+    });
   });
 
   test("takes back what the engine refuses of one block and applies again", async () => {

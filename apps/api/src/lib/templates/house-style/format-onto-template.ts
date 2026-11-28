@@ -306,6 +306,21 @@ const bulletIdsOf = ({ blocks }: DocxBlockManifest): Set<string> =>
 const sum = (entries: readonly { count: number }[]): number =>
   entries.reduce((total, { count }) => total + count, 0);
 
+/** The note says which fields of the source the output shows as text. */
+const withFieldsAsText = (
+  note: FormattingNote,
+  { dropped }: TemplatePlanReport,
+): FormattingNote =>
+  dropped.sourceFields.length === 0
+    ? note
+    : {
+        ...note,
+        items: [
+          ...note.items,
+          { kind: "fieldsAsText", fields: [...dropped.sourceFields] },
+        ],
+      };
+
 /** What the engine's report counts for the outcome of a formatting. */
 const leftOf = ({
   footnotes,
@@ -571,7 +586,7 @@ export const formatOntoTemplate = async ({
     manifest,
     plan: built.plan,
     profile,
-    note: built.note,
+    note: withFieldsAsText(built.note, report),
     outcome: { attempts, repairs, ...leftOf(report), pages },
   });
 };

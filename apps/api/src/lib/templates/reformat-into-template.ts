@@ -201,6 +201,7 @@ const KNOWN_NOTE_KINDS = [
   "templateBlocksKept",
   "trackedChangesKept",
   "trackedChangesResolved",
+  "fieldsAsText",
 ] as const satisfies readonly NoteSource["kind"][];
 
 type KnownNoteSource = Extract<
@@ -354,6 +355,14 @@ const noteItemOf = (
         kind: "tracked_changes_resolved",
         reason: item.view,
         count: changesOf(item),
+      };
+    case "fieldsAsText":
+      return {
+        kind: "fields_as_text",
+        reason: item.fields
+          .map(({ kind, count }) => `${kind}:${String(count)}`)
+          .join(","),
+        count: item.fields.reduce((total, { count }) => total + count, 0),
       };
     default: {
       item satisfies never;

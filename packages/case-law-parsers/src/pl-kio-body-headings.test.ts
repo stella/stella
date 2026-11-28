@@ -1,15 +1,16 @@
+import { describe, expect, test } from "bun:test";
 /**
  * The procurement chamber's converter sets some printed body lines as
  * headings; only its centred headings are the decision's own.
  */
-
-import { describe, expect, test } from "bun:test";
 
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 import { readPlKioLayout } from "@stll/case-law-parsers/pl-kio-layout";
 import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
+
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
@@ -21,9 +22,7 @@ const blocksOf = async (
   const content = new TextDecoder().decode(
     Bun.gunzipSync(
       new Uint8Array(
-        await Bun.file(
-          new URL(`__fixtures__/${file}`, import.meta.url),
-        ).arrayBuffer(),
+        await Bun.file(new URL(file, PARSER_FIXTURES_DIR)).arrayBuffer(),
       ),
     ),
   );
