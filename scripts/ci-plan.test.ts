@@ -5951,7 +5951,53 @@ test("route smoke consumes the production build and fails when its stack cannot 
   );
   const setup = rawSteps.find(({ id }) => id === "e2e-stack");
   expect(setup?.["uses"]).toBe("./.github/actions/setup-production-e2e");
+  expect(setup?.["with"]).toMatchObject({ "pause-native-extraction": "true" });
   expect(smoke?.if ?? "").not.toContain("always()");
+});
+
+test("network-baseline stacks pause inline native extraction while general E2E shards keep it active", () => {
+  const e2eShard = ciJobs["e2e-production-shard"];
+  const shardSteps = flattenWorkflowSteps(
+    typeof e2eShard === "object" && e2eShard !== null && "steps" in e2eShard
+      ? e2eShard.steps
+      : undefined,
+  );
+  const shardSetup = shardSteps.find(({ id }) => id === "e2e-stack");
+  expect(shardSetup?.["uses"]).toBe("./.github/actions/setup-production-e2e");
+  expect(shardSetup?.["with"]).toMatchObject({
+    "pause-native-extraction": `\${{ matrix.shard == 'network-baseline' && 'true' || 'false' }}`,
+  });
+
+  for (const relPath of [
+    "../.github/workflows/network-baseline-record.yml",
+    "../.github/workflows/route-scale-nightly.yml",
+  ]) {
+    const parsedWorkflow = Bun.YAML.parse(
+      readFileSync(new URL(relPath, import.meta.url), "utf-8"),
+    );
+    const parsedJobs =
+      typeof parsedWorkflow === "object" &&
+      parsedWorkflow !== null &&
+      "jobs" in parsedWorkflow &&
+      typeof parsedWorkflow.jobs === "object" &&
+      parsedWorkflow.jobs !== null
+        ? Object.values(parsedWorkflow.jobs)
+        : [];
+    const stackStep = parsedJobs
+      .filter(
+        (job): job is { steps: unknown[] } =>
+          typeof job === "object" &&
+          job !== null &&
+          "steps" in job &&
+          Array.isArray(job.steps),
+      )
+      .flatMap((job) => flattenWorkflowSteps(job.steps))
+      .find(({ uses }) => uses === "./.github/actions/setup-production-e2e");
+    expect(stackStep, relPath).toBeDefined();
+    expect(stackStep?.["with"], relPath).toMatchObject({
+      "pause-native-extraction": "true",
+    });
+  }
 });
 
 test("an unreadable PR diff requires route smoke while manual and queue runs retain their suites", () => {

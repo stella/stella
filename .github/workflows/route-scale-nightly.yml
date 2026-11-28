@@ -103,6 +103,7 @@ jobs:
         uses: ./.github/actions/setup-production-e2e
         with:
           expected-sha: ${{ github.sha }}
+          pause-native-extraction: "true"
 
       - name: Prepare network comparison baseline
         timeout-minutes: 5

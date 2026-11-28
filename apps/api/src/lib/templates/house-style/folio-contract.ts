@@ -235,6 +235,10 @@ export type TemplateStyle = {
   size?: number | null;
   /** Whether the style keeps its paragraph with the next one. */
   keepNext?: boolean;
+  /** Whether the style starts its paragraphs on a new page, inheritance
+   *  and the document's defaults resolved. Absent from an inspection read
+   *  before it was reported. */
+  pageBreakBefore?: boolean;
   /** The left indent the style gives its paragraphs, in twentieths of a
    *  point; null when none states one. Absent from an inspection read
    *  before it was reported. */
@@ -482,6 +486,9 @@ export type TemplatePlan = {
   /** The section the body ends with, when its page is another than the
    *  template's. */
   lastSection?: TemplatePlanSection;
+  /** The template section, counted from 0, the output's pages and headers
+   *  are built from; left out, the template's last. */
+  bodySection?: number;
   /** Paragraphs inside kept template tables written without their text.
    *  An engine that does not know the option leaves them as they are. */
   emptyTemplateBlockIds?: string[];
