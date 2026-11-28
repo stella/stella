@@ -11,6 +11,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
@@ -22,7 +23,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -17,7 +18,6 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import {
   parkReconciliationItem,

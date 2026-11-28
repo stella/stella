@@ -1,17 +1,18 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type {
+  ReconciliationListingItem,
+  SourceRecapture,
+  StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import {
   locateListedPayload,
   recaptureDecisionFromListing,
 } from "@/api/handlers/case-law/ingestion/recapture";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import type {
-  ReconciliationListingItem,
-  SourceRecapture,
-  StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);

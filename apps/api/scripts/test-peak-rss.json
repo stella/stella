@@ -2984,14 +2984,6 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/case-law/case-number.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/case-law/citation-arrival-settle.db.test.ts": {
       "peakMb": 760,
       "baselineMb": 193,
@@ -6038,14 +6030,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/source-fingerprint.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
       }
     },
     "src/handlers/case-law/ingestion/source-raw-writes.db.test.ts": {
@@ -15720,14 +15704,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/case-law/decision-text.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/lib/case-law/decision-type-census.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
@@ -20352,14 +20328,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/adapter-manifest.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/lib/legal-search/authority-sql.test.ts": {
       "peakMb": 775,
       "baselineMb": 193,
@@ -21552,14 +21520,6 @@
         "job": "measure-2"
       }
     },
-    "src/lib/legal-search/ingestion-plain-text.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/lib/legal-search/language-group-collapse.test.ts": {
       "peakMb": 214,
       "baselineMb": 214,
@@ -21673,14 +21633,6 @@
       }
     },
     "src/lib/legal-search/metadata-urls.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/lib/legal-search/parser-reparse-scopes.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
       "source": {
@@ -22062,14 +22014,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/lib/legal-search/source-exclusion-census.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/lib/legal-search/source-exclusion-policy.test.ts": {

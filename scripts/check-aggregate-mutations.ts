@@ -4,15 +4,14 @@
 //
 //   - Routes. The route table the API serves (`apiRoutes`) is read as data:
 //     every POST, PUT, PATCH and DELETE route's definition either carries an
-//     ownership declaration (`declareAggregateMutation`, keyed by definition)
-//     or sits in the reasoned, shrink-only baseline, keyed by method and path.
-//   - Declarations. Every `declareAggregateMutation` call site in the API
-//     source is verified statically: it imports the owner by name and calls
-//     it directly with a literal declaration, every aggregate exists in the
-//     lock registry, and the declared handler awaits the lock for each one,
-//     itself or through a joined direct callee. The owner's registry is only
-//     written by those calls, so a route the table reports declared has a
-//     verified declaration.
+//     ownership declaration on `definition.config.aggregateMutation` or sits in
+//     the reasoned, shrink-only baseline, keyed by method and path.
+//   - Declarations. Every `aggregateMutation` property on a handler config in
+//     the API source is verified statically: it is a literal declaration on a
+//     handler factory config (inline or via a local `const` binding, with no
+//     spread, computed, or dynamic values), every aggregate exists in the lock
+//     registry, and the declared handler awaits the lock for each one, itself
+//     or through a joined direct callee.
 import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -45,7 +44,17 @@ const API = "apps/api/src/";
 const REGISTRY = `${API}lib/db/aggregate-lock.ts`;
 const REGISTRY_DIRECTORY = `${API}lib/db/aggregate-lock-entries`;
 const OWNER = `${API}lib/db/aggregate-mutation-declaration.ts`;
-const DECLARE = "declareAggregateMutation";
+const API_HANDLERS = `${API}lib/api-handlers.ts`;
+const ENDPOINTS = `${API}lib/endpoints.ts`;
+const PROPERTY = "aggregateMutation";
+const INFRA_FILES = new Set([
+  OWNER,
+  API_HANDLERS,
+  ENDPOINTS,
+  `${API}http/handler-config-types.ts`,
+  `${API}http/route.ts`,
+]);
+const ENDPOINT_METHODS = new Set(["public", "session", "member", "workspace"]);
 const BASELINE = BASELINE_PATHS.aggregateMutations;
 const baselineSchema = v.array(
   v.object({
@@ -140,6 +149,13 @@ const validateDeclaration = ({
   file,
   registry,
 }: ValidateDeclarationOptions) => {
+  if (
+    declaration.properties.some(
+      (field) => !isPropertyAssignment(field) || field.computed,
+    )
+  ) {
+    panic(`Invalid aggregate mutation declaration in ${file}`);
+  }
   const fields = new Map(
     declaration.properties
       .filter(isPropertyAssignment)
@@ -322,6 +338,33 @@ const factoryReturn = (node: Callable): CallExpression | undefined => {
     : undefined;
 };
 
+const defineEndpointCallback = ({
+  call,
+  access,
+}: {
+  call: CallExpression;
+  access: SourceAccess;
+}): Argument | undefined => {
+  if (
+    call.callee.type !== "MemberExpression" ||
+    call.callee.computed ||
+    call.callee.object.type !== "Identifier" ||
+    call.callee.property.type !== "Identifier" ||
+    !ENDPOINT_METHODS.has(call.callee.property.name)
+  ) {
+    return undefined;
+  }
+  const binding = trustedBinding({
+    identifier: call.callee.object,
+    access,
+  });
+  return binding?.kind === "import" &&
+    binding.module === ENDPOINTS &&
+    binding.exported === "defineEndpoint"
+    ? call.arguments.at(1)
+    : undefined;
+};
+
 const handlerImplementation = ({
   handler,
   source,
@@ -363,6 +406,18 @@ const handlerImplementation = ({
       access,
       visited,
     });
+  }
+  if (handler.type === "CallExpression") {
+    const endpointCallback = defineEndpointCallback({ call: handler, access });
+    if (endpointCallback !== undefined) {
+      return handlerImplementation({
+        handler: endpointCallback,
+        source,
+        file,
+        access,
+        visited,
+      });
+    }
   }
   if (
     handler.type === "CallExpression" &&
@@ -1644,100 +1699,305 @@ const assertDeclaredHandlerLocks = ({
 
 // --- Declaration sites ----------------------------------------------------------
 
-/** Local names `file` imports the owner's declaration helper under. */
-const declarationNames = ({
+const walkUpConfigWrappers = (node: Node): Node => {
+  let current = node;
+  let parent = parentOf(current);
+  while (
+    parent !== undefined &&
+    (parent.type === "ParenthesizedExpression" ||
+      parent.type === "TSAsExpression" ||
+      parent.type === "TSSatisfiesExpression") &&
+    parent.expression === current
+  ) {
+    current = parent;
+    parent = parentOf(current);
+  }
+  return current;
+};
+
+const isHandlerFactoryCall = (
+  call: CallExpression,
+  access: SourceAccess,
+): boolean => {
+  if (call.callee.type === "Identifier") {
+    const binding = trustedBinding({ identifier: call.callee, access });
+    return binding?.kind === "import" && binding.module === API_HANDLERS;
+  }
+  if (
+    call.callee.type === "MemberExpression" &&
+    !call.callee.computed &&
+    call.callee.object.type === "Identifier" &&
+    call.callee.property.type === "Identifier" &&
+    ENDPOINT_METHODS.has(call.callee.property.name)
+  ) {
+    const binding = trustedBinding({ identifier: call.callee.object, access });
+    return (
+      binding?.kind === "import" &&
+      binding.module === ENDPOINTS &&
+      binding.exported === "defineEndpoint"
+    );
+  }
+  return false;
+};
+
+const isAggregateMutationKey = (property: Node): boolean => {
+  if (property.type !== "Property") {
+    return false;
+  }
+  if (
+    !property.computed &&
+    property.key.type === "Identifier" &&
+    property.key.name === PROPERTY
+  ) {
+    return true;
+  }
+  return isStringLiteral(property.key) && property.key.value === PROPERTY;
+};
+
+const isReferenceIdentifier = (node: Identifier): boolean => {
+  const parent = parentOf(node);
+  if (parent === undefined) {
+    return true;
+  }
+  if (parent.type === "VariableDeclarator" && parent.id === node) {
+    return false;
+  }
+  if (parent.type === "Property" && !parent.computed && parent.key === node) {
+    return false;
+  }
+  if (
+    parent.type === "MemberExpression" &&
+    !parent.computed &&
+    parent.property === node
+  ) {
+    return false;
+  }
+  if (
+    parent.type === "ImportSpecifier" ||
+    parent.type === "ImportDefaultSpecifier" ||
+    parent.type === "ImportNamespaceSpecifier" ||
+    parent.type === "TSTypeReference" ||
+    parent.type === "TSTypeQuery" ||
+    parent.type === "TSPropertySignature"
+  ) {
+    return false;
+  }
+  return true;
+};
+
+const declarationTypeOf = (
+  declaration: ObjectExpression,
+  source: SourceTree,
+): string | undefined => {
+  const typeField = declaration.properties
+    .filter(isPropertyAssignment)
+    .find((field) => nodeText(field.key, source) === "type");
+  return typeField !== undefined && isStringLiteral(typeField.value)
+    ? typeField.value.value
+    : undefined;
+};
+
+/**
+ * Verifies every `aggregateMutation` declaration in one file and returns how
+ * many handler factories carry one. Spread, computed, dynamic, mutated, or
+ * unattached declarations fail closed.
+ */
+const isAggregateMutationAssignment = (node: Node): boolean =>
+  node.type === "AssignmentExpression" &&
+  node.left.type === "MemberExpression" &&
+  ((!node.left.computed &&
+    node.left.property.type === "Identifier" &&
+    node.left.property.name === PROPERTY) ||
+    (node.left.computed &&
+      isStringLiteral(node.left.property) &&
+      node.left.property.value === PROPERTY));
+
+const collectIdentifierReferences = (
+  source: SourceTree,
+  name: string,
+  declarationNode: Identifier,
+): Identifier[] => {
+  const refs: Identifier[] = [];
+  walk(source.program, (node) => {
+    if (
+      node.type === "Identifier" &&
+      node.name === name &&
+      node !== declarationNode &&
+      isReferenceIdentifier(node)
+    ) {
+      refs.push(node);
+    }
+  });
+  return refs;
+};
+
+const verifyConstConfigDeclaration = ({
+  declarator,
+  declaration,
   source,
   file,
   access,
 }: {
+  declarator: Extract<Node, { type: "VariableDeclarator" }>;
+  declaration: ObjectExpression;
   source: SourceTree;
   file: string;
   access: SourceAccess;
-}) => {
-  const names = new Set<string>();
-  for (const statement of source.program.body) {
-    if (statement.type !== "ImportDeclaration") {
-      continue;
+}): number => {
+  const variableDecl = parentOf(declarator);
+  if (
+    declarator.id.type !== "Identifier" ||
+    variableDecl?.type !== "VariableDeclaration" ||
+    variableDecl.kind !== "const"
+  ) {
+    return panic(
+      `Aggregate mutation config must be a const binding in ${file}`,
+    );
+  }
+  const references = collectIdentifierReferences(
+    source,
+    declarator.id.name,
+    declarator.id,
+  );
+  let attached = 0;
+  for (const reference of references) {
+    const refExpr = walkUpConfigWrappers(reference);
+    const refParent = parentOf(refExpr);
+    if (refParent?.type === "SpreadElement") {
+      panic(`Spread ${PROPERTY} config is not allowed in ${file}`);
     }
-    const fromOwner =
-      access.resolveSourceModule({ file, name: statement.source.value }) ===
-      OWNER;
-    for (const item of statement.specifiers) {
-      if (fromOwner && item.type === "ImportNamespaceSpecifier") {
-        panic(`Import ${DECLARE} by name from its owner in ${file}`);
+    if (
+      refParent?.type === "CallExpression" &&
+      refParent.arguments.at(0) === refExpr &&
+      isHandlerFactoryCall(refParent, access)
+    ) {
+      assertDeclaredHandlerLocks({
+        declaration,
+        handler: refParent,
+        source,
+        file,
+        registry: access.registry,
+        access,
+      });
+      attached += 1;
+    } else if (
+      refParent?.type === "Property" &&
+      !refParent.computed &&
+      refParent.value === refExpr &&
+      refParent.key.type === "Identifier" &&
+      refParent.key.name === "config"
+    ) {
+      if (declarationTypeOf(declaration, source) === "aggregate") {
+        panic(
+          `Cannot resolve declared aggregate handler implementation in ${file}`,
+        );
       }
-      if (item.type !== "ImportSpecifier") {
-        continue;
-      }
-      const exported =
-        item.imported.type === "Identifier"
-          ? item.imported.name
-          : item.imported.value;
-      if (exported !== DECLARE) {
-        continue;
-      }
-      if (!fromOwner || item.importKind === "type") {
-        panic(`Import ${DECLARE} from ${OWNER} in ${file}`);
-      }
-      names.add(item.local.name);
+      attached += 1;
     }
   }
-  return names;
+  if (attached === 0) {
+    panic(
+      `Aggregate mutation config must be passed to a handler factory in ${file}`,
+    );
+  }
+  return attached;
 };
 
-/**
- * Verifies every declaration in one file and returns how many it holds. Any
- * other use of the helper's name (an alias, a re-export, a value passed on, a
- * namespace member) fails: only a direct call can be verified.
- */
+const verifyAggregateMutationProperty = ({
+  node,
+  configObject,
+  source,
+  file,
+  access,
+}: {
+  node: Property;
+  configObject: ObjectExpression;
+  source: SourceTree;
+  file: string;
+  access: SourceAccess;
+}): number => {
+  if (node.computed || node.shorthand || node.method || node.kind !== "init") {
+    return panic(`Invalid aggregate mutation declaration in ${file}`);
+  }
+  if (
+    configObject.properties.some(
+      (field) => field.type === "SpreadElement" || field.computed,
+    )
+  ) {
+    return panic(`Invalid aggregate mutation config in ${file}`);
+  }
+  const declaration = node.value;
+  if (declaration.type !== "ObjectExpression") {
+    return panic(`Invalid aggregate mutation declaration in ${file}`);
+  }
+  validateDeclaration({
+    declaration,
+    source,
+    file,
+    registry: access.registry,
+  });
+
+  const configExpr = walkUpConfigWrappers(configObject);
+  const container = parentOf(configExpr);
+  if (
+    container?.type === "CallExpression" &&
+    container.arguments.at(0) === configExpr &&
+    isHandlerFactoryCall(container, access)
+  ) {
+    assertDeclaredHandlerLocks({
+      declaration,
+      handler: container,
+      source,
+      file,
+      registry: access.registry,
+      access,
+    });
+    return 1;
+  }
+  if (
+    container?.type === "VariableDeclarator" &&
+    container.init === configExpr
+  ) {
+    return verifyConstConfigDeclaration({
+      declarator: container,
+      declaration,
+      source,
+      file,
+      access,
+    });
+  }
+  return panic(
+    `Declare ${PROPERTY} directly on a handler factory config in ${file}`,
+  );
+};
+
 const verifyFileDeclarations = (file: string, access: SourceAccess) => {
   const content = access.load(file);
   if (content === undefined) {
     return panic(`Cannot read aggregate declaration site ${file}`);
   }
   const source = parse({ file, source: content });
-  const names = declarationNames({ source, file, access });
   let verified = 0;
+
+  walk(source.program, (node) => {
+    if (isAggregateMutationAssignment(node)) {
+      panic(`Declare ${PROPERTY} statically on handler config in ${file}`);
+    }
+  });
+
   const visit = (node: Node) => {
-    if (
-      node.type === "Identifier" &&
-      (node.name === DECLARE || names.has(node.name)) &&
-      parentOf(node)?.type !== "ImportSpecifier"
-    ) {
-      const call = parentOf(node);
-      if (
-        !names.has(node.name) ||
-        call?.type !== "CallExpression" ||
-        call.callee !== node
-      ) {
-        panic(
-          `Call ${DECLARE} directly in ${file}: ${nodeText(call ?? node, source)}`,
-        );
+    if (node.type === "ObjectExpression") {
+      for (const property of node.properties) {
+        if (property.type === "Property" && isAggregateMutationKey(property)) {
+          verified += verifyAggregateMutationProperty({
+            node: property,
+            configObject: node,
+            source,
+            file,
+            access,
+          });
+        }
       }
-      const [handler, declaration] = call.arguments;
-      if (
-        call.arguments.length !== 2 ||
-        handler === undefined ||
-        declaration === undefined ||
-        !(declaration.type === "ObjectExpression")
-      ) {
-        panic(`Invalid aggregate mutation declaration in ${file}`);
-      }
-      validateDeclaration({
-        declaration,
-        source,
-        file,
-        registry: access.registry,
-      });
-      assertDeclaredHandlerLocks({
-        declaration,
-        handler,
-        source,
-        file,
-        registry: access.registry,
-        access,
-      });
-      verified += 1;
     }
     visitChildren(node, visit);
   };
@@ -1747,7 +2007,7 @@ const verifyFileDeclarations = (file: string, access: SourceAccess) => {
 
 /**
  * Verifies every declaration site among `files` (repo-relative); a file that
- * never names the helper is skipped unparsed. Returns the declarations found.
+ * never names `aggregateMutation` is skipped unparsed. Returns the declarations found.
  */
 export const verifyAggregateDeclarations = ({
   files,
@@ -1759,7 +2019,10 @@ export const verifyAggregateDeclarations = ({
   const access = createSourceAccess({ sourceLoader: load, files });
   let verified = 0;
   for (const file of files) {
-    if (file !== OWNER && access.load(file)?.includes(DECLARE) === true) {
+    if (
+      !INFRA_FILES.has(file) &&
+      access.load(file)?.includes(PROPERTY) === true
+    ) {
       verified += verifyFileDeclarations(file, access);
     }
   }

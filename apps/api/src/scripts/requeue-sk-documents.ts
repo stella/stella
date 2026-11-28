@@ -1,8 +1,9 @@
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   countParkedDocuments,
   loadDeferredDocumentSourceId,

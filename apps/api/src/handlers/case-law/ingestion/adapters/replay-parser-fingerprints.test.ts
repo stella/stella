@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 import {
   loadParserFingerprints,

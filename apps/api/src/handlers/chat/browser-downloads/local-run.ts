@@ -13,7 +13,6 @@ import {
   verifyRunCallerWith,
 } from "@/api/handlers/chat/run-outputs/upload";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { VerifyBearerToken } from "@/api/mcp/auth";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
@@ -67,6 +66,11 @@ export const createFileLocalRunBrowserDownload = (
       params: v.object({ runId: runIdSchema }),
       body: browserDownloadBodySchema,
       requestBodyMaxBytes: BROWSER_DOWNLOAD_REQUEST_MAX_BYTES,
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Adds one document (or one chat file) with its audit event and storage object, or names a document the matter already holds; it changes no aggregate's ordered state.",
+      },
     },
     verifyRunCallerWith<BrowserDownloadRunContext>({
       ...dependencies,
@@ -117,11 +121,5 @@ export const createFileLocalRunBrowserDownload = (
   );
 
 const fileLocalRunBrowserDownload = createFileLocalRunBrowserDownload();
-
-declareAggregateMutation(fileLocalRunBrowserDownload, {
-  type: "independent",
-  reason:
-    "Adds one document (or one chat file) with its audit event and storage object, or names a document the matter already holds; it changes no aggregate's ordered state.",
-});
 
 export default fileLocalRunBrowserDownload;

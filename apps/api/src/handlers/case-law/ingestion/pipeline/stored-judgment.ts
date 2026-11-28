@@ -1,15 +1,16 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db-types";
-import { caseLawDecisions } from "@/api/db/schema";
-import type { ProcessSupplementOptions } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
-import type { SafeId } from "@/api/lib/branded-types";
 import type {
   IngestionResult,
   StoredRawReadError,
   StoredRawResultReader,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import type { ScopedDb } from "@/api/db/safe-db-types";
+import { caseLawDecisions } from "@/api/db/schema";
+import type { ProcessSupplementOptions } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
+import type { SafeId } from "@/api/lib/branded-types";
 
 type RebuildStoredJudgmentOptions = {
   judgmentId: SafeId<"caseLawDecision">;

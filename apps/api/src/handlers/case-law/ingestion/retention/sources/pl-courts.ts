@@ -15,6 +15,8 @@
  */
 import { Result } from "better-result";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,
@@ -22,7 +24,6 @@ import {
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { htmlParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/html-paragraphs";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 
 const LISTING_PARTS = ["listing-dump", "listing-search"] as const;

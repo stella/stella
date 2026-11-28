@@ -15,6 +15,10 @@
 
 import { inspect } from "node:util";
 
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { sanitizeErrorForOutput } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
@@ -22,10 +26,6 @@ import {
   ADAPTER_MODULES,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/lib/legal-search/ingestion-types";
 
 const writeStdoutLine = (message = ""): void => {
   process.stdout.write(`${message}\n`);

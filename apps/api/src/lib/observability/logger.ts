@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { registerIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 // parser-output-unchanged: Release attribution adds a service.version attribute to telemetry records; parsed ingestion records are unchanged.
 import { setParserLogger } from "@stll/case-law-parsers/parser-logger";
 import type { FailureGrade, FailureReason } from "@stll/errors";
@@ -10,7 +11,6 @@ import {
   sanitizeErrorForOutput,
 } from "@stll/errors";
 
-import { registerIngestionDiagnosticsSink } from "@/api/lib/case-law/ingestion-diagnostics-sink";
 import type { ErrorFingerprint } from "@/api/lib/errors/utils";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
 import { otlpLogExporter } from "@/api/lib/observability/otel";

@@ -5,7 +5,6 @@ import { readerAnswerRequest } from "@/api/handlers/legal-reader/answers/request
 import { createAnswerBodySchema } from "@/api/handlers/legal-reader/answers/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -16,6 +15,10 @@ const config = {
   mcp: { type: "internal", reason: "realtime_stream" },
   requiresUsage: { actionType: "chat", laneRouting: true },
   body: createAnswerBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["readerAnswer"],
+  },
 } satisfies HandlerConfig;
 
 const createReaderAnswer = createSafeRootHandler(config, async function* (ctx) {
@@ -27,9 +30,5 @@ const createReaderAnswer = createSafeRootHandler(config, async function* (ctx) {
     }),
   );
   return Result.ok(request.stream(prepared));
-});
-declareAggregateMutation(createReaderAnswer, {
-  type: "aggregate",
-  aggregates: ["readerAnswer"],
 });
 export default createReaderAnswer;

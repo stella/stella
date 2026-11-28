@@ -21,6 +21,7 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { createGunzip } from "node:zlib";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   composeCourtListenerText,
   type CourtListenerTextOpinion,
@@ -45,7 +46,6 @@ import {
   isCsvRow,
   OPINION_COLUMNS,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const isOpinionRow = isCsvRow(OPINION_COLUMNS);

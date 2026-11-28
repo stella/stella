@@ -4,7 +4,7 @@ import { Result } from "better-result";
 import type {
   StoredRawReparseOutcome,
   StoredRawReparseValue,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "./ingestion-types";
 
 /** The replay callback consumes an outcome or a rejected Promise, rather than a Result. */
 export const readStoredRawReparseResult = (

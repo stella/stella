@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { gunzipSync } from "node:zlib";
 
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -14,12 +20,6 @@ import {
   nssRegistryUrl,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/lib/legal-search/ingestion-types";
 import { czNssFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   nssRecoveryFixture,

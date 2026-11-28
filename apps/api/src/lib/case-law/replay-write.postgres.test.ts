@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import {
   caseLawDecisions,
   caseLawDecisionSupplements,
@@ -18,7 +20,6 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { writeRepairedCorpusProjectionDesiredStatesTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];

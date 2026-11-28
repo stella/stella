@@ -2,10 +2,11 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { buildCzNsSbirkaDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { heldDecisionAttachmentForAdapter } from "@/api/lib/legal-search/held-decision-attachment";
 import {
   HELD_DECISION_MATCH_BASES,
@@ -13,7 +14,6 @@ import {
   HELD_DECISION_REVIEW,
   heldDecisionReviewOf,
 } from "@/api/lib/legal-search/held-decision-attachment-values";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   CZ_NS_SBIRKA_RECORDINGS,
   czNsSbirkaRecordedPage,

@@ -11,8 +11,7 @@
  */
 
 import { foldDecisionIdentifierInput } from "@stll/api-contract/decision-docket-grammar";
-
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type { RawIngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 
 /** The courts' portal id: `orzeczenia.nsa.gov.pl/doc/0A9A601038`. */
 const PORTAL_DOCUMENT_ID = /^[0-9A-F]{10}$/u;

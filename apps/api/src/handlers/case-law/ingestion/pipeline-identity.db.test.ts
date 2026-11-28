@@ -14,6 +14,9 @@ import {
   directoryCourtIdentities,
   readPrintedCourt,
 } from "@stll/api-contract/court-identity";
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
@@ -39,9 +42,6 @@ import {
   presentTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,

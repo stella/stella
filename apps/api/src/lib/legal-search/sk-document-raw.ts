@@ -1,9 +1,16 @@
 // parser-output-unchanged: retain fetched PDF bodies without changing document parsing.
 import { Result, TaggedError } from "better-result";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_RAW_CAPTURE } from "@/api/lib/legal-search/document-raw-capture";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   RAW_SOURCE_FAMILY,
   type RawSourceWriteFailure,
@@ -11,12 +18,6 @@ import {
   writeCaseLawRawPayload,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
 import { LIMITS } from "@/api/lib/limits";
 import { readS3ObjectBoundedIfPresent } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";

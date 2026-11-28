@@ -18,7 +18,6 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { broadcastToUser } from "@/api/lib/sse";
 
@@ -47,6 +46,11 @@ const config = {
   body: v.object({
     readState: v.picklist(Object.values(CHAT_THREAD_READ_STATE)),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Transitions one caller-owned chat thread conditionally on its read state; no other row reads or depends on it.",
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -132,11 +136,5 @@ const updateChatThreadReadState = createSafeRootHandler(
     return Result.ok({ readState });
   },
 );
-
-declareAggregateMutation(updateChatThreadReadState, {
-  type: "independent",
-  reason:
-    "Transitions one caller-owned chat thread conditionally on its read state; no other row reads or depends on it.",
-});
 
 export default updateChatThreadReadState;

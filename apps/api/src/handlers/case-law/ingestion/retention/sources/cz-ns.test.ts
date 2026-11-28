@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import {
   validateAst,
   type ValidationResult,
@@ -12,8 +14,6 @@ import {
   czNsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { RETENTION_TEXT_ABSENCE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { czNsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

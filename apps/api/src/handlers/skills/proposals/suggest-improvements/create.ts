@@ -33,7 +33,6 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -85,6 +84,11 @@ const config = {
     actionType: "chat",
     serviceTier: "flex",
     modelTask: "short-text",
+  },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Creates one new draft proposal row referencing an existing skill revision; does not mutate the skill or existing proposals.",
   },
 } satisfies HandlerConfig;
 
@@ -396,11 +400,5 @@ const buildPrompt = ({
   sections.push(`Current SKILL.md:\n${currentBody}`);
   return sections.join("\n\n");
 };
-
-declareAggregateMutation(suggestSkillImprovements, {
-  type: "independent",
-  reason:
-    "Creates one new draft proposal row referencing an existing skill revision; does not mutate the skill or existing proposals.",
-});
 
 export default suggestSkillImprovements;

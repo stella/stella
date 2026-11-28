@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { isDocumentAst, parseDocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -23,7 +24,6 @@ import {
   normalizeDecisionType,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const decision = plainTextIngestionResult({
   caseNumber: "reference",

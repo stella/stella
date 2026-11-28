@@ -1,8 +1,9 @@
-import type { ReplayEnrolment } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
+import type { ReplayEnrolment } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 
 /** Every source starts disabled so a test enables only the sources it owns. */
 export const OFF_REPLAY_ENROLMENT_FIXTURE = {

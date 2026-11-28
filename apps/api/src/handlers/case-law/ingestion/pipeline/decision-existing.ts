@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { DOCUMENT_DELIVERY } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -34,8 +37,6 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import {
   OBSERVATION_DETAIL,
   OBSERVATION_DETAIL_RANK,

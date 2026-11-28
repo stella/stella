@@ -30,6 +30,8 @@ import { panic, Result } from "better-result";
  */
 import { and, eq, isNull, ne } from "drizzle-orm";
 
+import type { DecisionSupplementKind } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCitations,
@@ -53,7 +55,6 @@ import {
 } from "@/api/lib/case-law/decision-absorption";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
-import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import {
   classifyCaseLawRawKey,

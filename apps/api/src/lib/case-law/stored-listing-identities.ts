@@ -2,6 +2,9 @@ import { panic } from "better-result";
 import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import type { CensusListingIdentity } from "@stll/case-law-ingestion-core/ingestion-types";
+import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
@@ -19,8 +22,6 @@ import {
   rowHoldsDocumentFor,
   supplementIsMergedFor,
 } from "@/api/lib/case-law/stored-payload";
-import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 
 export const CENSUS_IDENTITY_BATCH_SIZE = 500;
 

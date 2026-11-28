@@ -3,6 +3,15 @@ import { Glob } from "bun";
 import path from "node:path";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
+import {
+  type DecisionSupplement,
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  type IngestionResult,
+  type RawIngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  toPlainTextIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
 import { parseRegionalDecision } from "@stll/case-law-parsers/cz-regional";
 import { parseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
@@ -49,15 +58,6 @@ import { segmentDecision } from "../apps/api/src/handlers/case-law/ingestion/seg
 import { judgeNameKey } from "../apps/api/src/handlers/case-law/judges/judge-name";
 import { loadDocxArchive } from "../apps/api/src/lib/docx-archive";
 import { sanitizeResult } from "../apps/api/src/lib/legal-search/ingestion-normalization";
-import {
-  type DecisionSupplement,
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  type IngestionResult,
-  type RawIngestionResult,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  toPlainTextIngestionResult,
-} from "../apps/api/src/lib/legal-search/ingestion-types";
 import { parsePendingDocument } from "../apps/api/src/lib/legal-search/sk-document-parser";
 import {
   type LogRecord,

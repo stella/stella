@@ -1,6 +1,17 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 import { panic, Result } from "better-result";
 
+import { IMPORT_SOURCE_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  toPlainTextIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   composeCourtListenerText,
   type CourtListenerTextOutcome,
@@ -18,16 +29,6 @@ import {
   presentTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  STORED_RAW_REPARSE_REJECTION,
-  toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
 
 import { planCourtListenerRecord } from "./plan";
 import { decodeCourtListenerRaw } from "./raw";

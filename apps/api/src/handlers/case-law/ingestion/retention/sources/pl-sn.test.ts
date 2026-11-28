@@ -1,6 +1,16 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type {
+  IngestionResult,
+  RawIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -11,16 +21,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plSnRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-sn";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import type {
-  IngestionResult,
-  RawIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const PAGE = new URL(

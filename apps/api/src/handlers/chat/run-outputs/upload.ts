@@ -22,7 +22,6 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { fileSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -203,6 +202,11 @@ export const createUploadRunOutput = (
       }),
       requestBodyMaxBytes:
         DESKTOP_RUNNER_OUTPUT_MAX_BYTES + MULTIPART_OVERHEAD_BYTES,
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Adds one immutable file row, its audit event and its storage object to the run's chat thread; it changes no aggregate's ordered state.",
+      },
     },
     verifyRunCaller(dependencies),
     async function* ({ body: { file }, caller }) {
@@ -264,11 +268,5 @@ export const createUploadRunOutput = (
   );
 
 const uploadRunOutput = createUploadRunOutput();
-
-declareAggregateMutation(uploadRunOutput, {
-  type: "independent",
-  reason:
-    "Adds one immutable file row, its audit event and its storage object to the run's chat thread; it changes no aggregate's ordered state.",
-});
 
 export default uploadRunOutput;

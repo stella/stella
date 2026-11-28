@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import {
   ADAPTER_MANIFESTS,
   IMPORT_SOURCE_MANIFESTS,
-} from "@/api/lib/legal-search/adapter-manifest";
+} from "@stll/case-law-ingestion-core/adapter-manifest";
 
 import { checkProvisionCapabilityCoverage } from "./provision-capability-coverage";
 

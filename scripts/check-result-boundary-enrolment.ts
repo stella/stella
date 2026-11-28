@@ -26,6 +26,7 @@ import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { failCheck } from "../packages/scripts/src/check-failure";
 import {
   isResultConventionExcludedFile,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -188,8 +189,15 @@ const trackedWorkspaceFiles = (): string[] => {
     { cwd: REPO_ROOT },
   );
   if (!listed.success) {
-    console.error("git ls-files failed; cannot enumerate workspace source");
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-result-boundary-enrolment",
+        summary: "git ls-files failed; cannot enumerate workspace source",
+        remediation:
+          "Ensure git is available and run this check from a valid repository checkout.",
+        rerunCommand: "bun run check:result-boundary-enrolment",
+      }),
+    );
   }
   return listed.stdout.toString().split("\0").filter(Boolean);
 };
@@ -203,8 +211,16 @@ const main = () => {
   });
 
   if (errors.length > 0) {
-    console.error(errors.join("\n\n"));
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-result-boundary-enrolment",
+        summary: `${errors.length} better-result boundary enrolment issue(s) found`,
+        details: errors,
+        remediation:
+          "Enroll new source directories in RESULT_CONVENTION_ENABLED_GLOBS (or document a reasoned entry in RESULT_CONVENTION_OPT_OUTS) in scripts/result-boundary-globs.ts, and remove any stale opt-outs.",
+        rerunCommand: "bun run check:result-boundary-enrolment",
+      }),
+    );
   }
 
   console.log(

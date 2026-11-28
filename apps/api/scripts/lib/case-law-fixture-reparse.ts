@@ -21,14 +21,14 @@
 
 import { panic, Result } from "better-result";
 
+import type {
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 
 import { getSystemPrompt } from "@/api/handlers/case-law/analysis/prompts/prompt-registry";
 import { analysisInputOf } from "@/api/lib/case-law/analysis-prompt";
-import type {
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
 
 /** The fixture row fields this module reads or rewrites; others pass through. */
 export type ReparseFixtureRow = {

@@ -14,14 +14,14 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import {
+  type RawIngestionResult,
+  toPlainTextIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { assertReaderAcceptsAst } from "@stll/case-law-parsers/parser-reader-guard";
 
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import {
-  type RawIngestionResult,
-  toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
 import { ukFclFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);

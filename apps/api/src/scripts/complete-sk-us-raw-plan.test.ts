@@ -2,6 +2,14 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  StoredRawReadError,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { StoredRawReparseInput } from "@stll/case-law-ingestion-core/ingestion-types";
 import { assertProperty } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -25,14 +33,6 @@ import {
   readUnavailable,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  StoredRawReadError,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import {
   openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,

@@ -1,3 +1,4 @@
+import { STORED_RAW_REPARSE_REJECTION } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { Verdict } from "@stll/db-load-gate/health";
 
 import {
@@ -8,7 +9,6 @@ import {
   type ReplayPreviewFailure,
   type ReplayRowOutcome,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 
 import { caseLawSources } from "./case-law";
 import { jsonb, p, safeUuid, sql, timestamptz } from "./common";

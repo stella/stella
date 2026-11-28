@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq, inArray, isNull, like } from "drizzle-orm";
 import { appendFile } from "node:fs/promises";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { initialBatchState } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
@@ -11,7 +12,6 @@ import {
   caseLawSources,
   databaseBackfillStates,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   ECJ_FIRST_MONTH,
   ECJ_LISTING_TIMEOUT_MS,

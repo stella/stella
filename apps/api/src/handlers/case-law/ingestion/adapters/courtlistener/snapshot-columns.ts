@@ -13,10 +13,10 @@
  * the source inventory; it is never classified as an exclusion.
  */
 
+import type { SourceFieldDisposition } from "@stll/case-law-ingestion-core/ingestion-types";
 import { compareCanonicalIds } from "@stll/case-law-parsers/courtlistener/canonical-id-order";
 import type { OpinionRow } from "@stll/case-law-parsers/courtlistener/opinion-row";
 
-import type { SourceFieldDisposition } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 export {

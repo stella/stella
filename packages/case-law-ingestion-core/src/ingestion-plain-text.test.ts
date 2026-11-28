@@ -6,14 +6,14 @@ import {
   absentDecisionTextFields,
   presentTextField,
   TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import { PlainTextError } from "@/api/lib/case-law/plain-text";
+} from "./decision-text";
 import {
   EMPTY_AST,
   type IngestionResult,
   toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+} from "./ingestion-types";
+import { PlainTextError } from "./plain-text";
+import { plainTextIngestionResult } from "./plain-text-assembly";
 
 const rawDecision = {
   caseNumber: "A <br/> 1",

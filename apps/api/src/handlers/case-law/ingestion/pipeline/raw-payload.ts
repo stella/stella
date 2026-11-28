@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 
-import type { SafeId } from "@/api/lib/branded-types";
-import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
+import { withSourceRawObjects } from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   IngestionResult,
   SourceRawObjectRef,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   copyRawObject,
   homeRawPayloadObjects,

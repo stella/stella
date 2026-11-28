@@ -62,7 +62,6 @@ import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -433,134 +432,132 @@ export const createDesktopDictationTranscribeEndpoint = ({
   readMatter = readDesktopMatter,
   ...options
 }: DesktopTranscribeOptions = {}) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        requestBodyMaxBytes: MAX_TRANSCRIPTION_MULTIPART_BYTES,
-        body: desktopDictationBodySchema,
-        response: safePublicHandlerResponseSchemasWithStatusText(
-          desktopDictationTranscriptSchema,
-        ),
+  createSafeBoundedPublicHandler(
+    {
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      requestBodyMaxBytes: MAX_TRANSCRIPTION_MULTIPART_BYTES,
+      body: desktopDictationBodySchema,
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopDictationTranscriptSchema,
+      ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Transcribes transient desktop audio and appends organization-scoped usage and audit events; it does not change matter or document aggregate state.",
       },
-      async function* (ctx) {
-        const { request } = ctx;
-        const { pieceId, vocabulary: ownWords, ...body } = ctx.body;
-        const { account, safeDb, settings, retainingModels } =
-          yield* Result.await(authorizeDictation(request, options));
-        yield* Result.await(admitStandardAccount(account, readAccountEmail));
-        const { matterId } = body;
-        const matter =
-          matterId === undefined
-            ? null
-            : yield* Result.await(
-                Result.tryPromise({
-                  try: async () => await readMatter(account, matterId),
-                  catch: () =>
-                    classifyFailure(
-                      new HandlerError({
-                        status: 503,
-                        code: "service_unavailable",
-                        message: "Matter access is unavailable",
-                      }),
-                      "organization_state_unreadable",
-                    ),
-                }),
-              );
-        const user = { id: account.userId };
-        const session = { activeOrganizationId: account.organizationId };
-        const caller: DictationCaller = {
-          ...settings,
-          // The desktop lists models outside the region only labeled as such.
-          allowOutsideRegion: true,
-          // The desktop lists a model whose provider keeps the audio only
-          // with its warning, and only to a member granted such models.
-          allowRetainingModels: retainingModels,
+    },
+    async function* (ctx) {
+      const { request } = ctx;
+      const { pieceId, vocabulary: ownWords, ...body } = ctx.body;
+      const { account, safeDb, settings, retainingModels } =
+        yield* Result.await(authorizeDictation(request, options));
+      yield* Result.await(admitStandardAccount(account, readAccountEmail));
+      const { matterId } = body;
+      const matter =
+        matterId === undefined
+          ? null
+          : yield* Result.await(
+              Result.tryPromise({
+                try: async () => await readMatter(account, matterId),
+                catch: () =>
+                  classifyFailure(
+                    new HandlerError({
+                      status: 503,
+                      code: "service_unavailable",
+                      message: "Matter access is unavailable",
+                    }),
+                    "organization_state_unreadable",
+                  ),
+              }),
+            );
+      const user = { id: account.userId };
+      const session = { activeOrganizationId: account.organizationId };
+      const caller: DictationCaller = {
+        ...settings,
+        // The desktop lists models outside the region only labeled as such.
+        allowOutsideRegion: true,
+        // The desktop lists a model whose provider keeps the audio only
+        // with its warning, and only to a member granted such models.
+        allowRetainingModels: retainingModels,
+        user,
+        session,
+        safeDb,
+        recordAuditEvent: createAuditRecorder({
+          organizationId: account.organizationId,
+          userId: account.userId,
+          workspaceId: null,
+          request,
+          server: null,
+        }),
+        // Only the matter read above is ever looked up.
+        getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+          await Promise.resolve(
+            matter?.workspace?.id === workspaceId ? matter.workspace : null,
+          ),
+      };
+      return yield* admitFiniteAction({
+        actionKind: "dictation.transcribe",
+        ctx: {
+          ...ctx,
           user,
           session,
-          safeDb,
-          recordAuditEvent: createAuditRecorder({
-            organizationId: account.organizationId,
-            userId: account.userId,
-            workspaceId: null,
-            request,
-            server: null,
-          }),
-          // Only the matter read above is ever looked up.
-          getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
-            await Promise.resolve(
-              matter?.workspace?.id === workspaceId ? matter.workspace : null,
-            ),
-        };
-        return yield* admitFiniteAction({
-          actionKind: "dictation.transcribe",
-          ctx: {
-            ...ctx,
-            user,
-            session,
-            scopedDb: account.scopedDb,
-            actionSignal: request.signal,
-          },
-          ...(admit ? { admit } : {}),
-          async *handler({ modelAdmission }) {
-            const result = yield* Result.await(
-              executeDictation(
-                {
-                  ...caller,
-                  body: withVocabulary(
-                    body,
-                    desktopChunkVocabulary(
-                      ownWords,
-                      matter === null ? [] : matter.vocabulary,
-                    ),
+          scopedDb: account.scopedDb,
+          actionSignal: request.signal,
+        },
+        ...(admit ? { admit } : {}),
+        async *handler({ modelAdmission }) {
+          const result = yield* Result.await(
+            executeDictation(
+              {
+                ...caller,
+                body: withVocabulary(
+                  body,
+                  desktopChunkVocabulary(
+                    ownWords,
+                    matter === null ? [] : matter.vocabulary,
                   ),
-                  request,
-                  modelAdmission,
-                  ...(pieceId === undefined
-                    ? {}
-                    : {
-                        usageKey: await desktopPieceUsageKey(
-                          account.userId,
-                          pieceId,
-                          body.file,
-                        ),
-                      }),
-                },
-                { ...DEFAULT_DICTATION_DEPENDENCIES, ...dependencies },
+                ),
+                request,
+                modelAdmission,
+                ...(pieceId === undefined
+                  ? {}
+                  : {
+                      usageKey: await desktopPieceUsageKey(
+                        account.userId,
+                        pieceId,
+                        body.file,
+                      ),
+                    }),
+              },
+              { ...DEFAULT_DICTATION_DEPENDENCIES, ...dependencies },
+            ),
+          );
+          // The desktop types this text; the provider's answer is not
+          // trusted to hold only typeable characters.
+          const text = typedDictationText(result.text);
+          // One chunk is at most a minute of speech; a longer answer is
+          // not a transcript of it.
+          if (text.length > MAX_DESKTOP_DICTATION_TRANSCRIPT_LENGTH) {
+            return Result.err(
+              classifyFailure(
+                new HandlerError({
+                  status: 502,
+                  code: AI_FAILURE_CODES.output_invalid,
+                  message:
+                    "The transcription provider returned an invalid response.",
+                  hint: "Retry the audio chunk or select another available transcription model.",
+                  retryable: false,
+                }),
+                "model_output_invalid",
               ),
             );
-            // The desktop types this text; the provider's answer is not
-            // trusted to hold only typeable characters.
-            const text = typedDictationText(result.text);
-            // One chunk is at most a minute of speech; a longer answer is
-            // not a transcript of it.
-            if (text.length > MAX_DESKTOP_DICTATION_TRANSCRIPT_LENGTH) {
-              return Result.err(
-                classifyFailure(
-                  new HandlerError({
-                    status: 502,
-                    code: AI_FAILURE_CODES.output_invalid,
-                    message:
-                      "The transcription provider returned an invalid response.",
-                    hint: "Retry the audio chunk or select another available transcription model.",
-                    retryable: false,
-                  }),
-                  "model_output_invalid",
-                ),
-              );
-            }
-            return Result.ok({ text });
-          },
-        });
-      },
-    ),
-    {
-      type: "independent",
-      reason:
-        "Transcribes transient desktop audio and appends organization-scoped usage and audit events; it does not change matter or document aggregate state.",
+          }
+          return Result.ok({ text });
+        },
+      });
     },
   );
 

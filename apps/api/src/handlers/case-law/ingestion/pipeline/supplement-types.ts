@@ -1,3 +1,9 @@
+import type {
+  DecisionSupplement,
+  SourceAdapter,
+  StoredRawResultReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type {
@@ -8,11 +14,6 @@ import type {
 import type { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
-import type {
-  DecisionSupplement,
-  SourceAdapter,
-  StoredRawResultReader,
-} from "@/api/lib/legal-search/ingestion-types";
 
 /** Emitted when a supplement's judgment could not be rebuilt to compose it. */
 export const SUPPLEMENT_JUDGMENT_UNREADABLE =

@@ -4,7 +4,7 @@ import {
   type ParserReparseFeature,
   type ParserReparseScope,
   type ParserVersionScopes,
-} from "./parser-reparse-scopes";
+} from "@stll/case-law-ingestion-core/parser-reparse-scopes";
 
 type DeclaredScopes = typeof PARSER_VERSION_SCOPES;
 type DeclaredFeatures = typeof PARSER_REPARSE_FEATURES;

@@ -1,9 +1,11 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
-import { IMPORT_SOURCE_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { IMPORT_SOURCE_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   recordPublisherFieldCoverage,
   retainedPublisherParts,
-} from "@/api/lib/legal-search/publisher-field-coverage";
+} from "@stll/case-law-ingestion-core/publisher-field-coverage";
+
 import { logger } from "@/api/lib/observability/logger";
 
 import {

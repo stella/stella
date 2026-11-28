@@ -11,6 +11,7 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { compareCodeUnit } from "@stll/collation";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -19,7 +20,6 @@ import {
   caseLawIndexJobs,
   caseLawSources,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   loadPendingDocuments,

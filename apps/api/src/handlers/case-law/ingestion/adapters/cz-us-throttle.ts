@@ -1,7 +1,11 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 // parser-output-unchanged: Refusal results carry typed read outcomes; successful responses are parsed unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
+import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/case-law-consts";
+import { observePublisherDocumentFetch } from "@stll/case-law-ingestion-core/document-stage-observation";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   DOCUMENT_FETCH_EVENT,
@@ -10,7 +14,6 @@ import {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 
-import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   createPublisherSlot,
   NALUS_DAILY_REQUEST_LIMIT,
@@ -21,8 +24,6 @@ import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters
 import type { ReadRefusalScope } from "@/api/lib/errors/read-outcome";
 import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 import { unreadPublisherError } from "./publisher-read";

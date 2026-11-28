@@ -12,8 +12,9 @@ import { panic } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";

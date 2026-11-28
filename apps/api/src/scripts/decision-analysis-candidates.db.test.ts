@@ -12,11 +12,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { assertProperty } from "@stll/property-testing";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
   TestDatabase,

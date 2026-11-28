@@ -1,12 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
-
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 
 import {
   COURTLISTENER_RAW_PART,

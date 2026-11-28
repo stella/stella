@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import {
   CITATION_SCOPE_METADATA_KEY,
   citationScopeAstHash,
@@ -26,8 +28,6 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 const mapCourtListenerRecord = guardParser(uncheckedMapCourtListenerRecord);

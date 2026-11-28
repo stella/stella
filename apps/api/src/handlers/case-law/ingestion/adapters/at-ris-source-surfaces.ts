@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 /**
  * One surface census for the eleven tribunals this publisher serves.
@@ -11,17 +12,17 @@
  * committed baseline lists.
  */
 
-import type { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import type { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   backlogSurface,
   excludedSourceSurface,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   LegacyAdapterKey,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 
 /** The adapters this census speaks for: the tribunals, not the ministry's. */
 export type AtRisSurfaceAdapter = Exclude<

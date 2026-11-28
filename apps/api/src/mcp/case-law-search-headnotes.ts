@@ -1,6 +1,7 @@
 import type * as v from "valibot";
 
-import { truncateDecisionHeadnote } from "../lib/case-law/decision-headnote";
+import { truncateDecisionHeadnote } from "@stll/case-law-ingestion-core/decision-headnote";
+
 import type { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
 import { LIMITS } from "../lib/limits";
 

@@ -18,6 +18,7 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import * as schema from "../apps/api/src/db/schema";
+import { failCheck } from "../packages/scripts/src/check-failure";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const ALLOWLIST_PATH = path.join(
@@ -239,18 +240,16 @@ const main = (): void => {
   );
 
   const allowlist = loadAllowlist();
-  let failed = false;
+  const errors: string[] = [];
 
   for (const entry of allowlist) {
     const key = allowlistKey(entry.table, entry.column);
     if (!validColumnKeys.has(key)) {
-      failed = true;
-      console.error(
+      errors.push(
         `stale allowlist entry: ${entry.table}.${entry.column} does not match any current schema column -- remove it from ${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)}`,
       );
     } else if (!deadColumnKeys.has(key)) {
-      failed = true;
-      console.error(
+      errors.push(
         `stale allowlist entry: ${entry.table}.${entry.column} is no longer dead -- remove it from ${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)}`,
       );
     }
@@ -264,14 +263,21 @@ const main = (): void => {
   );
 
   for (const column of unallowlistedDead) {
-    failed = true;
-    console.error(
+    errors.push(
       `dead column: ${column.table}.${column.tsKey} (sql ${column.sqlName})`,
     );
   }
 
-  if (failed) {
-    process.exit(1);
+  if (errors.length > 0) {
+    process.exit(
+      failCheck({
+        check: "check-dead-columns",
+        summary: `${errors.length} schema column issue(s) found`,
+        details: errors,
+        remediation: `Reference every live schema column in application source, drop unused columns, or remove stale entries from ${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)}.`,
+        rerunCommand: "bun run check:dead-columns",
+      }),
+    );
   }
 
   const tableCount = new Set(columns.map((column) => column.table)).size;

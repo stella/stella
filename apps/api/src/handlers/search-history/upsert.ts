@@ -3,7 +3,6 @@ import { Result } from "better-result";
 import { abortableTx } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
@@ -24,6 +23,11 @@ const config = {
   // The law pages record a use as it happens; agents read and delete history.
   mcp: { type: "internal", reason: "search_ui" },
   body: searchHistoryEntryInputSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "One upsert on the unique owner lookup key; concurrent records of one entry converge in the database.",
+  },
 } satisfies HandlerConfig;
 
 /** Records one use: a new entry, or a bump of the caller's matching one. */
@@ -75,11 +79,5 @@ const upsertSearchHistory = createSafeRootHandler(
     return Result.ok({ id: entry.id });
   },
 );
-
-declareAggregateMutation(upsertSearchHistory, {
-  type: "independent",
-  reason:
-    "One upsert on the unique owner lookup key; concurrent records of one entry converge in the database.",
-});
 
 export default upsertSearchHistory;

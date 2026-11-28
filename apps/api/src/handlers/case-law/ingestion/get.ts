@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, count, desc, eq, gte, inArray, lte, max, sql } from "drizzle-orm";
 
+import {
+  CASE_LAW_SOURCE_ROWS_BOUND,
+  CASE_LAW_SOURCE_ROWS_INVARIANT,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -23,10 +27,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { boundedAll } from "@/api/lib/db/bounded-all";
-import {
-  CASE_LAW_SOURCE_ROWS_BOUND,
-  CASE_LAW_SOURCE_ROWS_INVARIANT,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { removalReconciliationCountsQuery } from "@/api/lib/legal-search/removal-reconciliation-store";
 import {
   createUnrecognizedSourceReporter,

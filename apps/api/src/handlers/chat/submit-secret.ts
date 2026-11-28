@@ -35,7 +35,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
@@ -75,6 +74,10 @@ const config = {
   }),
   // Validate inside the handler so framework validation errors never contain private input.
   body: v.unknown(),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 type PendingRequestOptions = {
@@ -435,9 +438,5 @@ const submitSecret = createSafeRootHandler(
 );
 // The thread fence comes first; the request's turn and receipt fences follow
 // in rank order inside the same transaction.
-declareAggregateMutation(submitSecret, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default submitSecret;

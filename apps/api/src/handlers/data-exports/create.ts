@@ -13,7 +13,6 @@ import {
   canReadStoredDataExport,
 } from "@/api/lib/data-export/stored-export-access";
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { requireCurrentOrganizationMemberPermission } from "@/api/lib/db/member-authority";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOrganizationPermissionReplay } from "@/api/lib/idempotency/organization-replay-authorization";
@@ -51,6 +50,11 @@ const config = {
       ),
     ),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Creates an organization export job and audit event; it changes no matter or domain aggregate rows.",
+  },
 } satisfies HandlerConfig;
 
 const createDataExport = createSafeRootHandler(
@@ -124,11 +128,5 @@ const createDataExport = createSafeRootHandler(
     authorizeReplay: authorizeStoredDataExportReplay,
   },
 );
-
-declareAggregateMutation(createDataExport, {
-  type: "independent",
-  reason:
-    "Creates an organization export job and audit event; it changes no matter or domain aggregate rows.",
-});
 
 export default createDataExport;

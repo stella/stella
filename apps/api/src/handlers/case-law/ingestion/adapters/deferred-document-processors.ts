@@ -7,15 +7,16 @@
  * only the deferred adapters, not every adapter module.
  */
 
+import {
+  DEFERRED_DOCUMENT_ADAPTER_KEYS,
+  type DeferredDocumentAdapterKey,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { startProjectedRetentionCheck } from "@/api/handlers/case-law/ingestion/retention/retention-check";
 import { projectSkCourtsDocument } from "@/api/handlers/case-law/ingestion/retention/sources/sk-courts-document";
 import { detached } from "@/api/lib/analytics/capture";
-import {
-  DEFERRED_DOCUMENT_ADAPTER_KEYS,
-  type DeferredDocumentAdapterKey,
-} from "@/api/lib/legal-search/adapter-manifest";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   type BackfilledDocument,
   type DecisionDocumentOutcome,

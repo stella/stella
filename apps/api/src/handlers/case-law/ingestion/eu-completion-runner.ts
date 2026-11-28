@@ -2,6 +2,13 @@ import { type InferOk, panic, Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { TransformStream } from "node:stream/web";
 
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -36,13 +43,6 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  type IngestionResult,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  type StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
 import {
   readS3ObjectBoundedIfPresent,
   S3ObjectBudgetError,

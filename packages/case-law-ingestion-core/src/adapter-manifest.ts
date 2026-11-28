@@ -22,13 +22,13 @@ import {
   CZ_ECLI_COURTS,
   EU_ECLI_COURTS,
   SK_ECLI_COURTS,
-} from "@/api/lib/case-law/ecli-court-codes";
+} from "./ecli-court-codes";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
   IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "./ingestion-constants";
 
 type SourcePlaceholderPattern = {
   readonly type: "exact";

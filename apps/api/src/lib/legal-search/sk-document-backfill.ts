@@ -43,6 +43,15 @@ import {
   sql,
 } from "drizzle-orm";
 
+import type { DeferredDocumentAdapterKey } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  recordDocumentStageError,
+  withDocumentStageObserver,
+} from "@stll/case-law-ingestion-core/document-stage-observation";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import { isUnreadablePdfError } from "@stll/case-law-parsers/sk-courts";
 import { sanitizeErrorForOutput } from "@stll/errors";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -82,7 +91,6 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
-import type { DeferredDocumentAdapterKey } from "@/api/lib/legal-search/adapter-manifest";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
@@ -114,14 +122,6 @@ import {
   isDeferredDocumentOwnershipLost,
   withDeferredDocumentSourceOwnership,
 } from "@/api/lib/legal-search/deferred-document-source-ownership";
-import {
-  recordDocumentStageError,
-  withDocumentStageObserver,
-} from "@/api/lib/legal-search/document-stage-observation";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
 import {
   openRawSourceWriteWindow,
   type RawSourceWriteWindow,

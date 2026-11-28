@@ -20,6 +20,11 @@ const config = {
     personalApiKeyIdBodySchema,
     v.object({ expiresInDays: personalApiKeyExpirySchema }),
   ]),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Rotates a single caller-owned personal API key row with no shared aggregate invariant.",
+  },
 } satisfies HandlerConfig;
 
 export default createSafeRootHandler(

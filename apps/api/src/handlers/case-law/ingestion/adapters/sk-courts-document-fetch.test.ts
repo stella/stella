@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { afterEach, expect, mock, test } from "bun:test";
 
+import { withDocumentStageWindow } from "@stll/case-law-ingestion-core/document-stage-observation";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
@@ -8,8 +10,6 @@ import {
 
 import { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
-import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

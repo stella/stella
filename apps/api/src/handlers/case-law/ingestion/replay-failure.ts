@@ -1,7 +1,8 @@
 import { TaggedError } from "better-result";
 
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import type { SafeId } from "@/api/lib/branded-types";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { getPgDriverErrorCode, getPgErrorCode } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 

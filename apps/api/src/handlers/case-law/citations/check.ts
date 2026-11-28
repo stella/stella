@@ -55,7 +55,6 @@ import {
   readResearchDecision,
   resolveDecisionText,
 } from "@/api/lib/case-law/research-answer-runner";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { CITATION_CHECK_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
@@ -202,6 +201,11 @@ const config = {
     ),
   }),
   requiresUsage: { actionType: "case_law", serviceTier: "standard" },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Reads the public corpus and asks the decision model; writes only its own usage rows, with no cross-row invariant.",
+  },
 } satisfies HandlerConfig;
 
 type CheckCitationDependencies = {
@@ -376,10 +380,6 @@ export const createCheckCitation = ({
     },
   );
 
-const checkCitation = declareAggregateMutation(createCheckCitation(), {
-  type: "independent",
-  reason:
-    "Reads the public corpus and asks the decision model; writes only its own usage rows, with no cross-row invariant.",
-});
+const checkCitation = createCheckCitation();
 
 export default checkCitation;

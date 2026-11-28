@@ -6,7 +6,6 @@ import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { abortableTx } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -56,6 +55,11 @@ const config = {
       v.maxLength(LIMITS.searchHistoryImportMax),
     ),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "One batched upsert on the unique owner lookup key; a repeated or concurrent import converges in the database.",
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -135,11 +139,5 @@ const importSearchHistory = createSafeRootHandler(
     });
   },
 );
-
-declareAggregateMutation(importSearchHistory, {
-  type: "independent",
-  reason:
-    "One batched upsert on the unique owner lookup key; a repeated or concurrent import converges in the database.",
-});
 
 export default importSearchHistory;

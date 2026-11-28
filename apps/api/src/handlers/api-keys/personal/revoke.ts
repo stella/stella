@@ -13,6 +13,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: personalApiKeyIdBodySchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Revokes a single caller-owned personal API key row with no shared aggregate invariant.",
+  },
 } satisfies HandlerConfig;
 
 export default createSafeRootHandler(

@@ -4,7 +4,7 @@ export default {
   id: "case-law-source-fingerprint",
   capability:
     "The change-detection hash of a case-law decision's stored source",
-  owner: ["apps/api/src/handlers/case-law/ingestion/source-fingerprint.ts"],
+  owner: ["packages/case-law-ingestion-core/src/source-fingerprint.ts"],
   summary:
     "`sourceFingerprint` is the only constructor of `SourceFingerprint`, " +
     "derived from the stored envelope and every object stored beside it, so " +

@@ -9,7 +9,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { deleteBrowserSiteNotesForSiteOnTx } from "@/api/lib/chat/browser-site-notes/store";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -25,6 +24,10 @@ const config = {
       v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
     ),
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatToolGrants"],
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -68,10 +71,5 @@ const deleteBrowserSiteNotesSite = createSafeRootHandler(
     return Result.ok(deleted);
   },
 );
-
-declareAggregateMutation(deleteBrowserSiteNotesSite, {
-  type: "aggregate",
-  aggregates: ["chatToolGrants"],
-});
 
 export default deleteBrowserSiteNotesSite;

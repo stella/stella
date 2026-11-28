@@ -1,6 +1,14 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  approveMetadataUrls,
+  rehydrateMetadataUrls,
+} from "@stll/case-law-ingestion-core/metadata-urls";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -36,18 +44,10 @@ import {
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  approveMetadataUrls,
-  rehydrateMetadataUrls,
-} from "@/api/lib/legal-search/metadata-urls";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

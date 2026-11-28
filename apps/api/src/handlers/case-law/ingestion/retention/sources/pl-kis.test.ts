@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 
@@ -12,8 +14,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import { RETENTION_TEXT_ABSENCE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plKisRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-kis";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 
 const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);

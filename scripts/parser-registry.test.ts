@@ -263,7 +263,7 @@ test("entry JSON schema rejects malformed and type-inconsistent records", () => 
 test("entry sources exclusively own registry declarations", () => {
   for (const file of ["ingestion-constants.ts", "parser-reparse-scopes.ts"]) {
     const source = readFileSync(
-      path.join(repositoryRoot, "apps/api/src/lib/legal-search", file),
+      path.join(repositoryRoot, "packages/case-law-ingestion-core/src", file),
       "utf-8",
     );
     for (const name of names) {

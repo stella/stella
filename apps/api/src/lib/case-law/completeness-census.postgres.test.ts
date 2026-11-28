@@ -2,6 +2,11 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import type {
+  CensusListingIdentity,
+  SourceSliceWalk,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { Temporal } from "@stll/time";
 
@@ -23,11 +28,6 @@ import {
 import { CENSUS_CAPABILITIES } from "@/api/lib/case-law/completeness-census-capabilities";
 import { countryCensusVerdict } from "@/api/lib/case-law/completeness-census-contract";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import type {
-  CensusListingIdentity,
-  SourceSliceWalk,
-} from "@/api/lib/legal-search/ingestion-types";
 import { publicLawDatabaseRolePermissionsSql } from "@/api/lib/public-law-read-db";
 import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

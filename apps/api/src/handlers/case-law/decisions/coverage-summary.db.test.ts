@@ -3,6 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import {
   caseLawCoverageSummaries,
   caseLawDecisions,
@@ -18,7 +20,6 @@ import type {
 import { unmeasuredSourceCensus } from "@/api/lib/case-law/completeness-census";
 import { publisherCensusOf } from "@/api/lib/case-law/completeness-census-contract";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   CASE_LAW_COVERAGE_FIXTURE,

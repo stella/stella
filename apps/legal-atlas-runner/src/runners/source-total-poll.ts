@@ -23,12 +23,13 @@
 
 import { panic } from "better-result";
 
-import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
-import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
   SourceAdapter,
   SourceTotalCount,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
+import { errorTag } from "@/api/lib/errors/error-tag";
 
 import { DRAIN_CHECK_SLICE_MS } from "./sk-document-drain";
 import {

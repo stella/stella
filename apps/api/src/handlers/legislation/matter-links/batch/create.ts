@@ -7,7 +7,6 @@ import { legislationMatterLinkItemSchema } from "@/api/handlers/legislation/matt
 import { linkProvisionsToMatter } from "@/api/handlers/legislation/matter-links/link-writes";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -36,6 +35,10 @@ const config = {
     consumesServices: false,
   },
   body: createLegislationMatterLinksBatchBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["workspace"],
+  },
 } satisfies WorkspaceHandlerConfig;
 export const createLegislationMatterLinksBatchHandler = (
   legislationDb: LegislationReadDb,
@@ -78,10 +81,5 @@ export const createLegislationMatterLinksBatchHandler = (
 
 const createLegislationMatterLinksBatch =
   createLegislationMatterLinksBatchHandler(legislationPublicReadDb);
-
-declareAggregateMutation(createLegislationMatterLinksBatch, {
-  type: "aggregate",
-  aggregates: ["workspace"],
-});
 
 export default createLegislationMatterLinksBatch;

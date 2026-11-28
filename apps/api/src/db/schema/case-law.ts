@@ -24,6 +24,9 @@ import {
   STATED_DATE_RELATIONS,
   VERSION_EVIDENCE_KINDS,
 } from "@stll/api-contract/provision-applied-version";
+import { DECISION_SUPPLEMENT_KINDS } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import { PORTRAIT_SOURCES } from "@stll/case-law-ingestion-core/judges-consts";
+import type { JudgeExternalRefs } from "@stll/case-law-ingestion-core/judges-consts";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -63,8 +66,6 @@ import {
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import { CITATION_SHEET_NUMBER_MAX_LENGTH } from "@/api/handlers/case-law/citation-sheet-number";
-import { PORTRAIT_SOURCES } from "@/api/handlers/case-law/judges/consts";
-import type { JudgeExternalRefs } from "@/api/handlers/case-law/judges/consts";
 import {
   AI_CITATION_REVIEW_ORIGINS,
   CITATION_REVIEW_ORIGIN,
@@ -135,7 +136,6 @@ import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-l
 import type { CollectionDocumentPart } from "@/api/lib/legal-search/collection-document-part";
 import type { CollectionDocumentPartRead } from "@/api/lib/legal-search/collection-document-part-read";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
-import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
   HELD_DECISION_MATCH_BASES,
   HELD_DECISION_MATCH_BASIS,

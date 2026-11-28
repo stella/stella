@@ -20,6 +20,23 @@ import {
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { approveMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -81,24 +98,7 @@ import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-la
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import {
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-  STORED_RAW_REPLAY_STATUS,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/lib/legal-search/ingestion-types";
-import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,

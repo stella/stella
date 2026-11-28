@@ -2,6 +2,11 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -9,11 +14,6 @@ import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { SHELL_STEM } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 
 const PARSER_FIXTURES = new URL(
   "../../parsers/__fixtures__/eu-ecj/",

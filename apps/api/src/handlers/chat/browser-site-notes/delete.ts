@@ -6,7 +6,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { deleteBrowserSiteNoteOnTx } from "@/api/lib/chat/browser-site-notes/store";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -14,6 +13,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params: v.object({ noteId: resourceIdSchema("chatBrowserSiteNote") }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatToolGrants"],
+  },
 } satisfies HandlerConfig;
 
 /** Remove one of the member's research notes about a website. Idempotent. */
@@ -44,10 +47,5 @@ const deleteBrowserSiteNoteHandler = createSafeRootHandler(
     return Result.ok(deleted);
   },
 );
-
-declareAggregateMutation(deleteBrowserSiteNoteHandler, {
-  type: "aggregate",
-  aggregates: ["chatToolGrants"],
-});
 
 export default deleteBrowserSiteNoteHandler;

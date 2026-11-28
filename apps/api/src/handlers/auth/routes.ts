@@ -19,7 +19,6 @@ import {
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth/auth-paths";
 import { isReviewAccountConfigured } from "@/api/lib/auth/review-account";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { isEnterpriseSsoDeployed } from "@/api/lib/db/sso-access";
 import { isTransactionalEmailConfigured } from "@/api/lib/email/email";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
@@ -97,7 +96,14 @@ const authCapabilities = defineEndpoint.public({}, async () => {
  * never reveals whether an account or unverified organization exists.
  */
 const discoverSso = defineEndpoint.public(
-  { body: discoverSsoBodySchema },
+  {
+    body: discoverSsoBodySchema,
+    aggregateMutation: {
+      type: "independent",
+      reason:
+        "Read-only public SSO provider discovery lookup with no persisted mutation.",
+    },
+  },
   async ({ body }) => {
     if (body.by === "email") {
       const normalized = normalizeEmail(body.email);
@@ -116,11 +122,6 @@ const discoverSso = defineEndpoint.public(
  * without enforcing the organization's SSO requirement so a member who
  * received `sso_sign_in_required` can start SSO re-authentication in place.
  */
-declareAggregateMutation(discoverSso, {
-  type: "independent",
-  reason:
-    "Read-only public SSO provider discovery lookup with no persisted mutation.",
-});
 
 export const readMemberOrganizationSsoProviders = defineEndpoint.public(
   {},

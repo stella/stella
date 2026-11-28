@@ -14,6 +14,8 @@ import { panic } from "better-result";
  */
 import { and, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
 
+import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { ReconciliationBuildOutcome } from "@stll/case-law-ingestion-core/ingestion-types";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { DAY_IN_MS } from "@stll/time";
 
@@ -29,8 +31,6 @@ import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
-import type { ReconciliationBuildOutcome } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 import { fingerprintReconciliationPayload } from "./reconciliation-payload";

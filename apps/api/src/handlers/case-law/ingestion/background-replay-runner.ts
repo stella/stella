@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import type { StoredRawReader } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -9,7 +11,6 @@ import {
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type { StoredRawReader } from "@/api/lib/legal-search/ingestion-types";
 import { LIMITS } from "@/api/lib/limits";
 import { readS3ObjectBoundedIfPresent } from "@/api/lib/s3";
 

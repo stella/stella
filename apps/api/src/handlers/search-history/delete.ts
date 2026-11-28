@@ -11,7 +11,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
@@ -46,6 +45,11 @@ const config = {
       description: "The entry's `id` from `search-history.list`.",
     }),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Owner-serialized delete records an identity cutoff and erases the entry in one audited transaction.",
+  },
 } satisfies HandlerConfig;
 
 const deleteSearchHistoryEntry = createSafeRootHandler(
@@ -203,11 +207,5 @@ const deleteSearchHistoryEntry = createSafeRootHandler(
     return Result.ok({ id: deleted.id });
   },
 );
-
-declareAggregateMutation(deleteSearchHistoryEntry, {
-  type: "independent",
-  reason:
-    "Owner-serialized delete records an identity cutoff and erases the entry in one audited transaction.",
-});
 
 export default deleteSearchHistoryEntry;

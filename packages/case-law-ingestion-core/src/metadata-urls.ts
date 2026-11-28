@@ -8,7 +8,7 @@ import {
   toMetadataUrl,
 } from "@stll/case-law-parsers/sanitize-url";
 
-import { includes, isRecord } from "@/api/lib/type-guards";
+import { includesMember, isIngestionRecord } from "./internal-helpers";
 
 export const META_URL_DIAGNOSTICS = "metadataUrlDiagnostics";
 export const MAX_METADATA_URL_DIAGNOSTICS = 64;
@@ -106,7 +106,7 @@ const recordDefect = (state: DiagnosticState, diagnostic: UrlDiagnostic) => {
   }
 };
 const readDiagnostics = (value: unknown): UrlDiagnostic[] => {
-  if (!isRecord(value) || !Array.isArray(value["entries"])) {
+  if (!isIngestionRecord(value) || !Array.isArray(value["entries"])) {
     return [];
   }
   const diagnostics: UrlDiagnostic[] = [];
@@ -115,11 +115,11 @@ const readDiagnostics = (value: unknown): UrlDiagnostic[] => {
       break;
     }
     if (
-      isRecord(entry) &&
+      isIngestionRecord(entry) &&
       typeof entry["address"] === "string" &&
       entry["address"].length <= MAX_DIAGNOSTIC_ADDRESS_LENGTH &&
       typeof entry["reason"] === "string" &&
-      includes(METADATA_URL_DEFECT_REASONS, entry["reason"])
+      includesMember(METADATA_URL_DEFECT_REASONS, entry["reason"])
     ) {
       diagnostics.push({ address: entry["address"], reason: entry["reason"] });
     }
@@ -130,7 +130,7 @@ const readDiagnostics = (value: unknown): UrlDiagnostic[] => {
 /** Schema introspection is independent of object identity, copies, and storage. */
 export const metadataUrlKeys = (schema: unknown): ReadonlySet<string> =>
   new Set(
-    isRecord(schema)
+    isIngestionRecord(schema)
       ? Object.entries(schema)
           .filter(([, child]) => child === "url")
           .map(([key]) => key)
@@ -141,19 +141,19 @@ export const metadataUrlChildSchema = (
   schema: unknown,
   key: string,
 ): unknown => {
-  if (!isRecord(schema)) {
+  if (!isIngestionRecord(schema)) {
     return undefined;
   }
   if (
     (schema["preserve"] === "string" || schema["preserve"] === "opaque") &&
-    isRecord(schema["object"])
+    isIngestionRecord(schema["object"])
   ) {
     return schema["object"][key];
   }
   return schema[key];
 };
 export const metadataUrlItemSchema = (schema: unknown): unknown =>
-  isRecord(schema) ? schema["items"] : undefined;
+  isIngestionRecord(schema) ? schema["items"] : undefined;
 
 /** Contract addresses also cover absent leaves and empty arrays. */
 export const metadataUrlAddresses = (schema: unknown): readonly string[] => {
@@ -163,7 +163,7 @@ export const metadataUrlAddresses = (schema: unknown): readonly string[] => {
       addresses.push(address);
       return;
     }
-    if (!isRecord(node)) {
+    if (!isIngestionRecord(node)) {
       return;
     }
     if (Object.hasOwn(node, "items")) {
@@ -229,18 +229,18 @@ const project = ({
   if (value === undefined || value === null) {
     return value;
   }
-  if (!isRecord(schema)) {
+  if (!isIngestionRecord(schema)) {
     return panic("Metadata URL declaration must be an explicit schema");
   }
   if (schema["preserve"] === "opaque") {
     const unwrapped =
       mode === "source" &&
-      isRecord(value) &&
+      isIngestionRecord(value) &&
       value["type"] === "metadata-url-opaque" &&
       Object.hasOwn(value, "value")
         ? value["value"]
         : value;
-    if (!isRecord(unwrapped)) {
+    if (!isIngestionRecord(unwrapped)) {
       return unwrapped;
     }
     return project({
@@ -283,7 +283,7 @@ const project = ({
     }
     return projected;
   }
-  if (!isRecord(value)) {
+  if (!isIngestionRecord(value)) {
     recordDefect(diagnostics, { address, reason: "unsupported-url-value" });
     return undefined;
   }
@@ -325,7 +325,7 @@ const projectMetadata = (
     diagnostics,
     mode,
   });
-  if (!isRecord(projected)) {
+  if (!isIngestionRecord(projected)) {
     return {
       [META_URL_DIAGNOSTICS]: {
         entries: [{ address: "", reason: "unsupported-url-value" }],
@@ -337,11 +337,11 @@ const projectMetadata = (
     mode === "stored" ? readDiagnostics(projected[META_URL_DIAGNOSTICS]) : [];
   delete projected["metadataUrlDiagnostics"];
   const storedSidecar =
-    mode === "stored" && isRecord(metadata)
+    mode === "stored" && isIngestionRecord(metadata)
       ? metadata[META_URL_DIAGNOSTICS]
       : undefined;
   const priorOverflow: unknown =
-    isRecord(storedSidecar) && Array.isArray(storedSidecar["entries"])
+    isIngestionRecord(storedSidecar) && Array.isArray(storedSidecar["entries"])
       ? storedSidecar["overflowCount"]
       : undefined;
   // Persisted omissions retain their bounded diagnostic snapshot; a current value supersedes it.

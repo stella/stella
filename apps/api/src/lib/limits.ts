@@ -36,16 +36,16 @@ import {
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { SSE_HEARTBEAT_INTERVAL_MS } from "@stll/api-contract/sse-heartbeat";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+import {
+  CASE_LAW_HEADNOTE_KEYWORDS,
+  CASE_LAW_HEADNOTE_MAX_CHARS,
+  MCP_CASE_LAW_HEADNOTE_MAX_CHARS,
+} from "@stll/case-law-ingestion-core/decision-headnote";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { envPublicCorpus } from "@/api/env-public-corpus";
-import {
-  CASE_LAW_HEADNOTE_KEYWORDS,
-  CASE_LAW_HEADNOTE_MAX_CHARS,
-  MCP_CASE_LAW_HEADNOTE_MAX_CHARS,
-} from "@/api/lib/case-law/decision-headnote";
 import { SITEMAP_RANGE_ROWS_CEILING } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   API_RATE_LIMITS,

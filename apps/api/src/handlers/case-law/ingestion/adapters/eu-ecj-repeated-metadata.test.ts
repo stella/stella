@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -11,11 +16,6 @@ import {
   ecjFormexDocuments,
   FORMEX_ARCHIVE_PREFIX,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 
 const primary =
   "<DOC><BIB.JUDGMENT><REF.CASE>C-1/26</REF.CASE><AUTHOR>CJ</AUTHOR><NO.CELEX>62026CJ0001</NO.CELEX></BIB.JUDGMENT></DOC>";

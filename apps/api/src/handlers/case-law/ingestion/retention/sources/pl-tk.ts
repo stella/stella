@@ -11,6 +11,7 @@
  */
 import { Result } from "better-result";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { load } from "@stll/html";
 
 import {
@@ -20,7 +21,6 @@ import {
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { htmlParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/html-paragraphs";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 const LISTING_PART = "listing";
 const CASE_PAGE_PART = "case-page";

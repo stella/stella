@@ -4,7 +4,6 @@ import { dictationTermKey } from "@stll/api-contract/dictation-vocabulary";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import {
   countOrganizationTerms,
@@ -28,6 +27,11 @@ const config = {
     consumesServices: false,
   },
   body: dictationTermsBodySchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Reads which words the organization's dictation list already holds; it stores nothing.",
+  },
 } satisfies HandlerConfig;
 
 const checkDictationVocabulary = createSafeRootHandler(
@@ -47,11 +51,5 @@ const checkDictationVocabulary = createSafeRootHandler(
     return Result.ok({ listed: checked.listed.size, total: checked.total });
   },
 );
-
-declareAggregateMutation(checkDictationVocabulary, {
-  type: "independent",
-  reason:
-    "Reads which words the organization's dictation list already holds; it stores nothing.",
-});
 
 export default checkDictationVocabulary;

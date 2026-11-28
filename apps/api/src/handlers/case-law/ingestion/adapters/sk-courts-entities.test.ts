@@ -3,6 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { encodeHTML } from "entities";
 import fc from "fast-check";
 
+import {
+  decodeSourceRawEnvelope,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { entityResidueIn } from "@stll/case-law-parsers/entity-residue";
 import { assertProperty } from "@stll/property-testing";
 
@@ -11,10 +15,6 @@ import {
   skCourtsAdapter,
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import {
-  decodeSourceRawEnvelope,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/lib/legal-search/ingestion-types";
 import {
   capturedSkDocumentReplayInput,
   replayCapturedSkDocument as replay,

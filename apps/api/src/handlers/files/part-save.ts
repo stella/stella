@@ -20,7 +20,6 @@ import {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
@@ -68,6 +67,11 @@ const config = {
     destinationWorkspaceId: resourceIdSchema("workspace"),
     parentId: v.nullable(resourceIdSchema("entity")),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Copies one part of a file into a matter as a new document through createEntityFromBuffer, which takes the destination matter's own locks before it writes; it owns no registered aggregate.",
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const saveFilePart = createSafeHandler(
@@ -230,12 +234,6 @@ const saveFilePart = createSafeHandler(
     });
   },
 );
-
-declareAggregateMutation(saveFilePart, {
-  type: "independent",
-  reason:
-    "Copies one part of a file into a matter as a new document through createEntityFromBuffer, which takes the destination matter's own locks before it writes; it owns no registered aggregate.",
-});
 
 export default saveFilePart;
 

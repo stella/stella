@@ -2,15 +2,16 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
+  ADAPTER_KEYS,
+  IMPORT_SOURCE_KEYS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
+import {
   CASE_LAW_COVERAGE_AVAILABILITY,
   caseLawSourcePlacement,
   loadCaseLawCoverage,
 } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
 import {
   installRecordingAnalytics,

@@ -54,7 +54,6 @@ import type { MemberCaller } from "@/api/lib/auth/member-caller";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   fitGroqPrompt,
   readTranscriptionVocabulary,
@@ -149,6 +148,11 @@ const config = {
   requestBodyMaxBytes: MAX_TRANSCRIPTION_MULTIPART_BYTES,
   body: dictationBodySchema,
   response: safeHandlerResponseSchemas(transcriptionResultSchema),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Transcribes transient audio and appends organization-scoped usage and audit events; it does not change matter or document aggregate state.",
+  },
 } as const satisfies HandlerConfig;
 
 /** Who dictates: a signed-in member, or a linked desktop's account. */
@@ -623,11 +627,5 @@ export const createDictationTranscribeEndpoint = ({
   );
 
 const transcribeDictation = createDictationTranscribeEndpoint();
-
-declareAggregateMutation(transcribeDictation, {
-  type: "independent",
-  reason:
-    "Transcribes transient audio and appends organization-scoped usage and audit events; it does not change matter or document aggregate state.",
-});
 
 export default transcribeDictation;

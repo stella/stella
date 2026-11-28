@@ -1,8 +1,10 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 import { panic } from "better-result";
 
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import type { CzechDeclinedDecisionJudge } from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
-import type { CzechDeclinedDecisionJudge } from "@/api/lib/legal-search/ingestion-types";
 
 /**
  * The bench a Czech Constitutional Court decision states in its opening

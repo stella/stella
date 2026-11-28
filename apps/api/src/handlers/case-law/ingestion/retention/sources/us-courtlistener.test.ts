@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 
+import { IMPORT_SOURCE_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { type Block, hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -19,9 +22,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { usCourtlistenerRetention } from "@/api/handlers/case-law/ingestion/retention/sources/us-courtlistener";
-import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const mapCourtListenerRecord = guardParser(uncheckedMapCourtListenerRecord);

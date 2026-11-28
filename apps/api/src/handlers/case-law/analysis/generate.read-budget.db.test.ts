@@ -15,6 +15,7 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
@@ -35,7 +36,6 @@ import {
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import {
   getTestDb,
