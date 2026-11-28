@@ -835,13 +835,14 @@ export const validateSchemaIntrospection = async ({
   const problems: string[] = [];
   const compiler = await openIntrospectionCompiler(repoRoot);
   // Entries share most of the schema graph: analyze each file once.
-  const analyses = new Map<string, Promise<readonly FileFinding[]>>();
-  const findingsOf = (file: string): Promise<readonly FileFinding[]> => {
+  // Walks run one at a time, so no file is ever analyzed twice concurrently.
+  const analyses = new Map<string, readonly FileFinding[]>();
+  const findingsOf = async (file: string): Promise<readonly FileFinding[]> => {
     const known = analyses.get(file);
     if (known !== undefined) {
       return known;
     }
-    const analysis = analyzeRuntimeFile({ file, repoRoot, compiler });
+    const analysis = await analyzeRuntimeFile({ file, repoRoot, compiler });
     analyses.set(file, analysis);
     return analysis;
   };
