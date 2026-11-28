@@ -377,6 +377,28 @@ const leftOf = ({
   droppedSectionBreaks: dropped.sectionBreaks,
 });
 
+/** Source and output page counts, when the engine can lay both out. */
+const measurePages = async (
+  engine: TemplatePlanEngine,
+  source: Uint8Array,
+  output: Uint8Array,
+): Promise<PageCounts> => {
+  if (engine.layout === undefined) {
+    return { status: "notMeasured" };
+  }
+  const [before, after] = await Promise.all([
+    engine.layout(source),
+    engine.layout(output),
+  ]);
+  return before.isOk() && after.isOk()
+    ? {
+        status: "measured",
+        source: before.value.pages,
+        output: after.value.pages,
+      }
+    : { status: "notMeasured" };
+};
+
 /**
  * The manifest a document is formatted from. One that tracks changes is
  * read again as the caller asks: in one view, or with the changes kept.
@@ -609,20 +631,7 @@ export const formatOntoTemplate = async ({
   }
 
   const { built, docx, report } = settled;
-  let pages: PageCounts = { status: "notMeasured" };
-  if (engine.layout !== undefined) {
-    const [before, after] = await Promise.all([
-      engine.layout(source),
-      engine.layout(docx),
-    ]);
-    if (before.isOk() && after.isOk()) {
-      pages = {
-        status: "measured",
-        source: before.value.pages,
-        output: after.value.pages,
-      };
-    }
-  }
+  const pages = await measurePages(engine, source, docx);
   return Result.ok({
     docx,
     manifest,

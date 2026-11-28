@@ -751,8 +751,7 @@ const noteUncertainRoles = (
       continue;
     }
     if (
-      run !== null &&
-      run.role === role &&
+      run?.role === role &&
       run.alternative === alternative &&
       run.styleId === styleId
     ) {
