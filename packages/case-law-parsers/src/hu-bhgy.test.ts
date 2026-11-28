@@ -5,7 +5,7 @@ import {
   huDecisionDateFrom,
   huDecisionTypeFrom,
   huDocketFrom,
-  continuesCourtNumbering,
+  courtNumberPositions,
   parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
 } from "@stll/case-law-parsers/hu-bhgy";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
@@ -959,23 +959,40 @@ describe("reading a document folio handed over", () => {
     ]);
   });
 
-  test("the court's numbering may skip forward or restart, but never steps back into a quotation", () => {
-    // [number, previous, next] → whether the number is the court's own.
-    const cases: [number, number | undefined, number | undefined, boolean][] = [
-      [1, undefined, 2, true],
-      [5, undefined, 6, true],
-      [12, 11, 13, true],
-      [13, 11, 14, true],
-      [13, 11, undefined, true],
-      [43, 114, 115, false],
-      [44, 114, 115, false],
-      [143, 114, 115, false],
-      [1, 30, 2, true],
-      [1, 30, 31, false],
-    ];
-    for (const [number, previous, next, expected] of cases) {
-      expect(continuesCourtNumbering(number, previous, next)).toBe(expected);
-    }
+  test("the court's numbering may skip forward or restart, while a quotation numbered off its run is left out", () => {
+    const court = (numbers: readonly (number | undefined)[]) =>
+      [...courtNumberPositions(numbers)]
+        .toSorted((left, right) => left - right)
+        .map((position) => numbers[position]);
+    // A quoted paragraph below the court's run.
+    expect(court([114, 43, 115, 116])).toEqual([114, 115, 116]);
+    // A quoted run above it, which the court's own numbers then resume.
+    expect(court([114, 143, 144, 115, 116])).toEqual([114, 115, 116]);
+    // A step the court skips stays, though a quotation follows it.
+    expect(court([11, 13, 4, 14])).toEqual([11, 13, 14]);
+    expect(court([10, 12, 13])).toEqual([10, 12, 13]);
+    // Lines without a bracketed number are passed over.
+    expect(court([undefined, 5, undefined, 6])).toEqual([5, 6]);
+    // Numbering restarts at a [1] followed by a [2], and only there.
+    expect(court([1, 2, 3, 1, 2])).toEqual([1, 2, 3, 1, 2]);
+    expect(court([30, 1, 31])).toEqual([30, 31]);
+  });
+
+  test("a quoted run between two court paragraphs leaves the court's next number in place", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "[114]\tA Kúria a következő döntéseket idézi:" },
+      { text: "[143] Az első idézett bekezdés." },
+      { text: "[144] A második idézett bekezdés." },
+      { text: "[115]\tA kereset ezért nem alapos." },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation#114:A Kúria a következő döntéseket idézi:",
+      "p:argumentation:[143] Az első idézett bekezdés.",
+      "p:argumentation:[144] A második idézett bekezdés.",
+      "p:argumentation#115:A kereset ezért nem alapos.",
+    ]);
   });
 
   test("titles the court prints inside its reasons are headings, whatever their wording", () => {

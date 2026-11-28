@@ -1161,26 +1161,102 @@ const bracketedNumberOf = (item: DocItem): number | undefined => {
   return undefined;
 };
 
+type NumberedPosition = { readonly value: number; readonly position: number };
+
+type ChainLink = {
+  readonly score: number;
+  readonly skipped: number;
+  readonly previous: number | undefined;
+};
+
+/** Whether a chain scores higher, or the same with fewer skipped numbers. */
+const outranks = (link: ChainLink, other: ChainLink | undefined): boolean =>
+  other === undefined ||
+  link.score > other.score ||
+  (link.score === other.score && link.skipped < other.skipped);
+
 /**
- * Whether a bracketed number continues the court's own numbering. A court
- * numbers its paragraphs in order, while a paragraph it quotes from another
- * decision (`[43]` of a Constitutional Court ruling inside `[114]`–`[115]`)
- * keeps the number it had there. A number is the court's when it is the
- * first one, the next one, or a forward step that the next bracketed number
- * does not undo; a `[1]` restarts the numbering only when a `[2]` follows.
+ * The court's chain through one run: it opens at the run's first number, the
+ * court's first paragraph. A paragraph scores 2 and a step that skips numbers
+ * costs 3, so a jump pays off only when more than one paragraph follows it in
+ * order. Returns the indices into `run` of the chain's numbers.
  */
-export const continuesCourtNumbering = (
-  number: number,
-  previous: number | undefined,
-  next: number | undefined,
-): boolean => {
-  if (previous === undefined || number === previous + 1) {
-    return true;
+const courtChainOf = (run: readonly NumberedPosition[]): number[] => {
+  const links: (ChainLink | undefined)[] = [];
+  let best = 0;
+  for (const [index, { value }] of run.entries()) {
+    let link: ChainLink | undefined =
+      index === 0 ? { score: 2, skipped: 0, previous: undefined } : undefined;
+    for (let earlier = 0; earlier < index; earlier += 1) {
+      const from = links[earlier];
+      const before = run[earlier]?.value;
+      if (from === undefined || before === undefined || before >= value) {
+        continue;
+      }
+      const step = value - before - 1;
+      const candidate: ChainLink = {
+        score: from.score + 2 - (step === 0 ? 0 : 3),
+        skipped: from.skipped + step,
+        previous: earlier,
+      };
+      if (outranks(candidate, link)) {
+        link = candidate;
+      }
+    }
+    links[index] = link;
+    if (link !== undefined && outranks(link, links[best])) {
+      best = index;
+    }
   }
-  if (number > previous) {
-    return next === undefined || next > number;
+  const chain: number[] = [];
+  for (
+    let index: number | undefined = run.length === 0 ? undefined : best;
+    index !== undefined;
+    index = links[index]?.previous
+  ) {
+    chain.push(index);
   }
-  return number === 1 && next === 2;
+  return chain;
+};
+
+/**
+ * Which of the bracketed numbers, given in document order, are the court's
+ * own paragraph numbers. A court numbers its paragraphs in order, while a
+ * paragraph it quotes from another decision keeps the number it had there
+ * (`[43]` of a Constitutional Court ruling between the court's `[114]` and
+ * `[115]`). The court's numbers are the rising chain from its first number
+ * that keeps the most paragraphs in step, so a quotation numbered below or
+ * above the court's run is left out, while a number the court itself skips
+ * is kept once its numbering carries on from there. A `[1]` followed by a
+ * `[2]` starts a new run, as a court may number each part afresh.
+ *
+ * Returns the positions (indices into `numbers`) of the court's numbers.
+ */
+export const courtNumberPositions = (
+  numbers: readonly (number | undefined)[],
+): Set<number> => {
+  const candidates = numbers.flatMap((value, position) =>
+    value === undefined ? [] : [{ value, position }],
+  );
+  const runs: NumberedPosition[][] = [];
+  for (const [index, candidate] of candidates.entries()) {
+    const restarts =
+      index > 0 && candidate.value === 1 && candidates[index + 1]?.value === 2;
+    const run = runs.at(-1);
+    if (run === undefined || restarts) {
+      runs.push([candidate]);
+    } else {
+      run.push(candidate);
+    }
+  }
+  return new Set(
+    runs.flatMap((run) =>
+      courtChainOf(run).flatMap((index) => {
+        const position = run[index]?.position;
+        return position === undefined ? [] : [position];
+      }),
+    ),
+  );
 };
 
 /**
@@ -1431,21 +1507,10 @@ export const parseHuBhgyDecision = (
   let softBreakDate: string | undefined;
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
-  /** The last bracketed number read as the court's own paragraph number. */
-  let lastCourtNumber: number | undefined;
-  /** The item being read, so a paragraph can look at the numbers after it. */
+  /** The items whose bracketed number is the court's own paragraph number. */
+  const courtNumbered = courtNumberPositions(items.map(bracketedNumberOf));
+  /** The item being read, so a paragraph knows whether its number counts. */
   let currentItem = 0;
-  /** The next bracketed number after the item being read, if any. */
-  const nextBracketedNumber = (): number | undefined => {
-    for (let next = currentItem + 1; next < items.length; next += 1) {
-      const item = items[next];
-      const number = item === undefined ? undefined : bracketedNumberOf(item);
-      if (number !== undefined) {
-        return number;
-      }
-    }
-    return undefined;
-  };
 
   /**
    * Whether a line of the reasons is a title the court prints there. Besides
@@ -1506,12 +1571,7 @@ export const parseHuBhgyDecision = (
     );
     const printedNumber = numbered?.groups?.["number"];
     const number =
-      printedNumber !== undefined &&
-      continuesCourtNumbering(
-        parseIntegerToken(printedNumber).unwrapOr(0),
-        lastCourtNumber,
-        nextBracketedNumber(),
-      )
+      printedNumber !== undefined && courtNumbered.has(currentItem)
         ? printedNumber
         : undefined;
     const role: ParagraphRole = BODY_ROLE[region];
@@ -1532,7 +1592,6 @@ export const parseHuBhgyDecision = (
       });
       return;
     }
-    lastCourtNumber = parseIntegerToken(number).unwrapOr(lastCourtNumber);
     // The bracketed number is the citable paragraph number, so it is kept as
     // structure: a citation names `[31]`, and a prefix inside the text would
     // make every search for the paragraph's words find the number too.
