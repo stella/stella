@@ -418,17 +418,38 @@ const noteItemsOf = (
   // of thing that had no place.
   if (item.kind === "sourceHeaders") {
     return [
-      ...item.kept.map(({ family, kind, paragraphs }): ReformatNoteItem => ({
-        kind: "source_header_kept",
-        reason: `${family}:${kind}`,
-        count: paragraphs,
-      })),
+      ...item.kept.map(
+        ({ family, kind, paragraphs, section }): ReformatNoteItem => ({
+          kind: "source_header_kept",
+          reason: `${family}:${kind}${section === undefined ? "" : `:section${String(section + 1)}`}`,
+          count: paragraphs,
+        }),
+      ),
       ...Object.entries(item.leftOut).flatMap(
         ([reason, count]): ReformatNoteItem[] =>
           count === 0
             ? []
             : [{ kind: "source_header_left_out", reason, count }],
       ),
+      ...(item.pageNumbersTwice === undefined || item.pageNumbersTwice === 0
+        ? []
+        : [
+            {
+              kind: "source_header_page_number_twice" as const,
+              count: item.pageNumbersTwice,
+            },
+          ]),
+    ];
+  }
+  // The comments kept, and those that had no place.
+  if (item.kind === "sourceComments") {
+    return [
+      ...(item.kept === 0
+        ? []
+        : [{ kind: "comments_kept" as const, count: item.kept }]),
+      ...(item.leftOut === 0
+        ? []
+        : [{ kind: "comments_left_out" as const, count: item.leftOut }]),
     ];
   }
   // One item per cell of the letterhead that still shows the sample.

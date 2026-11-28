@@ -8,6 +8,8 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type {
   DocxBlock,
   TemplateInspection,
@@ -171,6 +173,17 @@ export type TemplateProfile = {
    *  fill empty. Absent when the template keeps no contents or its field's
    *  code is not known, and from a profile made before this was read. */
   contentsStyles?: string[];
+  /** The deepest level the kept contents field takes by outline level
+   *  (`\o "1-3"` gives 3): a paragraph given an outline level up to it is
+   *  listed once the field also takes paragraphs' own levels. Absent when
+   *  the field takes no levels, and from a profile made before this was
+   *  read. */
+  contentsDepth?: number;
+  /** The template's styles for the lines of a table of contents, by the
+   *  level their name gives (`toc 1` → 1): a source's contents that stay
+   *  as lines of text are set in them. Absent when the template defines
+   *  none, and from a profile made before this was read. */
+  contentsLineStyles?: { level: number; styleId: string }[];
   /** The style the template writes the text of its tables in. Absent when
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
@@ -1122,11 +1135,16 @@ const inferRegions = ({
   roles,
 }: RegionOptions): Pick<
   TemplateProfile,
-  "regions" | "slots" | "contentsStyles"
+  | "regions"
+  | "slots"
+  | "contentsStyles"
+  | "contentsDepth"
+  | "contentsLineStyles"
 > => {
   const order = topLevel.map(({ id }) => id);
   const contents: string[] = [];
   let contentsStyles: string[] | undefined;
+  let contentsDepth: number | undefined;
   const contentsField = fields.find(
     ({ kind, blockId }) => kind === CONTENTS_FIELD && blockId !== undefined,
   );
@@ -1158,6 +1176,12 @@ const inferRegions = ({
       const endsInHeading = to > from && endsInNextHeading(topLevel[to], roles);
       contents.push(...order.slice(from, endsInHeading ? to : to + 1));
       contentsStyles = collectedStyles(contentsField.instruction, styles);
+      const headings = CONTENTS_HEADINGS.exec(contentsField.instruction ?? "");
+      if (headings !== null) {
+        contentsDepth = parseIntegerToken(headings.groups?.["high"] ?? "9", {
+          sign: "unsigned",
+        }).unwrapOr(9);
+      }
     }
   }
   const inContents = new Set(contents);
@@ -1275,7 +1299,43 @@ const inferRegions = ({
         signatureBlocks.length === 0 ? null : { blockIds: signatureBlocks },
     },
     ...(contentsStyles === undefined ? {} : { contentsStyles }),
+    ...(contentsDepth === undefined ? {} : { contentsDepth }),
+    ...contentsLineStylesOf(styles),
   };
+};
+
+/** A style named for a level of a table of contents: `toc 1`, `TOC 2`. */
+const CONTENTS_LINE_STYLE = /^toc (?<level>[1-9])$/iu;
+
+const contentsLineStylesOf = (
+  styles: readonly TemplateStyle[],
+): Pick<TemplateProfile, "contentsLineStyles"> => {
+  const found = styles.flatMap(({ styleId, name, type }) => {
+    const level = CONTENTS_LINE_STYLE.exec(name?.trim() ?? "")?.groups?.[
+      "level"
+    ];
+    const number =
+      level === undefined
+        ? null
+        : parseIntegerToken(level, { sign: "unsigned" }).unwrapOr(null);
+    return type === "paragraph" && number !== null
+      ? [{ level: number, styleId }]
+      : [];
+  });
+  // One style a level: the first that names it.
+  const byLevel = new Map<number, string>();
+  for (const { level, styleId } of found) {
+    if (!byLevel.has(level)) {
+      byLevel.set(level, styleId);
+    }
+  }
+  return byLevel.size === 0
+    ? {}
+    : {
+        contentsLineStyles: [...byLevel]
+          .map(([level, styleId]) => ({ level, styleId }))
+          .toSorted((a, b) => a.level - b.level),
+      };
 };
 
 const inferFillerStrings = (blocks: readonly DocxBlock[]): string[] => {
@@ -2131,6 +2191,20 @@ const profileSchema = v.strictObject({
   frontMatterEndsPage: v.exactOptional(v.boolean()),
   contentsStyles: v.exactOptional(
     v.pipe(v.array(idSchema), v.maxLength(BLOCKS_MAX)),
+  ),
+  contentsDepth: v.exactOptional(
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(9)),
+  ),
+  contentsLineStyles: v.exactOptional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          level: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(9)),
+          styleId: idSchema,
+        }),
+      ),
+      v.maxLength(9),
+    ),
   ),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
   header: v.exactOptional(
