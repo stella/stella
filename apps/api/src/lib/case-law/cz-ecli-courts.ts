@@ -1,3 +1,4 @@
+// parser-output-unchanged: routes unknown-code diagnostic logging through the injectable sink; court resolution output is identical.
 /**
  * Czech ECLI court codes, and the court a Czech decision is stored under.
  *

@@ -1,3 +1,4 @@
+// parser-output-unchanged: defines identical headnote character/keyword constants locally instead of importing LIMITS.
 import { DECISION_HEADNOTE_TRUNCATION_MARK } from "@stll/api-contract/case-law-text-field";
 
 /** One-row budget for the headnote a list row shows under the case number. */
