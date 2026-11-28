@@ -921,10 +921,14 @@ describe("buildTemplatePlan, list instances", () => {
     const manifest = manifestOf([
       "SMLOUVA",
       "Preambule",
-      numbered("A.", "Investor zamýšlí po provedení stavby vybudovat park.", 7),
-      numbered("B.", "Smluvní strany budou na základě Smlouvy činit kroky.", 7),
+      // The letters count in the list the provisions count in, so that
+      // list stays the template's and the letters go as text.
+      numbered("A.", "Investor zamýšlí po provedení stavby vybudovat park.", 1),
+      numbered("B.", "Smluvní strany budou na základě Smlouvy činit kroky.", 1),
       "Článek I.\nPrvní",
       numbered("1.", "Odstavec.", 1),
+      numbered("2.", "Odstavec druhý.", 1),
+      numbered("3.", "Odstavec třetí.", 1),
     ]);
     // No level of the template for recitals, and none spare.
     const { plan } = build(manifest, "keepSource", {
