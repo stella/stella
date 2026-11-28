@@ -138,6 +138,41 @@ describe("the collection's text", () => {
     ).toEqual([1, 2, 3]);
   });
 
+  test("source tabs and line breaks read as one space, as a browser shows them", () => {
+    const lines = new Map<string, string[]>();
+    for (const postId of CZ_NS_SBIRKA_RECORDINGS) {
+      const page = readCzNsSbirkaPage(czNsSbirkaRecordedPage(postId));
+      const parsed = parseCzNsSbirkaText(page.textHtml ?? "", {
+        ...IDENTITY,
+        postId,
+      });
+      if (Result.isError(parsed)) {
+        throw parsed.error;
+      }
+      const texts = parsed.value.documentAst.blocks.flatMap((block) =>
+        block.type === "paragraph" || block.type === "heading"
+          ? [block.plainText]
+          : [],
+      );
+      lines.set(postId, texts);
+      for (const text of texts) {
+        expect({
+          postId,
+          text,
+          raw: /[\t\r]| {2}|\n\n|^\s|\s$/u.test(text),
+        }).toEqual({
+          postId,
+          text,
+          raw: false,
+        });
+      }
+    }
+    expect(lines.get("5819")).toContain("II.\nDovolání a vyjádření k němu");
+    expect(
+      lines.get("13914")?.some((text) => text.includes("1) na jaře roku 1998")),
+    ).toBe(true);
+  });
+
   test("an empty text cell is a typed failure, not an empty document", () => {
     expect(
       Result.isError(

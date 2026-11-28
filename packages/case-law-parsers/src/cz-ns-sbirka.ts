@@ -34,6 +34,7 @@ import { Result, TaggedError } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
+import { collapseHtmlWhitespace } from "@stll/case-law-parsers/html-whitespace";
 import {
   isExcludedHtmlTag,
   ownTableRows,
@@ -297,7 +298,9 @@ const textDrafts = (
 };
 
 /**
- * One space per gap; a draft with no text is no block. The editors' summary
+ * Whitespace as a browser shows it: the page's source line breaks and tab
+ * indents are markup, so every run of them is one space, and none follows a
+ * line break. A draft with no text is no block. The editors' summary
  * opens the text, before the court's words: a wholly italic paragraph after
  * the body has started is the court's own emphasis, not apparatus.
  */
@@ -305,7 +308,7 @@ const numberedBlocks = (drafts: readonly BlockDraft[]): Block[] => {
   const blocks: Block[] = [];
   let bodyStarted = false;
   for (const candidate of drafts) {
-    const line = normalizeInlineLine(candidate.inlines);
+    const line = normalizeInlineLine(collapseHtmlWhitespace(candidate.inlines));
     if (collapse(line.plainText) === "") {
       continue;
     }
