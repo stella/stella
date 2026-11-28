@@ -21,13 +21,12 @@ import {
   observeDocumentStageSafely,
 } from "@stll/legal-atlas/document-stage-observer";
 
+import { getIngestionDiagnosticsSink } from "@/api/lib/case-law/ingestion-diagnostics-sink";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
-import {
-  OBSERVATION_DETAIL,
-  observationDetailOf,
-} from "@/api/lib/legal-search/partial-observation-sql";
+
+import { OBSERVATION_DETAIL, observationDetailOf } from "./partial-observation";
 
 type DocumentWindowContext = {
   source: AdapterKey;
@@ -56,13 +55,12 @@ const settle = async <T>(run: () => Promise<T>) => {
   return { attempt, result };
 };
 
-const reportDocumentStageObserverFailure = async (
+const reportDocumentStageObserverFailure = (
   { event, ...attributes }: DocumentTelemetryObserverFailure,
   signal: AbortSignal,
-): Promise<void> => {
-  const { logger } = await import("@/api/lib/observability/logger");
+): void => {
   signal.throwIfAborted();
-  logger.warn(event, attributes);
+  getIngestionDiagnosticsSink().warn(event, attributes);
 };
 
 type DocumentStageObserverOptions<T> = {
@@ -136,12 +134,11 @@ export const withDocumentStageObserver = async <T>({
   return result.value;
 };
 
-const writeDocumentStageObservation = async ({
+const writeDocumentStageObservation = ({
   event,
   ...attributes
-}: DocumentStageObservation): Promise<void> => {
-  const { logger } = await import("@/api/lib/observability/logger");
-  logger.info(event, attributes);
+}: DocumentStageObservation): void => {
+  getIngestionDiagnosticsSink().info(event, attributes);
 };
 
 /** Load the operational sink only when emitting, so pure ingestion utilities stay import-safe. */
