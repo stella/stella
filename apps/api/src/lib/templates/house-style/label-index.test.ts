@@ -198,6 +198,40 @@ describe("buildLabelIndex", () => {
     ]);
   });
 
+  test("roman parts of a pack over bare-number articles head no article", () => {
+    const part = (label: string, text: string) => ({
+      ...heading(text),
+      label,
+      numId: 5,
+    });
+    const article = (label: string, text: string) => ({
+      text,
+      label,
+      styleName: "Level 1",
+      outlineLevel: 1,
+    });
+    const manifest = manifestOf([
+      part("III.", "Order Form"),
+      "The Buyer orders the Deliverables.",
+      part("IV.", "Short form Terms"),
+      article("1", "Definitions"),
+      numbered("1.1", "Terms have the meaning given."),
+      article("4", "The Supplier's obligations"),
+      numbered("4.1", "The Supplier must deliver."),
+      numbered("4.1.1", "on time;"),
+      numbered("4.1.1.1", "in accordance with the Specification."),
+      part("V.", "Annex – Processing Personal Data"),
+    ]);
+    expect(keysOf(manifest)).toEqual([
+      "article 1",
+      "clause 1/1",
+      "article 4",
+      "clause 4/1",
+      "clause 4/1.1",
+      "clause 4/1.1.1",
+    ]);
+  });
+
   test("deeper dotted levels nest under their clause", () => {
     const manifest = manifestOf([
       { ...heading("Services"), label: "1." },
