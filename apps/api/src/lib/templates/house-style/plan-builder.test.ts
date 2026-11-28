@@ -4563,3 +4563,46 @@ describe("buildTemplatePlan, automatic labels the index does not read", () => {
     );
   });
 });
+
+describe("buildTemplatePlan, clauses deeper than the template's levels", () => {
+  test("count on a spare level under parents a first build moved", () => {
+    const at = (ilvl: number) => (label: string, text: string) =>
+      leveled(label, text, {
+        ilvl,
+        lvlText: Array.from(
+          { length: ilvl + 1 },
+          (_unused, n) => `%${String(n + 1)}`,
+        ).join("."),
+        numFmt: "decimal",
+      });
+    const manifest = manifestOf([
+      "CONSORTIUM AGREEMENT",
+      at(0)("9", "Access Rights"),
+      at(1)("9.7", "Access rights for parties leaving the consortium"),
+      at(2)("9.7.2", "Access rights granted to and by a leaving party"),
+      at(3)("9.7.2.1", "Access rights granted to a leaving party"),
+      at(4)(
+        "9.7.2.1.1",
+        "Access rights granted to a defaulting party end with its membership.",
+      ),
+      at(4)(
+        "9.7.2.1.2",
+        "Access rights granted to a non-defaulting party continue for its results.",
+      ),
+      at(3)("9.7.2.2", "Access rights granted by a leaving party"),
+      at(4)(
+        "9.7.2.2.1",
+        "A leaving party grants the access rights it agreed to grant.",
+      ),
+    ]);
+    const { plan, note, labelsNotKept } = build(manifest);
+    for (const start of [
+      "Access rights granted to a defaulting",
+      "A leaving party grants",
+    ]) {
+      expect(itemOf(plan, manifest, start)).not.toHaveProperty("labelAsText");
+    }
+    expect(note.counts.labelsConvertedToText).toBe(0);
+    expect(labelsNotKept).toEqual([]);
+  });
+});

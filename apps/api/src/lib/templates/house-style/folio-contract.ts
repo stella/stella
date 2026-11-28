@@ -37,6 +37,9 @@ export type DocxBlock = {
     /** The level's text (`%1.%2`); absent from older manifests and for a
      *  bullet. */
     lvlText?: string;
+    /** The format the level counts in (`w:numFmt`, `decimal` under legal
+     *  numbering); stated with `lvlText`. */
+    numFmt?: string;
     /** The level prints its counters in arabic numerals (`w:isLgl`). */
     legal?: true;
   } | null;

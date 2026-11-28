@@ -520,6 +520,10 @@ type Context = {
   /** By source list definition and level: the template level the paragraph
    *  placed last at that level is numbered on, as placed. */
   sourceLevels: Map<number, Map<number, ProfileListLevel | null>>;
+  /** The levels the paragraphs of each source level ended up on in an
+   *  earlier build, spare levels included: read in place of
+   *  `sourceLevels` where given. */
+  levelHints: ReadonlyMap<number, ReadonlyMap<number, ProfileListLevel>> | null;
   topLevel: readonly DocxBlock[];
   /** The source's sections; empty when the manifest does not report them. */
   sections: readonly DocxSection[];
@@ -785,7 +789,7 @@ const legalOf = (
  * list than the paragraph's own level.
  */
 const levelTextPatternOf = (
-  { sourceLevels }: Context,
+  { sourceLevels, levelHints }: Context,
   block: DocxBlock,
   ownLevel: ProfileListLevel | null,
 ): LabelPattern | null => {
@@ -796,12 +800,17 @@ const levelTextPatternOf = (
     numbering === null ||
     lvlText === undefined ||
     numFmt === undefined ||
-    ownLevel === null ||
+    (ownLevel === null && levelHints === null) ||
     lvlText.includes(OWN_COUNTER)
   ) {
     return null;
   }
-  const above = sourceLevels.get(numbering.abstractNumId);
+  const above =
+    levelHints?.get(numbering.abstractNumId) ??
+    sourceLevels.get(numbering.abstractNumId);
+  // With the settled levels of an earlier build, a paragraph without a
+  // level of its own counts on a spare level of its parents' list.
+  let list = ownLevel?.abstractNumId ?? null;
   let failed = false;
   const text = lvlText.replace(/%(\d)/gu, (_whole, digit: string) => {
     const sourceIlvl = Number(digit) - 1;
@@ -809,7 +818,8 @@ const levelTextPatternOf = (
       return OWN_COUNTER;
     }
     const level = above?.get(sourceIlvl) ?? null;
-    if (level === null || level.abstractNumId !== ownLevel.abstractNumId) {
+    list ??= level?.abstractNumId ?? null;
+    if (level === null || level.abstractNumId !== list) {
       failed = true;
       return "";
     }
@@ -974,6 +984,18 @@ const placementAt = (
       ? levelTextPatternOf(context, block, ownLevel)
       : null,
   );
+  // A pattern that names the paragraph's own level as one above it (a
+  // clause deeper than the template's levels, under a parent on that
+  // level) needs a level of its own: a spare one, at its role's indent.
+  if (
+    placement.level !== null &&
+    placement.pattern?.lvlText.includes(
+      `%${String(placement.level.ilvl + 1)}`,
+    ) === true
+  ) {
+    placement.borrowedLevel = placement.level;
+    placement.level = null;
+  }
   placement.ordinal =
     placement.pattern === null
       ? null
@@ -4574,21 +4596,90 @@ const noteParagraphOptions = (
   }
 };
 
-export const buildTemplatePlan = ({
-  manifest,
-  profile,
-  references,
-  roles,
-  mode,
-  index = buildLabelIndex(manifest),
-  decisions = new Map<string, string>(),
-  suspicions = [],
-  exclusions = NO_EXCLUSIONS,
-  sourceHighlightColors,
-  trackedChangesStated = false,
-  rejectedView,
-  languages,
-}: BuildOptions): BuiltPlan => {
+/**
+ * Builds the plan; where a label stays text whose level's text names
+ * levels that end up elsewhere than they were placed (a clause deeper than
+ * the template's levels under a parent moved to a spare level), builds it
+ * once more with the levels the first build settled on, and keeps that
+ * build where it writes fewer labels as text.
+ */
+export const buildTemplatePlan = (options: BuildOptions): BuiltPlan => {
+  const first = buildOnce(options, null);
+  if (options.mode !== "keepSource") {
+    return first.built;
+  }
+  let best = first.built;
+  let last = first;
+  // The levels settle within a few builds: a build that numbers more
+  // labels can move the spare levels the one before handed out.
+  for (let build = 1; build < SETTLING_BUILDS_MAX; build += 1) {
+    const retry = last.placements.some(
+      ({ numbered, keptReason, block }) =>
+        !numbered &&
+        keptReason !== null &&
+        SETTLED_RETRY_REASONS.has(keptReason) &&
+        block.numbering?.lvlText !== undefined,
+    );
+    if (!retry) {
+      break;
+    }
+    last = buildOnce(options, settledLevelsOf(last.placements));
+    if (
+      last.built.labelsNotKept.length === 0 &&
+      last.built.note.counts.labelsConvertedToText <
+        best.note.counts.labelsConvertedToText
+    ) {
+      best = last.built;
+    }
+  }
+  return best;
+};
+
+/** Builds of one document at most, the first included. */
+const SETTLING_BUILDS_MAX = 3;
+
+/** Labels kept as text that the levels a build settled on may answer. */
+const SETTLED_RETRY_REASONS: ReadonlySet<LabelKeptReason> = new Set([
+  "unreadable",
+  "formatConflict",
+]);
+
+/** By source list definition and level: the level its numbered paragraphs
+ *  ended up on, the last one's. */
+const settledLevelsOf = (
+  placements: readonly Placement[],
+): Map<number, Map<number, ProfileListLevel>> => {
+  const settled = new Map<number, Map<number, ProfileListLevel>>();
+  for (const { block, numbered, level } of placements) {
+    const { numbering } = block;
+    if (numbering === null || !numbered || level === null) {
+      continue;
+    }
+    const levels = settled.get(numbering.abstractNumId) ?? new Map();
+    levels.set(numbering.ilvl, level);
+    settled.set(numbering.abstractNumId, levels);
+  }
+  return settled;
+};
+
+const buildOnce = (
+  {
+    manifest,
+    profile,
+    references,
+    roles,
+    mode,
+    index = buildLabelIndex(manifest),
+    decisions = new Map<string, string>(),
+    suspicions = [],
+    exclusions = NO_EXCLUSIONS,
+    sourceHighlightColors,
+    trackedChangesStated = false,
+    rejectedView,
+    languages,
+  }: BuildOptions,
+  levelHints: Context["levelHints"],
+): { built: BuiltPlan; placements: readonly Placement[] } => {
   const { blocks } = manifest;
   const tableOf = new Map<string, string>();
   for (const block of blocks) {
@@ -4620,6 +4711,7 @@ export const buildTemplatePlan = ({
     rejectedNumbers: rejectedNumbersOf(manifest, rejectedView),
     sourceLists: new Set(),
     sourceLevels: new Map(),
+    levelHints,
   };
   takeHeaderLines(context);
 
@@ -4725,7 +4817,7 @@ export const buildTemplatePlan = ({
     // draft line, a logo, a page number) are added to them.
     sourceHeaders: "keep",
   };
-  return {
+  const built: BuiltPlan = {
     plan,
     note: {
       mode,
@@ -4749,4 +4841,5 @@ export const buildTemplatePlan = ({
     },
     labelsNotKept: checkLabels({ context, placed, levelsByList, body }),
   };
+  return { built, placements: placed.placements };
 };

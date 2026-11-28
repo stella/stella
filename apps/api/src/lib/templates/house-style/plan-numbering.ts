@@ -528,6 +528,41 @@ const voteLevelPatterns = (
  * outline, patched to print it: the format most paragraphs need first, while
  * spare levels last.
  */
+/** The deepest level a pattern prints the counter of besides its own; -1
+ *  for none. */
+const deepestNamedLevel = ({ lvlText }: LabelPattern): number =>
+  Math.max(
+    -1,
+    ...[...lvlText.matchAll(/%(\d)/gu)].map((match) => Number(match[1]) - 1),
+  );
+
+/**
+ * The level a group of displaced paragraphs takes. A bullet counts nothing:
+ * it takes a level outside the outline list while there is one, and leaves
+ * the outline's to formats that count. A level that prints the counter of
+ * another must stand below it: in a list a level restarts only when one
+ * above it counts.
+ */
+const freshLevelFor = (
+  pattern: LabelPattern | null,
+  spare: ProfileListLevel[],
+  marks: ProfileListLevel[],
+): ProfileListLevel | undefined => {
+  if (pattern?.numFmt === "bullet") {
+    return marks.shift() ?? spare.shift();
+  }
+  return takeBelow(spare, pattern === null ? -1 : deepestNamedLevel(pattern));
+};
+
+/** Takes the first spare level below `above` out of `spare`. */
+const takeBelow = (
+  spare: ProfileListLevel[],
+  above: number,
+): ProfileListLevel | undefined => {
+  const at = spare.findIndex(({ ilvl }) => ilvl > above);
+  return at === -1 ? undefined : spare.splice(at, 1)[0];
+};
+
 const assignSpareLevels = (
   candidates: readonly Placement[],
   chosen: Map<string, LabelPattern>,
@@ -571,12 +606,7 @@ const assignSpareLevels = (
     const first = group.at(0);
     const pattern = first?.pattern ?? null;
     const format = pattern === null ? "" : formatKey(pattern);
-    // A bullet counts nothing: it takes a level outside the outline list
-    // while there is one, and leaves the outline's to formats that count.
-    const fresh =
-      pattern?.numFmt === "bullet"
-        ? (marks.shift() ?? spare.shift())
-        : spare.shift();
+    const fresh = freshLevelFor(pattern, spare, marks);
     const level = fresh ?? levelByFormat.get(format);
     if (fresh !== undefined) {
       levelByFormat.set(format, fresh);
@@ -817,7 +847,7 @@ export const numberPlacements = ({
   const levelsByList = new Map<number, ListLevelFormat[]>();
   for (const [key, level] of usedLevels) {
     const pattern = chosen.get(key);
-    const { numFmt, lvlText, legal } =
+    const { numFmt, lvlText, legal }: LevelFormat =
       pattern === undefined ? level : formatAt(pattern, level.ilvl);
     const format = {
       ilvl: level.ilvl,
