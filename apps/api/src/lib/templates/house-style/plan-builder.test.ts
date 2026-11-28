@@ -1250,6 +1250,33 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(note.items).toContainEqual({ kind: "alignmentsKept", blocks: 3 });
   });
 
+  test("a party line led by a bullet keeps the alignment the source sets it in", () => {
+    const front = withFacts(
+      [
+        "VERTRAG",
+        "zwischen",
+        "der Universität",
+        "nachstehend „Auftragnehmerin“ genannt -",
+        "Článek I.\nPrvní",
+        "Text ustanovení.",
+      ],
+      {
+        3: {
+          alignment: "right",
+          label: "–",
+          numbering: { numId: 7, ilvl: 0, abstractNumId: 7, bullet: true },
+        },
+      },
+    );
+    const { plan } = build(front);
+    const item = itemOf(plan, front, "nachstehend");
+    expect(item?.alignment).toBe("right");
+    // The mark stays a list's.
+    expect(item?.numbering).toEqual(
+      expect.objectContaining({ numId: expect.any(Number) }),
+    );
+  });
+
   test("the text of a table takes the style the template writes its tables in", () => {
     const table = inColumns(2, ["Položka", "Cena", "1. První", "100"]);
     const plain = build(table);
@@ -3163,6 +3190,31 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
     expect(itemOf(plan, manifest, "Další odstavec")).not.toHaveProperty(
       "indent",
     );
+    expect(note.items).toContainEqual({
+      kind: "continuationsIndented",
+      blocks: 2,
+    });
+    expect(note.items.map(({ kind }) => kind)).not.toContain("textLabelsHung");
+  });
+
+  test("a line under an item that hangs a typed mark keeps the mark in front of its text", () => {
+    const manifest = withIndents({
+      2: { left: 567, firstLine: -567 },
+      3: { left: 1506, firstLine: -360 },
+      // A dash at the item's text, the line's text 284 twips further in.
+      4: { left: 1790, firstLine: -284 },
+      5: { left: 1506, firstLine: 0 },
+    });
+    const { plan, note } = build(manifest, "keepSource", { roles });
+    const under = PROFILE.roles.roman?.numbering?.indent.left ?? 0;
+    expect(under).toBeGreaterThan(0);
+    expect(itemOf(plan, manifest, "k.ú.")?.indent).toEqual({
+      left: under + 284,
+      hanging: 284,
+    });
+    expect(itemOf(plan, manifest, "budova včetně")?.indent).toEqual({
+      left: under,
+    });
     expect(note.items).toContainEqual({
       kind: "continuationsIndented",
       blocks: 2,
