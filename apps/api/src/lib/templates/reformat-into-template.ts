@@ -400,7 +400,7 @@ const noteItemsOf = (
             ? []
             : [{ kind: "source_header_left_out", reason, count }],
       ),
-      ...((item.pageNumbersTwice ?? 0) === 0
+      ...(item.pageNumbersTwice === undefined || item.pageNumbersTwice === 0
         ? []
         : [
             {

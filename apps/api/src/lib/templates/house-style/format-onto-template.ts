@@ -84,11 +84,12 @@ const vouchedBySource = (
   const target = manifest.blocks.find(({ id }) => id === targetBlockId);
   return (
     target?.selfNumbers !== undefined &&
-    (block === undefined ? [] : textFieldsOf(block)).some(
+    block !== undefined &&
+    textFieldsOf(block).some(
       ({ start, end, targetBlockId: cited }) =>
         cited === targetBlockId &&
         block.text.slice(start, end) === expectedText,
-    ) === true &&
+    ) &&
     !report.leftovers.fields.some(({ kind }) => SELF_NUMBERING_KINDS.test(kind))
   );
 };
