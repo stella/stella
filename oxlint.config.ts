@@ -2158,8 +2158,8 @@ const config = defineConfig({
     // by the next regeneration. Bound instead by the conformance fixtures
     // in snowball/__fixtures__ and by
     // scripts/generate-snowball-stemmers.ts.
-    "apps/api/src/lib/legal-search/morphology/snowball/*.gen.ts",
-    "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",
+    "packages/legal-morphology/src/snowball/*.gen.ts",
+    "packages/legal-morphology/src/snowball/base-stemmer.ts",
     // The template-pack content repository is a submodule with its own
     // toolchain and lint setup; this repo neither authors nor formats it.
     "packages/template-packs/content/**",
@@ -7521,6 +7521,7 @@ const config = defineConfig({
       // The fill pipeline: a new diagnostic channel joins the record.
       files: [
         "apps/api/src/lib/docx/**/*.ts",
+        "packages/docx-engine/src/**/*.ts",
         "apps/api/src/lib/templates/**/*.ts",
         "apps/api/src/lib/clauses/**/*.ts",
         "apps/api/src/handlers/templates/**/*.ts",
@@ -8047,7 +8048,10 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/api/src/lib/docx/**/*.ts"],
+      files: [
+        "apps/api/src/lib/docx/**/*.ts",
+        "packages/docx-engine/src/**/*.ts",
+      ],
       rules: {
         "unicorn/prefer-modern-dom-apis": "off",
         "unicorn/prefer-dom-node-remove": "off",

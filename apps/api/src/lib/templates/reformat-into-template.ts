@@ -24,6 +24,7 @@ import type {
   DocxBlockManifest,
   TemplateEngineRefusal,
   TemplatePlanEngine,
+  TrackedChanges,
 } from "@/api/lib/templates/house-style/folio-contract";
 import {
   formatOntoTemplate,
@@ -39,6 +40,7 @@ import {
   type REFORMAT_NUMBERING_MODES,
   type REFORMAT_REFUSAL_CODES,
   type REFORMAT_TEMPLATE_HEALTH_KINDS,
+  type REFORMAT_TRACKED_CHANGES,
 } from "@/api/lib/templates/reformat-into-template-contract";
 
 type ReformatNumberingMode = (typeof REFORMAT_NUMBERING_MODES)[number];
@@ -66,9 +68,16 @@ export class ReformatRefusedError extends TaggedError("ReformatRefusedError")<{
   }
 }
 
+/** The refusal of a document whose tracked changes cannot all be kept as
+ *  tracked changes; it shares its code with the one that asks for a choice. */
+const CHANGES_NOT_KEEPABLE =
+  "The document tracks changes that cannot be kept as tracked changes (a moved passage, a changed table cell). Reformat it with the changes accepted or rejected.";
+/** The detail that tells the two refusals of that code apart. */
+export const CHANGES_NOT_KEEPABLE_REASON = "cannot_keep";
+
 const REFUSAL_MESSAGES = {
   tracked_changes:
-    "The document has tracked changes. Accept or reject them, then reformat it.",
+    "The document has tracked changes. Choose whether to keep them as tracked changes, accept them or reject them, then reformat it.",
   unsupported_content:
     "The document holds content that cannot be carried onto the template unchanged.",
   label_not_writable:
@@ -190,6 +199,8 @@ const KNOWN_NOTE_KINDS = [
   "lineBreakSpacingKept",
   "invisibleEffectsRemoved",
   "templateBlocksKept",
+  "trackedChangesKept",
+  "trackedChangesResolved",
   "fieldsAsText",
   "internalLinksAsText",
 ] as const satisfies readonly NoteSource["kind"][];
@@ -208,8 +219,44 @@ const unreadNoteItem = (item: { kind: string }): ReformatNoteItem =>
     ? { kind: "other", reason: item.kind, blockId: item.blockId }
     : { kind: "other", reason: item.kind };
 
+/** The changes a document tracks in its text: what a view resolves and
+ *  what a kept redline carries. */
+const changesOf = ({
+  insertions,
+  deletions,
+  moves,
+  paragraphMarks,
+  tableRows,
+}: TrackedChanges): number =>
+  insertions + deletions + moves + paragraphMarks + tableRows;
+
+/**
+ * What became of the document's tracked changes when they were kept: how
+ * many are in the output, how many sat in paragraphs it does not have, and
+ * that recorded changes of formatting are not among them.
+ */
+const keptChangesItems = (
+  item: Extract<NoteSource, { kind: "trackedChangesKept" }>,
+): ReformatNoteItem[] => [
+  {
+    kind: "tracked_changes_kept",
+    count: Math.max(0, changesOf(item) - item.notCarried),
+  },
+  ...(item.notCarried > 0
+    ? [{ kind: "tracked_changes_not_carried" as const, count: item.notCarried }]
+    : []),
+  ...(item.formattingChanges > 0
+    ? [
+        {
+          kind: "formatting_changes_not_kept" as const,
+          count: item.formattingChanges,
+        },
+      ]
+    : []),
+];
+
 const noteItemOf = (
-  item: NoteSource,
+  item: Exclude<NoteSource, { kind: "trackedChangesKept" }>,
   blocks: ReadonlyMap<string, DocxBlock>,
 ): ReformatNoteItem => {
   if (!isKnownNoteSource(item)) {
@@ -306,6 +353,13 @@ const noteItemOf = (
       };
     case "internalLinksAsText":
       return { kind: "internal_links_as_text", count: item.links };
+    case "trackedChangesResolved":
+      return {
+        kind: "tracked_changes_resolved",
+        reason: item.view,
+        // Accepted or rejected, a change of formatting is resolved too.
+        count: changesOf(item) + item.formattingChanges,
+      };
     case "fieldsAsText":
       return {
         kind: "fields_as_text",
@@ -319,6 +373,24 @@ const noteItemOf = (
       return panic("Unhandled formatting note item");
     }
   }
+};
+
+/** The note items one finding of the formatter is worded as. */
+const noteItemsOf = (
+  item: NoteSource,
+  blocks: ReadonlyMap<string, DocxBlock>,
+): ReformatNoteItem[] => {
+  if (item.kind === "trackedChangesKept") {
+    return keptChangesItems(item);
+  }
+  // One item per cell of the letterhead that still shows the sample.
+  if (item.kind === "letterheadFilled") {
+    return item.left.map((cell): ReformatNoteItem => ({
+      kind: "letterhead_sample_left",
+      reason: cell,
+    }));
+  }
+  return [noteItemOf(item, blocks)];
 };
 
 /** The template findings this layer words; a newer one passes as `other`
@@ -347,6 +419,9 @@ type ReformatOptions = {
   /** Take the rules' own answer where one candidate clearly leads; otherwise
    *  every open decision stays open and the plan takes the safe path. */
   acceptSuggestedDecisions: boolean;
+  /** What to do with the document's tracked changes. Left out, a document
+   *  that has any is refused by name: the choice is the caller's. */
+  trackedChanges?: (typeof REFORMAT_TRACKED_CHANGES)[number];
 };
 
 /** Every open decision left open: a reference stays text, a role as read. */
@@ -364,6 +439,7 @@ export const reformatDocxOntoTemplate = async ({
   template,
   numbering,
   acceptSuggestedDecisions,
+  trackedChanges,
 }: ReformatOptions): Promise<
   Result<{ docx: Uint8Array; note: ReformatNote }, ReformatRefusedError>
 > => {
@@ -374,10 +450,13 @@ export const reformatDocxOntoTemplate = async ({
   const recording: TemplatePlanEngine = {
     ...engine,
     analyze: async (docx, options) => {
-      // The formatter reads a document that tracks changes again in one
-      // view. Nobody chose a view here, so it is refused by name instead of
+      // The formatter reads a document that tracks changes again as the
+      // caller chose. With no choice it is refused by name instead of
       // being formatted with every change accepted.
-      if (options?.trackedChanges !== undefined) {
+      if (
+        trackedChanges === undefined &&
+        options?.trackedChanges !== undefined
+      ) {
         return Result.err(
           new TemplateEngineError({
             message: "The document has tracked changes and no view was chosen.",
@@ -400,6 +479,7 @@ export const reformatDocxOntoTemplate = async ({
     resolveAmbiguities: acceptSuggestedDecisions
       ? resolveAmbiguitiesByRule
       : leaveDecisionsOpen,
+    ...(trackedChanges === undefined ? {} : { trackedChanges }),
   });
   const read = formatted.isOk() ? formatted.value.manifest : lastRead;
   const blocks = new Map(
@@ -442,6 +522,17 @@ export const reformatDocxOntoTemplate = async ({
         })),
       );
     }
+    // Asked to keep the changes, the engine named some it cannot carry:
+    // the choice left is one of the two views.
+    if (error.reason === "tracked-changes" && trackedChanges === "keep") {
+      return Result.err(
+        new ReformatRefusedError({
+          message: CHANGES_NOT_KEEPABLE,
+          reason: "tracked_changes",
+          details: [{ reason: CHANGES_NOT_KEEPABLE_REASON }],
+        }),
+      );
+    }
     // What is left is the engine's own refusal, by its reason.
     return refuse(
       refusalCodeOf(error.reason),
@@ -453,7 +544,7 @@ export const reformatDocxOntoTemplate = async ({
 
   const done: Formatted = formatted.value;
   const { docx, note, outcome, profile } = done;
-  const items = note.items.map((item) => noteItemOf(item, blocks));
+  const items = note.items.flatMap((item) => noteItemsOf(item, blocks));
   return Result.ok({
     docx,
     note: {

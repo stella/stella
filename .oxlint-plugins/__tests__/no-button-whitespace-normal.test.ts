@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { lintSingleRule } from "./lint-single-rule.ts";
+import { lintSingleRule, runSingleRule } from "./lint-single-rule.ts";
 
 test("reports wrapping utilities in Button className string expressions", async () => {
   expect(
@@ -35,4 +35,40 @@ test("allows wrapping utilities outside Button className strings", async () => {
       { sourcePath: "source.tsx" },
     ),
   ).toEqual([]);
+});
+
+test("autofixes bare static whitespace-normal on Button className", async () => {
+  expect(
+    await runSingleRule(
+      "no-button-whitespace-normal",
+      [
+        '<Button className="whitespace-normal" />;',
+        '<Button className="px-2 whitespace-normal text-sm" />;',
+        '<Button className="whitespace-normal!" />;',
+        '<Button layout="wrap" className="px-2 whitespace-normal" />;',
+        '<Button layout="wrap" className="whitespace-normal" />;',
+      ].join("\n"),
+      { sourcePath: "source.tsx", fix: true },
+    ),
+  ).toEqual({
+    lines: [],
+    source: [
+      '<Button layout="wrap" />;',
+      '<Button layout="wrap" className="px-2 text-sm" />;',
+      '<Button layout="wrap" />;',
+      '<Button layout="wrap" className="px-2" />;',
+      '<Button layout="wrap" />;',
+    ].join("\n"),
+  });
+
+  const nonMechanical = [
+    '<Button className="max-sm:whitespace-normal" />;',
+    '<Button className={cn("px-2", "whitespace-normal")} />;',
+  ].join("\n");
+  expect(
+    await runSingleRule("no-button-whitespace-normal", nonMechanical, {
+      sourcePath: "source.tsx",
+      fix: true,
+    }),
+  ).toEqual({ lines: [1, 2], source: nonMechanical });
 });

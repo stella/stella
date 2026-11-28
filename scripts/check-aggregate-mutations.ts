@@ -1956,6 +1956,9 @@ if (import.meta.main) {
       `Aggregate mutation coverage: ${declarations} verified declarations, ${undeclared.length} undeclared mutation routes, ${baseline.length} legacy entries\n`,
     );
     if (errors.length !== 0) {
+      process.stderr.write(
+        `Fix: declare aggregate mutations on new routes or remove migrated rows from ${BASELINE}, then re-run \`bun scripts/check-aggregate-mutations.ts\`.\n`,
+      );
       process.exitCode = 1;
     }
   }

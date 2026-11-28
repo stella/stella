@@ -25,6 +25,7 @@ import {
 import { and, eq } from "drizzle-orm";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -34,7 +35,6 @@ import fillTemplateToWorkspace from "@/api/handlers/templates/fills/create";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import * as tanstackModels from "@/api/lib/tanstack-ai-models";
 import * as decisionModel from "@/api/lib/workflow/decisions/decision-model";

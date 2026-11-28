@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { stemLegalTerm } from "@stll/legal-morphology/stem";
+
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -9,7 +11,6 @@ import {
   corpusIndexDecisionTerms,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
-import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
 import {
   PUBLIC_READ_TIMEOUT_CODE,
   publicReadTimeoutRefusal,

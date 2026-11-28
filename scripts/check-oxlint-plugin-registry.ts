@@ -396,6 +396,9 @@ if (import.meta.main) {
     for (const error of errors) {
       console.error(`- ${error}`);
     }
+    console.error(
+      "Fix: register new plugins/rules in oxlint.config.ts, .oxlint-plugins/README.md, fixtures, and scripts/guard-rollouts/, then re-run `bun scripts/check-oxlint-plugin-registry.ts`.",
+    );
     process.exitCode = 1;
   } else {
     console.log(

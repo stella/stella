@@ -5,19 +5,21 @@ import * as slimdom from "slimdom";
 
 import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
 import { ZipArchive } from "@stll/docx-core/zip";
+import {
+  createDirectiveProcessingContext,
+  processBlockDirectives,
+} from "@stll/docx-engine/block-directives";
+import { processInlineConditions } from "@stll/docx-engine/inline-conditions";
+import { paragraphOwnText, paragraphText, W_NS } from "@stll/docx-engine/ooxml";
+import { paragraphSpanText } from "@stll/docx-engine/rich-patch";
+import type { TemplateData } from "@stll/docx-engine/types";
 import { assertProperty } from "@stll/property-testing";
 import { resolvePath } from "@stll/template-conditions";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
-import {
-  createDirectiveProcessingContext,
-  processBlockDirectives,
-} from "./block-directives";
 import { locateFieldMarkers } from "./discover-template";
-import { processInlineConditions } from "./inline-conditions";
-import { paragraphOwnText, paragraphText, W_NS } from "./ooxml";
 import { fillTemplate, renderedTemplateMarkers } from "./patch-template";
 import {
   collectRenderedFieldTokens,
@@ -26,8 +28,6 @@ import {
   swapFieldMarkersForTokens,
 } from "./rendered-field-markers";
 import type { RenderedFieldOccurrence } from "./rendered-field-markers";
-import { paragraphSpanText } from "./rich-patch";
-import type { TemplateData } from "./types";
 
 const renderedInspection = (text: string, values: TemplateData) => {
   const doc = slimdom.parseXmlDocument(

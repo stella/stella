@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import { stemCorpusText } from "@stll/legal-morphology/stem-text";
 import {
   assertProperty,
   propertySeed,
@@ -14,8 +16,6 @@ import {
   quoteCorpusValue,
   tokenizeCorpusFreeText,
 } from "./corpus-query";
-import { corpusTokens } from "./corpus-tokens";
-import { stemCorpusText } from "./morphology/stem-text";
 
 const hostileText = fc
   .array(

@@ -1,3 +1,11 @@
+import {
+  corpusMorphologyLanguage,
+  documentMorphologyLanguage,
+} from "@stll/legal-morphology/corpus-language";
+import {
+  functionWordKey,
+  functionWordsFor,
+} from "@stll/legal-morphology/function-words";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -5,14 +13,6 @@ import {
   quoteCorpusValue,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
-import {
-  corpusMorphologyLanguage,
-  documentMorphologyLanguage,
-} from "@/api/lib/legal-search/morphology/corpus-language";
-import {
-  functionWordKey,
-  functionWordsFor,
-} from "@/api/lib/legal-search/morphology/function-words";
 
 /** Dates and amounts add noise to coverage ranking; section numbers identify passages. */
 const NUMERIC_VALUE =

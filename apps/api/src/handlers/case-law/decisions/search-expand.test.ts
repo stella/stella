@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { getModelDefaultReasoningEffort } from "@stll/ai-catalog";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { sleep } from "@stll/concurrency/sleep";
+import { corpusMorphologyLanguage } from "@stll/legal-morphology/corpus-language";
+import { functionWordsFor } from "@stll/legal-morphology/function-words";
 import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -14,8 +16,6 @@ import {
   partitionCorpusFunctionWords,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
-import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
-import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
 import { isRecord } from "@/api/lib/type-guards";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";

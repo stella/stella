@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { lookupFormatMarkerPaths } from "@stll/docx-engine/template-manifest";
+import type { FieldMeta } from "@stll/docx-engine/types";
+import { CLEARED_FIELD_SOURCE } from "@stll/docx-engine/types";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { lookupFormatMarkerPaths } from "@/api/lib/docx/template-manifest";
-import type { FieldMeta } from "@/api/lib/docx/types";
-import { CLEARED_FIELD_SOURCE } from "@/api/lib/docx/types";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import {

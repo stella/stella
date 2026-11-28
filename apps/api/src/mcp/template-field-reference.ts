@@ -1,20 +1,21 @@
 import type * as v from "valibot";
 
 import {
-  DATE_FORMAT_STYLES,
-  INPUT_TYPES,
-  LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
-  LOOKUP_FORMATS_MAX,
-  LOOKUP_REGISTRIES,
-} from "@/api/lib/docx/types";
-import {
   ATTORNEY_REFS,
   CONTACT_FIELDS,
   FIRM_FIELDS,
   MATTER_FIELDS,
   USER_FIELDS,
   WORKSPACE_CONTACT_ROLES,
-} from "@/api/lib/template-binding/binding-sources";
+} from "@stll/docx-engine/binding-sources";
+import {
+  DATE_FORMAT_STYLES,
+  INPUT_TYPES,
+  LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
+  LOOKUP_FORMATS_MAX,
+  LOOKUP_REGISTRIES,
+} from "@stll/docx-engine/types";
+
 import type {
   templateFieldInputSchema,
   TemplateFieldSourceInput,

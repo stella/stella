@@ -14,9 +14,8 @@ import {
   normalizeEnumValue,
   normalizeNumber,
 } from "@stll/agent-input";
-
-import { normalizeDateFieldValue } from "@/api/lib/docx/date-fields";
-import type { FieldDateFormat, ResolvedField } from "@/api/lib/docx/types";
+import { normalizeDateFieldValue } from "@stll/docx-engine/date-fields";
+import type { FieldDateFormat, ResolvedField } from "@stll/docx-engine/types";
 
 export type PrefillTarget = {
   /** Simple mapped id used in the model conversation (f1, f2, …). */

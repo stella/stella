@@ -285,6 +285,72 @@ describe("reformat_into_template", () => {
     expect(created).toEqual([]);
   });
 
+  test("the refusal of a document with tracked changes names the three choices", async () => {
+    const { context, dependencies } = await harness({ tracked: true });
+    const result = await handleReformatIntoTemplateTool(
+      { args: { entity_id: ENTITY_ID, template_id: TEMPLATE_ID }, context },
+      dependencies,
+    );
+
+    if ("egress" in result || result.status !== "error") {
+      throw new Error(JSON.stringify(result));
+    }
+    const refusal = JSON.stringify(result.error);
+    for (const choice of ["keep", "accept", "reject"]) {
+      expect(refusal).toContain(choice);
+    }
+    expect(refusal).toContain("tracked_changes");
+  });
+
+  test("reformats the text with the tracked changes accepted or rejected when the caller says which", async () => {
+    for (const [choice, sentence] of [
+      ["accept", "1.2. The customer pays the agreed fee."],
+      // The fixture's insertion is all the source adds to "pays fee".
+      ["reject", "1.2. The customer pays fee."],
+    ] as const) {
+      const { context, created, dependencies } = await harness({
+        tracked: true,
+      });
+      const result = await handleReformatIntoTemplateTool(
+        {
+          args: {
+            entity_id: ENTITY_ID,
+            template_id: TEMPLATE_ID,
+            tracked_changes: choice,
+          },
+          context,
+        },
+        dependencies,
+      );
+
+      if ("egress" in result || result.status !== "success") {
+        throw new Error(JSON.stringify(result));
+      }
+      // The note says which text the output is and how many changes that
+      // settled.
+      expect(result.data).toMatchObject({
+        note: {
+          items: expect.arrayContaining([
+            { kind: "tracked_changes_resolved", reason: choice, count: 1 },
+          ]),
+        },
+      });
+      const [saved] = created;
+      const output = (
+        await folioTemplatePlanEngine.analyze(
+          new Uint8Array(saved?.buffer ?? new ArrayBuffer(0)),
+        )
+      ).unwrap();
+      // One text, with no change left in it.
+      expect(output.trackedChanges).toBe(0);
+      expect(
+        output.blocks.map(({ label, text }) =>
+          label === null ? text : `${label} ${text}`,
+        ),
+      ).toContain(sentence);
+    }
+  });
+
   test("asks for the template when several fit the document equally", async () => {
     const { context, created, dependencies } = await harness({
       // Only the file extension would match the first.

@@ -3,22 +3,34 @@ import type * as slimdom from "slimdom";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import {
+  createDirectiveProcessingContext,
+  processBlockDirectives,
+  readConditionRawValues,
+} from "@stll/docx-engine/block-directives";
+import { processInlineConditions } from "@stll/docx-engine/inline-conditions";
+import { paragraphText, W_NS } from "@stll/docx-engine/ooxml";
+import {
+  paragraphSpanText,
+  patchParagraphPlaceholders,
+  replaceParagraphTextRanges,
+} from "@stll/docx-engine/rich-patch";
+import type {
+  ClauseProvenance,
+  EnclosingScope,
+  RichPatchValue,
+  RichRun,
+  TemplateData,
+} from "@stll/docx-engine/types";
+import {
   type LoopProperty,
   type NamedCondition,
   scanMarkers,
 } from "@stll/template-conditions";
 
 import {
-  createDirectiveProcessingContext,
-  processBlockDirectives,
-  readConditionRawValues,
-} from "@/api/lib/docx/block-directives";
-import {
   discoverTemplate,
   locateFieldMarkers,
 } from "@/api/lib/docx/discover-template";
-import { processInlineConditions } from "@/api/lib/docx/inline-conditions";
-import { paragraphText, W_NS } from "@/api/lib/docx/ooxml";
 import {
   collectRenderedFieldTokens,
   createFieldMarkerTable,
@@ -26,18 +38,6 @@ import {
   swapFieldMarkersForTokens,
 } from "@/api/lib/docx/rendered-field-markers";
 import type { RenderedFieldOccurrence } from "@/api/lib/docx/rendered-field-markers";
-import {
-  paragraphSpanText,
-  patchParagraphPlaceholders,
-  replaceParagraphTextRanges,
-} from "@/api/lib/docx/rich-patch";
-import type {
-  ClauseProvenance,
-  EnclosingScope,
-  RichPatchValue,
-  RichRun,
-  TemplateData,
-} from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 

@@ -1,6 +1,7 @@
+import type { TemplateWarning } from "@stll/docx-engine/template-warnings";
+
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { TemplateConditionDecisionOutput } from "@/api/mcp/template-condition-decisions";
 import type { DescribedTemplateField } from "@/api/mcp/template-field-input";

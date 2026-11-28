@@ -1,10 +1,11 @@
 import * as v from "valibot";
 
+import type { ResolvedAiCondition } from "@stll/docx-engine/resolve-ai-conditions";
+import type { TemplateStructureError } from "@stll/docx-engine/types";
+
 import type { TemplateFillStatus } from "@/api/db/schema";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
-import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
-import type { TemplateStructureError } from "@/api/lib/docx/types";
 import type {
   FilledDocumentMember,
   FilledDocx,

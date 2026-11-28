@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
+
 import { envBaseServerSchema } from "@/api/env-base-schema";
 import {
   CORPUS_INDEX_QUERY_VARIANTS,
@@ -16,7 +18,6 @@ import {
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 
 test("query variants default off and reject unknown configuration", () => {
   const schema = envBaseServerSchema.CORPUS_INDEX_QUERY_VARIANT;

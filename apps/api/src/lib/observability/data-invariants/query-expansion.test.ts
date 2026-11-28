@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 
+import type { MorphologyLanguage } from "@stll/legal-morphology/stem";
+
 import {
   type ExpansionDictionaryProbe,
   PUBLISHED_EXPANSION_LANGUAGES,
 } from "@/api/lib/legal-search/expansion";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 
 import { queryExpansionDictionariesInvariant } from "./query-expansion";

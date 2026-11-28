@@ -62,6 +62,7 @@ import { ZipArchive } from "@stll/docx-core/zip";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { waitFor } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
@@ -129,7 +130,6 @@ import type {
   LegislationAmendmentChannelObservation,
   LegislationAmendmentRelation,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import { LIMITS } from "@/api/lib/limits";
 import {

@@ -2,8 +2,13 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  type ExpansionDictionaryIdentity,
+  parseExpansionDictionaryIdentity,
+  sameExpansionDictionary,
+  serializeExpansionDictionaryIdentity,
+} from "@stll/legal-morphology/dictionary";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
-import { isUuid } from "@stll/uuid-codec";
 /**
  * The wire format of a corpus-index search cursor: its one owner.
  *
@@ -66,6 +71,7 @@ import { isUuid } from "@stll/uuid-codec";
  * corpus addresses documents by uuid, so the grammar is fixed-width in its
  * metadata and needs no escaping rule.
  */
+import { isUuid } from "@stll/uuid-codec";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -80,12 +86,6 @@ import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   isCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
-import {
-  type ExpansionDictionaryIdentity,
-  parseExpansionDictionaryIdentity,
-  sameExpansionDictionary,
-  serializeExpansionDictionaryIdentity,
-} from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 

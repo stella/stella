@@ -333,20 +333,18 @@ describe("formatOntoTemplate", () => {
       return {
         ...engine,
         analyze: async (_docx, options) => {
-          views.push(options?.trackedChanges);
-          return await Promise.resolve(
-            Result.ok(
-              options?.trackedChanges === undefined
-                ? { ...manifest, trackedChanges: 5, revisions: tracked }
-                : {
-                    ...manifest,
-                    trackedChangesResolved: {
-                      view: options.trackedChanges,
-                      ...tracked,
-                    },
-                  },
-            ),
-          );
+          const view = options?.trackedChanges;
+          views.push(view);
+          const asRead: DocxBlockManifest = {
+            ...manifest,
+            trackedChanges: 5,
+            revisions: tracked,
+          };
+          const viewed: DocxBlockManifest =
+            view === undefined || view === "keep"
+              ? asRead
+              : { ...manifest, trackedChangesResolved: { view, ...tracked } };
+          return await Promise.resolve(Result.ok(viewed));
         },
       };
     };
@@ -378,6 +376,46 @@ describe("formatOntoTemplate", () => {
     expect(rejected.note.items.at(0)).toMatchObject({
       view: "reject",
       stated: true,
+    });
+    // Asked to keep the changes, the document is read with them kept and
+    // the plan says so.
+    views.length = 0;
+    const keeping = fakeEngine(manifest, []);
+    const kept = (
+      await formatOntoTemplate({
+        engine: {
+          ...keeping,
+          analyze: async (_docx, options) => {
+            views.push(options?.trackedChanges);
+            const withKept: DocxBlockManifest = {
+              ...manifest,
+              trackedChangesKept: tracked,
+            };
+            const viewed: DocxBlockManifest = {
+              ...manifest,
+              trackedChanges: 5,
+              revisions: tracked,
+            };
+            return await Promise.resolve(
+              Result.ok(options?.trackedChanges === "keep" ? withKept : viewed),
+            );
+          },
+        },
+        source: SOURCE,
+        template: TEMPLATE,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+        trackedChanges: "keep",
+      })
+    ).unwrap();
+    // Once more with the changes rejected: the plan holds the numbers of
+    // the two views against each other.
+    expect(views).toEqual([undefined, "keep", "reject"]);
+    expect(kept.plan.trackedChanges).toBe("keep");
+    expect(kept.note.items.at(0)).toEqual({
+      kind: "trackedChangesKept",
+      notCarried: 0,
+      ...tracked,
     });
     // A document that tracks nothing is read once and its plan names no view.
     views.length = 0;
