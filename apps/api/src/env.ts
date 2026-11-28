@@ -11,7 +11,7 @@ import {
   resolveEmailProvider,
 } from "@/api/env-schema";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
-import { bindDeploymentFlagReader } from "@/api/lib/deployment-flag-binding";
+import { bindDeploymentFlagReader } from "@/api/lib/feature-access/deployment-flag-binding";
 import { bindActionSizeLimitsReader } from "@/api/lib/rate-limit/action-size-settings";
 import { bindRateLimitBudgetReader } from "@/api/lib/rate-limit/budget-config";
 import {

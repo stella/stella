@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
 import type { env } from "@/api/env";
-import { readDeploymentFlag } from "@/api/lib/deployment-flag-binding";
+import { readDeploymentFlag } from "@/api/lib/feature-access/deployment-flag-binding";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
