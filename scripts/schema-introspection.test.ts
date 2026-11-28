@@ -280,6 +280,49 @@ describe("schema-only dependency validation", () => {
     );
   });
 
+  test("reports a shared dependency under every entry, as entry-by-entry runs do", async () => {
+    const entries = [
+      { path: "apps/api/src/first.ts", reason: "Enumerates table metadata." },
+      { path: "apps/api/src/second.ts", reason: "Enumerates table metadata." },
+      { path: "apps/api/src/third.ts", reason: "Enumerates table metadata." },
+    ];
+    const { root, dispose } = fixture({
+      "apps/api/src/first.ts": `${FULL_IMPORT}\nimport { inventory } from "./shared";`,
+      "apps/api/src/second.ts": `${FULL_IMPORT}\nimport { inventory } from "./shared";\nimport "./cycle";`,
+      "apps/api/src/third.ts": 'import { tables } from "@/api/db/schema";',
+      "apps/api/src/shared.ts": `import "./cycle";\nexport const inventory = (connection: any) => connection.select();`,
+      "apps/api/src/cycle.ts":
+        'import "./shared"; import "./absent"; export const loop = (connection: any) => connection.insert();',
+    });
+    try {
+      const together = await validateSchemaIntrospection({
+        entries,
+        repoRoot: root,
+      });
+      const separately: string[] = [];
+      for (const entry of entries) {
+        separately.push(
+          ...(await validateSchemaIntrospection({
+            entries: [entry],
+            repoRoot: root,
+          })),
+        );
+      }
+      expect(together).toEqual(separately);
+      expect(together).toEqual([
+        "apps/api/src/first.ts: unresolved runtime import in apps/api/src/cycle.ts: ./absent",
+        "apps/api/src/first.ts: database operation in apps/api/src/cycle.ts: insert",
+        "apps/api/src/first.ts: database operation in apps/api/src/shared.ts: select",
+        "apps/api/src/second.ts: unresolved runtime import in apps/api/src/cycle.ts: ./absent",
+        "apps/api/src/second.ts: database operation in apps/api/src/cycle.ts: insert",
+        "apps/api/src/second.ts: database operation in apps/api/src/shared.ts: select",
+        "apps/api/src/third.ts: stale schema introspection entry: no full-schema import or re-export",
+      ]);
+    } finally {
+      dispose();
+    }
+  });
+
   test("requires exact files, distinct membership and reasons", async () => {
     const { root, dispose } = fixture({});
     try {
