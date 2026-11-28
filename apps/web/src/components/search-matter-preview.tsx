@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";

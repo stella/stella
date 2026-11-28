@@ -2527,6 +2527,32 @@ const hasNestedReaderHelper = (
   return found;
 };
 
+const resolveUnchangedLocal = (
+  module: ModuleIndex,
+  expression: ts.Expression,
+  reference: ts.Node,
+  seen = new Set<Binding>(),
+): ts.Expression | undefined => {
+  const current = unwrap(expression);
+  if (!ts.isIdentifier(current)) {
+    return current;
+  }
+  const resolved = unchangedOptionsBinding({
+    module,
+    identifier: current,
+    reference,
+  });
+  if (!resolved || seen.has(resolved.binding)) {
+    return undefined;
+  }
+  return resolveUnchangedLocal(
+    module,
+    resolved.expression,
+    resolved.reference,
+    new Set(seen).add(resolved.binding),
+  );
+};
+
 const validateResourceQueryHook = ({
   module,
   call,
@@ -2559,12 +2585,12 @@ const validateResourceQueryHook = ({
         "useResourceQuery requires a single explicit resourceReads declaration.",
     };
   }
-  const reads = resolveLocal(module, readsEntry[1]);
+  const reads = resolveUnchangedLocal(module, readsEntry[1], call);
   if (!reads) {
     return {
       status: "invalid",
       reason:
-        "useResourceQuery resourceReads declaration must be statically resolvable.",
+        "useResourceQuery resourceReads declaration must be statically resolvable and unmutated.",
     };
   }
   if (
@@ -2580,13 +2606,26 @@ const validateResourceQueryHook = ({
   return { status: "valid" };
 };
 
-type ReaderState = {
-  entry: MutationQueryCensus["readers"][number];
-  module: ModuleIndex | undefined;
-  call: ts.CallExpression | undefined;
-  tagged: boolean;
-  invalidReason?: string;
-};
+type ReaderState =
+  | {
+      status: "valid";
+      entry: MutationQueryCensus["readers"][number];
+      module: ModuleIndex;
+      call: ts.CallExpression;
+    }
+  | {
+      status: "invalid";
+      entry: MutationQueryCensus["readers"][number];
+      module: ModuleIndex;
+      call: ts.CallExpression;
+      reason: string;
+    }
+  | {
+      status: "legacy";
+      entry: MutationQueryCensus["readers"][number];
+      module: ModuleIndex | undefined;
+      call: ts.CallExpression | undefined;
+    };
 type ReaderStatesArgs = {
   entries: MutationQueryCensus["readers"];
   indexed: ReadonlyMap<string, ModuleIndex>;
@@ -2611,13 +2650,13 @@ const createReaderStates = ({
     const module = indexed.get(entry.file);
     const call = find(entry);
     if (!module || !call) {
-      return { entry, module, call, tagged: false };
+      return { status: "legacy", entry, module, call };
     }
     if (
       entry.file === REALTIME_MODULE &&
       enclosingFunctionName(call) === READER_HOOK_HELPER
     ) {
-      return { entry, module, call, tagged: true };
+      return { status: "valid", entry, module, call };
     }
     if (canonicalCall(module, call, READER_HOOK_HELPER)) {
       const validation = validateResourceQueryHook({
@@ -2627,13 +2666,13 @@ const createReaderStates = ({
         contracts,
       });
       return validation.status === "valid"
-        ? { entry, module, call, tagged: true }
+        ? { status: "valid", entry, module, call }
         : {
+            status: "invalid",
             entry,
             module,
             call,
-            tagged: false,
-            invalidReason: validation.reason,
+            reason: validation.reason,
           };
     }
     const options = call.arguments.at(
@@ -2704,7 +2743,9 @@ const createReaderStates = ({
             seen: new Set(),
           }));
     }
-    return { entry, module, call, tagged };
+    return tagged
+      ? { status: "valid", entry, module, call }
+      : { status: "legacy", entry, module, call };
   });
 
 const coveredReaderIds = (
@@ -2714,13 +2755,17 @@ const coveredReaderIds = (
     readerStates.map(({ entry }) => [entry.id, entry]),
   );
   const validReaderIds = new Set(
-    readerStates.filter(({ tagged }) => tagged).map(({ entry }) => entry.id),
+    readerStates
+      .filter((state) => state.status === "valid")
+      .map(({ entry }) => entry.id),
   );
   let changed = true;
   while (changed) {
     changed = false;
-    for (const { entry } of readerStates) {
+    for (const state of readerStates) {
+      const { entry } = state;
       if (
+        state.status === "invalid" ||
         entry.kind !== "wrapper" ||
         validReaderIds.has(entry.id) ||
         entry.wrapperOf.length === 0 ||
@@ -2794,22 +2839,31 @@ const collectReaderFindings = (
   const readerReason = `Existing query reader pending migration to ${READER_HELPER} resource metadata.`;
   const validReaderIds = coveredReaderIds(readerStates);
   const findings: Finding[] = [];
-  for (const { entry, module, call, invalidReason } of readerStates) {
-    if (!module || !call) {
+  for (const state of readerStates) {
+    if (state.status === "invalid") {
       findings.push({
-        id: `${entry.id}:reader`,
-        file: entry.file,
+        id: `${state.entry.id}:reader`,
+        file: state.entry.file,
+        reason: state.reason,
+        disposition: "invalid-declaration",
+      });
+      continue;
+    }
+    if (!state.module || !state.call) {
+      findings.push({
+        id: `${state.entry.id}:reader`,
+        file: state.entry.file,
         reason: "Query reader location could not be resolved from its census.",
         disposition: "legacy",
       });
       continue;
     }
-    if (!validReaderIds.has(entry.id)) {
+    if (!validReaderIds.has(state.entry.id)) {
       findings.push({
-        id: `${entry.id}:reader`,
-        file: entry.file,
-        reason: invalidReason ?? readerReason,
-        disposition: invalidReason ? "invalid-declaration" : "legacy",
+        id: `${state.entry.id}:reader`,
+        file: state.entry.file,
+        reason: readerReason,
+        disposition: "legacy",
       });
     }
   }

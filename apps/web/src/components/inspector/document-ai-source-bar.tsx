@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
@@ -147,10 +146,7 @@ export const DocumentAiSourceBar = ({
     justificationId && isActiveTab && hasBoundingBoxCitations && !boundingBoxes,
   );
   const generateBoundingBoxes = useResourceQuery({
-    resourceReads: {
-      resources: [RESOURCE_TYPE.FLOW_RUN, RESOURCE_TYPE.WORKSPACE],
-      scope: { type: "workspace", workspaceId },
-    },
+    resourceReads: { type: "independent" },
     queryKey: [
       ...workspaceKeys.justifications(workspaceId),
       "generate-bounding-boxes",
@@ -215,10 +211,7 @@ export const DocumentAiSourceBar = ({
   }
 
   useResourceQuery({
-    resourceReads: {
-      resources: [RESOURCE_TYPE.FLOW_RUN, RESOURCE_TYPE.WORKSPACE],
-      scope: { type: "workspace", workspaceId },
-    },
+    resourceReads: { type: "independent" },
     queryKey: [
       ...workspaceKeys.justifications(workspaceId),
       "bounding-box-poll",
