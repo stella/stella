@@ -333,6 +333,12 @@ const templateHealthOf = (finding: {
       ? { kind: "text_drawn_as_picture", styleId: finding.styleId }
       : { kind: "text_drawn_as_picture" };
   }
+  if (finding.kind === "rolesNotRead") {
+    return { kind: "template_roles_not_read" };
+  }
+  if (finding.kind === "lastSectionNotBody") {
+    return { kind: "template_last_section_not_body" };
+  }
   return { kind: "other", reason: finding.kind };
 };
 
