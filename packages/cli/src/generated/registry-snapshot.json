@@ -6793,7 +6793,7 @@
         },
         "ask_role_questions": {
           "type": "boolean",
-          "description": "Return the paragraphs whose role the formatter was unsure of, each with the roles it may take, so they can be answered in role_decisions on a second call"
+          "description": "Also return the paragraphs whose role was uncertain, with the roles each may take"
         },
         "role_decisions": {
           "type": "array",
@@ -6803,7 +6803,7 @@
               "block_id": {
                 "type": "string",
                 "maxLength": 64,
-                "description": "blockId of a returned role question"
+                "description": "blockId of a role question"
               },
               "role": {
                 "enum": [
@@ -6824,14 +6824,15 @@
                   "heading",
                   "body"
                 ],
-                "type": "string"
+                "type": "string",
+                "description": "One of the roles the question offered"
               }
             },
             "required": ["block_id", "role"],
             "additionalProperties": false
           },
           "maxItems": 500,
-          "description": "Answers to role questions of an earlier call: one of the roles each question offered; other answers are ignored"
+          "description": "Answers to the role questions of an earlier call; any other answer is ignored"
         },
         "tracked_changes": {
           "enum": ["keep", "accept", "reject"],

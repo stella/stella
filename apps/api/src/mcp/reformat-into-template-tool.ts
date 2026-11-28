@@ -132,7 +132,7 @@ const reformatIntoTemplateArgsSchema = nullAsAbsent(
       v.pipe(
         v.boolean(),
         v.description(
-          "Return the paragraphs whose role the formatter was unsure of, each with the roles it may take, so they can be answered in role_decisions on a second call",
+          "Also return the paragraphs whose role was uncertain, with the roles each may take",
         ),
       ),
     ),
@@ -143,14 +143,17 @@ const reformatIntoTemplateArgsSchema = nullAsAbsent(
             block_id: v.pipe(
               v.string(),
               v.maxLength(LIMITS.reformatRoleBlockIdMaxLength),
-              v.description("blockId of a returned role question"),
+              v.description("blockId of a role question"),
             ),
-            role: v.picklist(REFORMAT_PARAGRAPH_ROLES),
+            role: v.pipe(
+              v.picklist(REFORMAT_PARAGRAPH_ROLES),
+              v.description("One of the roles the question offered"),
+            ),
           }),
         ),
         v.maxLength(LIMITS.reformatRoleDecisionsMax),
         v.description(
-          "Answers to role questions of an earlier call: one of the roles each question offered; other answers are ignored",
+          "Answers to the role questions of an earlier call; any other answer is ignored",
         ),
       ),
     ),
@@ -654,9 +657,13 @@ export const handleReformatIntoTemplateTool = async (
             numbering,
             acceptSuggestedDecisions: input.accept_suggested_decisions ?? false,
             askRoleQuestions: input.ask_role_questions ?? false,
-            roleDecisions: (input.role_decisions ?? []).map(
-              ({ block_id, role }) => ({ blockId: block_id, role }),
-            ),
+            ...(input.role_decisions === undefined
+              ? {}
+              : {
+                  roleDecisions: input.role_decisions.map(
+                    ({ block_id, role }) => ({ blockId: block_id, role }),
+                  ),
+                }),
             ...(input.tracked_changes === undefined
               ? {}
               : { trackedChanges: input.tracked_changes }),

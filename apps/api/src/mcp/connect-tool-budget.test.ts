@@ -28,9 +28,10 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 // characters together) for coding agents that browse on the member's
 // computer. reformat_into_template adds 1,466 characters for applying an
 // organisation template's house style to a stored document; its choice for
-// a document with tracked changes (keep, accept or reject) adds 353.
+// a document with tracked changes (keep, accept or reject) adds 353; asking
+// and answering its paragraph-role questions adds 727.
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 146_278;
+const TOTAL_CONNECT_CHAR_BUDGET = 147_005;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {
