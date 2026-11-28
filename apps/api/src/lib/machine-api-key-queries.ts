@@ -5,6 +5,7 @@ import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
 import {
   apiKeyKindScope,
@@ -180,8 +181,17 @@ export const readOrganizationMachineApiKeyPage = async (
 /** {@link readOrganizationMachineApiKeyPage} through the owner connection. */
 export const listOrganizationMachineApiKeys = async (
   options: ListOptions,
-): Promise<MachineApiKeyPageRow[]> =>
-  await readOrganizationMachineApiKeyPage(rootDb, options);
+): Promise<MachineApiKeyPageRow[]> => {
+  let rows: MachineApiKeyPageRow[] = [];
+  await withOwnerOrganizationScope(
+    rootDb,
+    options.organizationId,
+    async (tx) => {
+      rows = await readOrganizationMachineApiKeyPage(tx, options);
+    },
+  );
+  return rows;
+};
 
 /**
  * A single machine key, scoped to the organization in the same query.
@@ -196,10 +206,15 @@ export const findOrganizationMachineApiKey = async ({
 }: {
   keyId: string;
   organizationId: SafeId<"organization">;
-}): Promise<MachineApiKeyRow | null> =>
-  await rootDb
-    .select(machineApiKeyColumns)
-    .from(apikey)
-    .where(and(organizationScope(organizationId), eq(apikey.id, keyId)))
-    .limit(1)
-    .then((rows) => rows.at(0) ?? null);
+}): Promise<MachineApiKeyRow | null> => {
+  let row: MachineApiKeyRow | null = null;
+  await withOwnerOrganizationScope(rootDb, organizationId, async (tx) => {
+    const rows = await tx
+      .select(machineApiKeyColumns)
+      .from(apikey)
+      .where(and(organizationScope(organizationId), eq(apikey.id, keyId)))
+      .limit(1);
+    row = rows.at(0) ?? null;
+  });
+  return row;
+};

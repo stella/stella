@@ -80,6 +80,13 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    // The document editor decodes TIFF pictures off the main thread; the
+    // engine starts the worker by `new URL(..., import.meta.url)`.
+    label: "document TIFF decoder worker",
+    pattern: "dist/client/assets/tiffDecoder.worker-????????.js",
+  },
+  {
+    expectedCount: 1,
     label: "Office font metrics worker",
     pattern: "dist/client/assets/font-metrics.worker-????????.js",
   },

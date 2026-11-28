@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 8.7.0
+
+### Minor Changes
+
+- [#9636](https://github.com/stella/stella/pull/9636) [`c6845b5`](https://github.com/stella/stella/commit/c6845b50db3852d22cf21dde246f08a2aae82472) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella template reformat` takes `--tracked-changes` (`keep`, `accept` or `reject`) for a document with tracked changes: keep them as tracked changes in the reformatted document, or reformat the text with all of them accepted or rejected.
+
+## 8.6.0
+
+### Minor Changes
+
+- [#9603](https://github.com/stella/stella/pull/9603) [`69a6fff`](https://github.com/stella/stella/commit/69a6fff6d58142e40bc49620a8ca0865a144653b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `stella template reformat` to apply an organisation template's house style to a stored document and save the result as a new document beside it.
+
 ## 8.5.0
 
 ### Minor Changes

@@ -2,15 +2,15 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
+import type { ResolvedAiCondition } from "@stll/docx-engine/resolve-ai-conditions";
+import type { TemplateStructureError } from "@stll/docx-engine/types";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   type ClauseDirectiveWarning,
   clauseDirectiveWarningSchema,
 } from "@/api/lib/clauses/clause-directives";
-import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
-import type { TemplateStructureError } from "@/api/lib/docx/types";
 import {
   decideTemplateFillCompletion,
   describeFillShortfall,

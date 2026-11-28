@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type { CitationWorkBudget } from "@stll/case-law-parsers/us-citation-scanner";
 import {
   hasInlineChildren,
   isDocumentAst,
@@ -18,7 +19,6 @@ import { assertProperty, propertySeed } from "@stll/property-testing";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { annotateUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-annotations";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import type { CitationWorkBudget } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 
 const paragraph = (id: string, inlines: Inline[]): ParagraphBlock => ({
   id,

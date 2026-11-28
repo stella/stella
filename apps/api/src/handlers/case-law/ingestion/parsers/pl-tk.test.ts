@@ -9,6 +9,16 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { fileURLToPath } from "node:url";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import {
+  listPlTkPageFields,
+  parsePlTkPage,
+  parsePlTkText as uncheckedParsePlTkText,
+  parsePolishDate,
+  readPlTkCasePage,
+  readPlTkRuling,
+} from "@stll/case-law-parsers/pl-tk";
+import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import { load } from "@stll/html";
 import {
   type Block,
@@ -18,16 +28,6 @@ import {
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import {
-  listPlTkPageFields,
-  parsePlTkPage,
-  parsePlTkText as uncheckedParsePlTkText,
-  parsePolishDate,
-  readPlTkCasePage,
-  readPlTkRuling,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
-import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlTkText = guardParser(uncheckedParsePlTkText);
 

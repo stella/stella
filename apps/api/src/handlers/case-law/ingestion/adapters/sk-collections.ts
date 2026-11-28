@@ -1,16 +1,21 @@
 // parser-output-unchanged: listing-stage labels do not alter collection parsing.
+// parser-output-unchanged: publisher reads use readPublisher with identical status handling; collection parsing is unchanged.
 import { panic, Result } from "better-result";
 
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   joinSkCollectionRecords,
   parseSkCollectionPages,
   type SkCollectionTextPage,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   SK_COLLECTION_PARSER_VERSION,
@@ -55,13 +60,49 @@ type CollectionRequestOptions = {
   signal?: AbortSignal | undefined;
 };
 
+const outcomeHttpStatus = (
+  outcome: ReadOutcome<Response>,
+): number | undefined => {
+  switch (outcome.type) {
+    case "present":
+      return outcome.value.status;
+    case "absent":
+      if (outcome.evidence === "http-404") {
+        return 404;
+      }
+      if (outcome.evidence === "http-410") {
+        return 410;
+      }
+      return undefined;
+    case "refused":
+      return outcome.status;
+    case "unavailable":
+      return outcome.cause.kind === "status" ||
+        outcome.cause.kind === "no-content" ||
+        outcome.cause.kind === "empty-body"
+        ? outcome.cause.status
+        : undefined;
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
+  }
+};
+
+const outcomeStatusLabel = (outcome: UnreadPublisherOutcome): string => {
+  const status = outcomeHttpStatus(outcome);
+  if (status !== undefined) {
+    return String(status);
+  }
+  return outcome.type === "absent" ? outcome.evidence : outcome.cause.kind;
+};
+
 const requestIssue = async ({
   series,
   url,
   method,
   headers,
   signal,
-}: CollectionRequestOptions): Promise<Response> => {
+}: CollectionRequestOptions): Promise<ReadOutcome<Response>> => {
   const publisher = PUBLISHERS[series];
   const target = restrictOutboundUrl({
     hostPolicy: {
@@ -81,7 +122,7 @@ const requestIssue = async ({
   ) {
     return panic("Collection URL is outside the selected publisher");
   }
-  return await fetchPublisher(target, {
+  return await readPublisher(target, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     publisherGate: publisher.gate,
@@ -287,10 +328,11 @@ const cachedIssueUnchanged = async ({
     headers,
     signal,
   });
-  if (head.status === 304) {
+  const headStatus = outcomeHttpStatus(head);
+  if (headStatus === 304) {
     return Result.ok({ status: "unchanged" });
   }
-  if (head.status === 405 || head.status === 501) {
+  if (headStatus === 405 || headStatus === 501) {
     const response = await request({
       series: issue.series,
       url: issue.url,
@@ -298,22 +340,29 @@ const cachedIssueUnchanged = async ({
       headers,
       signal,
     });
-    return Result.ok(
-      response.status === 304
-        ? ({ status: "unchanged" } as const)
-        : ({ status: "response", response } as const),
-    );
+    if (outcomeHttpStatus(response) === 304) {
+      return Result.ok({ status: "unchanged" });
+    }
+    if (response.type !== "present") {
+      return Result.err(
+        new SkCollectionIssueError({
+          message: `Issue request failed (${outcomeStatusLabel(response)})`,
+          issueUrl: issue.url,
+        }),
+      );
+    }
+    return Result.ok({ status: "response", response: response.value });
   }
-  if (!head.ok) {
+  if (head.type !== "present") {
     return Result.err(
       new SkCollectionIssueError({
-        message: `Issue validation failed (${head.status})`,
+        message: `Issue validation failed (${outcomeStatusLabel(head)})`,
         issueUrl: issue.url,
       }),
     );
   }
   const previous = cache.etag ?? cache.lastModified;
-  const current = head.headers.get(
+  const current = head.value.headers.get(
     cache.etag === null ? "last-modified" : "etag",
   );
   if (current === null) {
@@ -417,16 +466,12 @@ export const createSkCollectionConnector = ({
           headers,
           signal,
         });
-        if (robots.status !== 404) {
-          if (!robots.ok) {
-            return Result.err(
-              new SkCollectionIssueError({
-                message: `Robots request failed (${robots.status})`,
-                issueUrl: issue.url,
-              }),
-            );
-          }
-          const body = await responseBytes(robots, ROBOTS_MAX_BYTES, issue.url);
+        if (robots.type === "present") {
+          const body = await responseBytes(
+            robots.value,
+            ROBOTS_MAX_BYTES,
+            issue.url,
+          );
           if (body.isErr()) {
             return body;
           }
@@ -435,6 +480,13 @@ export const createSkCollectionConnector = ({
           ) {
             return Result.ok({ status: "robots-denied", issueUrl: issue.url });
           }
+        } else if (robots.type !== "absent" || robots.evidence !== "http-404") {
+          return Result.err(
+            new SkCollectionIssueError({
+              message: `Robots request failed (${outcomeStatusLabel(robots)})`,
+              issueUrl: issue.url,
+            }),
+          );
         }
         const validation =
           currentCache === null
@@ -453,23 +505,26 @@ export const createSkCollectionConnector = ({
         if (validated.status === "unchanged" && currentCache !== null) {
           return Result.ok({ status: "unchanged", cache: currentCache });
         }
-        const response =
-          validated.status === "response"
-            ? validated.response
-            : await request({
-                series: issue.series,
-                url: issue.url,
-                method: "GET",
-                headers,
-                signal,
-              });
-        if (!response.ok) {
-          return Result.err(
-            new SkCollectionIssueError({
-              message: `Issue request failed (${response.status})`,
-              issueUrl: issue.url,
-            }),
-          );
+        let response: Response;
+        if (validated.status === "response") {
+          response = validated.response;
+        } else {
+          const fetched = await request({
+            series: issue.series,
+            url: issue.url,
+            method: "GET",
+            headers,
+            signal,
+          });
+          if (fetched.type !== "present") {
+            return Result.err(
+              new SkCollectionIssueError({
+                message: `Issue request failed (${outcomeStatusLabel(fetched)})`,
+                issueUrl: issue.url,
+              }),
+            );
+          }
+          response = fetched.value;
         }
         const bytes = await responseBytes(response, PDF_MAX_BYTES, issue.url);
         if (bytes.isErr()) {

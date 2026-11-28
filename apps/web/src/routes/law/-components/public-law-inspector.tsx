@@ -43,7 +43,17 @@ const LazySessionInspector = lazy(async () => {
  * open it, which is what a matter's own inspector does. This is the only dock
  * on the surface; a reader seeds tabs into the store and never docks its own.
  */
-export const PublicLawInspector = () => {
+type PublicLawInspectorProps = {
+  /**
+   * Optional override for the lazy member session inspector body. Defaults to
+   * `LazySessionInspector`, which pulls in the full chat and editor chunk.
+   */
+  sessionInspector?: ReactNode;
+};
+
+export const PublicLawInspector = ({
+  sessionInspector,
+}: PublicLawInspectorProps = {}) => {
   const user = useMaybeAuthenticatedUser();
   const tabs = useInspectorTabsStore((state) => state.tabs);
   const minimized = useInspectorTabsStore((state) => state.minimized);
@@ -65,7 +75,7 @@ export const PublicLawInspector = () => {
           (or anything it opens) loads leaves the reader with a blank column.
         */}
         <Suspense fallback={<SessionRailPlaceholder />}>
-          <LazySessionInspector />
+          {sessionInspector ?? <LazySessionInspector />}
         </Suspense>
       </PublicInspectorDock>
     </>

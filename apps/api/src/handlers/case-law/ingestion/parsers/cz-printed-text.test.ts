@@ -8,17 +8,16 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type {
   Block,
   DocumentAst,
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
-
-import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "./cz-ns";
-import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "./cz-nss";
 
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);

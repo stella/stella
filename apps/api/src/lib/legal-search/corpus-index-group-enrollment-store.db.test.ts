@@ -34,6 +34,7 @@ import {
 import { CORPUS_INDEX_APPEND_CANCEL_REASON } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
+  CORPUS_PROJECTION_LEASE_MAX_MS,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
   startCorpusProjectionAppendTx,
@@ -335,7 +336,7 @@ test("an attestation withdrawn after reservation stops the append at start, and 
           generation: MANIFEST.generation,
           scope: { type: "route", indexId: "case_law_v7_usa" },
           limit: 1,
-          leaseMs: 60_000,
+          leaseMs: CORPUS_PROJECTION_LEASE_MAX_MS,
         }),
     );
   const lastErrorOf = async (intentId: SafeId<"corpusIndexProjectionIntent">) =>
@@ -470,7 +471,7 @@ test("no append reaches a group before its attestation, and its work waits rathe
             family: "case_law",
             generation: MANIFEST.generation,
             limit: 10,
-            leaseMs: 60_000,
+            leaseMs: CORPUS_PROJECTION_LEASE_MAX_MS,
           }),
       )
     ).map(({ entityId }) => entityId);
@@ -482,7 +483,7 @@ test("no append reaches a group before its attestation, and its work waits rathe
           generation: MANIFEST.generation,
           scope: { type: "route", indexId },
           limit: 10,
-          leaseMs: 60_000,
+          leaseMs: CORPUS_PROJECTION_LEASE_MAX_MS,
         }),
     );
 

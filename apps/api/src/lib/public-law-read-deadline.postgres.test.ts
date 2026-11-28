@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { readFailureBrand } from "@stll/errors";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { envBase } from "@/api/env-base";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -218,35 +219,23 @@ if (!databaseUrl || !runPostgres) {
                     });
                     // The reader cannot signal its owner session. Wait until
                     // its statement is active, then cancel from the control connection.
-                    await withTimeout(
-                      async () => {
-                        // real-time: cancellation must target an active PostgreSQL statement.
-                        while (true) {
-                          const active = executedRows(
-                            await control.unsafe(
-                              "SELECT wait_event FROM pg_stat_activity WHERE pid = $1",
-                              [pid],
-                            ),
-                          ).at(0);
-                          if (
-                            isRecord(active) &&
-                            active["wait_event"] === "PgSleep"
-                          ) {
-                            await control.unsafe(
-                              "SELECT pg_cancel_backend($1)",
-                              [pid],
-                            );
-                            return;
-                          }
-                          // real-time: observe the database's wait state before signaling its backend.
-                          await Bun.sleep(1);
-                        }
+                    await waitForExternalState({
+                      description: `backend ${String(pid)} to enter PgSleep`,
+                      intervalMs: 1,
+                      timeoutMs: 1000, // timeout: observe the statement under test before its 1s pg_sleep finishes
+                      read: async () => {
+                        const active = executedRows(
+                          await control.unsafe(
+                            "SELECT wait_event FROM pg_stat_activity WHERE pid = $1",
+                            [pid],
+                          ),
+                        ).at(0);
+                        return (
+                          isRecord(active) && active["wait_event"] === "PgSleep"
+                        );
                       },
-                      {
-                        label: "observe_public_read_cancellation",
-                        timeoutMs: 1000, // timeout: observe the statement under test before its sleep finishes
-                      },
-                    );
+                    });
+                    await control.unsafe("SELECT pg_cancel_backend($1)", [pid]);
                     const cancelled = await pending;
                     if (Result.isError(cancelled)) {
                       cancellation = cancelled.error;

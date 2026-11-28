@@ -1,3 +1,6 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: dot-notation property access on LANGUAGE_STOPWORDS preserves identical runtime output
 /**
  * The Supreme Court's official collection, the Sbírka soudních rozhodnutí a
@@ -53,6 +56,15 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import {
+  CZ_NS_SBIRKA_TEXT_HEADING,
+  type CzNsSbirkaPage,
+  type CzNsSbirkaParsedDocument,
+  parseCzNsSbirkaText,
+  readCzNsSbirkaPage,
+} from "@stll/case-law-parsers/cz-ns-sbirka";
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
+import { visibleHtmlText } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -75,14 +87,6 @@ import {
   INGESTION_USER_AGENT,
   parseCeDate,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  CZ_NS_SBIRKA_TEXT_HEADING,
-  type CzNsSbirkaPage,
-  type CzNsSbirkaParsedDocument,
-  parseCzNsSbirkaText,
-  readCzNsSbirkaPage,
-} from "@/api/handlers/case-law/ingestion/parsers/cz-ns-sbirka";
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
@@ -137,7 +141,6 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { LANGUAGE_STOPWORDS } from "@/api/lib/templates/template-languages";
 import { isRecord } from "@/api/lib/type-guards";
 

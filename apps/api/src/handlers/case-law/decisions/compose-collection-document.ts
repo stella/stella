@@ -22,9 +22,9 @@ import {
   mapInlineText,
   rewriteInlineWhitespace,
 } from "@stll/legal-ast/inline-line";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import type { CollectionDocumentPartRead } from "@/api/lib/legal-search/collection-document-part-read";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";

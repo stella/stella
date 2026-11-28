@@ -17,6 +17,8 @@ import { reportOnboardingFailure } from "./onboarding-telemetry";
 /** What setup reads of Activity (`activity_get_setup`): whether recording
  *  has started and the choices setup offers, the ones Settings stores. */
 export type ActivitySetupSnapshot = {
+  /** Managed policy keeps every browser to its app name. */
+  browserTitlesManaged: boolean;
   captureDetails: boolean;
   detailsAccess: ActivityDetailsAccess;
   detectCalls: boolean;
@@ -33,6 +35,7 @@ const isActivitySetupSnapshot = (
   value: unknown,
 ): value is ActivitySetupSnapshot =>
   isRecord(value) &&
+  typeof value["browserTitlesManaged"] === "boolean" &&
   typeof value["captureDetails"] === "boolean" &&
   isOneOf(ACTIVITY_DETAILS_ACCESS, value["detailsAccess"]) &&
   typeof value["detectCalls"] === "boolean" &&

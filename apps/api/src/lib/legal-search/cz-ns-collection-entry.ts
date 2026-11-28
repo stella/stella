@@ -19,8 +19,10 @@ import {
   CZ_NS_COLLECTION_PARTS,
   type CzNsCollectionPart,
 } from "@stll/api-contract/cz-ns-collection-citation";
-
-import type { MetadataUrlDefect, SafeHref } from "@/api/lib/sanitize-url";
+import type {
+  MetadataUrlDefect,
+  SafeHref,
+} from "@stll/case-law-parsers/sanitize-url";
 
 /** The metadata key the entry is stored under. */
 export const CZ_NS_COLLECTION_METADATA_KEY = "czNsCollection";
@@ -59,7 +61,7 @@ const reportEditionSchema = v.variant("extent", [
   sectionEditionSchema,
   v.object({ extent: v.literal("complete") }),
 ]);
-export type CzNsReportEdition = v.InferOutput<typeof reportEditionSchema>;
+type CzNsReportEdition = v.InferOutput<typeof reportEditionSchema>;
 
 /** A URL as the entry carries it once built: typed, or the defect found. */
 type EntryUrl = SafeHref | MetadataUrlDefect | undefined;

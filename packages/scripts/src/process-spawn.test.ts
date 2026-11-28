@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setImmediate } from "node:timers/promises";
 
 import { spawnGatedTestProcess } from "./process-spawn";
 
@@ -78,7 +79,7 @@ test("failed leader registration never releases the entry point", async () => {
       "Test invocation must acquire process ownership before entry execution",
     );
     expect(warnings).toEqual(["Registration failed"]);
-    await Bun.sleep(100);
+    await setImmediate();
     expect(existsSync(marker)).toBe(false);
   } finally {
     rmSync(directory, { recursive: true, force: true });

@@ -1,3 +1,5 @@
+// parser-output-unchanged: CourtListener parser imports moved to @stll/case-law-parsers.
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: [us-courtlistener] named declaration types leave emitted runtime unchanged.
 /**
  * What a CourtListener cluster becomes, before its text is read: identity,
@@ -18,6 +20,22 @@ import {
   US_REPORTER_JURISDICTION,
 } from "@stll/api-contract/us-reporter-citation";
 import {
+  COURTLISTENER_REJECTION_REASON,
+  type CourtListenerRecordRejectedError,
+  type CourtListenerRejectionReason,
+  rejectCourtListenerRecord,
+  type RejectionDiagnostic,
+} from "@stll/case-law-parsers/courtlistener/rejection";
+import {
+  CITATION_TYPES,
+  compareOpinionOrder,
+  OPINION_TYPES,
+} from "@stll/case-law-parsers/courtlistener/vocabulary";
+import {
+  type SafeHref,
+  sanitizeUrl,
+} from "@stll/case-law-parsers/sanitize-url";
+import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifier,
@@ -32,7 +50,6 @@ import {
   type DecisionJudgeInput,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
-import { type SafeHref, sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import { courtListenerRawHash, encodeCourtListenerRaw } from "./raw";
 import {
@@ -42,23 +59,11 @@ import {
   type AdmittedOpinion,
 } from "./record";
 import {
-  COURTLISTENER_REJECTION_REASON,
-  type CourtListenerRecordRejectedError,
-  type CourtListenerRejectionReason,
-  rejectCourtListenerRecord,
-  type RejectionDiagnostic,
-} from "./rejection";
-import {
   compareBytewise,
   compareCanonicalIds,
   hasVisibleText,
   type PersonRow,
 } from "./snapshot-columns";
-import {
-  CITATION_TYPES,
-  compareOpinionOrder,
-  OPINION_TYPES,
-} from "./vocabulary";
 
 const COUNTRY = US_REPORTER_JURISDICTION;
 const LANGUAGE = "en";

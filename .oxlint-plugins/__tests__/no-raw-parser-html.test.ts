@@ -181,10 +181,7 @@ describe.serial("HTML parser helper ownership", () => {
       '$("p").text();',
     ];
     expect(
-      await lint(
-        source,
-        "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts",
-      ),
+      await lint(source, "packages/case-law-parsers/src/shared-inlines.ts"),
     ).toEqual([]);
     expect(await lint(source, "other/shared-inlines.ts")).toEqual([3]);
   });
@@ -248,8 +245,7 @@ describe.serial("HTML parser helper ownership", () => {
     ).toEqual([7]);
 
     const root = fileURLToPath(new URL("../../", import.meta.url));
-    const plUodoPath =
-      "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts";
+    const plUodoPath = "packages/case-law-parsers/src/pl-uodo.ts";
     expect(
       await lintSingleRule(
         RULE_NAME,

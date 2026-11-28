@@ -5,6 +5,7 @@ import { Buffer } from "node:buffer";
 
 import { getCollator } from "@stll/collation";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
 import { assertProperty } from "@stll/property-testing";
 
 import { envBase } from "@/api/env-base";
@@ -46,7 +47,6 @@ import {
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import {
   blendStableCitationAuthority,
   DEFAULT_AUTHORITY_WEIGHT,

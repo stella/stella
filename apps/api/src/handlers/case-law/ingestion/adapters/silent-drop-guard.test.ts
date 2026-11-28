@@ -1,17 +1,16 @@
 import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
+import { isExcludedHtmlTag } from "@stll/case-law-parsers/visible-html-text";
 import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
-import { isExcludedHtmlTag } from "@/api/lib/legal-search/parsers/visible-html-text";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   brTjdftFixture,
@@ -418,9 +417,6 @@ const missingFrom = ({
     (token) => !fulltext.includes(token) && !reported.includes(token),
   );
 };
-const expected = new Map<string, readonly string[]>(
-  Object.entries(baseline.misses),
-);
 test("every registered replay path has exactly one probe disposition", () => {
   expect([...drivers.keys()].toSorted()).toEqual(
     replayAdapters.map(({ key }) => key).toSorted(),
@@ -437,7 +433,6 @@ for (const adapter of replayAdapters) {
       drivers.get(adapter.key) ??
       panic(`Missing probe driver for ${adapter.key}`);
     if (driver.driver === "unsupported") {
-      expect(expected.has(adapter.key)).toBe(false);
       return;
     }
     const replay = adapter.reparseStoredRaw ?? panic("Replay disappeared");
@@ -535,15 +530,10 @@ for (const adapter of replayAdapters) {
     const observed = misses.toSorted();
     expect(
       observed,
-      "New misses fail; passing baseline entries must be removed",
-    ).toEqual([...(expected.get(adapter.key) ?? [])]);
+      "Child-drop probes must survive as text or be reported in unmapped.",
+    ).toEqual([]);
   }, 60_000);
 }
-test("a removed adapter cannot leave a stale suppression", () => {
-  for (const key of expected.keys()) {
-    expect(drivers.has(key)).toBe(true);
-  }
-});
 test("a marker must survive as text or be present in the unmapped report", () => {
   expect(
     missingFrom({

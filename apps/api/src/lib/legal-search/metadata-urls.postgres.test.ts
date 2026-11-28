@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
+
 import { SK_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/sk-courts.metadata-urls";
 import {
   checkedDecisionMetadata,
@@ -12,7 +14,6 @@ import {
   META_URL_DIAGNOSTICS,
   rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

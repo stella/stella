@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { settledWithin } from "@stll/test-kit";
 
 import {
   SETTING_ORGANIZATION_ID,
@@ -234,15 +235,18 @@ describe.skipIf(!runPostgresTests)(
             });
             let second: Promise<unknown> | undefined;
             try {
-              await Promise.race([
-                ready.promise,
-                first.then(() =>
-                  panic("First gate writer completed before its signal"),
-                ),
-                Bun.sleep(3000).then(() =>
-                  panic("First gate writer rendezvous timed out"),
-                ),
-              ]);
+              await settledWithin(
+                Promise.race([
+                  ready.promise,
+                  first.then(() =>
+                    panic("First gate writer completed before its signal"),
+                  ),
+                ]),
+                {
+                  description: "first gate writer rendezvous",
+                  timeoutMs: 3000,
+                },
+              );
               const pid = await backendPid(secondClient);
               second = secondClient.begin(async (tx) => {
                 await (firstWriter === "child"
@@ -657,15 +661,20 @@ describe.skipIf(!runPostgresTests)(
           });
           let repairInsert: Promise<unknown> | undefined;
           try {
-            await Promise.race([
-              parentInserted.promise,
-              insertParent.then(() =>
-                panic("Parent transaction completed before its insert signal"),
-              ),
-              Bun.sleep(3000).then(() =>
-                panic("Parent transaction insert rendezvous timed out"),
-              ),
-            ]);
+            await settledWithin(
+              Promise.race([
+                parentInserted.promise,
+                insertParent.then(() =>
+                  panic(
+                    "Parent transaction completed before its insert signal",
+                  ),
+                ),
+              ]),
+              {
+                description: "parent transaction insert rendezvous",
+                timeoutMs: 3000,
+              },
+            );
             repairInsert = repairChildWriter.begin(async (tx) => {
               await tx`INSERT INTO flow_run_steps (id, workspace_id, run_id, index, kind, review_task_entity_id)
                 VALUES (${repairStepId}, ${fixture.workspaceA}, ${repairRunId}, 0, 'review-gate', ${repairEntityId})`;
@@ -712,15 +721,18 @@ describe.skipIf(!runPostgresTests)(
           });
           let updateParent: Promise<unknown> | undefined;
           try {
-            await Promise.race([
-              locked.promise,
-              insertChild.then(() =>
-                panic("Child transaction completed before its lock signal"),
-              ),
-              Bun.sleep(3000).then(() =>
-                panic("Child transaction insert rendezvous timed out"),
-              ),
-            ]);
+            await settledWithin(
+              Promise.race([
+                locked.promise,
+                insertChild.then(() =>
+                  panic("Child transaction completed before its lock signal"),
+                ),
+              ]),
+              {
+                description: "child transaction insert rendezvous",
+                timeoutMs: 3000,
+              },
+            );
             const pid = await backendPid(parentWriter);
             updateParent = parentWriter.begin(
               async (tx) =>

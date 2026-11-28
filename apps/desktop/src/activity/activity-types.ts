@@ -114,6 +114,9 @@ export type ActivityCaptureSettings = {
   appNameOnlyApps: ActivityAppExclusion[];
   browserApps: ActivityAppExclusion[];
   browserTitleApps: ActivityAppExclusion[];
+  /** Managed policy keeps every browser to its app name, whatever the
+   * member chose; `browserTitleApps` is then empty. */
+  browserTitlesManaged: boolean;
   sourceAppVisuals: ClipboardSourceAppVisual[];
 };
 
@@ -158,6 +161,9 @@ export type ActivityDaySnapshot = {
   detailsAccess: ActivityDetailsAccess;
   browserApps: ActivityAppExclusion[];
   browserTitleApps: ActivityAppExclusion[];
+  /** Managed policy keeps every browser to its app name, whatever the
+   * member chose; `browserTitleApps` is then empty. */
+  browserTitlesManaged: boolean;
   calendarSource: ActivityCalendarSource;
   otherAccountHistoryDays: number;
   persistence: ActivityPersistenceStatus;
@@ -313,6 +319,7 @@ const isCaptureSettings = ({
   appNameOnlyApps,
   browserApps,
   browserTitleApps,
+  browserTitlesManaged,
 }: Record<string, unknown>) =>
   typeof captureDetails === "boolean" &&
   typeof detectCalls === "boolean" &&
@@ -322,7 +329,8 @@ const isCaptureSettings = ({
   Array.isArray(browserApps) &&
   browserApps.every(isExclusion) &&
   Array.isArray(browserTitleApps) &&
-  browserTitleApps.every(isExclusion);
+  browserTitleApps.every(isExclusion) &&
+  typeof browserTitlesManaged === "boolean";
 
 /** The fields the day and settings snapshots share. */
 const isSettingsState = (value: Record<string, unknown>) => {

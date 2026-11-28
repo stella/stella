@@ -1,3 +1,5 @@
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { panic, Result, TaggedError } from "better-result";
 /**
  * Tribunal Superior do Trabalho (Brazil's superior labour court).
@@ -69,6 +71,16 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import {
+  parseBrTstDespacho,
+  parseBrTstHtml,
+  parseBrTstPrecedent,
+} from "@stll/case-law-parsers/br-tst";
+import type {
+  BrTstDocumentIdentity,
+  BrTstParsedDocument,
+  BrTstParseError,
+} from "@stll/case-law-parsers/br-tst";
 import { sha256Hex } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal, todayFor } from "@stll/time";
 
@@ -80,16 +92,6 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parseBrTstDespacho,
-  parseBrTstHtml,
-  parseBrTstPrecedent,
-} from "@/api/handlers/case-law/ingestion/parsers/br-tst";
-import type {
-  BrTstDocumentIdentity,
-  BrTstParsedDocument,
-  BrTstParseError,
-} from "@/api/handlers/case-law/ingestion/parsers/br-tst";
 import { MAX_SLICE_PAGES } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";

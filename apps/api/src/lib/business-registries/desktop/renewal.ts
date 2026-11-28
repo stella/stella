@@ -20,10 +20,8 @@ import {
 } from "@/api/lib/business-registries/desktop/config";
 import type { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
-import {
-  withAggregateLock,
-  withAggregateTransaction,
-} from "@/api/lib/db/aggregate-lock";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
@@ -76,7 +74,7 @@ export const renewDesktopCredential = async ({
   const successorHash = await defaultKeyHasher(successorKey);
   const outcome = await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(db, async (tx) => {
+      await withOwnerOrganizationScope(db, organizationId, async (tx) => {
         const membershipLock = await withAggregateLock({
           aggregate: "desktopMembership",
           id: { organizationId, userId },
@@ -231,7 +229,7 @@ export const probeDesktopCredential = async ({
   const hash = await defaultKeyHasher(currentKey);
   const queried = await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(db, async (tx) => {
+      await withOwnerOrganizationScope(db, organizationId, async (tx) => {
         const keyLock = await withAggregateLock({
           aggregate: "desktopCredential",
           id: { id: keyId, userId },

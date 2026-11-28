@@ -372,11 +372,6 @@
     "apps/web/src/components/inspector/anonymization-context-menu.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx": 3
   },
-  "no-imported-class-constant/no-imported-class-constant": {},
-  "require-bounded-request-schema/require-bounded-request-schema": {},
-  "no-unbounded-response-body/no-unbounded-response-body": {},
-  "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
-  "exhaustive-union-map/exhaustive-union-map": {},
   "no-direct-status-set/no-direct-status-set": {
     "apps/api/scripts/seed-matter-activity.ts": 2,
     "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
@@ -540,35 +535,23 @@
     "scripts/sync-railway-template-source.ts": 1,
     "scripts/tanstack-drift.ts": 3
   },
-  "no-native-ui/no-native-accordion": {},
   "no-native-ui/no-native-button": {
     "apps/web/src/components/catalogue/catalogue-row.tsx": 1,
     "apps/web/src/components/file-tree/file-tree.tsx": 1,
     "packages/decision-reader/src/annotation-anchors.tsx": 1
   },
-  "no-native-ui/no-native-checkbox": {},
-  "no-native-ui/no-native-details-grid": {},
   "no-native-ui/no-native-dialog": {
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/features/chat/answer-edit/answer-edit-panel.tsx": 1
   },
-  "no-native-ui/no-native-form": {},
-  "no-native-ui/no-native-input": {},
-  "no-native-ui/no-native-label": {},
-  "no-native-ui/no-native-menu": {},
-  "no-native-ui/no-native-number-input": {},
-  "no-native-ui/no-native-secret-input": {},
   "no-native-ui/no-native-select": {
     "apps/web/src/routes/knowledge/-components/template-studio-slash-menu.tsx": 2
   },
-  "no-native-ui/no-native-separator": {},
   "no-native-ui/no-native-table": {
     "apps/web/src/components/workspaces/table/workspace-grid.tsx": 3,
     "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 3,
     "packages/decision-reader/src/document-ast-text.tsx": 3
   },
-  "no-native-ui/no-native-textarea": {},
-  "no-native-ui/no-native-tooltip": {},
   "eslint/complexity": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 5,
     ".oxlint-plugins/no-known-value-widening.ts": 1,
@@ -596,9 +579,6 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts": 2,
     "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts": 1,
     "apps/api/src/handlers/chat/send-message.ts": 2,
     "apps/api/src/handlers/chat/stream-chat.ts": 1,
     "apps/api/src/handlers/chat/tools/chat-tools.ts": 1,
@@ -612,8 +592,6 @@
     "apps/api/src/lib/docx/lookup-fields.ts": 1,
     "apps/api/src/lib/entities/query-entities.ts": 1,
     "apps/api/src/lib/entity-versions/write-file-version.ts": 1,
-    "apps/api/src/lib/legal-search/morphology/slovak.ts": 1,
-    "apps/api/src/lib/legal-search/parsers/validate-ast.ts": 1,
     "apps/api/src/lib/observability/failure-evidence.ts": 1,
     "apps/api/src/lib/safe-outbound-fetch.ts": 1,
     "apps/api/src/lib/search/index-global.ts": 1,
@@ -653,10 +631,15 @@
     "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx": 1,
     "apps/web/src/routes/law/cases/-case-law-index.page.tsx": 1,
     "packages/business-registries/src/denue/client.ts": 1,
+    "packages/case-law-parsers/src/cz-nss.ts": 1,
+    "packages/case-law-parsers/src/cz-us.ts": 1,
+    "packages/case-law-parsers/src/shared-inlines.ts": 1,
+    "packages/case-law-parsers/src/validate-ast.ts": 1,
     "packages/cli/src/generate-route-map.ts": 1,
     "packages/cli/src/input-contract-help.ts": 1,
     "packages/cli/src/json-schema-validate.ts": 1,
     "packages/cli/src/registry-trust.ts": 1,
+    "packages/legal-morphology/src/slovak.ts": 1,
     "packages/scripts/src/model-catalog-capabilities-gen.ts": 1,
     "packages/scripts/src/property-timeout-convention.ts": 1,
     "scripts/check-marketing-content.ts": 1,
@@ -702,9 +685,6 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 3,
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
     "apps/api/src/handlers/catalogue/list.ts": 1,
     "apps/api/src/handlers/chat/chat-message-persistence.ts": 1,
@@ -758,7 +738,6 @@
     "apps/api/src/lib/document-processing-queue.ts": 1,
     "apps/api/src/lib/document-processing-request.ts": 2,
     "apps/api/src/lib/document-translation/run-queue.ts": 2,
-    "apps/api/src/lib/docx/block-directives.ts": 1,
     "apps/api/src/lib/docx/discover-template.ts": 1,
     "apps/api/src/lib/entities/create-from-buffer.ts": 1,
     "apps/api/src/lib/entities/query-entities.ts": 1,
@@ -769,8 +748,6 @@
     "apps/api/src/lib/legal-search/corpus-index-client.ts": 1,
     "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts": 1,
     "apps/api/src/lib/legal-search/corpus-pack-batch.ts": 1,
-    "apps/api/src/lib/legal-search/parsers/rtf-reader.ts": 1,
-    "apps/api/src/lib/legal-search/parsers/validate-ast.ts": 1,
     "apps/api/src/lib/scheduler/tasks/search-semantic-timestamps.ts": 1,
     "apps/api/src/lib/search/index-global.ts": 1,
     "apps/api/src/lib/skills/install.ts": 1,
@@ -866,6 +843,12 @@
     "apps/web/vite.config.ts": 1,
     "packages/agent-engine/src/bun-docker/provider.ts": 1,
     "packages/browser-page/src/page-script.ts": 2,
+    "packages/case-law-parsers/src/cz-nss.ts": 1,
+    "packages/case-law-parsers/src/cz-us.ts": 1,
+    "packages/case-law-parsers/src/hu-bhgy.ts": 1,
+    "packages/case-law-parsers/src/rtf-reader.ts": 1,
+    "packages/case-law-parsers/src/validate-ast.ts": 1,
+    "packages/docx-engine/src/block-directives.ts": 1,
     "packages/legal-atlas/src/provision-citation-grammars.ts": 1,
     "packages/scripts/src/dev-runner.ts": 1,
     "packages/ui/src/components/date-picker-popover.tsx": 1,
@@ -876,8 +859,5 @@
     "scripts/env-tool.ts": 1,
     "scripts/ratchet.ts": 1,
     "scripts/suppression-waivers.ts": 1
-  },
-  "eslint/max-params": {},
-  "react/no-children-prop": {},
-  "eslint/no-unexpected-multiline": {}
+  }
 }

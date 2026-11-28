@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { CourtListenerRecordRejectedError } from "@stll/case-law-parsers/courtlistener/rejection";
+
 import {
   admitCourtListenerRecord,
   COURTLISTENER_RECORD_LIMITS,
 } from "./record";
-import type { CourtListenerRecordRejectedError } from "./rejection";
 import {
   citationRow,
   clusterRow,

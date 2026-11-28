@@ -149,7 +149,7 @@ const colourExemptions = [
       "a file format's own default.",
     files: [
       // The hidden-text style the court's published HTML uses.
-      "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts",
+      "packages/case-law-parsers/src/sk-us.ts",
       // Class styles restored for the sender's own email markup.
       "apps/api/src/lib/files/email-sender-styles.ts",
       // Seeded sample emails and documents.
@@ -719,6 +719,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
     "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
+  ]),
+  fixtureRuleOverride("no-hand-rolled-setup-choice.fixture.tsx", [
+    "no-hand-rolled-setup-choice/no-hand-rolled-setup-choice",
   ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
@@ -2155,8 +2158,8 @@ const config = defineConfig({
     // by the next regeneration. Bound instead by the conformance fixtures
     // in snowball/__fixtures__ and by
     // scripts/generate-snowball-stemmers.ts.
-    "apps/api/src/lib/legal-search/morphology/snowball/*.gen.ts",
-    "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",
+    "packages/legal-morphology/src/snowball/*.gen.ts",
+    "packages/legal-morphology/src/snowball/base-stemmer.ts",
     // The template-pack content repository is a submodule with its own
     // toolchain and lint setup; this repo neither authors nor formats it.
     "packages/template-packs/content/**",
@@ -2473,6 +2476,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-justified-reader-text.ts",
     "./.oxlint-plugins/no-raw-reader-scroll.ts",
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
+    "./.oxlint-plugins/no-hand-rolled-setup-choice.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
@@ -2908,6 +2912,40 @@ const config = defineConfig({
         "bun-test-hygiene/no-wait-for-under-fake-timers": "error",
         "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
+      },
+    },
+    {
+      // Security test suites must never silently skip, stub, or conditionally
+      // bypass assertions. Only the five reviewed live-Postgres suites may
+      // gate `describe.skip` / `describe.skipIf` on `STELLA_RUN_POSTGRES_TESTS`.
+      files: ["apps/api/src/tests/security/**/*.test.ts"],
+      excludeFiles: [
+        "apps/api/src/tests/security/billing-arrangements.postgres.test.ts",
+        "apps/api/src/tests/security/billing-visibility.postgres.test.ts",
+        "apps/api/src/tests/security/case-law-decision-base-table-contract.postgres.test.ts",
+        "apps/api/src/tests/security/public-law-reader-role.postgres.test.ts",
+        "apps/api/src/tests/security/table-policy-settings.test.ts",
+      ],
+      rules: {
+        "bun-test-hygiene/no-disabled-tests": ["error", { strict: true }],
+      },
+    },
+    {
+      // Reviewed live-Postgres security suites may gate top-level `describe`
+      // blocks on `STELLA_RUN_POSTGRES_TESTS`, while all other skips/todos
+      // stay banned.
+      files: [
+        "apps/api/src/tests/security/billing-arrangements.postgres.test.ts",
+        "apps/api/src/tests/security/billing-visibility.postgres.test.ts",
+        "apps/api/src/tests/security/case-law-decision-base-table-contract.postgres.test.ts",
+        "apps/api/src/tests/security/public-law-reader-role.postgres.test.ts",
+        "apps/api/src/tests/security/table-policy-settings.test.ts",
+      ],
+      rules: {
+        "bun-test-hygiene/no-disabled-tests": [
+          "error",
+          { strict: true, allowDescribeEnvGate: "STELLA_RUN_POSTGRES_TESTS" },
+        ],
       },
     },
     {
@@ -3890,10 +3928,7 @@ const config = defineConfig({
       // does not read (it covers Czech, Slovak and Polish decisions).
       excludeFiles: [
         "packages/legal-ast/src/printed-paragraph-labels.ts",
-        "apps/api/src/handlers/case-law/ingestion/parsers/at-*.ts",
         "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj*.ts",
-        "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy*.ts",
-        "apps/api/src/handlers/case-law/ingestion/parsers/uk-fcl*.ts",
         "**/*.test.ts",
       ],
       rules: {
@@ -4829,6 +4864,18 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.{ts,tsx}"],
       rules: {
         "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop": "error",
+      },
+    },
+    {
+      // Setup screens offer a choice through the shared `ChoiceGroup` and
+      // `ChoiceCard`; only their owner draws radios and choice cards.
+      files: ["apps/desktop/src/onboarding/**/*.tsx"],
+      excludeFiles: [
+        "apps/desktop/src/onboarding/SetupScreenParts.tsx",
+        "**/*.test.tsx",
+      ],
+      rules: {
+        "no-hand-rolled-setup-choice/no-hand-rolled-setup-choice": "error",
       },
     },
     {
@@ -7474,6 +7521,7 @@ const config = defineConfig({
       // The fill pipeline: a new diagnostic channel joins the record.
       files: [
         "apps/api/src/lib/docx/**/*.ts",
+        "packages/docx-engine/src/**/*.ts",
         "apps/api/src/lib/templates/**/*.ts",
         "apps/api/src/lib/clauses/**/*.ts",
         "apps/api/src/handlers/templates/**/*.ts",
@@ -8000,7 +8048,10 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/api/src/lib/docx/**/*.ts"],
+      files: [
+        "apps/api/src/lib/docx/**/*.ts",
+        "packages/docx-engine/src/**/*.ts",
+      ],
       rules: {
         "unicorn/prefer-modern-dom-apis": "off",
         "unicorn/prefer-dom-node-remove": "off",

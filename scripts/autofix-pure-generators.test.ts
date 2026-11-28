@@ -140,6 +140,8 @@ const EXCLUDED_AUTOFIX = {
   "infosoud-codes": "Fetches live code tables",
   "mojibake-exemplars": "Extracts upstream exemplars",
   "mcp-surface": "Human-reviewed protected baseline",
+  "desktop-activity-data-map":
+    "Cargo test requires native platform dependencies and toolchain state",
   "desktop-rpc":
     "Cargo test requires native platform dependencies and toolchain state",
   "scan-engine-wasm":
@@ -241,7 +243,7 @@ test("every module the case-law re-parse imports selects it", () => {
   // The segmenter shapes every re-parsed section; the payload reads it
   // directly, not through the ingestion re-export.
   expect(closure).toContain(
-    "apps/api/src/lib/legal-search/segment-decision.ts",
+    "packages/case-law-parsers/src/segment-decision.ts",
   );
   const { inputs } = generator("case-law-fixture-reparse");
   expect(

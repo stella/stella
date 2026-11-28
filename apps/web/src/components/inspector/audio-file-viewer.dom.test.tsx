@@ -1,9 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
+
+const router = await import("@tanstack/react-router");
+await mock.module("@tanstack/react-router", () => ({
+  ...router,
+  useRouter: () => ({ state: { matches: [] } }),
+}));
 
 const { act } = await import("react");
 const { cleanup, fireEvent, render, screen } =

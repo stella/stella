@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { EMPTY_AST } from "@stll/legal-ast/document-types";
+import { settledWithin } from "@stll/test-kit";
 
 import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -12,38 +13,38 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombstones";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
-import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
+import type {
+  FakeS3,
+  FakeS3Hold,
+  FakeS3Method,
+} from "@/api/tests/helpers/fake-s3";
 
 const corpusBucket = envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
-
-/**
- * How long the store holds a served response. Long enough that three
- * requests are provably in flight at once, short enough that a test which
- * waits out a straggler stays fast.
- */
-const HOLD_MS = 150;
 
 const errorName = (error: unknown): string =>
   error instanceof Error ? error.name : String(error);
 
-const waitForRequests = async (
+const holdKeys = (
   fake: FakeS3,
   method: FakeS3Method,
-  expected: number,
+  keys: readonly string[],
+): FakeS3Hold[] =>
+  keys.map((key) => fake.holdNext({ method, keyIncludes: key }));
+
+const releaseAbortedHolds = async (
+  holds: readonly FakeS3Hold[],
 ): Promise<void> => {
-  await new Promise<void>((resolve) => {
-    const check = () => {
-      if (
-        fake.requests.filter((request) => request.method === method).length >=
-        expected
-      ) {
-        resolve();
-        return;
-      }
-      setTimeout(check, 1);
-    };
-    check();
-  });
+  await settledWithin(
+    Promise.all(holds.map(async (hold) => await hold.aborted)),
+    {
+      description: "cancelled S3 requests to abort at server",
+      timeoutMs: 5000,
+    },
+  );
+  for (const hold of holds) {
+    hold.release();
+  }
+  await Promise.all(holds.map(async (hold) => await hold.completed));
 };
 
 const keysUnder = (fake: FakeS3): string[] =>
@@ -94,7 +95,7 @@ describe("corpus object cancellation", () => {
   let fake: FakeS3;
 
   beforeEach(() => {
-    fake = startFakeS3({ delayMs: HOLD_MS });
+    fake = startFakeS3();
   });
 
   afterEach(() => {
@@ -112,10 +113,15 @@ describe("corpus object cancellation", () => {
   });
 
   test("passes caller cancellation to every in-flight corpus PUT", async () => {
+    const holds = holdKeys(fake, "PUT", [
+      writtenKeys.textKey,
+      writtenKeys.sectionsKey,
+      writtenKeys.astKey,
+    ]);
     const controller = new AbortController();
     const pending = writeRejection(controller.signal);
 
-    await waitForRequests(fake, "PUT", 3);
+    await Promise.all(holds.map(async (hold) => await hold.reached));
     controller.abort();
 
     const rejection = await pending;
@@ -124,12 +130,16 @@ describe("corpus object cancellation", () => {
     // Cancellation reached the requests themselves: all three were in flight
     // and none of them landed an object.
     expect(keysUnder(fake)).toEqual([]);
-    // Nor does one land once the hold on the cancelled requests expires.
-    await Bun.sleep(HOLD_MS * 2);
+    // Nor does one land once the hold on the cancelled requests is released.
+    await releaseAbortedHolds(holds);
     expect(keysUnder(fake)).toEqual([]);
   });
 
   test("reports a rejected corpus PUT rather than the siblings it cancelled", async () => {
+    const holds = holdKeys(fake, "PUT", [
+      writtenKeys.sectionsKey,
+      writtenKeys.astKey,
+    ]);
     fake.failNext({
       method: "PUT",
       code: "AccessDenied",
@@ -146,7 +156,7 @@ describe("corpus object cancellation", () => {
     // keys the caller has already given up on, so nothing may land after the
     // write returns either.
     expect(keysUnder(fake)).toEqual([]);
-    await Bun.sleep(HOLD_MS * 2);
+    await releaseAbortedHolds(holds);
     expect(keysUnder(fake)).toEqual([]);
   });
 
@@ -154,6 +164,7 @@ describe("corpus object cancellation", () => {
     for (const key of Object.values(deletedKeys)) {
       fake.put(corpusBucket, key, "payload");
     }
+    const holds = holdKeys(fake, "DELETE", Object.values(deletedKeys));
     const controller = new AbortController();
     const pending = deleteCorpusDocument(deletedKeys, {
       ...erasure,
@@ -163,10 +174,11 @@ describe("corpus object cancellation", () => {
       (error: unknown) => error,
     );
 
-    await waitForRequests(fake, "DELETE", 3);
+    await Promise.all(holds.map(async (hold) => await hold.reached));
     controller.abort();
 
     const rejection = await pending;
+    await releaseAbortedHolds(holds);
 
     expect(errorName(rejection)).toBe("AbortError");
     // A cancelled erasure removes nothing: the caller retries the whole set.
@@ -181,6 +193,10 @@ describe("corpus object cancellation", () => {
     for (const key of Object.values(deletedKeys)) {
       fake.put(corpusBucket, key, "payload");
     }
+    const holds = holdKeys(fake, "DELETE", [
+      deletedKeys.sectionsKey,
+      deletedKeys.astKey,
+    ]);
     fake.failNext({
       method: "DELETE",
       code: "AccessDenied",
@@ -196,7 +212,7 @@ describe("corpus object cancellation", () => {
     expect(errorName(rejection)).toBe("AccessDenied");
     // The erasure failed as a whole, so no sibling delete may apply late and
     // leave the caller with a half-erased document it was never told about.
-    await Bun.sleep(HOLD_MS * 2);
+    await releaseAbortedHolds(holds);
     expect(keysUnder(fake)).toEqual([
       deletedKeys.astKey,
       deletedKeys.sectionsKey,

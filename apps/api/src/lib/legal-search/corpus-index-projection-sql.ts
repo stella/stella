@@ -1,8 +1,15 @@
-import { sql, type SQLWrapper } from "drizzle-orm";
+import { panic } from "better-result";
+import { type SQL, sql, type SQLWrapper } from "drizzle-orm";
 
+import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS,
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
+  CORPUS_INDEX_DELETING_INTENT_STATUSES,
   CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES,
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS,
+  CORPUS_INDEX_PROJECTION_LEGACY_SINGLE_APPEND_REQUEST_CAP,
   CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
   type CorpusIndexDesiredAction,
   corpusIndexIntentStatusesWithCopy,
@@ -25,6 +32,37 @@ type CorpusProjectionWorkColumns = {
   appliedIndexId: SQLWrapper;
   desiredIndexId: SQLWrapper;
 };
+
+/** The request cap check: one of the powers of two the contract lists. */
+export const corpusIndexProjectionAppendRequestCapIsValid = (
+  appendRequestCap: SQLWrapper,
+) =>
+  sql`${appendRequestCap} IN (${sql.raw(CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS.join(", "))})`;
+
+type CorpusProjectionAppendRequestCapColumns = {
+  appendMode: SQLWrapper;
+  appendRequestCap: SQLWrapper;
+};
+
+/**
+ * An entity's effective request cap, the SQL twin of
+ * `corpusIndexProjectionAppendRequestCapOf`: a row the retired `single` mode
+ * still marks is capped at the legacy single cap.
+ */
+export const corpusIndexProjectionAppendRequestCap = ({
+  appendMode,
+  appendRequestCap,
+}: CorpusProjectionAppendRequestCapColumns): SQL<number> =>
+  sql<number>`CASE WHEN ${appendMode} = 'single'
+    THEN LEAST(${appendRequestCap}, ${sql.raw(String(CORPUS_INDEX_PROJECTION_LEGACY_SINGLE_APPEND_REQUEST_CAP))})
+    ELSE ${appendRequestCap}
+  END`;
+
+/** The entity is not capped below a full request. */
+export const corpusIndexProjectionAppendRequestIsFull = (
+  columns: CorpusProjectionAppendRequestCapColumns,
+): SQL<boolean> =>
+  sql<boolean>`${corpusIndexProjectionAppendRequestCap(columns)} = ${sql.raw(String(CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL))}`;
 
 /** One source of truth for the scheduler and its partial queue index. */
 export const corpusIndexProjectionNeedsWork = ({
@@ -52,12 +90,12 @@ export const corpusIndexProjectionNeedsWork = ({
 )`;
 
 /**
- * One source of truth for the append queue and its partial index: this row has
- * no earlier revision left in the index. A replacement stays out until its old
- * revision settles, so a claim costs the rows it can take rather than every
- * replacement still waiting its turn. The queue's outstanding-intent probe
- * remains the authority; this only keeps the walk from reaching what it would
- * refuse.
+ * One source of truth for the append queue and its partial index: this row
+ * names no revision that is still live. A replacement of a named copy stays
+ * out until that copy settles, so a claim costs the rows it can take rather
+ * than every replacement still waiting its turn. The queue's append-gate probe
+ * (`corpusIndexProjectionIntentHoldsAppend`) remains the authority; this only
+ * keeps the walk from reaching what it would refuse.
  */
 export const corpusIndexProjectionAppendIsUnblocked = ({
   appliedRevision,
@@ -267,7 +305,8 @@ export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
 
 /**
  * One source of truth for "this entity still owes the index an exact action",
- * shared by the append and erasure anti-joins. The partial index that answers
+ * shared by the erasure anti-join and, under `query_only` retrieval, the
+ * append one (`corpusIndexProjectionIntentHoldsAppend`). The partial index that answers
  * them leaves out a subset of these statuses
  * (`corpusIndexProjectionOutstandingIndexPredicate`), so PostgreSQL proves
  * this predicate implies the index's and the probe never walks an entity's
@@ -275,6 +314,73 @@ export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
  */
 export const corpusIndexProjectionIntentIsOutstanding = (status: SQLWrapper) =>
   sql`${status} NOT IN (${sqlLiteralValues(CORPUS_INDEX_QUIESCENT_INTENT_STATUSES)})`;
+
+/**
+ * One source of truth for "this other revision holds back a new append of its
+ * entity" (`CORPUS_INDEX_INTENT_APPEND_GATE`), read through
+ * `corpusIndexProjectionAppendGateIsClear`. Under `query_only` retrieval it is the outstanding
+ * predicate itself. Under `stored` retrieval a revision whose exact delete is
+ * in flight is left out as well; the list it excludes still contains every
+ * status the outstanding partial index leaves out, so the index keeps
+ * answering the probe.
+ */
+const corpusIndexProjectionIntentHoldsAppend = (
+  status: SQLWrapper,
+  retrieval: CorpusRevisionRetrieval,
+) => {
+  switch (retrieval.type) {
+    case "query_only":
+      return corpusIndexProjectionIntentIsOutstanding(status);
+    case "stored":
+      return sql`${status} NOT IN (${sqlLiteralValues([
+        ...CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
+        ...CORPUS_INDEX_DELETING_INTENT_STATUSES,
+      ])})`;
+    default:
+      retrieval satisfies never;
+      return panic(`Unhandled revision retrieval: ${String(retrieval)}`);
+  }
+};
+
+/** A revision whose exact delete is queued, issued or awaiting settlement. */
+const corpusIndexProjectionIntentIsDeleting = (status: SQLWrapper) =>
+  sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_DELETING_INTENT_STATUSES)})`;
+
+/**
+ * One source of truth for "nothing holds back a new append of this entity",
+ * shared by the append queue, the operator's unpark and the deferred-state
+ * wake. `others(condition)` is a subquery selecting the entity's other
+ * revisions whose status meets `condition`, correlated by the caller.
+ *
+ * - `query_only`: no other revision is outstanding.
+ * - `stored`: none holds the append (`corpusIndexProjectionIntentHoldsAppend`),
+ *   and at most `CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS` is being
+ *   deleted, so the index never holds more than one older copy beside the
+ *   one readers are given.
+ */
+export const corpusIndexProjectionAppendGateIsClear = ({
+  others,
+  retrieval,
+}: {
+  others: (condition: (status: SQLWrapper) => SQL) => SQL;
+  retrieval: CorpusRevisionRetrieval;
+}): SQL => {
+  switch (retrieval.type) {
+    case "query_only":
+      return sql`NOT EXISTS (${others(corpusIndexProjectionIntentIsOutstanding)})`;
+    case "stored":
+      return sql`(
+        NOT EXISTS (${others((status) => corpusIndexProjectionIntentHoldsAppend(status, retrieval))})
+        AND (
+          SELECT count(*)
+          FROM (${others(corpusIndexProjectionIntentIsDeleting)} LIMIT ${sql.raw(String(CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS + 1))}) AS deleting
+        ) <= ${sql.raw(String(CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS))}
+      )`;
+    default:
+      retrieval satisfies never;
+      return panic(`Unhandled revision retrieval: ${String(retrieval)}`);
+  }
+};
 
 /** The outstanding-intent partial index's own predicate, as it was built. */
 export const corpusIndexProjectionOutstandingIndexPredicate = (

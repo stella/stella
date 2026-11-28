@@ -17,6 +17,7 @@ import { panic } from "better-result";
  */
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
+import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import type {
   Block,
   DocumentAst,
@@ -40,7 +41,6 @@ import type {
   IngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
 /**
  * The metadata key a composed decision lists its supplements under: which

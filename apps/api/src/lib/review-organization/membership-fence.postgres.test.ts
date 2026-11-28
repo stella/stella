@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf, settledWithin, WaitTimeoutError } from "@stll/test-kit";
+
 import type { Transaction } from "@/api/db/root";
 import { createMembershipFence } from "@/api/lib/review-organization/reset";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -78,12 +80,14 @@ if (!databaseUrl || !enabled) {
             VALUES (${lateMatterId}, ${organizationId}, 'Late matter', 'LATE-1')`.then(
             () => "created" as const,
           );
-          const waited = await Promise.race([
-            join,
-            matter,
-            Bun.sleep(500).then(() => "waiting" as const),
-          ]);
-          expect(waited).toBe("waiting");
+          expect(
+            await rejectionOf(
+              settledWithin(Promise.race([join, matter]), {
+                description: "join or matter to bypass membership fence",
+                timeoutMs: 500, // timeout: bounded window asserting concurrent writes stay blocked on fence
+              }),
+            ),
+          ).toBeInstanceOf(WaitTimeoutError);
 
           release.resolve(undefined);
           await fenced;

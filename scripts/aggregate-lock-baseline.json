@@ -3398,12 +3398,6 @@
     "reason": "transaction-boundary in apps/api/src/lib/search/process-extraction.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/lib/sharepoint-disable-purge.ts",
-    "fingerprint": "8f251f5c50d8856c2cda79c689c28c5fc197e9bbdb2b59690e8125eb57ac9f36",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/sharepoint-disable-purge.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/skills/install.ts",
     "fingerprint": "76727bd1bcb80d354fdb9ec31d7ce40203045f2a0796c1a0ddf306fb33fcd4de",
     "count": 1,

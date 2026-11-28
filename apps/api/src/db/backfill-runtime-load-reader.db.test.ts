@@ -486,20 +486,19 @@ describe.skipIf(!enabled)(
                 `VACUUM (FREEZE, DISABLE_PAGE_SKIPPING) ${target}`,
               ),
           );
-          const deadline = performance.now() + 5000;
-          let running = false;
           // Synchronize on actual progress, rather than timing worker startup.
-          while (!running && performance.now() < deadline) {
-            const progress = (
-              await observer<
-                { running: boolean }[]
-              >`SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${pid} AND relid = ${target}::regclass) AS running`
-            ).at(0);
-            running = progress?.running === true;
-            if (!running) {
-              await Bun.sleep(10);
-            }
-          }
+          const running = await waitForExternalState({
+            description: `VACUUM progress for backend ${String(pid)}`,
+            timeoutMs: 5000,
+            read: async () => {
+              const progress = (
+                await observer<
+                  { running: boolean }[]
+                >`SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${pid} AND relid = ${target}::regclass) AS running`
+              ).at(0);
+              return progress?.running === true;
+            },
+          });
           expect(running).toBe(true);
           const read = createDatabaseLoadVerdictReader({
             db: restrictedRunner(db, "stella_ingestion", schema),

@@ -9,18 +9,18 @@ import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import {
+  buildSkDecisionPdfBlocks,
+  isUnreadablePdfError,
+  parseSkDecisionPdf as uncheckedParseSkDecisionPdf,
+} from "@stll/case-law-parsers/sk-courts";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { documentAstSchema, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import appealLines from "@/api/lib/legal-search/parsers/fixtures/sk-courts-appeal-lines.json";
-import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
-import {
-  buildSkDecisionPdfBlocks,
-  isUnreadablePdfError,
-  parseSkDecisionPdf as uncheckedParseSkDecisionPdf,
-} from "@/api/lib/legal-search/parsers/sk-courts";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 
@@ -479,7 +479,10 @@ test("bold Roman verdict items keep their holding role and reasoning titles beco
   for (const text of ["I. Súd žalobu zamieta.", "II. Náhradu nepriznáva."]) {
     expect(
       documentAst.blocks.find((block) => block.plainText === text),
-    ).toMatchObject({ type: "paragraph", role: "holding" });
+    ).toMatchObject({
+      type: "paragraph",
+      role: "holding",
+    });
   }
   expect(
     documentAst.blocks.find((block) => block.plainText === "XII. Argumentacia"),

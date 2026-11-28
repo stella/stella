@@ -332,7 +332,7 @@ const materialOf = (entityId: string): CorpusProjectionMaterial => ({
     indexId: "case-law-v5-svk",
     leaseToken: "lease",
     leaseExpiresAt: new Date("2030-01-01T00:00:00Z"),
-    appendMode: "batchable",
+    appendRequestCap: 512,
   },
 });
 

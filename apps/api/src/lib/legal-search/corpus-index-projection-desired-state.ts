@@ -52,6 +52,7 @@ import {
   type ProjectedCorpusIndexGeneration,
   readProjectedCorpusIndexGenerationsTx,
 } from "@/api/lib/legal-search/corpus-index-projected-generations";
+import { CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
@@ -938,8 +939,9 @@ const SERVED_COPY_RETIREMENT_REASONS = {
  * appended anew and never served the retired copy again. The copy is queued
  * for cleanup if it is still `applied`. The caller holds these state rows;
  * the revisions are locked after them, in the projection lock order. Each
- * state is then queued for the append walk at the instant its retired copy
- * can have settled.
+ * state is then queued for the append walk: at once where hits carry their
+ * revision, otherwise at the instant its retired copy can have settled
+ * (`corpusProjectionRetiredRevisionRunnableAt`).
  *
  * Private to this module on purpose: a copy leaves readers only through a
  * canonical change written here (an undone erasure) or through the one-off
@@ -1024,6 +1026,7 @@ const retireServedCopiesTx = async (
           value: corpusProjectionRetiredRevisionRunnableAt(
             manifest,
             corpusIndexProjectionStates.appliedRevision,
+            transitionAt,
           ),
         },
       },
@@ -1143,6 +1146,7 @@ const writeDesiredStates = async (
           appendMode: sql<
             "batchable" | "single"
           >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
+          appendRequestCap: sql<number>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendRequestCap} ELSE ${CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL}::integer END`,
           lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
           lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
         },

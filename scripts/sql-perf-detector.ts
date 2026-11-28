@@ -91,15 +91,6 @@ export type SqlPerfHit = {
 
 export type SqlPerfCommentError = { line: number; message: string };
 
-/**
- * Kinds the per-file baseline holds. The later kinds start at zero: every hit
- * is reported whatever the file's baseline count.
- */
-export const isBaselinedSqlPerfKind = (kind: SqlPerfHit["kind"]): boolean =>
-  kind !== "or-subquery" &&
-  kind !== "optional-keyset" &&
-  kind !== "per-source-full-count";
-
 const LIKE = /\b(?:NOT\s+)?I?LIKE\b/giu;
 const CORPUS =
   /\b(?:case_law_(?:published_|unredacted_)?decisions|legislation_documents|case_law_[a-z_]*citation[a-z_]*|(?:published|unredacted)?CaseLawDecisions|legislationDocuments|caseLaw\w*Citation\w*)\b/iu;

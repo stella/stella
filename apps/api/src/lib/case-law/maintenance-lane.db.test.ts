@@ -57,30 +57,30 @@ if (!databaseUrl || !runPostgresTests) {
       );
     });
 
-    test("the bounded door skips a held lane without starting work", async () => {
+    test("the periodic door skips a held lane without starting work", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const held = await holdCaseLawMaintenanceLane({
           sql: openClient().sql,
         });
         try {
           const skipped = await enterCaseLawMaintenanceLane({
-            mode: "bounded",
+            mode: "periodic",
             signal: AbortSignal.timeout(10_000),
             statementTimeout: 5000,
             lockTimeout: 5000,
             work: async () =>
               panic("Contended maintenance work must not start"),
           });
-          expect(skipped).toBeNull();
+          expect(skipped.status).toBe("busy");
         } finally {
           await held.release();
         }
       });
     });
 
-    test("the bounded door serializes root and ingestion work on one backend and releases after failure", async () => {
-      const roles = await enterCaseLawMaintenanceLane({
-        mode: "bounded",
+    test("the scoped door serializes root and ingestion work on one backend and releases after failure", async () => {
+      const ran = await enterCaseLawMaintenanceLane({
+        mode: "periodic",
         signal: AbortSignal.timeout(10_000),
         statementTimeout: 5000,
         lockTimeout: 5000,
@@ -109,9 +109,10 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           ]),
       });
-      if (roles === null) {
-        panic("Expected uncontended bounded maintenance lane");
+      if (ran.status === "busy") {
+        panic("Expected an uncontended maintenance lane");
       }
+      const roles = ran.value;
       expect(new Set(roles.map((row) => row?.pid)).size).toBe(1);
       expect(roles.at(0)?.role).not.toBe("stella_ingestion");
       expect(roles.at(1)?.role).toBe("stella_ingestion");
@@ -120,6 +121,8 @@ if (!databaseUrl || !runPostgresTests) {
         async () =>
           await enterCaseLawMaintenanceLane({
             mode: "bounded",
+            laneWaitMs: 5000,
+            workTimeoutMs: 10_000,
             signal: AbortSignal.timeout(10_000),
             statementTimeout: 5000,
             lockTimeout: 5000,
@@ -129,13 +132,13 @@ if (!databaseUrl || !runPostgresTests) {
       expect(failed.isErr()).toBe(true);
       expect(
         await enterCaseLawMaintenanceLane({
-          mode: "bounded",
+          mode: "periodic",
           signal: AbortSignal.timeout(10_000),
           statementTimeout: 5000,
           lockTimeout: 5000,
           work: async () => "released",
         }),
-      ).toBe("released");
+      ).toEqual({ status: "ran", value: "released" });
     });
 
     test("the read-only door refuses a write with 25006", async () => {

@@ -192,6 +192,19 @@ test("the details screen offers both answers, neither chosen, and continues only
   expect(native.activity.captureDetails).toBe(false);
 });
 
+test("where policy keeps browser titles off, the details screen says so instead of offering browsers", async () => {
+  const native = nativeSide({
+    activity: { ...RECORDING, browserTitlesManaged: true },
+  });
+  const view = await renderSetup(native);
+  await click(view, onboarding.continue);
+  await heading(view, setup.details.title);
+
+  await answerDetails(view, "withDetails");
+  await view.findByText(activity.browserTitlesManaged);
+  expect(view.queryByText(setup.details.browsers)).toBeNull();
+});
+
 test("a choice saved before is not shown as chosen; the screen asks again", async () => {
   const native = nativeSide({
     activity: { ...RECORDING, captureDetails: true, detailsAccess: "ready" },

@@ -50,6 +50,12 @@ export type DocxBlock = {
   /** Offsets in `text` at which the paragraph holds a field that numbers
    *  itself: the number it prints is in no text. Absent without one. */
   selfNumbers?: number[];
+  /** The tracked changes the paragraph holds, in a manifest read with the
+   *  changes kept: where each sits in `text`. Absent without one. */
+  revisions?: DocxBlockRevision[];
+  /** The paragraph's cross-reference fields, in the order they stand.
+   *  Absent without one, and from an engine that does not report them. */
+  crossReferences?: DocxBlockCrossReference[];
   /** The paragraph starts on a new page by its own formatting or its
    *  style's. */
   pageBreakBefore?: true;
@@ -59,12 +65,46 @@ export type DocxBlock = {
   /** The paragraph alignment in effect (`w:jc`): the paragraph's own, else
    *  its style's. Absent when neither states one. */
   alignment?: string;
+  /** The space the paragraph states for itself in front of it and behind
+   *  it, in twentieths of a point; a side it does not state is left out.
+   *  Absent when it states neither, and from an engine that does not
+   *  report it. What its style gives is not here. */
+  spacing?: TemplatePlanSpacing;
   /** The indent in effect, in twentieths of a point: where the
    *  paragraph's lines start, and what its first line adds to that
    *  (negative for a hanging indent). Absent when nothing states one, and
    *  from a manifest read before it was reported. */
   indent?: { left: number; firstLine: number };
   cells?: { row: number; col: number; blockIds: string[] }[];
+};
+
+/** A tracked change inside a paragraph. An insertion spans the text it
+ *  added; a deletion takes no place in the text read with the changes
+ *  accepted, so its `start` and `end` are the one offset it was made at. */
+type DocxBlockRevision = {
+  kind: "insertion" | "deletion";
+  start: number;
+  end: number;
+  author: string;
+  date: string | null;
+  /** The change is of a paragraph mark, not of text. */
+  paragraphMark?: true;
+};
+
+/** A `REF` field of a paragraph: without a number switch it shows the
+ *  content of the bookmark it names. */
+type DocxBlockCrossReference = {
+  /** The span of the paragraph's `text` the field's result takes. */
+  start: number;
+  end: number;
+  /** The field's code as the document states it. */
+  instruction: string;
+  bookmark: string;
+  /** The paragraph the bookmark starts and ends in; null when no bookmark
+   *  of that name does both in one paragraph. */
+  targetBlockId: string | null;
+  /** Whether the bookmark holds all of that paragraph's content. */
+  targetWhole: boolean;
 };
 
 /** One section of a document: how it begins after the one before it, and
@@ -81,6 +121,10 @@ export type DocxSection = {
     left: number | null;
   };
   columns: number;
+  /** The section shows a header or footer of its own: other content than
+   *  the section before it shows on those pages. Absent from an engine
+   *  that does not report it. */
+  ownHeaders?: true;
 };
 
 export type DocxBlockManifest = {
@@ -103,12 +147,20 @@ export type DocxBlockManifest = {
   /** The view the manifest was read in and what was resolved for it:
    *  every block, label and hash is that view's. */
   trackedChangesResolved?: TrackedChanges & { view: TrackedChangesView };
+  /** What the manifest keeps, when it was read with the changes kept:
+   *  every block, label and hash is the accepted view's, and the blocks
+   *  say where their changes sit. */
+  trackedChangesKept?: TrackedChanges;
   warnings: string[];
 };
 
 /** One of the two texts a document with tracked changes holds: with every
  *  change accepted, or with every change rejected. */
 export type TrackedChangesView = "accept" | "reject";
+
+/** What to do with a document's tracked changes: format one view of it,
+ *  or keep the changes as changes in the output. */
+export type TrackedChangesChoice = TrackedChangesView | "keep";
 
 /** The tracked changes of a document's main story and notes, by kind. */
 export type TrackedChanges = {
@@ -178,6 +230,9 @@ export type TemplateField = {
   part: string;
   /** The field name in upper case: `TOC`, `REF`, `FILLIN`, `DATE`. */
   kind: string;
+  /** The field's code as the template writes it (`TOC \o "1-3" \h`).
+   *  Absent from an inspection read before it was reported. */
+  instruction?: string;
   /** Main story only: the top-level block the field starts in. */
   blockId?: string;
   /** Main story only: the top-level block the field ends in. A plan keeps
@@ -238,6 +293,10 @@ type TemplatePlanMerge = "lineBreak" | "space" | "none";
 /** How a paragraph's lines are set between the margins. */
 export type TemplatePlanAlignment = "left" | "center" | "right" | "both";
 
+/** The space in front of a paragraph and behind it, in twentieths of a
+ *  point: at least one side. */
+export type TemplatePlanSpacing = { before?: number; after?: number };
+
 export type TemplatePlanNestedParagraph = {
   blockId: string;
   styleId?: string;
@@ -247,6 +306,10 @@ export type TemplatePlanNestedParagraph = {
   labelAsText?: boolean;
   /** As on a source item. */
   alignment?: TemplatePlanAlignment;
+  /** The paragraph's own space in front of it and behind it, over its
+   *  style's; a side left out is the style's. Left out by an engine that
+   *  does not know it. */
+  spacing?: TemplatePlanSpacing;
 };
 
 /** A section of the output with a page other than the template's, in
@@ -321,7 +384,16 @@ export type TemplatePlanSourceItem = {
 type TemplatePlanItem =
   | { kind: "template"; templateBlockIds: string[] }
   | TemplatePlanSourceItem
-  | { kind: "slot"; templateBlockId: string; sourceBlockIds: string[] };
+  | {
+      kind: "slot";
+      templateBlockId: string;
+      sourceBlockIds: string[];
+      /** A lead of the first source block the slot does not take: the name
+       *  of a field that the kept template paragraph named here shows. The
+       *  rest is placed word for word. An engine that does not know the
+       *  option places the block whole. */
+      dropLead?: { text: string; shownByTemplateBlockId: string };
+    };
 
 type TemplatePlanOmitReason =
   "empty" | "sourceToc" | "pageArtifact" | "duplicateLabel";
@@ -374,9 +446,36 @@ export type TemplatePlan = {
   /** The section the body ends with, when its page is another than the
    *  template's. */
   lastSection?: TemplatePlanSection;
-  /** The view of a source with tracked changes the plan is made for. The
-   *  output carries no revision. */
-  trackedChanges?: TrackedChangesView;
+  /** Paragraphs inside kept template tables written without their text.
+   *  An engine that does not know the option leaves them as they are. */
+  emptyTemplateBlockIds?: string[];
+  /** What the plan does with the tracked changes of its source: it is made
+   *  for one view, and the output carries no revision; or it keeps them,
+   *  and the output carries each as the change it is. */
+  trackedChanges?: TrackedChangesChoice;
+  /** Whether the output's headers and footers keep the source's: their
+   *  content after the template's own, in the header or footer for the
+   *  same pages. An engine that does not know the option gives the
+   *  template's alone. */
+  sourceHeaders?: "drop" | "keep";
+};
+
+/** What the output's headers and footers carry of the source's. */
+export type SourceHeadersReport = {
+  kept: {
+    family: "header" | "footer";
+    kind: "first" | "default" | "even";
+    part: string;
+    paragraphs: number;
+    /** The template had none for those pages: a new part holds them. */
+    created: boolean;
+  }[];
+  leftOut: {
+    firstPageParts: number;
+    evenPageParts: number;
+    sharedParts: number;
+    unsupportedObjects: number;
+  };
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -416,6 +515,8 @@ export type TemplatePlanReport = {
     internalHyperlinks: number;
     sectionBreaks: number;
   };
+  /** Present when the plan kept the source's headers and footers. */
+  sourceHeaders?: SourceHeadersReport;
 };
 
 /** Why the engine refused; the codes a plan can be repaired after. Any
@@ -462,11 +563,12 @@ type TemplateLayoutSignals = { pages: number };
  *  not depend on the package release that carries it. */
 export type TemplatePlanEngine = {
   /** With `trackedChanges`, the manifest of that view of a document with
-   *  tracked changes. An engine that cannot read a view answers as if none
-   *  was asked for. */
+   *  tracked changes, or of its accepted view with the changes kept. An
+   *  engine that cannot read a view answers as if none was asked for; one
+   *  that cannot keep what the document tracks refuses by name. */
   analyze: (
     docx: Uint8Array,
-    options?: { trackedChanges?: TrackedChangesView },
+    options?: { trackedChanges?: TrackedChangesChoice },
   ) => Promise<Result<DocxBlockManifest, TemplateEngineError>>;
   inspect: (
     docx: Uint8Array,
@@ -567,9 +669,39 @@ const blockSchema = v.strictObject({
   selfNumbers: v.exactOptional(
     v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
   ),
+  revisions: v.exactOptional(
+    v.array(
+      v.strictObject({
+        kind: v.picklist(["insertion", "deletion"]),
+        start: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        end: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        author: v.string(),
+        date: v.nullable(v.string()),
+        paragraphMark: v.exactOptional(v.literal(true)),
+      }),
+    ),
+  ),
+  crossReferences: v.exactOptional(
+    v.array(
+      v.strictObject({
+        start: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        end: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        instruction: v.string(),
+        bookmark: v.string(),
+        targetBlockId: v.nullable(v.string()),
+        targetWhole: v.boolean(),
+      }),
+    ),
+  ),
   pageBreakBefore: v.exactOptional(v.literal(true)),
   endsSection: v.exactOptional(v.literal(true)),
   alignment: v.exactOptional(v.string()),
+  spacing: v.exactOptional(
+    v.strictObject({
+      before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    }),
+  ),
   indent: v.exactOptional(
     v.strictObject({
       left: v.pipe(v.number(), v.integer()),
@@ -609,6 +741,7 @@ const sectionSchema = v.strictObject({
     left: twips,
   }),
   columns: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  ownHeaders: v.exactOptional(v.literal(true)),
 });
 
 const count = v.pipe(v.number(), v.integer(), v.minValue(0));
@@ -643,6 +776,7 @@ const manifestSchema = v.strictObject({
       view: v.picklist(["accept", "reject"]),
     }),
   ),
+  trackedChangesKept: v.exactOptional(trackedChangesSchema),
   warnings: v.array(v.string()),
 });
 

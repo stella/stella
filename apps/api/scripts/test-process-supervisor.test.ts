@@ -786,9 +786,14 @@ posixTest(
           "-e",
           `
           const descendant = ${JSON.stringify(`
-            import { writeFileSync } from "node:fs";
+            import { renameSync, writeFileSync } from "node:fs";
             process.on("SIGTERM", () => undefined);
-            const heartbeat = () => writeFileSync(${JSON.stringify(heartbeatPath)}, String(Date.now()));
+            const heartbeatTarget = ${JSON.stringify(heartbeatPath)};
+            const heartbeatTmp = heartbeatTarget + ".tmp";
+            const heartbeat = () => {
+              writeFileSync(heartbeatTmp, String(process.pid) + ":" + String(Date.now()));
+              renameSync(heartbeatTmp, heartbeatTarget);
+            };
             heartbeat();
             setInterval(heartbeat, 20);
           `)};
@@ -820,11 +825,35 @@ posixTest(
         intervalMs: 20,
         read: () => readFileSync(heartbeatPath, "utf-8") !== afterLeaderExit,
       });
+      const descendantPid = Number(afterLeaderExit.split(":")[0]);
+      expect(Number.isInteger(descendantPid) && descendantPid > 0).toBe(true);
       fixture.supervisor.dispose();
-      await Bun.sleep(100);
-      const afterDispose = readFileSync(heartbeatPath, "utf-8");
-      await Bun.sleep(100);
-      expect(readFileSync(heartbeatPath, "utf-8")).toBe(afterDispose);
+      await waitForExternalState({
+        description: `descendant ${String(descendantPid)} exits after supervisor dispose`,
+        intervalMs: 20,
+        timeoutMs: 5000,
+        read: () => {
+          if (Result.try(() => process.kill(descendantPid, 0)).isErr()) {
+            return true;
+          }
+          if (process.platform === "linux") {
+            const status = Result.try(() =>
+              readFileSync(`/proc/${String(descendantPid)}/status`, "utf-8"),
+            );
+            return status.isErr() || /^State:\s+Z\b/mu.test(status.value);
+          }
+          const state = Bun.spawnSync([
+            "ps",
+            "-o",
+            "stat=",
+            "-p",
+            String(descendantPid),
+          ])
+            .stdout.toString()
+            .trim();
+          return state === "" || state.startsWith("Z");
+        },
+      });
     } finally {
       fixture.cleanup();
     }

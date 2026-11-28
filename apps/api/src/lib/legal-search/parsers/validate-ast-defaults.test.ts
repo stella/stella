@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { validateAst } from "./validate-ast";
 import baseline from "./validate-ast-defaults.baseline.json";
 
 test("a reused parsed document retains fresh-parse diagnostics", () => {

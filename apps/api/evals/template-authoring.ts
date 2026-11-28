@@ -98,6 +98,14 @@ import * as slimdom from "slimdom";
 import * as v from "valibot";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import {
+  isElement,
+  MAIN_DOCUMENT_PART_PATH,
+  paragraphText,
+  W_NS,
+} from "@stll/docx-engine/ooxml";
+import { mergeManifestWithDiscovery } from "@stll/docx-engine/template-manifest";
+import type { FieldMeta, TemplateManifest } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -111,14 +119,6 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import {
-  isElement,
-  MAIN_DOCUMENT_PART_PATH,
-  paragraphText,
-  W_NS,
-} from "@/api/lib/docx/ooxml";
-import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";

@@ -6,6 +6,8 @@ mod activity;
 mod activity_calls;
 mod activity_capture;
 mod activity_commands;
+#[cfg(test)]
+mod activity_data_map;
 mod activity_details;
 mod activity_matter_learning;
 mod activity_matter_rules;

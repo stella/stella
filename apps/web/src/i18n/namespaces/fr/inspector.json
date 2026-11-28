@@ -853,6 +853,19 @@
     },
     "showPane": "Afficher le volet",
     "swapViews": "Échanger la vue principale et le panneau latéral",
-    "title": "Inspecteur"
+    "title": "Inspecteur",
+    "transcribe": {
+      "action": "Transcrire",
+      "failed": {
+        "changed": "L'enregistrement a changé pendant la transcription. Réessayez.",
+        "generic": "L'enregistrement n'a pas pu être transcrit. Réessayez.",
+        "noSpeech": "Aucune parole n'a été trouvée dans cet enregistrement.",
+        "provider": "Aucun modèle de transcription n'est disponible pour votre organisation. Demandez à un administrateur d'en configurer un dans les paramètres d'IA.",
+        "tooLong": "Cet enregistrement est trop long pour être transcrit.",
+        "unsupported": "Le format de cet enregistrement ne peut pas être transcrit."
+      },
+      "progress": "Transcription en cours… {percent, number} %",
+      "saved": "Transcription enregistrée sous {fileName}"
+    }
   }
 }

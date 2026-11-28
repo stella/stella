@@ -12,7 +12,10 @@ import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { storedUserFileKey } from "@/api/lib/file-key";
-import { callerDownloadSource } from "@/api/lib/s3-presign";
+import {
+  callerDownloadSource,
+  MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS,
+} from "@/api/lib/s3-presign";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
@@ -83,7 +86,7 @@ const readUserFileContent = createSafeRootHandler(
           userId: user.id,
           source: callerDownloadSource({ id: sourceSessionId }),
           s3Key,
-          expiresInSeconds: 900,
+          expiresInSeconds: MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS,
           workspaceId: file.workspaceId,
           // A name forces a download; every other file reads in the browser.
           ...(isDownloadOnlyFileMimeType(file.mimeType)

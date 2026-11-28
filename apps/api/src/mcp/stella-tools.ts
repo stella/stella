@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
@@ -28,6 +28,7 @@ import {
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
   CITATION_GRAPH_RESOURCE_URI,
@@ -94,7 +95,6 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { externalRefFromColumns } from "@/api/lib/imports/external-ref";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -901,39 +901,45 @@ const handleListMattersTool: TypedMcpToolHandler<
     boundaryId = decoded;
   }
 
-  const rows = await context.scopedDb((tx) =>
-    tx
-      .select({
-        id: workspaces.id,
-        name: workspaces.name,
-        reference: workspaces.reference,
-        status: workspaces.status,
-        lastActivityAt: workspaces.lastActivityAt,
-        createdAt: workspaces.createdAt,
-      })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.organizationId, context.organizationId),
-          status === "all" ? undefined : eq(workspaces.status, status),
-          // Compare the full-precision (lastActivityAt, id) tuple in-DB
-          // against the boundary row (looked up by id) so the cursor never
-          // round-trips lastActivityAt through a millisecond JS Date;
-          // matters sharing a now()-generated microsecond timestamp cannot
-          // be skipped or duplicated across pages. The boundary lookup is
-          // scoped to the same org and status filter as the page (defense in
-          // depth beyond RLS) so a cursor carrying a foreign or out-of-filter
-          // workspace id cannot shift this page's boundary. The status clause
-          // is conditional: comparing against the synthetic "all" value would
-          // fail to cast to the status enum.
-          boundaryId === undefined
-            ? undefined
-            : sql`(${workspaces.lastActivityAt}, ${workspaces.id}) < (select b.last_activity_at, b.id from workspaces b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId}${status === "all" ? sql`` : sql` and b.status = ${status}`})`,
-        ),
-      )
-      .orderBy(desc(workspaces.lastActivityAt), desc(workspaces.id))
-      .limit(limit + 1),
-  );
+  const rows =
+    context.accessibleWorkspaceIds.length === 0 ||
+    (boundaryId !== undefined &&
+      !ensureWorkspaceAccess({ context, workspaceId: boundaryId }))
+      ? []
+      : await context.scopedDb((tx) =>
+          tx
+            .select({
+              id: workspaces.id,
+              name: workspaces.name,
+              reference: workspaces.reference,
+              status: workspaces.status,
+              lastActivityAt: workspaces.lastActivityAt,
+              createdAt: workspaces.createdAt,
+            })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.organizationId, context.organizationId),
+                inArray(workspaces.id, context.accessibleWorkspaceIds),
+                status === "all" ? undefined : eq(workspaces.status, status),
+                // Compare the full-precision (lastActivityAt, id) tuple in-DB
+                // against the boundary row (looked up by id) so the cursor never
+                // round-trips lastActivityAt through a millisecond JS Date;
+                // matters sharing a now()-generated microsecond timestamp cannot
+                // be skipped or duplicated across pages. The boundary lookup is
+                // scoped to the same org and status filter as the page (defense in
+                // depth beyond RLS) so a cursor carrying a foreign or out-of-filter
+                // workspace id cannot shift this page's boundary. The status clause
+                // is conditional: comparing against the synthetic "all" value would
+                // fail to cast to the status enum.
+                boundaryId === undefined
+                  ? undefined
+                  : sql`(${workspaces.lastActivityAt}, ${workspaces.id}) < (select b.last_activity_at, b.id from workspaces b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId}${status === "all" ? sql`` : sql` and b.status = ${status}`})`,
+              ),
+            )
+            .orderBy(desc(workspaces.lastActivityAt), desc(workspaces.id))
+            .limit(limit + 1),
+        );
 
   const page = createCursorPage({
     rows,

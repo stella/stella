@@ -7,6 +7,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -25,7 +26,6 @@ import { readGzipJson } from "@/api/lib/gzip-json";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);
 

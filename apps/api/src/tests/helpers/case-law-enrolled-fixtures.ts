@@ -24,6 +24,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { load } from "@stll/html";
 import { createSha256 } from "@stll/sha256/bun";
@@ -143,7 +144,6 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { buildCzIsirFixtureDecision } from "@/api/tests/helpers/cz-isir-fixture";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

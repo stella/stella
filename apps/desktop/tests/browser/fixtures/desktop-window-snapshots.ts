@@ -243,6 +243,7 @@ export const ACTIVITY_SETTINGS = {
   detailsAccess: "ready",
   browserApps: [{ identifier: "com.example.browser", name: "Example Browser" }],
   browserTitleApps: [],
+  browserTitlesManaged: false,
   apps: [
     { identifier: "com.example.editor", name: "Example Editor" },
     { identifier: "com.example.browser", name: "Example Browser" },

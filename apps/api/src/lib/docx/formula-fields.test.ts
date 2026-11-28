@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyFormulaFields, resolveFormulaFields } from "./formula-fields";
+import {
+  applyFormulaFields,
+  resolveFormulaFields,
+} from "@stll/docx-engine/formula-fields";
+import type { FieldMeta } from "@stll/docx-engine/types";
+
 import { applyManifestFillSteps } from "./manifest-fill-steps";
-import type { FieldMeta } from "./types";
 
 const annualRentField: FieldMeta = {
   path: "rent_annual",

@@ -93,6 +93,7 @@
         "@stll/brand": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/calculations": "workspace:*",
+        "@stll/case-law-parsers": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/chat": "workspace:*",
         "@stll/chat-limits": "workspace:*",
@@ -105,6 +106,7 @@
         "@stll/decision-reader": "workspace:*",
         "@stll/docx-authoring": "workspace:*",
         "@stll/docx-core": "catalog:",
+        "@stll/docx-engine": "workspace:*",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
@@ -116,6 +118,7 @@
         "@stll/invoicing": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
+        "@stll/legal-morphology": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/mcp-apps": "workspace:*",
         "@stll/mcp-kit": "workspace:^",
@@ -967,6 +970,34 @@
         "tsrs": "catalog:",
       },
     },
+    "packages/case-law-parsers": {
+      "name": "@stll/case-law-parsers",
+      "version": "0.0.0",
+      "dependencies": {
+        "@libpdf/core": "catalog:",
+        "@stll/agent-input": "workspace:*",
+        "@stll/api-contract": "workspace:*",
+        "@stll/docx-core": "catalog:",
+        "@stll/errors": "workspace:*",
+        "@stll/html": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
+        "@stll/mojibake": "workspace:*",
+        "@stll/sha256": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "@stll/time": "0.4.3",
+        "better-result": "catalog:",
+        "entities": "^9.0.0",
+        "slimdom": "^4.3.5",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/folio-core": "catalog:",
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
+      },
+    },
     "packages/catalogue": {
       "name": "@stll/catalogue",
       "version": "0.0.0",
@@ -1035,7 +1066,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "8.5.0",
+      "version": "8.7.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1196,9 +1227,33 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/docx-engine": {
+      "name": "@stll/docx-engine",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/agent-input": "workspace:*",
+        "@stll/api-contract": "workspace:*",
+        "@stll/collation": "workspace:*",
+        "@stll/concurrency": "workspace:*",
+        "@stll/docx-core": "catalog:",
+        "@stll/docx-utils": "workspace:*",
+        "@stll/template-conditions": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
+        "diff": "catalog:",
+        "slimdom": "^4.3.5",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
+      },
+    },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.3.4",
+      "version": "0.3.6",
       "dependencies": {
         "@stll/docx-core": "catalog:",
         "better-result": "catalog:",
@@ -1338,6 +1393,22 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/sha256": "workspace:^",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
+      },
+    },
+    "packages/legal-morphology": {
+      "name": "@stll/legal-morphology",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/api-contract": "workspace:*",
+        "@stll/concurrency": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
@@ -2000,7 +2071,7 @@
     "@expo/router-server": "58.0.23",
     "@expo/ui": "58.0.29",
     "@modelcontextprotocol/sdk": "1.32.2",
-    "@stll/folio-core": "0.76.0",
+    "@stll/folio-core": "0.81.0",
     "@tanstack/router-core": {
       "seroval-plugins": "1.8.0",
     },
@@ -2056,11 +2127,11 @@
     "@stll/anonymize": "4.0.0",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "4.0.0",
-    "@stll/docx-core": "0.47.0",
-    "@stll/folio-agents": "0.17.6",
-    "@stll/folio-core": "0.76.0",
+    "@stll/docx-core": "0.50.0",
+    "@stll/folio-agents": "0.17.11",
+    "@stll/folio-core": "0.81.0",
     "@stll/folio-fonts": "0.1.0",
-    "@stll/folio-react": "0.39.1",
+    "@stll/folio-react": "0.41.0",
     "@stll/fuzzy-search": "1.4.2",
     "@stll/regex-set": "1.1.0",
     "@stll/regex-set-wasm": "1.1.0",
@@ -3552,6 +3623,8 @@
 
     "@stll/calculations": ["@stll/calculations@workspace:packages/calculations"],
 
+    "@stll/case-law-parsers": ["@stll/case-law-parsers@workspace:packages/case-law-parsers"],
+
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
 
     "@stll/chat": ["@stll/chat@workspace:packages/chat"],
@@ -3582,7 +3655,9 @@
 
     "@stll/docx-authoring": ["@stll/docx-authoring@workspace:packages/docx-authoring"],
 
-    "@stll/docx-core": ["@stll/docx-core@0.47.0", "", { "dependencies": { "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "marked": "^18.2.0" } }, "sha512-aQvtJfSCexplHre6olh6+KR5MCA82urFo1qQdfG+caKUPi25ucMazitt/SwD602noXGpoTHOfYbdf5VrCfWOxA=="],
+    "@stll/docx-core": ["@stll/docx-core@0.50.0", "", { "dependencies": { "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "marked": "^18.2.0" } }, "sha512-S7gd6NNngY+Dt7tMWjrpi/OAGUmA5YV46LEmZ1XMCzYEA8FLOuGVylpGigns5ST4gpl7X+aTMXI4jjB2+6oXig=="],
+
+    "@stll/docx-engine": ["@stll/docx-engine@workspace:packages/docx-engine"],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
@@ -3592,13 +3667,13 @@
 
     "@stll/fetch": ["@stll/fetch@workspace:packages/fetch"],
 
-    "@stll/folio-agents": ["@stll/folio-agents@0.17.6", "", { "dependencies": { "@stll/folio-core": "^0.76.0", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "y-protocols": "^1.0.6", "yjs": "^13.6.31" } }, "sha512-ME1vNalPppDYmzRWMK6ST1kDumhnag3RCfz0VweDgILl9rq7IvswiFGHNZBzy1iBUvyh5V2WmvJ4qjsL8ejJLA=="],
+    "@stll/folio-agents": ["@stll/folio-agents@0.17.11", "", { "dependencies": { "@stll/folio-core": "^0.81.0", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "y-protocols": "^1.0.6", "yjs": "^13.6.31" } }, "sha512-7SQ1M0nWYJfM97jzUjq07PcHT2xRvonk46cKKwDidPzTmtRz5MBBloPnRnXog1DsX8CR9sy2XtmVyoDlG8L0Dw=="],
 
-    "@stll/folio-core": ["@stll/folio-core@0.76.0", "", { "dependencies": { "@stll/docx-core": "^0.47.0", "@stll/template-conditions": "^0.7.0", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.18", "hyphen": "1.14.1", "utif2": "^4.1.0", "valibot": "1.5.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.2", "prosemirror-dropcursor": "^1.8.4", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.2", "prosemirror-view": "^1.42.6", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-gTwrfuBX2cO6tE0JoDr9luBcZFN11ARe1G8J1Hwm6tIGDmzdZ3vezK23JQgBHIVlcSxqKsSIxFKtthvABJxYOg=="],
+    "@stll/folio-core": ["@stll/folio-core@0.81.0", "", { "dependencies": { "@stll/docx-core": "^0.50.0", "@stll/template-conditions": "^0.7.0", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.18", "hyphen": "1.14.1", "utif2": "^4.1.0", "valibot": "1.5.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.2", "prosemirror-dropcursor": "^1.8.4", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.2", "prosemirror-view": "^1.42.6", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-phW1T8n8lmjA2mHY6L/EWiMjGf2ZGJG4Y4bgQg6h650kVWVjCelP2JZQXyKW/QoJ6clDdZ9awOmEtvNeSydWhQ=="],
 
     "@stll/folio-fonts": ["@stll/folio-fonts@0.1.0", "", {}, "sha512-5ZlR76tV4qFJXit2nhYdgacIgncyixfDKbL2U9AvI6QbVGEQVbPvuZNPnrdII1niQdxdSiT6Pd1xfcmkTP1UNA=="],
 
-    "@stll/folio-react": ["@stll/folio-react@0.39.1", "", { "dependencies": { "@base-ui/react": "1.9.0", "@stll/folio-core": "^0.76.0", "@stll/folio-fonts": "^0.1.0", "@stll/utf8-boundaries": "0.2.0", "@types/react": "^19.3.0", "@types/react-dom": "^19.3.0", "better-result": "3.0.1", "lucide-react": "1.73.0", "react-compiler-runtime": "^1.0.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "react": "^19.2.0", "react-dom": "^19.2.0", "use-intl": ">=4.0.0", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-zn1uqXNZCTMgfcckZWogyv5J045lIxb9IqjUG4vr7dzpblJxh1qLN8roMIvL9XWObEHVM0XU1lWRxoCrm4k1VQ=="],
+    "@stll/folio-react": ["@stll/folio-react@0.41.0", "", { "dependencies": { "@base-ui/react": "1.9.0", "@stll/folio-core": "^0.81.0", "@stll/folio-fonts": "^0.1.0", "@stll/utf8-boundaries": "0.2.0", "@types/react": "^19.3.0", "@types/react-dom": "^19.3.0", "better-result": "3.0.1", "lucide-react": "1.73.0", "react-compiler-runtime": "^1.0.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "react": "^19.2.0", "react-dom": "^19.2.0", "use-intl": ">=4.0.0", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-xTpCq9RixvTIZBQWOF8LOkVh0nVE7twyOM537pmLISeIO4qvcVF9Js6gAWpeCI5RSsqszobtLoqKmJJbQhn2bw=="],
 
     "@stll/fuzzy-search": ["@stll/fuzzy-search@1.4.2", "", { "optionalDependencies": { "@stll/fuzzy-search-darwin-arm64": "1.4.2", "@stll/fuzzy-search-darwin-x64": "1.4.2", "@stll/fuzzy-search-linux-arm64-gnu": "1.4.2", "@stll/fuzzy-search-linux-x64-gnu": "1.4.2", "@stll/fuzzy-search-wasm32-wasi": "1.4.2", "@stll/fuzzy-search-win32-x64-msvc": "1.4.2" } }, "sha512-nNHnbeUDBcnHsf8lchJdHUxXw/vGls4saKvOrl0xfBSyFncsil6sGd2nV/6LGLGDZChq+F9kLYWOUk/MrFuYNA=="],
 
@@ -3629,6 +3704,8 @@
     "@stll/legal-atlas": ["@stll/legal-atlas@workspace:packages/legal-atlas"],
 
     "@stll/legal-atlas-runner": ["@stll/legal-atlas-runner@workspace:apps/legal-atlas-runner"],
+
+    "@stll/legal-morphology": ["@stll/legal-morphology@workspace:packages/legal-morphology"],
 
     "@stll/locales": ["@stll/locales@workspace:packages/locales"],
 

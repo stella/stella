@@ -40,7 +40,10 @@
     "notAvailable": true,
     "blockedByPolicy": true,
     "signedOut": true,
-    "notConfirmed": true
+    "notConfirmed": true,
+    "storeKeyUnavailable": true,
+    "keychainNotAnswering": true,
+    "storeUnreadable": true
   },
   "gapDisplays": {
     "stayedOn": true,

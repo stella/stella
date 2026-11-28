@@ -24,18 +24,34 @@ type Parts = {
   numbering: string;
   /** The page of the body's last section; upright without one. */
   page?: string;
+  /** The content of a settings part; the package has none without it. */
+  settings?: string;
 };
 
-const docx = async ({ body, styles, numbering, page = UPRIGHT }: Parts) => {
+const SETTINGS_TYPE = `<Override PartName="/word/settings.xml" ContentType="${WORD}.settings+xml"/>`;
+const SETTINGS_RELATIONSHIP = `<Relationship Id="rId3" Type="${OFFICE}/settings" Target="settings.xml"/>`;
+
+const docx = async ({
+  body,
+  styles,
+  numbering,
+  page = UPRIGHT,
+  settings,
+}: Parts) => {
   const zip = new ZipArchive();
-  const parts = {
-    "[Content_Types].xml": `${XML}<Types xmlns="${PACKAGE}/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="${WORD}.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="${WORD}.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="${WORD}.numbering+xml"/></Types>`,
+  const withSettings = settings !== undefined;
+  const parts: Record<string, string> = {
+    "[Content_Types].xml": `${XML}<Types xmlns="${PACKAGE}/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="${WORD}.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="${WORD}.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="${WORD}.numbering+xml"/>${withSettings ? SETTINGS_TYPE : ""}</Types>`,
     "_rels/.rels": `${XML}<Relationships xmlns="${PACKAGE}/relationships"><Relationship Id="rId1" Type="${OFFICE}/officeDocument" Target="word/document.xml"/></Relationships>`,
-    "word/_rels/document.xml.rels": `${XML}<Relationships xmlns="${PACKAGE}/relationships"><Relationship Id="rId1" Type="${OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${OFFICE}/numbering" Target="numbering.xml"/></Relationships>`,
+    "word/_rels/document.xml.rels": `${XML}<Relationships xmlns="${PACKAGE}/relationships"><Relationship Id="rId1" Type="${OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${OFFICE}/numbering" Target="numbering.xml"/>${withSettings ? SETTINGS_RELATIONSHIP : ""}</Relationships>`,
     "word/document.xml": `${XML}<w:document ${W}><w:body>${body}<w:sectPr>${page}</w:sectPr></w:body></w:document>`,
     "word/styles.xml": `${XML}<w:styles ${W}>${styles}</w:styles>`,
     "word/numbering.xml": `${XML}<w:numbering ${W}>${numbering}</w:numbering>`,
   };
+  if (withSettings) {
+    parts["word/settings.xml"] =
+      `${XML}<w:settings ${W}>${settings}</w:settings>`;
+  }
   for (const [path, content] of Object.entries(parts)) {
     zip.set(path, content);
   }
@@ -62,8 +78,9 @@ const list = (id: number, levels: string): string =>
 const instance = (numId: number, abstractNumId: number): string =>
   `<w:num w:numId="${String(numId)}"><w:abstractNumId w:val="${String(abstractNumId)}"/></w:num>`;
 
-const template = async () =>
+const template = async (settings?: string) =>
   await docx({
+    ...(settings === undefined ? {} : { settings }),
     body: [
       paragraph("AGREEMENT", styled("Title")),
       paragraph("Heading", styled("Article")),
@@ -265,6 +282,173 @@ describe("folioTemplatePlanEngine", () => {
     });
   });
 
+  test("a memo's own lines fill the header of fields the template keeps", async () => {
+    const cell = (text: string): string =>
+      `<w:tc><w:p>${text === "" ? "" : `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`}</w:p></w:tc>`;
+    const row = (name: string): string =>
+      `<w:tr>${cell(name)}${cell("")}</w:tr>`;
+    const memoTemplate = await docx({
+      body: [
+        paragraph("MEMORANDUM", styled("Title")),
+        `<w:tbl>${["From:", "To:", "Date:", "Subject:"].map(row).join("")}</w:tbl>`,
+        paragraph("Text of the memo goes here.", styled("Body")),
+      ].join(""),
+      styles: [
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+        style("Title", "Title"),
+        style("Body", "Body Text"),
+      ].join(""),
+      numbering: "",
+    });
+    const memo = await docx({
+      body: [
+        paragraph("MEMORANDUM"),
+        paragraph("To: Jane Roe"),
+        paragraph("From: Peter Lang"),
+        paragraph("Re: Lease of the warehouse"),
+        paragraph("The lease ends in June."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: "",
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: memo,
+        template: memoTemplate,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.note.items).toContainEqual(
+      expect.objectContaining({ kind: "headerFieldsFilled" }),
+    );
+    const texts = (await folioTemplatePlanEngine.analyze(formatted.docx))
+      .unwrap()
+      .blocks.map(({ text }) => text);
+    // The values stand in the cells, word for word, without their own
+    // names; the cell without a line stays empty.
+    expect(texts).toContain("Jane Roe");
+    expect(texts).toContain("Peter Lang");
+    expect(texts).toContain("Lease of the warehouse");
+    expect(texts).not.toContain("To: Jane Roe");
+    expect(texts).toContain("The lease ends in June.");
+  });
+
+  test("a cell paragraph the source sets tight stays tight in the output", async () => {
+    const TIGHT = '<w:spacing w:before="0" w:after="0"/>';
+    const cell = (text: string, properties = ""): string =>
+      `<w:tc>${paragraph(text, properties)}</w:tc>`;
+    const tabled = await docx({
+      body: [
+        paragraph("SERVICES AGREEMENT"),
+        paragraph("Article 1"),
+        paragraph("Scope"),
+        paragraph("The supplier provides the services.", listed(1, 0)),
+        `<w:tbl><w:tr>${cell("Item", TIGHT)}${cell("Price")}</w:tr></w:tbl>`,
+        paragraph("A closing sentence."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: list(0, level(0, "decimal", "1.%1.")) + instance(1, 0),
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: tabled,
+        template: await template(),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.note.items).toContainEqual({
+      kind: "cellSpacingKept",
+      blocks: 1,
+    });
+    const output = (
+      await folioTemplatePlanEngine.analyze(formatted.docx)
+    ).unwrap();
+    const spacingOf = (text: string) =>
+      output.blocks.find((block) => block.text === text)?.spacing;
+    // The engine wrote the spacing the plan asked for, and no other.
+    expect(spacingOf("Item")).toEqual({ before: 0, after: 0 });
+    expect(spacingOf("Price")).toBeUndefined();
+  });
+
+  test("a field of the source to a heading whose number a field counts stays a field", async () => {
+    const run = (inner: string, bold = false): string =>
+      `<w:r>${bold ? "<w:rPr><w:b/></w:rPr>" : ""}${inner}</w:r>`;
+    const char = (type: string, bold = false): string =>
+      run(`<w:fldChar w:fldCharType="${type}"/>`, bold);
+    const code = (text: string, bold = false): string =>
+      run(`<w:instrText xml:space="preserve">${text}</w:instrText>`, bold);
+    const said = (value: string, bold = false): string =>
+      run(`<w:t xml:space="preserve">${value}</w:t>`, bold);
+    const counted = `${char("begin")}${code(String.raw` AUTONUMLGL  \* Arabic \e `)}${char("end")}`;
+    const cited = [
+      char("begin", true),
+      code(String.raw` REF annex1 \h  \* MERGEFORMAT `, true),
+      char("separate", true),
+      said("Annex 1 - Prices", true),
+      char("end", true),
+    ].join("");
+    const fielded = await docx({
+      body: [
+        paragraph("SERVICES AGREEMENT"),
+        paragraph("Article 1"),
+        paragraph("Scope"),
+        `<w:p><w:pPr>${listed(1, 0)}</w:pPr>${said("The prices are listed in ")}${cited}${said(".")}</w:p>`,
+        paragraph("A closing sentence."),
+        `<w:p><w:bookmarkStart w:id="1" w:name="annex1"/>${said("Annex ")}${counted}${said(" - Prices")}<w:bookmarkEnd w:id="1"/></w:p>`,
+        paragraph("The price list."),
+      ].join(""),
+      styles:
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+      numbering: list(0, level(0, "decimal", "1.%1.")) + instance(1, 0),
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: fielded,
+        // A plan with fields asks the reader to update them on open.
+        template: await template('<w:defaultTabStop w:val="708"/>'),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.outcome.repairs).toEqual([]);
+    expect(formatted.plan.references).toContainEqual(
+      expect.objectContaining({
+        instruction: String.raw`\h \* MERGEFORMAT`,
+        expectedText: "Annex 1 - Prices",
+      }),
+    );
+    // The output's field names the bookmark the engine set around the
+    // heading, which still counts its own number.
+    const output = (
+      await folioTemplatePlanEngine.analyze(formatted.docx)
+    ).unwrap();
+    const citing = output.blocks.find(({ text }) =>
+      text.startsWith("The prices"),
+    );
+    const heading = output.blocks.find(({ text }) => text.startsWith("Annex"));
+    expect(heading?.selfNumbers).toEqual([6]);
+    expect(citing?.crossReferences).toEqual([
+      expect.objectContaining({
+        targetBlockId: heading?.id,
+        targetWhole: true,
+      }),
+    ]);
+    const xml =
+      (await (
+        await ZipArchive.read(formatted.docx)
+      )
+        .entry("word/document.xml")
+        ?.text()) ?? "";
+    expect(xml).toMatch(/ REF _Ref\d+ \\h \\\* MERGEFORMAT /u);
+  });
+
   test("formats one view of a document with tracked changes: accepted unless the caller asks for the rejected one", async () => {
     const tracked = await docx({
       body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,
@@ -299,5 +483,51 @@ describe("folioTemplatePlanEngine", () => {
     };
     expect(await textOf()).toContain("Kept inserted.");
     expect(await textOf("reject")).toContain("Kept deleted.");
+  });
+
+  test("formats a document with its tracked changes kept: the output is the same redline", async () => {
+    const tracked = await docx({
+      body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,
+      styles: "",
+      numbering: "",
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: tracked,
+        template: await template(),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+        trackedChanges: "keep",
+      })
+    ).unwrap();
+    expect(formatted.plan.trackedChanges).toBe("keep");
+    expect(formatted.note.items.at(0)).toMatchObject({
+      kind: "trackedChangesKept",
+      insertions: 1,
+      deletions: 1,
+    });
+    // The output tracks what the source tracks, and reads as the source
+    // does in either view.
+    const kept = (
+      await folioTemplatePlanEngine.analyze(formatted.docx, {
+        trackedChanges: "keep",
+      })
+    ).unwrap();
+    expect(kept.trackedChangesKept).toMatchObject({
+      insertions: 1,
+      deletions: 1,
+      authors: ["A"],
+    });
+    const textsOf = async (view: "accept" | "reject") =>
+      (
+        await folioTemplatePlanEngine.analyze(formatted.docx, {
+          trackedChanges: view,
+        })
+      )
+        .unwrap()
+        .blocks.map(({ text }) => text);
+    expect(await textsOf("accept")).toContain("Kept inserted.");
+    expect(await textsOf("reject")).toContain("Kept deleted.");
   });
 });

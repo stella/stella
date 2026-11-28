@@ -4,6 +4,8 @@ import { Buffer } from "node:buffer";
 import { printError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { corpusMorphologyLanguage } from "@stll/legal-morphology/corpus-language";
+import { stemCorpusText } from "@stll/legal-morphology/stem-text";
 
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -19,8 +21,6 @@ import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-i
 import type { CaseLawProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
-import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
-import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
 
 /**

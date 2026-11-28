@@ -1,17 +1,18 @@
 import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
+import {
+  validateAst,
+  type ValidationResult,
+} from "@stll/case-law-parsers/validate-ast";
+
 import { RETENTION_PROJECTION_FAILURE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import {
   projectSkCourtsDocument,
   withoutMetadataTable,
 } from "@/api/handlers/case-law/ingestion/retention/sources/sk-courts-document";
-import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
-import {
-  validateAst,
-  type ValidationResult,
-} from "@/api/lib/legal-search/parsers/validate-ast";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 

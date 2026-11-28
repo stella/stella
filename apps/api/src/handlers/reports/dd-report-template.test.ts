@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { isTemplateData } from "@stll/docx-engine/types";
 
 import type { JustificationContent } from "@/api/db/schema";
 import type {
@@ -13,7 +14,6 @@ import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiFieldGenerator } from "@/api/lib/docx/resolve-ai-fields";
 import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
-import { isTemplateData } from "@/api/lib/docx/types";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ViewLayout } from "@/api/lib/views-schema";

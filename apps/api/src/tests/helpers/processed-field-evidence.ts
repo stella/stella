@@ -12,6 +12,27 @@ import { panic, Result } from "better-result";
 import path from "node:path";
 import * as v from "valibot";
 
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
+import { parseCzIsirDecision as parseCzIsirDecisionUnguarded } from "@stll/case-law-parsers/cz-isir";
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
+import {
+  parseRegionalDecision as uncheckedParseRegionalDecision,
+  type ParseRegionalInput,
+} from "@stll/case-law-parsers/cz-regional";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@stll/case-law-parsers/cz-us";
+import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@stll/case-law-parsers/eu-ecj";
+import { parseHuBhgyDecision as uncheckedParseHuBhgyDecision } from "@stll/case-law-parsers/hu-bhgy";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import {
+  parsePlTkPage,
+  parsePlTkText as uncheckedParsePlTkText,
+  readPlTkCasePage,
+  readPlTkRuling,
+} from "@stll/case-law-parsers/pl-tk";
+import { parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml } from "@stll/case-law-parsers/pl-uodo";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
+import { parseUkFclDecision as uncheckedParseUkFclDecision } from "@stll/case-law-parsers/uk-fcl";
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -28,31 +49,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
-import { parseCzIsirDecision as parseCzIsirDecisionUnguarded } from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
-import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
-import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import {
-  parseRegionalDecision as uncheckedParseRegionalDecision,
-  type ParseRegionalInput,
-} from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
-import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
-import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
-import { parseHuBhgyDecision as uncheckedParseHuBhgyDecision } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
-import {
-  parsePlTkPage,
-  parsePlTkText as uncheckedParsePlTkText,
-  readPlTkCasePage,
-  readPlTkRuling,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
-import { parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
-import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
-import { parseUkFclDecision as uncheckedParseUkFclDecision } from "@/api/handlers/case-law/ingestion/parsers/uk-fcl";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-field-inventory";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseCzUohsDocumentPdf = guardParser(uncheckedParseCzUohsDocumentPdf);
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);

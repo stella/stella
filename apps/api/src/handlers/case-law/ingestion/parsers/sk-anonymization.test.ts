@@ -2,6 +2,10 @@ import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
+import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 
 import {
@@ -10,11 +14,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import type { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
-import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
-
-import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "./sk-us";
 
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);

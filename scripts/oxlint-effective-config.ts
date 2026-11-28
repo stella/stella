@@ -333,32 +333,3 @@ export const shadowedDeclarations = ({
   }
   return findings;
 };
-
-export type BaselineEntry = { from: Severity; to: Severity; reason: string };
-
-type BaselineVerdict = {
-  /** Findings the baseline does not record with these severities. */
-  unexpected: Finding[];
-  /** Baseline entries that no longer describe a finding: delete them. */
-  stale: string[];
-};
-
-export const checkBaseline = (
-  findings: readonly Finding[],
-  baseline: Readonly<Record<string, BaselineEntry>>,
-): BaselineVerdict => {
-  const matched = new Set<string>();
-  const unexpected: Finding[] = [];
-  for (const finding of findings) {
-    const entry = baseline[finding.rule];
-    if (entry?.from === finding.from && entry.to === finding.to) {
-      matched.add(finding.rule);
-    } else {
-      unexpected.push(finding);
-    }
-  }
-  const stale = Object.keys(baseline)
-    .filter((rule) => !matched.has(rule))
-    .toSorted();
-  return { unexpected, stale };
-};

@@ -6,7 +6,8 @@ import {
   MetadataUrlDefect,
   type SafeHref,
   toMetadataUrl,
-} from "@/api/lib/sanitize-url";
+} from "@stll/case-law-parsers/sanitize-url";
+
 import { includes, isRecord } from "@/api/lib/type-guards";
 
 export const META_URL_DIAGNOSTICS = "metadataUrlDiagnostics";

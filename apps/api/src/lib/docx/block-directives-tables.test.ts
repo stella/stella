@@ -3,6 +3,8 @@ import fc from "fast-check";
 import * as slimdom from "slimdom";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { processBlockDirectives } from "@stll/docx-engine/block-directives";
+import { paragraphText, W_NS } from "@stll/docx-engine/ooxml";
 import {
   assertProperty,
   propertySeed,
@@ -12,8 +14,6 @@ import {
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
-import { processBlockDirectives } from "./block-directives";
-import { paragraphText, W_NS } from "./ooxml";
 import { fillTemplate } from "./patch-template";
 
 // ── Fixture builders ─────────────────────────────────────

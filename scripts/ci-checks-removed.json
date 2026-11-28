@@ -146,5 +146,9 @@
   {
     "name": "Failure-as-empty baseline",
     "reason": "Both baselines it held shrink-only (no-failure-as-empty and case-law read-fault guard) are empty and deleted: no-failure-as-empty and read-fault-guard.test.ts now fail outright on every finding, so no exception list is left to keep from growing."
+  },
+  {
+    "name": "Knip dead-export check (packages/cli)",
+    "reason": "Covered at zero by Knip dead-export budget (all workspaces), which runs knip-exports-ratchet.ts --check across every workspace including packages/cli."
   }
 ]

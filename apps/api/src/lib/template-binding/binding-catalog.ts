@@ -23,7 +23,7 @@ import {
   type UserField,
   WORKSPACE_CONTACT_ROLES,
   type WorkspaceContactRole,
-} from "./binding-sources";
+} from "@stll/docx-engine/binding-sources";
 
 /** One bindable field within a source. `labelKey` is an i18n key resolved by
  *  the frontend; a future custom field would instead carry a literal `label`. */

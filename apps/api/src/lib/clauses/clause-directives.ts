@@ -4,17 +4,17 @@ import * as v from "valibot";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import {
+  parseBlockTree,
+  scanBlockDirectives,
+} from "@stll/docx-engine/block-directives";
+import { parseInlineConditions } from "@stll/docx-engine/inline-conditions";
+import { paragraphText, W_NS } from "@stll/docx-engine/ooxml";
+import type { TemplateStructureError } from "@stll/docx-engine/types";
+import {
   blockDirectiveLinePattern,
   scanMarkers,
 } from "@stll/template-conditions";
 
-import {
-  parseBlockTree,
-  scanBlockDirectives,
-} from "@/api/lib/docx/block-directives";
-import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
-import { paragraphText, W_NS } from "@/api/lib/docx/ooxml";
-import type { TemplateStructureError } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import type { ClauseBody } from "./types";

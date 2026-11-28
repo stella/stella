@@ -42,6 +42,7 @@ import { writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta, TemplateManifest } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -55,7 +56,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";

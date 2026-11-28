@@ -23,6 +23,17 @@ import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import {
+  ecjDocumentHtml,
+  ecjDocumentRoot,
+  ecjPageCarriesChrome,
+  parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml,
+} from "@stll/case-law-parsers/eu-ecj";
+import {
+  normalizeOracleText,
+  parseFormex,
+} from "@stll/case-law-parsers/eu-ecj-formex";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { load } from "@stll/html";
 import { headingPathsByAnchor } from "@stll/legal-ast";
 import {
@@ -30,19 +41,7 @@ import {
   hasInlineChildren,
 } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
-
-import {
-  ecjDocumentHtml,
-  ecjDocumentRoot,
-  ecjPageCarriesChrome,
-  parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
-import {
-  normalizeOracleText,
-  parseFormex,
-} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex";
-import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 
 import {
   manifestationStem,

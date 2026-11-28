@@ -8,6 +8,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { rejectionOf, settledWithin, WaitTimeoutError } from "@stll/test-kit";
+
 import {
   caseLawDecisions,
   caseLawIndexJobs,
@@ -277,11 +279,13 @@ if (!databaseUrl || !runPostgresTests) {
         );
       try {
         expect(
-          await Promise.race([
-            staleWriter,
-            Bun.sleep(100).then(() => "blocked" as const),
-          ]),
-        ).toBe("blocked");
+          await rejectionOf(
+            settledWithin(staleWriter, {
+              description: "stale writer to bypass redaction lock",
+              timeoutMs: 100, // timeout: bounded window asserting stale writer stays blocked on redaction lock
+            }),
+          ),
+        ).toBeInstanceOf(WaitTimeoutError);
       } finally {
         releaseRedaction?.();
         await heldRedaction;

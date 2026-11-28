@@ -1,1 +1,1 @@
-export * from "@/api/lib/legal-search/segment-decision";
+export * from "@stll/case-law-parsers/segment-decision";

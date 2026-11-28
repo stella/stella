@@ -2,6 +2,11 @@ import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import {
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+} from "@stll/case-law-parsers/pdf-bands";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -22,16 +27,11 @@ import {
   parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
-import {
-  extractPdfBodyAndNotes,
-  PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

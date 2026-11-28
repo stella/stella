@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 /**
  * A `DocumentAst` from a publisher's HTML page, for any guidance source.
  *
@@ -12,6 +13,13 @@
 
 import { panic, Result } from "better-result";
 
+import { collapseHtmlWhitespace } from "@stll/case-law-parsers/html-whitespace";
+import { sanitizeUrl } from "@stll/case-law-parsers/sanitize-url";
+import {
+  isExcludedHtmlTag,
+  ownTableRows,
+  walkInlines,
+} from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -32,20 +40,12 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 
-import {
-  isExcludedHtmlTag,
-  ownTableRows,
-  walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
-
 import type { BlockKey, KeyedBlock } from "./block-ids";
 import {
   assembleDocumentAst,
   DocumentBuildError,
   draftText,
 } from "./document-assembly";
-import { collapseHtmlWhitespace } from "./html-whitespace";
 import { headingKeyOf } from "./section-labels";
 
 /** Page chrome a content root can still contain; none of it is document text. */

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 export const CORPUS_INDEX_DESIRED_ACTIONS = ["upsert", "erase"] as const;
 export type CorpusIndexDesiredAction =
   (typeof CORPUS_INDEX_DESIRED_ACTIONS)[number];
@@ -108,6 +110,58 @@ export const CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES =
   );
 
 /**
+ * What another revision of an entity in each status does to a new append of
+ * that entity.
+ *
+ * - `holds`: it can still create or expose an append (reserved through
+ *   applied; an `applied` revision the walk can meet is one its state does
+ *   not name, so a census still has to decide it), or it waits for an
+ *   operator (`cleanup_stalled`). The new append waits.
+ * - `deleting`: an exact delete of that revision is queued, issued or
+ *   awaiting settlement; at most `CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS`
+ *   of them at once. The delete names its revision
+ *   (`corpusProjectionRevisionsQuery`), so it never reaches another one. A
+ *   generation whose hits carry their revision
+ *   (`corpusIndexRevisionRetrieval` is `stored`) shows readers only the copy
+ *   PostgreSQL names as applied, so a new revision may be appended beside the
+ *   one being deleted. A `query_only` generation cannot tell the copies apart
+ *   and waits for the delete to settle.
+ * - `quiescent`: nothing of that revision remains to act on.
+ *
+ * Erasure never reads this: it applies only once every revision is
+ * quiescent (`advanceCorpusProjectionErasuresTx`).
+ */
+export const CORPUS_INDEX_INTENT_APPEND_GATE = {
+  reserved: "holds",
+  append_started: "holds",
+  append_committed: "holds",
+  applied: "holds",
+  cleanup_pending: "deleting",
+  cleanup_started: "deleting",
+  cleanup_committed: "deleting",
+  cleanup_stalled: "holds",
+  settled: "quiescent",
+  cancelled: "quiescent",
+  withdrawn: "quiescent",
+} as const satisfies Record<
+  CorpusIndexIntentStatus,
+  "holds" | "deleting" | "quiescent"
+>;
+
+/**
+ * How many revisions being deleted a stored-revision append may run beside:
+ * one, so the index never holds two older copies of an entity beside the one
+ * readers are given. A second one waiting holds the append back as before.
+ */
+export const CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS = 1;
+
+/** Revisions whose exact delete a stored-revision append may run beside. */
+export const CORPUS_INDEX_DELETING_INTENT_STATUSES =
+  CORPUS_INDEX_INTENT_STATUSES.filter(
+    (status) => CORPUS_INDEX_INTENT_APPEND_GATE[status] === "deleting",
+  );
+
+/**
  * Why a reserved revision was cancelled instead of starting its append. The
  * start predicate rejects on the lease deadline or on the desired state, and
  * the two mean opposite things: a run of expiries says a cycle is slower than
@@ -188,12 +242,118 @@ export const CORPUS_INDEX_PROJECTION_WORK_STATUSES = [
   "blocked",
 ] as const;
 
+/**
+ * Values of the retired `append_mode` column. The request cap below replaced
+ * it; a row still marked `single` reads as the legacy single cap
+ * (`corpusIndexProjectionAppendRequestCapOf`) until its next state write
+ * clears the mark, and the column goes once no row carries it.
+ */
 export const CORPUS_INDEX_PROJECTION_APPEND_MODES = [
   "batchable",
   "single",
 ] as const;
-export type CorpusIndexProjectionAppendMode =
+type CorpusIndexProjectionAppendMode =
   (typeof CORPUS_INDEX_PROJECTION_APPEND_MODES)[number];
+
+/**
+ * The most revisions an entity's next append may share one request with,
+ * itself included. A request whose outcome says nothing about which of its
+ * revisions failed (unknown, or a document fault in a shared request) halves
+ * the cap of every revision in it (`corpusIndexProjectionHalvedAppendRequestCap`),
+ * so a failing batch of N is retried as batches of N/2 and only a revision
+ * that keeps failing reaches a request of its own, where it is charged.
+ * Powers of two, so the executor groups a reservation into at most ten
+ * request classes.
+ */
+export const CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS = [
+  1, 2, 4, 8, 16, 32, 64, 128, 256, 512,
+] as const;
+export type CorpusIndexProjectionAppendRequestCap =
+  (typeof CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS)[number];
+
+/** An entity no failure has isolated: any request may carry it. */
+export const CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL =
+  512 satisfies CorpusIndexProjectionAppendRequestCap;
+
+/**
+ * Where an entity the retired `single` mode isolated restarts: small shared
+ * requests that halve again on failure, instead of one request each, so a
+ * backlog of them drains in about one commit round.
+ */
+export const CORPUS_INDEX_PROJECTION_LEGACY_SINGLE_APPEND_REQUEST_CAP =
+  32 satisfies CorpusIndexProjectionAppendRequestCap;
+
+const APPEND_REQUEST_CAP_SET: ReadonlySet<number> = new Set(
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS,
+);
+
+/** The smaller of two caps, still a cap. */
+const smallerCorpusIndexProjectionAppendRequestCap = (
+  left: CorpusIndexProjectionAppendRequestCap,
+  right: CorpusIndexProjectionAppendRequestCap,
+): CorpusIndexProjectionAppendRequestCap => (left <= right ? left : right);
+
+const isCorpusIndexProjectionAppendRequestCap = (
+  value: number,
+): value is CorpusIndexProjectionAppendRequestCap =>
+  APPEND_REQUEST_CAP_SET.has(value);
+
+/** A request cap read back from PostgreSQL, checked against the value set. */
+export const requireCorpusIndexProjectionAppendRequestCap = (
+  value: number,
+): CorpusIndexProjectionAppendRequestCap =>
+  isCorpusIndexProjectionAppendRequestCap(value)
+    ? value
+    : panic(`Corpus projection append request cap is invalid: ${value}`);
+
+/**
+ * The cap of a revision that failed in a request of `sharedWith` revisions
+ * without saying which one failed: the largest cap no greater than half the
+ * request, and never above the cap it already had.
+ */
+export const corpusIndexProjectionHalvedAppendRequestCap = ({
+  sharedWith,
+  current,
+}: {
+  sharedWith: number;
+  current: CorpusIndexProjectionAppendRequestCap;
+}): CorpusIndexProjectionAppendRequestCap => {
+  if (!Number.isSafeInteger(sharedWith) || sharedWith < 2) {
+    return panic(
+      `Only a request of several revisions halves its caps: ${sharedWith}`,
+    );
+  }
+  const half = Math.floor(sharedWith / 2);
+  const halved = CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS.findLast(
+    (cap) => cap <= half,
+  );
+  return smallerCorpusIndexProjectionAppendRequestCap(
+    halved ?? panic("A request of several revisions has no halved cap"),
+    current,
+  );
+};
+
+/**
+ * An entity's effective request cap from its state row: the retired `single`
+ * mark caps it at the legacy single cap. Its SQL twin, the only other reader
+ * of the mark, is `corpusIndexProjectionAppendRequestCap`
+ * (`corpus-index-projection-sql`).
+ */
+export const corpusIndexProjectionAppendRequestCapOf = ({
+  appendMode,
+  appendRequestCap,
+}: {
+  appendMode: CorpusIndexProjectionAppendMode;
+  appendRequestCap: number;
+}): CorpusIndexProjectionAppendRequestCap => {
+  const cap = requireCorpusIndexProjectionAppendRequestCap(appendRequestCap);
+  return appendMode === "single"
+    ? smallerCorpusIndexProjectionAppendRequestCap(
+        cap,
+        CORPUS_INDEX_PROJECTION_LEGACY_SINGLE_APPEND_REQUEST_CAP,
+      )
+    : cap;
+};
 
 export const CORPUS_INDEX_PROJECTION_FAILURE_KINDS = [
   "payload_unavailable",
@@ -239,7 +399,9 @@ export const CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES = [
 /**
  * Legal intent transitions. A response lost after an append never returns to
  * `reserved`: its revision is assumed written and must pass through exact
- * cleanup before the same desired epoch can be attempted again.
+ * cleanup. The same desired epoch is attempted again only as a new revision:
+ * after that cleanup settles, or, where hits carry their revision, beside it
+ * (`CORPUS_INDEX_INTENT_APPEND_GATE`).
  */
 export const CORPUS_INDEX_INTENT_TRANSITIONS = {
   reserved: ["append_started", "cancelled"],

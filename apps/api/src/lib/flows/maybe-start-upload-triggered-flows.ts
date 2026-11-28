@@ -5,6 +5,7 @@ import { rootDb } from "@/api/db/root";
 import { flowDefinitions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   deriveFileExtension,
@@ -58,22 +59,31 @@ export const maybeStartUploadTriggeredFlows = async ({
   fileName,
 }: MaybeStartUploadTriggeredFlowsArgs): Promise<void> => {
   const definitionsResult = await Result.tryPromise({
-    try: () =>
-      rootDb
-        .select({
-          id: flowDefinitions.id,
-          trigger: flowDefinitions.trigger,
-          createdByUserId: flowDefinitions.createdByUserId,
-        })
-        .from(flowDefinitions)
-        .where(
-          and(
-            eq(flowDefinitions.organizationId, organizationId),
-            eq(flowDefinitions.enabled, true),
-            sql`${flowDefinitions.trigger}->>'type' = 'file-upload'`,
-          ),
-        )
-        .limit(LIMITS.flowDefinitionsCount),
+    try: async () => {
+      let definitions: {
+        id: (typeof flowDefinitions.$inferSelect)["id"];
+        trigger: (typeof flowDefinitions.$inferSelect)["trigger"];
+        createdByUserId: (typeof flowDefinitions.$inferSelect)["createdByUserId"];
+      }[] = [];
+      await withOwnerOrganizationScope(rootDb, organizationId, async (tx) => {
+        definitions = await tx
+          .select({
+            id: flowDefinitions.id,
+            trigger: flowDefinitions.trigger,
+            createdByUserId: flowDefinitions.createdByUserId,
+          })
+          .from(flowDefinitions)
+          .where(
+            and(
+              eq(flowDefinitions.organizationId, organizationId),
+              eq(flowDefinitions.enabled, true),
+              sql`${flowDefinitions.trigger}->>'type' = 'file-upload'`,
+            ),
+          )
+          .limit(LIMITS.flowDefinitionsCount);
+      });
+      return definitions;
+    },
     catch: (cause) => cause,
   });
 

@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
+import {
+  assertReaderAcceptsAst,
+  guardParser,
+} from "@stll/case-law-parsers/parser-reader-guard";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { assertReaderAcceptsAst, guardParser } from "./parser-reader-guard";
 
 const ast = {
   version: 1,
@@ -73,9 +75,14 @@ test("declared parser owners equal the entry points exercised through fixture gu
   const { PARSER_FIXTURE_OWNERS } = await import("./parser-fixture-owners");
   const declared = new Set(Object.values(PARSER_FIXTURE_OWNERS).flat());
   const exercised = new Set<string>();
-  const root = new URL("../../", import.meta.url);
+  const apiRoot = new URL("../../", import.meta.url);
+  const parsersRoot = new URL(
+    "../../../../../packages/case-law-parsers/src/",
+    import.meta.url,
+  );
   const fixtureSources = new Bun.Glob("**/*.ts");
-  for await (const file of fixtureSources.scan(fileURLToPath(root))) {
+  const candidateUrls: { file: string; url: URL }[] = [];
+  for await (const file of fixtureSources.scan(fileURLToPath(apiRoot))) {
     const parserFixture =
       (file.startsWith("handlers/case-law/ingestion/") ||
         file.startsWith("lib/legal-search/parsers/")) &&
@@ -83,7 +90,16 @@ test("declared parser owners equal the entry points exercised through fixture gu
     if (!parserFixture && !file.startsWith("tests/helpers/")) {
       continue;
     }
-    const source = await Bun.file(new URL(file, root)).text();
+    candidateUrls.push({ file, url: new URL(file, apiRoot) });
+  }
+  for await (const file of fixtureSources.scan(fileURLToPath(parsersRoot))) {
+    if (!file.endsWith(".test.ts")) {
+      continue;
+    }
+    candidateUrls.push({ file, url: new URL(file, parsersRoot) });
+  }
+  for (const { file, url } of candidateUrls) {
+    const source = await Bun.file(url).text();
     if (!source.includes("guardParser")) {
       continue;
     }

@@ -1,3 +1,6 @@
+// parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
+// parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
+// parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
@@ -7,6 +10,12 @@
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { parsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+import { readPlKioLayout } from "@stll/case-law-parsers/pl-kio-layout";
+import {
+  legacyQuarantineHtmlText,
+  visibleHtmlText,
+} from "@stll/case-law-parsers/shared-inlines";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import type * as cheerio from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
@@ -36,12 +45,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
-import {
-  legacyQuarantineHtmlText,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1017,7 +1020,9 @@ const plKioCourtStorage = ({
 type PlKioSourceRawOptions = Pick<
   AssemblePlKioDecisionOptions,
   "detailHtml" | "item"
-> & { documentParts: SourceRawParts };
+> & {
+  documentParts: SourceRawParts;
+};
 
 const plKioSourceRawOf = ({
   detailHtml,

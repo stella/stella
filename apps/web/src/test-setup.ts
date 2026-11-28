@@ -35,6 +35,20 @@ const configureWaitTimeout = async () => {
 // Tests run components with the same memoization as the Vite build.
 Bun.plugin(reactCompilerBunPlugin);
 
+// Vite turns `?worker&url` (and `?sharedworker&url`) imports into emitted asset
+// URLs; Bun tests do not run Vite's worker asset plugin. Registering this once
+// in the shared preload prevents test-order-dependent `Missing 'default' export`
+// errors whenever a component lazily imports a worker-backed module.
+Bun.plugin({
+  name: "vite-worker-url",
+  setup(build) {
+    build.onLoad({ filter: /\?(?:shared)?worker&url$/u }, () => ({
+      contents: 'export default "/worker.js";',
+      loader: "js",
+    }));
+  },
+});
+
 // Tests must never inherit a developer deployment URL. A single preload owns
 // this process-wide value so test files can restore it safely.
 Object.assign(import.meta.env, {

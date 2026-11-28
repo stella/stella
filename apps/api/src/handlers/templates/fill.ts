@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { isTemplateData } from "@stll/docx-engine/types";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -8,7 +10,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { fileSchema } from "@/api/lib/custom-schema";
-import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanErrorForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { convertToPdf } from "@/api/lib/files/gotenberg";

@@ -26,6 +26,9 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { entityResiduesInStoredText } from "@stll/case-law-parsers/entity-residue";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -59,7 +62,6 @@ import {
   approveMetadataUrls,
   metadataUrlAddresses,
 } from "@/api/lib/legal-search/metadata-urls";
-import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   publisherFieldRetentionAudit,
@@ -67,7 +69,6 @@ import {
 } from "@/api/lib/legal-search/source-exclusion-census";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
-import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   CASE_LAW_CONFORMANCE_FIXTURES,
@@ -82,7 +83,6 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 const testFetchState = createTestFetch();

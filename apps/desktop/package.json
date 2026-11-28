@@ -5,6 +5,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
+    "activity-data-map:check": "cargo test --manifest-path src-tauri/Cargo.toml --locked activity_data_map::generated_activity_data_map_is_current -- --exact",
+    "activity-data-map:generate": "cargo test --manifest-path src-tauri/Cargo.toml --locked activity_data_map::generate_activity_data_map -- --ignored --exact",
     "build": "bun --bun tauri build --config src-tauri/tauri.sidecar.conf.json",
     "build:sidecar": "bun run --cwd ../../packages/agent-engine build:sidecar",
     "build:pkcs11-helper": "bun scripts/build-pkcs11-helper.ts",

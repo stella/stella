@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@stll/case-law-parsers/cz-regional";
+import type { ParseRegionalInput } from "@stll/case-law-parsers/cz-regional";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
-import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
-import type { ParseRegionalInput } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
 
 const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);

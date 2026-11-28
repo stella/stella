@@ -17,8 +17,23 @@ import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
 const MAX_SHARDS = API_TEST_SHARD_IDS.length;
-export const API_SHARD_SECONDS = 600;
+export const API_SHARD_SECONDS = 300;
 const MODULE_PATTERN = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
+
+// Test runner entrypoints whose transitive import closure must widen the full
+// API suite whenever a runner helper changes.
+const API_TEST_RUNNER_ENTRYPOINTS = [
+  "apps/api/scripts/run-tests.ts",
+  "apps/api/scripts/run-postgres-tests.ts",
+  "apps/api/scripts/run-valkey-tests.ts",
+  "apps/api/scripts/run-corpus-engine-suites.ts",
+  "apps/api/scripts/corpus-engine-test-env.ts",
+  "apps/api/scripts/run-perf-tests.ts",
+  "apps/api/scripts/prepare-postgres-tests.ts",
+  "apps/api/scripts/refresh-test-durations.ts",
+  "apps/api/scripts/load-test-env.ts",
+  "apps/api/scripts/shared-test-postgres.ts",
+] as const;
 
 // Each rule has a regression case; broad configuration changes certify the full suite.
 export const API_ALL_RULES = {
@@ -35,13 +50,29 @@ export const API_ALL_RULES = {
     /^\.github\/(?:workflows\/ci\.yml|actions\/(?:ci-install|flaky-test-quarantine)(?:\/.*)?)$/u,
   migrations: /^apps\/api\/drizzle\//u,
   database: /^apps\/api\/src\/db\//u,
-  runner: /^apps\/api\/scripts\//u,
+  runner:
+    /^apps\/api\/scripts\/(?:(?:run-tests|build-pglite-snapshot|run-postgres-tests|run-valkey-tests|run-corpus-engine-suites|corpus-engine-test-env|run-perf-tests|prepare-postgres-tests|refresh-test-durations|generate-capability-runtime|load-test-env|shared-test-postgres|migrate-shared-test-template)\.ts|lib\/)/u,
   selector:
     /^(?:scripts\/(?:test-scope|test-shards|api-test-impact|ci-api-test-plan|ci-postgres-test-plan|ci-postgres-shard-plan|ci-postgres-selector-miss)\.(?:test\.)?ts|packages\/scripts\/src\/test-shard-planning\.ts)$/u,
   environment: /^apps\/api\/\.env/u,
   postgres: /^docker\/postgres\//u,
   data: /^(?:apps\/api|packages)\/(?!.*\.(?:[cm]?[jt]s|[jt]sx)$)/u,
 } as const;
+
+// Changes to core auth, permissions, tenant-boundary, MCP, or security test
+// modules always select the full `apps/api/src/tests/security/` suite even
+// when a security test does not directly import the edited file.
+export const API_SECURITY_BOUNDARY_RULES = {
+  auth: /^apps\/api\/src\/(?:agent-auth\/|lib\/auth(?:\/|\.ts$|-adapter-options\.ts$|-artifacts\.ts$))/u,
+  authModel: /^packages\/auth-model\//u,
+  permissions: /^packages\/permissions\//u,
+  handlerBoundary:
+    /^apps\/api\/src\/lib\/(?:api-handlers|branded-types|workspaces\/authorized-workspace-ids)\.ts$/u,
+  mcpBoundary: /^(?:apps\/api\/src\/mcp\/|packages\/mcp-kit\/)/u,
+  securitySuite: /^apps\/api\/src\/tests\/security\//u,
+} as const;
+
+const API_SECURITY_TEST_PREFIX = "apps/api/src/tests/security/";
 
 // Turbo owns cross-workspace test inputs. Matching one must widen before
 // the import graph, which cannot observe arbitrary root-level file readers.
@@ -490,26 +521,49 @@ export const selectApiTestImpact = ({
     const apiRoot = path.join(realRoot, "apps/api");
     const tests = listApiTestPaths(apiRoot).map((file) => `apps/api/${file}`);
     const preload = "apps/api/src/tests/setup-env.ts";
+    const runnerEntries = API_TEST_RUNNER_ENTRYPOINTS.filter((file) =>
+      existsSync(path.join(realRoot, file)),
+    );
     // Scan changed modules too: a new/deleted/unparseable module cannot hide
     // behind a graph that only visits existing test dependencies.
     const graph = buildImportGraph(realRoot, [
       ...tests,
       preload,
+      ...runnerEntries,
       ...changed.filter(
         (file) =>
           /^(apps\/api|packages)\//u.test(file) && MODULE_PATTERN.test(file),
       ),
     ]);
     const preloadClosure = graph.closure(preload);
+    const runnerClosure = new Set<string>();
+    for (const entry of runnerEntries) {
+      for (const file of graph.closure(entry)) {
+        if (file.startsWith("apps/api/scripts/")) {
+          runnerClosure.add(file);
+        }
+      }
+    }
     if (
       (graphFailurePolicy === "all" && graph.failed.size > 0) ||
       [...preloadClosure].some((file) => graph.failed.has(file)) ||
-      changed.some((file) => preloadClosure.has(file) || graph.failed.has(file))
+      [...runnerClosure].some((file) => graph.failed.has(file)) ||
+      changed.some(
+        (file) =>
+          preloadClosure.has(file) ||
+          runnerClosure.has(file) ||
+          graph.failed.has(file),
+      )
     ) {
       return allApiTests();
     }
     const touchesApiOrPackages = changed.some((file) =>
       /^(?:apps\/api|packages)\//u.test(file),
+    );
+    const touchesSecurityBoundary = changed.some((file) =>
+      Object.values(API_SECURITY_BOUNDARY_RULES).some((rule) =>
+        rule.test(file),
+      ),
     );
     const changedApps = new Set(
       changed.flatMap((file) => {
@@ -538,6 +592,12 @@ export const selectApiTestImpact = ({
     }
     const files = tests
       .filter((test) => {
+        if (
+          touchesSecurityBoundary &&
+          test.startsWith(API_SECURITY_TEST_PREFIX)
+        ) {
+          return true;
+        }
         const closure = graph.closure(test);
         return (
           [...closure].some((file) => changedSet.has(file)) ||

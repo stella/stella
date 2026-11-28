@@ -11,7 +11,8 @@ import { compareCodeUnit } from "@stll/collation";
  * starts on a fresh clone of the template, so rows the earlier suites left in
  * shared tables cannot change what it observes. The suites that install the
  * corpus projection seeding guard on the canonical tables
- * (`guardPostgresSuiteSeeding`) are among them.
+ * (`guardPostgresSuiteSeeding`) are among them, and so are suites that time
+ * waits on a database-wide advisory lane another suite may also take.
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
@@ -29,11 +30,13 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/handlers/entities/versions/list.postgres.test.ts",
     "src/lib/account-export/store.postgres.test.ts",
     "src/lib/business-registries/desktop/proof.postgres.test.ts",
+    "src/lib/case-law/maintenance-lane-queue.postgres.test.ts",
     "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
     "src/lib/email/correspondence/concurrent-filing.postgres.test.ts",
     "src/lib/email/correspondence/source-race.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
     "src/lib/legal-search/corpus-index-generation-retire.postgres.test.ts",
+    "src/lib/legal-search/corpus-index-projection-append-behind-cleanup.postgres.test.ts",
     "src/lib/legal-search/corpus-index-route-proof-runner.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",

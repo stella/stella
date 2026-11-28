@@ -43,6 +43,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { isUnreadablePdfError } from "@stll/case-law-parsers/sk-courts";
 import { sanitizeErrorForOutput } from "@stll/errors";
 import type { Block } from "@stll/legal-ast/document-ast";
 import {
@@ -121,7 +122,6 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
-import { isUnreadablePdfError } from "@/api/lib/legal-search/parsers/sk-courts";
 import {
   openRawSourceWriteWindow,
   type RawSourceWriteWindow,

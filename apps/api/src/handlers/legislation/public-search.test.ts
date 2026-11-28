@@ -7,6 +7,7 @@ import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
@@ -21,7 +22,6 @@ import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type {
   LegislationReadDb,

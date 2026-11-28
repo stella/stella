@@ -65,6 +65,7 @@ describe("activity contract", () => {
       browserApps: [],
       sourceAppVisuals: [],
       browserTitleApps: [],
+      browserTitlesManaged: false,
       detailsAccess: "disabled",
       persistence: "encrypted",
       recordingStatus: "recording",
@@ -265,6 +266,7 @@ describe("activity contract", () => {
       detailsAccess: "disabled",
       browserApps: [],
       browserTitleApps: [],
+      browserTitlesManaged: false,
       apps: [{ identifier: "com.example.app", name: "App" }],
       sourceAppVisuals: [],
     };

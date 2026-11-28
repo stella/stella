@@ -1,10 +1,9 @@
 #!/usr/bin/env bun
 
 import { Result, TaggedError } from "better-result";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { actionlintWorkflowSource } from "./check-workflow-yaml";
 
 class ActionlintBaselineError extends TaggedError("ActionlintBaselineError")<{
@@ -30,13 +29,9 @@ const isFinding = (value: unknown): value is Finding =>
 
 const run = (): void => {
   const args = process.argv.slice(2);
-  if (
-    args.length > 1 ||
-    (args.length === 1 && args[0] !== "--check" && args[0] !== "--write")
-  ) {
+  if (args.length > 1 || (args.length === 1 && args[0] !== "--check")) {
     throw new ActionlintBaselineError({
-      message:
-        "Usage: bun scripts/check-actionlint-baseline.ts [--check|--write]",
+      message: "Usage: bun scripts/check-actionlint-baseline.ts [--check]",
     });
   }
   const binary = process.env["ACTIONLINT_BIN"];
@@ -117,30 +112,11 @@ const run = (): void => {
     }
     return 0;
   });
-  const actual = `${JSON.stringify(grouped, null, 2)}\n`;
-  const baseline = BASELINE_PATHS.actionlint;
-  if (args.at(0) === "--write") {
-    writeFileSync(baseline, actual);
+  if (grouped.length === 0) {
     return;
   }
-  const expected = readFileSync(baseline, "utf-8");
-  if (expected === actual) {
-    return;
-  }
-  const diff = [
-    `--- ${baseline}`,
-    "+++ actionlint actual",
-    ...expected
-      .trimEnd()
-      .split("\n")
-      .map((line) => `-${line}`),
-    ...actual
-      .trimEnd()
-      .split("\n")
-      .map((line) => `+${line}`),
-  ].join("\n");
   throw new ActionlintBaselineError({
-    message: `${diff}\nActionlint baseline differs; run with --write to re-anchor it.`,
+    message: `actionlint reported ${String(grouped.length)} finding group(s):\n${JSON.stringify(grouped, null, 2)}`,
   });
 };
 

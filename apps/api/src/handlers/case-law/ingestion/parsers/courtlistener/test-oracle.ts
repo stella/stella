@@ -11,6 +11,9 @@ import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import * as slimdom from "slimdom";
 
+import type { CourtListenerTextOpinion } from "@stll/case-law-parsers/courtlistener/compose";
+import type { TextStructure } from "@stll/case-law-parsers/courtlistener/select";
+import { isOpinionType } from "@stll/case-law-parsers/courtlistener/vocabulary";
 import { load } from "@stll/html";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
@@ -18,11 +21,7 @@ import {
   isCsvRow,
   OPINION_COLUMNS,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
-import { isOpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { isRecord } from "@/api/lib/type-guards";
-
-import type { CourtListenerTextOpinion } from "./compose";
-import type { TextStructure } from "./select";
 
 const isOpinionRow = isCsvRow(OPINION_COLUMNS);
 

@@ -14,6 +14,11 @@ import type {
   TemplateLevelIndent,
   TemplateStyle,
 } from "@/api/lib/templates/house-style/folio-contract";
+import {
+  HEAD_FIELDS,
+  readFieldName,
+} from "@/api/lib/templates/house-style/head-fields";
+import type { HeadField } from "@/api/lib/templates/house-style/head-fields";
 import { HOUSE_STYLE_ROLES } from "@/api/lib/templates/house-style/role-proposer";
 import type { HouseStyleRole } from "@/api/lib/templates/house-style/role-proposer";
 
@@ -72,6 +77,19 @@ type HeadingJoin = "sameLine" | "lineBreak";
  */
 export type TemplateHealthFinding =
   | { kind: "numberDrawnAsPicture"; abstractNumId: number; ilvl: number }
+  /** `rolesNotRead`: no style of the template could be read as the role
+   *  of an article heading, a clause or body text (`roles`), because its
+   *  sample text shows none in use: a filled document used as a template,
+   *  or a template whose numbered styles carry no sample. Paragraphs of
+   *  those roles are placed by fallbacks; the output wants a look. Sample
+   *  paragraphs in the template's own styles mend it. */
+  | { kind: "rolesNotRead"; roles: StructuralRole[] }
+  /** `lastSectionNotBody`: the sample body stands in section
+   *  `bodySection`, and the template ends with later sections (an exhibit,
+   *  a signature page, a landscape annex). An output takes its page setup
+   *  and its headers and footers from the template's last section. Ending
+   *  the template with the body's section mends it. */
+  | { kind: "lastSectionNotBody"; bodySection: number; lastSection: number }
   | { kind: "textDrawnAsPicture"; styleId: string | null }
   | {
       kind: "levelSetApart";
@@ -129,15 +147,37 @@ export type TemplateProfile = {
     party: { blockIds: string[] } | null;
     signature: { blockIds: string[] } | null;
   };
+  /** The style the template sets the numbered line that heads a party in
+   *  (a style named for parties, in a list of its own): a party's line
+   *  that carries a number is placed in it and counted in that list.
+   *  Absent when the template has none, and from a profile made before
+   *  this was read. */
+  partyHead?: ProfileRoleTarget;
   headings: { article: HeadingJoin; annex: HeadingJoin };
   /** Whether the template's sample starts a page between its front matter
    *  (title, parties) and its first article. Absent when the sample has no
    *  article, and from a profile made before this was read. */
   frontMatterEndsPage?: boolean;
+  /** The paragraph styles the kept table of contents collects its entries
+   *  from, by what its field names: styles by name, the built-in headings
+   *  of a range of levels, styles with an outline level. A document none
+   *  of whose headings is placed in one of them would get contents that
+   *  fill empty. Absent when the template keeps no contents or its field's
+   *  code is not known, and from a profile made before this was read. */
+  contentsStyles?: string[];
   /** The style the template writes the text of its tables in. Absent when
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
   tableText?: { styleId: string };
+  /** The cells of a kept letterhead that a letter's own head goes into:
+   *  the sample lines of the addressee, the paragraph that shows the date,
+   *  the one that names the file. Absent when the template keeps no such
+   *  table, and from a profile made before this was read. */
+  header?: TemplateHeader;
+  /** The fields a kept header names beside an empty cell (a memo's `To:`,
+   *  `From:`): the paragraph that names each and the one that takes its
+   *  value. Absent when the template has no such header. */
+  headerFields?: TemplateHeaderField[];
   fields: {
     /** Kinds replaced by their shown text: they prompt, or change on open. */
     freezeKinds: string[];
@@ -216,6 +256,19 @@ const LEVEL_WORDS = /[^\s\d.()[\]\-–—/:,;%]/u;
 /** A line that heads a table of contents and says nothing else. */
 const CONTENTS_CAPTION =
   /^(?:obsah|contents|table of contents|inhalt|inhaltsverzeichnis)[ \u00A0]*:?$/iu;
+/** Roles whose paragraphs are body text wherever they stand: the front
+ *  matter of a template ends at the first of them. */
+const BODY_START_ROLES = [
+  "articleHeading",
+  "clause1",
+  "clause2",
+  "clause3",
+  "recital",
+  "heading",
+] as const satisfies readonly HouseStyleRole[];
+/** A paragraph longer than this is prose of the sample, never a line of a
+ *  letterhead or of a memo's header. */
+const PROSE_LENGTH = 200;
 /** What a doubt about the template takes off the profile's confidence. */
 const UNCERTAIN_SHARE = 0.5;
 
@@ -231,6 +284,7 @@ const CONFIDENCE = {
 const NO_BLOCKS: readonly DocxBlock[] = [];
 const NO_FINDINGS: readonly TemplateHealthFinding[] = [];
 const NO_LEVELS: readonly ProfileListLevel[] = [];
+const NO_HEADER_FIELDS: readonly TemplateHeaderField[] = [];
 
 type StyleFacts = {
   style: TemplateStyle;
@@ -517,6 +571,28 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
 };
 
 /**
+ * The style of the numbered line that heads a party: named for parties,
+ * on a level of a list that is not the main outline's and prints a number.
+ * Among several, the one the sample text uses. Undefined when the template
+ * has none.
+ */
+const inferPartyHead = (
+  facts: readonly StyleFacts[],
+  roles: TemplateProfile["roles"],
+): ProfileRoleTarget | undefined => {
+  const main = roles.articleHeading?.numbering?.abstractNumId;
+  const head = byName(
+    facts,
+    NAME.party,
+    ({ level }) =>
+      level !== null && level.abstractNumId !== main && printsLabel(level),
+  );
+  return head === undefined
+    ? undefined
+    : target(head, CONFIDENCE.nameAndLevel, "styleName", "listLevel");
+};
+
+/**
  * The outline the template keeps for its annexes: another list than the
  * main one, with styles on two levels or more that are all named for
  * annexes, and a level that heads articles. Among several, the one with
@@ -705,7 +781,13 @@ const inferRoles = (
       ({ level, style }) =>
         level?.numFmt === "bullet" && style.outlineLvl === null,
     );
-  const annexSample = bySample(outside, ANNEX_SAMPLE);
+  // An entry of a filled table of contents names annexes too ("Annex 1 …
+  // 12"); a contents style is never the annex heading's.
+  const annexSample = bySample(
+    outside,
+    ANNEX_SAMPLE,
+    (fact) => !NAME.contents.test(nameOf(fact)),
+  );
   const annexListNamed = byName(outside, NAME.annexList);
   // The style of a heading without a number (`Preambule`): named for the
   // preamble and in no list; the numbered one of that name is the recital's.
@@ -807,33 +889,228 @@ const readStructure = (blocks: readonly DocxBlock[]): Structure => {
   };
 };
 
+type TemplateHeader = {
+  /** The sample lines of the addressee, in order: block ids. */
+  addressee: string[];
+  date: string | null;
+  reference: string | null;
+};
+
+type TemplateHeaderField = {
+  field: HeadField;
+  /** The word the template names the field with: `Subject`. */
+  name: string;
+  /** The paragraph that names the field. */
+  labelBlockId: string;
+  /** The empty paragraph beside it. */
+  valueBlockId: string;
+};
+
+/**
+ * Reads the fields a kept header table names beside an empty cell: a cell
+ * whose one line of text is the name of a field (`To:`), and the cell after
+ * it in its row, which holds one paragraph without text. A field the table
+ * names twice is read at neither place.
+ */
+const inferHeaderFields = (
+  { topLevel, nestedOf }: Structure,
+  keepBefore: readonly string[],
+): TemplateHeaderField[] => {
+  const found: TemplateHeaderField[] = [];
+  for (const table of topLevel) {
+    const nested = nestedOf.get(table.id);
+    const { cells } = table;
+    if (
+      table.kind !== "table" ||
+      !keepBefore.includes(table.id) ||
+      nested === undefined ||
+      cells === undefined
+    ) {
+      continue;
+    }
+    const byId = new Map(nested.map((block) => [block.id, block]));
+    for (const cell of cells) {
+      const beside = cells.find(
+        ({ row, col }) => row === cell.row && col === cell.col + 1,
+      );
+      const [label, ...more] = cell.blockIds.flatMap((id) => {
+        const block = byId.get(id);
+        return block === undefined || block.text.trim() === "" ? [] : [block];
+      });
+      const value =
+        beside?.blockIds.length === 1
+          ? byId.get(beside.blockIds.at(0) ?? "")
+          : undefined;
+      const named = label === undefined ? null : readFieldName(label.text);
+      if (
+        label !== undefined &&
+        more.length === 0 &&
+        named !== null &&
+        value?.kind === "paragraph" &&
+        value.text.trim() === "" &&
+        (value.inlineObjects ?? 0) === 0
+      ) {
+        found.push({
+          field: named.field,
+          name: named.word,
+          labelBlockId: label.id,
+          valueBlockId: value.id,
+        });
+      }
+    }
+  }
+  return found.filter(
+    ({ field }) => found.filter((other) => other.field === field).length === 1,
+  );
+};
+
+const HEADER_REFERENCE =
+  /^(?:file (?:no|number)|reference|our ref|č\.[ \u00A0]?j\.|sp\.[ \u00A0]?zn\.|spisová značka|naše značka|aktenzeichen|unser zeichen)/iu;
+const HEADER_DATE =
+  /^\d{1,2}\.?[ \u00A0]+\p{L}{3,}[ \u00A0]+\d{4}$|^\d{1,2}\.[ \u00A0]?\d{1,2}\.[ \u00A0]?\d{4}$|^\p{L}{3,}[ \u00A0]+\d{1,2},[ \u00A0]+\d{4}$/u;
+const HEADER_ADDRESSEE_MAX = 6;
+
+/**
+ * Reads the letterhead a template keeps: the first kept table. The lines
+ * its first cell opens with, up to the first line that is a label
+ * (`Via post / E-mail:`), are the sample of an addressee; a paragraph that
+ * is a date and one that names the file are the cells for those.
+ */
+const inferHeader = (
+  { topLevel, nestedOf }: Structure,
+  keepBefore: readonly string[],
+): TemplateHeader | undefined => {
+  const table = topLevel.find(
+    ({ id, kind }) => kind === "table" && keepBefore.includes(id),
+  );
+  const nested = table === undefined ? undefined : nestedOf.get(table.id);
+  if (table === undefined || nested === undefined) {
+    return undefined;
+  }
+  const shown = nested.filter(
+    ({ kind, text }) => kind === "paragraph" && text.trim() !== "",
+  );
+  const firstCell = new Set(table.cells?.at(0)?.blockIds);
+  const opening = shown.filter(({ id }) => firstCell.has(id));
+  const label = opening.findIndex(({ text }) => text.trim().endsWith(":"));
+  const date = shown.find(({ text }) => HEADER_DATE.test(text.trim()));
+  const reference = shown.find(({ text }) =>
+    HEADER_REFERENCE.test(text.trim()),
+  );
+  // A date or a reference under the address is no line of it: a paragraph
+  // takes one thing.
+  const sample = (label === -1 ? opening : opening.slice(0, label)).filter(
+    (block) => block !== date && block !== reference,
+  );
+  const addressee =
+    sample.length >= 2 && sample.length <= HEADER_ADDRESSEE_MAX
+      ? sample.map(({ id }) => id)
+      : [];
+  // A header of label and value cells (a memo's `From:`, `To:`) has no
+  // sample of an addressee and no date of its own: its labels stay.
+  return addressee.length === 0 && date === undefined
+    ? undefined
+    : {
+        addressee,
+        date: date?.id ?? null,
+        reference: reference?.id ?? null,
+      };
+};
+
 type RegionOptions = {
   inspection: TemplateInspection;
   structure: Structure;
   roles: TemplateProfile["roles"];
 };
 
+/** The switch of a contents field that names styles and their levels:
+ *  `\t "Name;1;Other;2"`. */
+const CONTENTS_NAMED = /\\t\s+"(?<named>[^"]*)"/u;
+/** The switch that takes the built-in headings, of a range of levels or of
+ *  all nine. */
+const CONTENTS_HEADINGS = /\\o(?:\s+"(?<low>\d)-(?<high>\d)")?/u;
+/** The switch that takes every paragraph with an outline level. */
+const CONTENTS_OUTLINED = /\\u(?![a-z])/iu;
+const BUILT_IN_HEADING = /^heading (?<level>[1-9])$/iu;
+
+/**
+ * The paragraph styles a contents field collects its entries from, read off
+ * its code. Names and levels alternate in the `\t` switch, parted by the
+ * list separator of the machine that wrote it: a semicolon or a comma.
+ * Undefined when the code is not known.
+ */
+const collectedStyles = (
+  instruction: string | undefined,
+  styles: readonly TemplateStyle[],
+): string[] | undefined => {
+  if (instruction === undefined) {
+    return undefined;
+  }
+  const named = CONTENTS_NAMED.exec(instruction)?.groups?.["named"] ?? "";
+  const names = new Set(
+    named
+      .split(named.includes(";") ? ";" : ",")
+      .filter((_part, position) => position % 2 === 0)
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name !== ""),
+  );
+  const headings = CONTENTS_HEADINGS.exec(instruction);
+  // Levels are single digits and compare as text.
+  const low = headings?.groups?.["low"] ?? "1";
+  const high = headings?.groups?.["high"] ?? "9";
+  const outlined = CONTENTS_OUTLINED.test(instruction);
+  return styles
+    .filter(({ type, name, outlineLvl }) => {
+      if (type !== "paragraph") {
+        return false;
+      }
+      // A built-in heading by its name, any other style by the outline
+      // level it states (counted from zero).
+      const level =
+        BUILT_IN_HEADING.exec(name ?? "")?.groups?.["level"] ??
+        (outlineLvl === null ? undefined : String(outlineLvl + 1));
+      return (
+        names.has((name ?? "").toLowerCase()) ||
+        (headings !== null &&
+          level !== undefined &&
+          level >= low &&
+          level <= high) ||
+        (outlined && outlineLvl !== null)
+      );
+    })
+    .map(({ styleId }) => styleId);
+};
+
 const inferRegions = ({
-  inspection: { fields },
+  inspection: { fields, styles },
   structure: { topLevel, nestedOf },
   roles,
-}: RegionOptions): Pick<TemplateProfile, "regions" | "slots"> => {
+}: RegionOptions): Pick<
+  TemplateProfile,
+  "regions" | "slots" | "contentsStyles"
+> => {
   const order = topLevel.map(({ id }) => id);
   const contents: string[] = [];
+  let contentsStyles: string[] | undefined;
   const contentsField = fields.find(
     ({ kind, blockId }) => kind === CONTENTS_FIELD && blockId !== undefined,
   );
   if (contentsField?.blockId !== undefined) {
     const from = order.indexOf(contentsField.blockId);
     const to = order.indexOf(contentsField.endBlockId ?? contentsField.blockId);
+    // A field that shows sample entries is kept too: the engine writes it
+    // without them. Not one inside a table (contents set in two columns):
+    // there the entries would stay, so such a field is kept only empty.
     const span = new Set(order.slice(from, to + 1));
-    const showsEntries = fields.some(
-      ({ kind, blockId }) =>
-        kind === CONTENTS_ENTRY_FIELD &&
-        blockId !== undefined &&
-        span.has(blockId),
-    );
-    if (from !== -1 && to >= from && !showsEntries) {
+    const entriesInTable =
+      topLevel[from]?.kind === "table" &&
+      fields.some(
+        ({ kind, blockId }) =>
+          kind === CONTENTS_ENTRY_FIELD &&
+          blockId !== undefined &&
+          span.has(blockId),
+      );
+    if (from !== -1 && to >= from && !entriesInTable) {
       const caption = topLevel[from - 1];
       // The caption above the field belongs to it. A short line that does
       // not name the contents is sample text of something else.
@@ -844,6 +1121,7 @@ const inferRegions = ({
         contents.push(caption.id);
       }
       contents.push(...order.slice(from, to + 1));
+      contentsStyles = collectedStyles(contentsField.instruction, styles);
     }
   }
   const inContents = new Set(contents);
@@ -864,14 +1142,29 @@ const inferRegions = ({
   };
   // The sample body starts at the first numbered sample paragraph, alone
   // or in a table, or at the table of contents; what stands before it is
-  // front matter.
+  // front matter. A template that is really a filled document may number
+  // nothing by its styles: there the body starts no later than its first
+  // heading, its first numbered paragraph outside a table, or its first
+  // paragraph of prose. No letterhead holds one, and without that bound
+  // everything up to the document's last table (its signatures) would be
+  // kept as a letterhead.
+  const bodyStyles = new Set(
+    BODY_START_ROLES.flatMap((role) => {
+      const styleId = roles[role]?.styleId;
+      return styleId === undefined ? [] : [styleId];
+    }),
+  );
   const bodyStart = topLevel.findIndex(
     (block) =>
       inContents.has(block.id) ||
       insideOf(block).some(
         ({ label, styleId }) =>
           label !== null && numberedStyles.has(styleId ?? ""),
-      ),
+      ) ||
+      (block.kind === "paragraph" &&
+        (bodyStyles.has(block.styleId ?? "") ||
+          block.label !== null ||
+          block.text.trim().length > PROSE_LENGTH)),
   );
   const front = bodyStart === -1 ? topLevel : topLevel.slice(0, bodyStart);
   const isSample = (block: DocxBlock): boolean =>
@@ -945,6 +1238,7 @@ const inferRegions = ({
       signature:
         signatureBlocks.length === 0 ? null : { blockIds: signatureBlocks },
     },
+    ...(contentsStyles === undefined ? {} : { contentsStyles }),
   };
 };
 
@@ -973,6 +1267,8 @@ const STRUCTURAL_ROLES = [
   "clause1",
   "body",
 ] as const satisfies readonly HouseStyleRole[];
+
+type StructuralRole = (typeof STRUCTURAL_ROLES)[number];
 
 /** A list has nine levels; a template has some lists and some styles. A
  *  template with more findings than this is reported up to here: the
@@ -1100,7 +1396,36 @@ const inferHealth = (
       findings.set(`apart ${finding.role}`, finding);
     }
   }
-  return [...findings.values()].slice(0, HEALTH_FINDINGS_MAX);
+  const unread = STRUCTURAL_ROLES.filter((role) => roles[role] === null);
+  // The body's section: that of the first paragraph in a heading or
+  // clause style of the template.
+  const bodyStyles = new Set(
+    BODY_START_ROLES.flatMap((role) => {
+      const styleId = roles[role]?.styleId;
+      return styleId === undefined ? [] : [styleId];
+    }),
+  );
+  const bodySection = inspection.blocks.find(({ styleId }) =>
+    bodyStyles.has(styleId ?? ""),
+  )?.sectionIndex;
+  const lastSection = Math.max(
+    0,
+    ...inspection.blocks.map(({ sectionIndex }) => sectionIndex),
+  );
+  if (bodySection !== undefined && bodySection < lastSection) {
+    findings.set("sections", {
+      kind: "lastSectionNotBody",
+      bodySection,
+      lastSection,
+    });
+  }
+  const health = [...findings.values()];
+  // First, so the cap never drops it: it says more than any other.
+  return (
+    unread.length > 0
+      ? [{ kind: "rolesNotRead" as const, roles: unread }, ...health]
+      : health
+  ).slice(0, HEALTH_FINDINGS_MAX);
 };
 
 /**
@@ -1225,6 +1550,7 @@ export const inferTemplateProfile = (
   const structure = readStructure(inspection.blocks);
   const roles = inferRoles(facts, structure.topLevel);
   const annexRoles = inferAnnexRoles(facts, roles);
+  const partyHead = inferPartyHead(facts, roles);
   const samplesOf = (role: ProfileRoleTarget | null): readonly DocxBlock[] =>
     facts.find(({ style }) => style.styleId === role?.styleId)?.samples ??
     NO_BLOCKS;
@@ -1301,6 +1627,9 @@ export const inferTemplateProfile = (
       ),
     ),
   );
+  const regions = inferRegions({ inspection, structure, roles });
+  const header = inferHeader(structure, regions.regions.keepBefore);
+  const headerFields = inferHeaderFields(structure, regions.regions.keepBefore);
   const pageBeforeArticle = startsPageBeforeArticle(
     structure.topLevel,
     roles.articleHeading,
@@ -1316,7 +1645,7 @@ export const inferTemplateProfile = (
     roles,
     spareLevels,
     markLevels,
-    ...inferRegions({ inspection, structure, roles }),
+    ...regions,
     headings: {
       article: joinOf(
         samplesOf(roles.articleHeading).filter(({ label }) => label !== null),
@@ -1327,6 +1656,8 @@ export const inferTemplateProfile = (
       ? {}
       : { frontMatterEndsPage: pageBeforeArticle }),
     ...(tableText === undefined ? {} : { tableText }),
+    ...(header === undefined ? {} : { header }),
+    ...(headerFields.length === 0 ? {} : { headerFields }),
     fields: {
       freezeKinds: kinds
         .filter((kind) => VOLATILE_FIELD_KINDS.has(kind))
@@ -1338,6 +1669,7 @@ export const inferTemplateProfile = (
     fillerStrings: inferFillerStrings(inspection.blocks),
     annex,
     ...(annexRoles === undefined ? {} : { annexRoles }),
+    ...(partyHead === undefined ? {} : { partyHead }),
     defaultAlignment:
       inspection.styles.find(
         ({ type, isDefault }) => type === "paragraph" && isDefault,
@@ -1360,7 +1692,8 @@ type ProfileIssueCode =
   | "listLevelChanged"
   | "sharedListLevel"
   | "unknownBlock"
-  | "fieldKeptInPart";
+  | "fieldKeptInPart"
+  | "headerFieldNotKept";
 
 export type TemplateProfileIssue = {
   severity: "error" | "warning";
@@ -1426,6 +1759,65 @@ const unknownLevelIssues = (
         : [{ severity: "error", code: "unknownListLevel" }];
     },
   );
+
+/**
+ * A header field is filled in the front blocks the output keeps: the table
+ * that holds its cells has to be one of them, or the lines the document
+ * states for it would be taken from the body and placed nowhere.
+ */
+const headerFieldIssues = (
+  { headerFields, regions: { keepBefore } }: TemplateProfile,
+  nestedOf: ReadonlyMap<string, readonly DocxBlock[]>,
+): TemplateProfileIssue[] =>
+  (headerFields ?? NO_HEADER_FIELDS).flatMap(
+    ({ labelBlockId, valueBlockId }) => {
+      const kept = keepBefore.some((tableId) => {
+        const inside = nestedOf.get(tableId) ?? NO_BLOCKS;
+        return (
+          inside.some(({ id }) => id === labelBlockId) &&
+          inside.some(({ id }) => id === valueBlockId)
+        );
+      });
+      return kept
+        ? []
+        : [
+            {
+              severity: "error" as const,
+              code: "headerFieldNotKept" as const,
+              blockId: valueBlockId,
+            },
+          ];
+    },
+  );
+
+/**
+ * An issue for every field over several blocks that the regions keep in
+ * part: a field is kept whole, in one run and in its order, or not at all.
+ */
+const fieldsKeptInPart = (
+  inspection: TemplateInspection,
+  { order, emitted }: { order: readonly string[]; emitted: readonly string[] },
+): TemplateProfileIssue[] => {
+  const issues: TemplateProfileIssue[] = [];
+  for (const { blockId, endBlockId } of inspection.fields) {
+    if (blockId === undefined || endBlockId === undefined) {
+      continue;
+    }
+    const span = order.slice(
+      order.indexOf(blockId),
+      order.indexOf(endBlockId) + 1,
+    );
+    const first = emitted.findIndex((id) => span.includes(id));
+    const whole =
+      first !== -1 &&
+      span.every((id, offset) => emitted[first + offset] === id) &&
+      emitted.filter((id) => span.includes(id)).length === span.length;
+    if (first !== -1 && !whole) {
+      issues.push({ severity: "error", code: "fieldKeptInPart", blockId });
+    }
+  }
+  return issues;
+};
 
 /**
  * Checks a profile against the template it is used with: a stored profile
@@ -1514,8 +1906,15 @@ export const validateTemplateProfile = (
       abstractByNum,
     }),
   );
+  // The style for a party's numbered heading line is the template's too.
+  if (
+    profile.partyHead !== undefined &&
+    !facts.has(profile.partyHead.styleId)
+  ) {
+    issues.push({ severity: "error", code: "unknownStyle", role: "party" });
+  }
 
-  const { topLevel } = readStructure(inspection.blocks);
+  const { topLevel, nestedOf } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);
   const { keepBefore, contents, filler } = profile.regions;
   const slotIds = [profile.slots.party, profile.slots.signature].flatMap(
@@ -1526,28 +1925,15 @@ export const validateTemplateProfile = (
       issues.push({ severity: "error", code: "unknownBlock", blockId });
     }
   }
+  issues.push(...headerFieldIssues(profile, nestedOf));
   // Every region that keeps template blocks, in the order they are placed:
   // the front blocks, then the contents.
-  const emitted = [...keepBefore, ...contents];
-  for (const { blockId, endBlockId } of inspection.fields) {
-    if (blockId === undefined || endBlockId === undefined) {
-      continue;
-    }
-    const span = order.slice(
-      order.indexOf(blockId),
-      order.indexOf(endBlockId) + 1,
-    );
-    // A field over several blocks is kept whole, in one run and in its
-    // order, or not at all.
-    const first = emitted.findIndex((id) => span.includes(id));
-    const whole =
-      first !== -1 &&
-      span.every((id, offset) => emitted[first + offset] === id) &&
-      emitted.filter((id) => span.includes(id)).length === span.length;
-    if (first !== -1 && !whole) {
-      issues.push({ severity: "error", code: "fieldKeptInPart", blockId });
-    }
-  }
+  issues.push(
+    ...fieldsKeptInPart(inspection, {
+      order,
+      emitted: [...keepBefore, ...contents],
+    }),
+  );
   return issues;
 };
 
@@ -1657,9 +2043,33 @@ const profileSchema = v.strictObject({
     filler: blockIdsSchema,
   }),
   slots: v.strictObject({ party: slotSchema, signature: slotSchema }),
+  partyHead: v.exactOptional(roleTargetObjectSchema),
   headings: v.strictObject({ article: joinSchema, annex: joinSchema }),
   frontMatterEndsPage: v.exactOptional(v.boolean()),
+  contentsStyles: v.exactOptional(
+    v.pipe(v.array(idSchema), v.maxLength(BLOCKS_MAX)),
+  ),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
+  header: v.exactOptional(
+    v.strictObject({
+      addressee: v.pipe(v.array(idSchema), v.maxLength(HEADER_ADDRESSEE_MAX)),
+      date: v.nullable(idSchema),
+      reference: v.nullable(idSchema),
+    }),
+  ),
+  headerFields: v.exactOptional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          field: v.picklist(HEAD_FIELDS),
+          name: v.pipe(v.string(), v.minLength(1), v.maxLength(16)),
+          labelBlockId: idSchema,
+          valueBlockId: idSchema,
+        }),
+      ),
+      v.maxLength(HEAD_FIELDS.length),
+    ),
+  ),
   fields: v.strictObject({
     freezeKinds: fieldKindsSchema,
     liveKinds: fieldKindsSchema,
@@ -1691,6 +2101,18 @@ const profileSchema = v.strictObject({
           v.strictObject({
             kind: v.literal("textDrawnAsPicture"),
             styleId: v.nullable(textSchema),
+          }),
+          v.strictObject({
+            kind: v.literal("lastSectionNotBody"),
+            bodySection: v.pipe(v.number(), v.integer(), v.minValue(0)),
+            lastSection: v.pipe(v.number(), v.integer(), v.minValue(1)),
+          }),
+          v.strictObject({
+            kind: v.literal("rolesNotRead"),
+            roles: v.pipe(
+              v.array(v.picklist(STRUCTURAL_ROLES)),
+              v.minLength(1),
+            ),
           }),
           v.strictObject({
             kind: v.literal("levelSetApart"),

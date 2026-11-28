@@ -18,7 +18,14 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { normalizeDateFormatSpec, normalizeLocale } from "@stll/agent-input";
-
+import {
+  ATTORNEY_REFS,
+  CONTACT_FIELDS,
+  FIRM_FIELDS,
+  MATTER_FIELDS,
+  USER_FIELDS,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/docx-engine/binding-sources";
 import type {
   FieldDateFormat,
   FieldLookup,
@@ -26,7 +33,7 @@ import type {
   FieldSource,
   FieldSourceKey,
   FieldValidation,
-} from "@/api/lib/docx/types";
+} from "@stll/docx-engine/types";
 import {
   CLEARED_FIELD_SOURCE,
   FIELD_DATE_FORMAT_DESCRIPTION,
@@ -38,15 +45,7 @@ import {
   fieldValidationObjectSchema,
   LOOKUP_FORMATS_MAX,
   LOOKUP_REGISTRIES,
-} from "@/api/lib/docx/types";
-import {
-  ATTORNEY_REFS,
-  CONTACT_FIELDS,
-  FIRM_FIELDS,
-  MATTER_FIELDS,
-  USER_FIELDS,
-  WORKSPACE_CONTACT_ROLES,
-} from "@/api/lib/template-binding/binding-sources";
+} from "@stll/docx-engine/types";
 
 const { entries: fieldEntries } = fieldMetaToolInputObjectSchema;
 const { entries: validationEntries } = fieldValidationObjectSchema;

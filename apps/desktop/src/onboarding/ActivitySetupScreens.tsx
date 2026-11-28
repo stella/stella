@@ -1,5 +1,3 @@
-import { useId } from "react";
-
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -29,6 +27,7 @@ import type {
 import { ActivityExplainer } from "./ActivityExplainer";
 import {
   ChoiceCard,
+  ChoiceGroup,
   Facts,
   ScreenContent,
   ScreenHeader,
@@ -127,9 +126,9 @@ const DetailsScreen = ({
   snapshot,
 }: DetailsScreenProps) => {
   const t = useTranslations("onboarding.activitySetup.details");
+  const activityT = useTranslations("activity");
   const disclosureT = useTranslations("activity.disclosure");
   const stored = useStoredFact();
-  const name = useId();
   const shown = shownDetailsChoice(answer, snapshot.captureDetails);
   const choose = async (choice: DetailsChoice) => {
     if (await controls.setCaptureDetails(DETAILS_CHOICE_CAPTURES[choice])) {
@@ -140,11 +139,7 @@ const DetailsScreen = ({
     <>
       <ScreenHeader body={t("body")} title={t("title")} />
       <ScreenContent>
-        <div
-          aria-label={t("title")}
-          className="flex flex-col gap-3"
-          role="radiogroup"
-        >
+        <ChoiceGroup label={t("title")}>
           {DETAILS_CHOICES.map((choice) => (
             <ChoiceCard
               checked={shown === choice}
@@ -152,7 +147,6 @@ const DetailsScreen = ({
                 `recorded.${DETAILS_CHOICE_FACTS[choice]}`,
               )}
               key={choice}
-              name={name}
               onChoose={() => {
                 void choose(choice);
               }}
@@ -160,7 +154,7 @@ const DetailsScreen = ({
               value={choice}
             />
           ))}
-        </div>
+        </ChoiceGroup>
         {permissions.length === 0 ? null : (
           <div className="bg-card overflow-hidden rounded-xl border">
             <PermissionsSection
@@ -173,7 +167,13 @@ const DetailsScreen = ({
           facts={[
             stored,
             disclosureT("detailsStay"),
-            ...(shown === "withDetails" ? [t("browsers")] : []),
+            ...(shown === "withDetails"
+              ? [
+                  snapshot.browserTitlesManaged
+                    ? activityT("browserTitlesManaged")
+                    : t("browsers"),
+                ]
+              : []),
           ]}
         />
       </ScreenContent>

@@ -1,11 +1,10 @@
 import { expect, test } from "bun:test";
 
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
-
-import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "./cz-ns";
 
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 

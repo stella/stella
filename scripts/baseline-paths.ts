@@ -20,32 +20,20 @@ export const BASELINE_PATHS = {
   /** scripts/check-mutation-query-invalidation.ts */
   mutationQueryInvalidation:
     "scripts/mutation-query-invalidation-baseline.json",
-  /** scripts/check-actionlint-baseline.ts */
-  actionlint: ".github/actionlint-baseline.json",
-  /** scripts/check-test-state-baseline.ts */
-  testState: "scripts/test-state-baseline.json",
   /** scripts/seed-test-determinism-baselines.ts */
   testAmbientTime: "scripts/test-ambient-time-baseline.json",
   /** scripts/seed-test-determinism-baselines.ts */
   testRealTimers: "scripts/test-real-timers-baseline.json",
-  /** scripts/seed-test-determinism-baselines.ts */
-  testWallclockAssertion: "scripts/test-wallclock-assertion-baseline.json",
-  /** scripts/check-rust-test-determinism.ts */
-  rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
   /** scripts/check-write-contracts.ts */
   writeContracts: "scripts/write-contract-routes-baseline.json",
   /** scripts/check-aggregate-mutations.ts */
   aggregateMutations: "scripts/aggregate-mutation-routes-baseline.json",
-  /** scripts/check-oxlint-effective-config.ts */
-  oxlintEffectiveConfig: "scripts/oxlint-effective-config-baseline.json",
   /** scripts/bundle-baseline.ts */
   bundle: "scripts/bundle-baseline.json",
   /** scripts/dependency-audit.ts */
   dependencyAudit: "scripts/dependency-audit-baseline.json",
-  /** scripts/knip-exports-ratchet.ts */
-  knipExports: "scripts/knip-exports-baseline.json",
   /** scripts/offline-check-policy.ts */
   offlineCheckImports: "scripts/offline-check-import-allowlist.json",
   /** scripts/check-ci-network-steps.ts */
@@ -62,10 +50,6 @@ export const BASELINE_PATHS = {
   transferRead: "scripts/transfer-read-guard-baseline.json",
   /** scripts/source-fingerprint-baseline.ts */
   sourceFingerprint: "scripts/source-fingerprint-baseline.json",
-  /** scripts/test-subject-reachability.ts */
-  testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
-  /** scripts/sql-perf-baseline.ts */
-  sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
   /** apps/api/scripts/deployment-feature-guard.ts */
@@ -79,9 +63,6 @@ export const BASELINE_PATHS = {
   /** apps/api/scripts/processed-field-backlog-guard.ts */
   caseLawProcessedFieldBacklog:
     "apps/api/src/handlers/case-law/ingestion/adapters/processed-field-backlog-baseline.json",
-  /** apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts */
-  caseLawSilentDrop:
-    "apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json",
   /** apps/api/scripts/update-structure-fidelity-baseline.ts */
   caseLawStructureFidelity:
     "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json",
@@ -93,10 +74,6 @@ export const BASELINE_PATHS = {
     "apps/api/src/handlers/legislation/fixtures/statute-recall/baseline.json",
   /** apps/web/e2e/helpers/network.ts */
   webNetwork: "apps/web/e2e/network-baseline.json",
-  /** scripts/queue-authority.ts */
-  queueAuthority: "scripts/queue-authority-baseline.json",
-  /** scripts/queue-authority.ts */
-  schedulerTaskAuthority: "scripts/scheduler-task-authority-baseline.json",
   // The i18n baselines and source locks are produced by
   // `packages/scripts/src/i18n-*.ts` against the messages directory it is
   // given, so the package holds the file name and each catalog contributes the
@@ -104,8 +81,6 @@ export const BASELINE_PATHS = {
   // English the translations follow; only `--sync` and `--accept` may write it.
   /** packages/scripts/src/i18n-check.ts, apps/web */
   webI18nCheck: "apps/web/src/i18n/i18n-check-baseline.json",
-  /** packages/scripts/src/i18n-lint.ts, apps/web */
-  webI18nLint: "apps/web/src/i18n/i18n-lint-baseline.json",
   /** packages/scripts/src/i18n-check.ts, apps/landing */
   landingI18nCheck: "apps/landing/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/landing */

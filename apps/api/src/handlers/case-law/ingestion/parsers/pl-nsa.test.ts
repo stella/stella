@@ -1,14 +1,16 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlNsaDecision as uncheckedParsePlNsaDecision,
   plNsaParagraphs,
   plNsaStatedSuperscripts,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
+} from "@stll/case-law-parsers/pl-nsa";
+
+import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 /**
  * The pl-nsa reader against whole rows of the dataset.
  *
@@ -20,7 +22,6 @@ import {
  */
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlNsaDecision = guardParser(uncheckedParsePlNsaDecision);
 

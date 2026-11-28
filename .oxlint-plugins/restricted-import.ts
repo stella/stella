@@ -157,16 +157,22 @@ const PARSER_OR_AST_ROOTS = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/handlers/case-law/ingestion/adapters/",
   "apps/api/src/lib/legal-search/parsers/",
+  "packages/case-law-parsers/",
   "packages/legal-ast/",
 ] as const;
 const LEGAL_AST = packageWithSubpaths("@stll/legal-ast");
+const CASE_LAW_PARSERS = packageWithSubpaths("@stll/case-law-parsers");
 const isParserOrAstModule = (moduleId: string): boolean =>
   LEGAL_AST(moduleId) ||
+  CASE_LAW_PARSERS(moduleId) ||
   PARSER_OR_AST_ROOTS.some((root) => moduleId.startsWith(root));
 
-const RETENTION_ORACLE_MODULE =
-  "apps/api/src/lib/legal-search/parsers/validate-ast";
-const RETENTION_ORACLE_MODULE_FILE = `${RETENTION_ORACLE_MODULE}.ts`;
+const RETENTION_ORACLE_MODULES = [
+  "@stll/case-law-parsers/validate-ast",
+  "packages/case-law-parsers/src/validate-ast",
+] as const;
+const RETENTION_ORACLE_MODULE_FILE =
+  "packages/case-law-parsers/src/validate-ast.ts";
 const RETENTION_CHECK_MODULE_FILE =
   "apps/api/src/handlers/case-law/ingestion/retention/retention-check.ts";
 
@@ -637,7 +643,7 @@ const RESTRICTED_IMPORT_RULES = {
         "Declare the source's projection in ingestion/retention/sources and " +
         "the pipeline checks every parsed decision against it; to choose " +
         "between parses, call validateAst and use its verdict without logging.",
-      modules: [RETENTION_ORACLE_MODULE],
+      modules: [...RETENTION_ORACLE_MODULES],
       restriction: {
         type: "exports",
         names: new Set(["validateAndLog"]),

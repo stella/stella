@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
-import { COURTLISTENER_TEXT_FORMATS } from "../../parsers/courtlistener/select";
+import { COURTLISTENER_TEXT_FORMATS } from "@stll/case-law-parsers/courtlistener/select";
+
 import { mapCourtListenerRecord } from "./map";
 import {
   clusterRow,

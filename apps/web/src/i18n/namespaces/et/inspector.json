@@ -853,6 +853,19 @@
     },
     "showPane": "Kuva paneel",
     "swapViews": "Vaheta põhivaade ja külgpaneel",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "transcribe": {
+      "action": "Transkribeeri",
+      "failed": {
+        "changed": "Salvestis muutus transkribeerimise ajal. Proovige uuesti.",
+        "generic": "Salvestist ei õnnestunud transkribeerida. Proovige uuesti.",
+        "noSpeech": "Sellest salvestisest ei leitud kõnet.",
+        "provider": "Teie organisatsioonil pole ühtegi transkribeerimismudelit. Paluge administraatoril see AI seadetes seadistada.",
+        "tooLong": "See salvestis on transkribeerimiseks liiga pikk.",
+        "unsupported": "Selle salvestise vormingut ei saa transkribeerida."
+      },
+      "progress": "Transkribeerimine… {percent, number}%",
+      "saved": "Transkriptsioon salvestati nimega {fileName}"
+    }
   }
 }

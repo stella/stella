@@ -15,7 +15,11 @@ export type CaptureMode = (typeof CAPTURE_MODES)[number];
 /** The lists the native recorder reads one app's mode from. */
 export type CaptureLists = Pick<
   ActivityCaptureSettings,
-  "appNameOnlyApps" | "browserApps" | "browserTitleApps" | "captureDetails"
+  | "appNameOnlyApps"
+  | "browserApps"
+  | "browserTitleApps"
+  | "browserTitlesManaged"
+  | "captureDetails"
 > & { excludedApps: ActivityAppExclusion[] };
 
 /** The comparable form of an app identifier, as the native side keeps it. */
@@ -51,15 +55,26 @@ export const savedCaptureMode = (
 };
 
 /**
- * The mode in effect: with details off, no app records titles, so every
- * app that is recorded at all records its name only.
+ * Whether titles can be chosen for one app: details are on, and for a
+ * browser, managed policy leaves browser titles to the member.
+ */
+export const titlesAvailable = (lists: CaptureLists, identifier: string) =>
+  lists.captureDetails &&
+  !(lists.browserTitlesManaged && isListed(lists.browserApps, identifier));
+
+/**
+ * The mode in effect: an app that cannot record titles (details off, or a
+ * browser under managed policy) records its name only, if it is recorded
+ * at all.
  */
 export const effectiveCaptureMode = (
   lists: CaptureLists,
   identifier: string,
 ): CaptureMode => {
   const saved = savedCaptureMode(lists, identifier);
-  return lists.captureDetails || saved === "nothing" ? saved : "appOnly";
+  return titlesAvailable(lists, identifier) || saved === "nothing"
+    ? saved
+    : "appOnly";
 };
 
 /** One existing native settings command and its arguments. */
@@ -138,8 +153,9 @@ export const captureModeCommands = (
 
 /**
  * The browser to ask about: the first one in the day's activity, with
- * details on, that is neither chosen for titles nor set to its name, nor
- * excluded, and whose question was not put off in this window. At most one.
+ * details on and browser titles left to the member, that is neither chosen
+ * for titles nor set to its name, nor excluded, and whose question was not
+ * put off in this window. At most one.
  */
 export const undecidedBrowser = (
   day: Pick<
@@ -147,13 +163,14 @@ export const undecidedBrowser = (
     | "appNameOnlyApps"
     | "browserApps"
     | "browserTitleApps"
+    | "browserTitlesManaged"
     | "captureDetails"
     | "excludedApps"
     | "segments"
   >,
   dismissed: ReadonlySet<string>,
 ): ActivityAppExclusion | null => {
-  if (!day.captureDetails) {
+  if (!day.captureDetails || day.browserTitlesManaged) {
     return null;
   }
   const firstSeen = (identifier: string) => {

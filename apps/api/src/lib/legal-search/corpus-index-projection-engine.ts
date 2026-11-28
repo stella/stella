@@ -7,6 +7,7 @@ import { isUuid } from "@stll/uuid-codec";
 import type { SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import {
+  CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   type CorpusIndexClient,
   corpusIndexCommittedIngestTimeoutMs,
@@ -14,13 +15,15 @@ import {
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import { CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { LIMITS } from "@/api/lib/limits";
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
-export const CORPUS_PROJECTION_APPEND_MAX_REVISIONS = 512;
+export const CORPUS_PROJECTION_APPEND_MAX_REVISIONS =
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL;
 export const CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES =
   LIMITS.corpusIndexIngestMaxBytes;
 export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
@@ -37,7 +40,7 @@ export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
  * bound by what they measure (`corpus-index-route-proof.ts`).
  */
 export const CORPUS_PROJECTION_CENSUS_MAX_REVISIONS = 512;
-export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
+const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
 /**
  * Coordinator requests retained during rollout. The projection executor uses
@@ -610,6 +613,27 @@ export const corpusProjectionAppendIngestBudgetMs = (
   manifest: CorpusIndexManifest,
 ): number =>
   corpusIndexCommittedIngestTimeoutMs(corpusIndexCommitTimeoutSecs(manifest));
+
+/**
+ * Lease an append to `manifest`'s indexes must still hold when it starts: the
+ * ingest's whole budget, which follows the generation's commit window, one
+ * presence-confirmation aggregate per census batch of a full request, and the
+ * unknown-outcome margin. The expired-lease sweep turns an `append_started`
+ * row whose lease has passed into cleanup, so any shorter margin lets it
+ * reclaim an append that is still in flight. The ingest start enforces it on
+ * every request, a batch or a single revision
+ * (`startCorpusProjectionAppendBatchTx`).
+ */
+export const corpusProjectionAppendStartMarginMs = (
+  manifest: CorpusIndexManifest,
+): number =>
+  corpusProjectionAppendIngestBudgetMs(manifest) +
+  Math.ceil(
+    CORPUS_PROJECTION_APPEND_MAX_REVISIONS /
+      CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  ) *
+    CORPUS_INDEX_AGGREGATION_TIMEOUT_MS +
+  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
 
 /** The commit window a generation's indexes were created with. */
 export const corpusIndexCommitTimeoutSecs = (

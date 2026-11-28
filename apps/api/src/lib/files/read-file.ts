@@ -57,6 +57,15 @@ const STORED_FILE_CONTENT_UNREADABLE = failureSink({
   expected: [],
 });
 
+/**
+ * Maximum download/read URL lifetime (900 seconds / 15 minutes).
+ *
+ * Matter-file reads issue Stella content grants (`/v1/file-content/<grant>`)
+ * whose redemption rechecks version liveness, while direct presigned S3
+ * downloads (user files, exports, desktop edit links) are bearer URLs that
+ * remain valid at S3 until expiry. Keeping this ceiling at 900 seconds aligns
+ * both paths with `MAX_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS` in `s3-presign.ts`.
+ */
 export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
 const FILE_READ_STORAGE_TIMEOUT_MS = 30_000;
 const refuseBackgroundSessionAuthority: SyntheticSessionAuthorityReader =

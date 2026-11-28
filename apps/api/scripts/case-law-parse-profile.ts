@@ -31,9 +31,9 @@ const {
   validateAst,
   validationInlineText,
   validationTextHoldsOnlyDecoration,
-} = await import("@/api/lib/legal-search/parsers/validate-ast");
+} = await import("@stll/case-law-parsers/validate-ast");
 const { markupResidueIn } =
-  await import("@/api/lib/legal-search/parsers/markup-residue");
+  await import("@stll/case-law-parsers/markup-residue");
 const iterations = process.argv.includes("--quick") ? 5 : 30;
 const fixtures = await buildValidateAstFixtures();
 

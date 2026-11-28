@@ -6,7 +6,6 @@ import type {
   Request,
 } from "@playwright/test";
 import { expect, request as apiRequestFactory } from "@playwright/test";
-import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -20,10 +19,7 @@ import {
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 
-import {
-  partitionRoundRobin,
-  resolveE2eExecutionProfile,
-} from "../execution-profile";
+import { partitionRoundRobin } from "../execution-profile";
 import { apiDelete, apiGet, apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
@@ -65,14 +61,10 @@ import {
 } from "../helpers/render-census-hook";
 import {
   measureSmokeWorlds,
-  parseRouteScaleLedger,
   routeScaleCensus,
   type RouteScaleMeasurement,
 } from "../helpers/route-scale";
-import {
-  addedLedgerEntries,
-  routeScaleLedgerMembership,
-} from "../helpers/route-scale-ledger";
+import { resolveRouteSmokeGroupCount } from "../helpers/route-smoke-groups";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
   assertSmokeRouteCoverage,
@@ -99,16 +91,12 @@ import {
   deleteTestWorkspace,
   type TestWorkspace,
 } from "../helpers/workspace";
-import scaleLedger from "../route-scale-ledger.json" with { type: "json" };
 
 // Every route retains the former one-second observation floor so delayed
 // warmups remain visible. After that floor, tracked API activity may finish
 // the longer document-route windows early once it stays quiet.
 const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
-const GIT_REF_OUTPUT_MAX_BYTES = 64 * 1024;
-const ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES = 256 * 1024;
-const SCALE_LEDGER = parseRouteScaleLedger(JSON.stringify(scaleLedger));
 // The small/large matter comparison walks every route three times, so it runs
 // in the nightly route-scale workflow; pull requests walk the baseline only.
 const ROUTE_SCALE = process.env["E2E_ROUTE_SCALE"] === "1";
@@ -120,43 +108,6 @@ const ROUTE_SCALE = process.env["E2E_ROUTE_SCALE"] === "1";
 // lifecycle; both need the authenticated storage state wired in explicitly.
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 
-const routeScaleLedgerAdditions = (): string[] => {
-  const baseRef = "origin/main";
-  const resolved = spawnSync(
-    "git",
-    [
-      "rev-parse",
-      "--verify",
-      "--quiet",
-      "--end-of-options",
-      `${baseRef}^{commit}`,
-    ],
-    { cwd: REPO_ROOT, encoding: "utf-8", maxBuffer: GIT_REF_OUTPUT_MAX_BYTES },
-  );
-  if (resolved.status !== 0) {
-    return [`base ${baseRef} could not be resolved`];
-  }
-  const commit = resolved.stdout.trim();
-  const ledgerPath = "apps/web/e2e/route-scale-ledger.json";
-  const base = spawnSync("git", ["show", `${commit}:${ledgerPath}`], {
-    cwd: REPO_ROOT,
-    encoding: "utf-8",
-    maxBuffer: ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES,
-  });
-  if (base.status !== 0) {
-    if (/exists on disk, but not in|does not exist in/u.test(base.stderr)) {
-      return addedLedgerEntries(
-        routeScaleLedgerMembership(JSON.stringify(scaleLedger)),
-        null,
-      );
-    }
-    return [`git show ${commit}:${ledgerPath} failed: ${base.stderr}`];
-  }
-  return addedLedgerEntries(
-    routeScaleLedgerMembership(JSON.stringify(scaleLedger)),
-    routeScaleLedgerMembership(base.stdout),
-  );
-};
 const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
 
 const ROUTE_TREE_PATH = path.resolve(
@@ -648,7 +599,7 @@ const declareRouteSmokeGroup = ({
           routes: defs.map(networkBaselineKey),
           small: measurements(smallScaleResults, smallRenderResults),
           large: measurements(scaleResults, largeRenderResults),
-          ledger: SCALE_LEDGER,
+          ledger: [],
         });
         expect(problems).toEqual([]);
       });
@@ -669,8 +620,6 @@ const declareRouteSmokeGroup = ({
 };
 
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
-declareVisualSandboxSmoke();
-declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("records loading landmarks in English and Czech", async ({
   baseURL,
@@ -749,113 +698,110 @@ for (const locale of ["en", "cs"] as const) {
   });
 }
 
-test("records inbox and contact loading landmarks in English and Czech", async ({
-  baseURL,
-  browser,
-}, testInfo) => {
-  // timeout: Each locale needs a cold and hydrated document for three routes.
-  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
-  const measurement = await measureLoadingGeometry({
+const declareRemainingStandaloneTests = () => {
+  declareVisualSandboxSmoke();
+  declarePublicKnowledgeSmoke({ mode: "disabled" });
+
+  test("records inbox and contact loading landmarks in English and Czech", async ({
+    baseURL,
     browser,
-    baseURL: baseURL ?? "http://localhost:3000",
-    storageState: STORAGE_STATE,
-    set: "contacts",
-  });
-  await testInfo.attach("contacts-loading-geometry.json", {
-    body: JSON.stringify(measurement, null, 2),
-    contentType: "application/json",
-  });
-  for (const sample of measurement.evidence) {
-    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
-      expect(
-        loaded,
-        `${sample.locale} ${sample.route} ${landmark}`,
-      ).not.toBeNull();
-      // The inbox's body is drawn from the layout this browser keeps, which
-      // the server's paint cannot read: it is absent there, never elsewhere.
-      if (sample.route === "/inbox" && landmark === "body") {
-        expect(sample.server[landmark]).toBeNull();
-        continue;
+  }, testInfo) => {
+    // timeout: Each locale needs a cold and hydrated document for three routes.
+    testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+    const measurement = await measureLoadingGeometry({
+      browser,
+      baseURL: baseURL ?? "http://localhost:3000",
+      storageState: STORAGE_STATE,
+      set: "contacts",
+    });
+    await testInfo.attach("contacts-loading-geometry.json", {
+      body: JSON.stringify(measurement, null, 2),
+      contentType: "application/json",
+    });
+    for (const sample of measurement.evidence) {
+      for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+        expect(
+          loaded,
+          `${sample.locale} ${sample.route} ${landmark}`,
+        ).not.toBeNull();
+        // The inbox's body is drawn from the layout this browser keeps, which
+        // the server's paint cannot read: it is absent there, never elsewhere.
+        if (sample.route === "/inbox" && landmark === "body") {
+          expect(sample.server[landmark]).toBeNull();
+          continue;
+        }
+        expect
+          .soft(
+            sample.server[landmark],
+            `${sample.locale} ${sample.route} cold ${landmark}`,
+          )
+          .toMatchObject({ top: loaded?.top, left: loaded?.left });
       }
-      expect
-        .soft(
-          sample.server[landmark],
-          `${sample.locale} ${sample.route} cold ${landmark}`,
-        )
-        .toMatchObject({ top: loaded?.top, left: loaded?.left });
     }
-  }
-});
+  });
 
-test("records Knowledge skill loading landmarks in English and Czech", async ({
-  baseURL,
-  browser,
-}, testInfo) => {
-  // timeout: Each locale needs a cold and hydrated document.
-  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
-  const measurement = await measureLoadingGeometry({
+  test("records Knowledge skill loading landmarks in English and Czech", async ({
+    baseURL,
     browser,
-    baseURL: baseURL ?? "http://localhost:3000",
-    storageState: STORAGE_STATE,
-    set: "knowledge-skill",
-  });
-  await testInfo.attach("knowledge-skill-loading-geometry.json", {
-    body: JSON.stringify(measurement, null, 2),
-    contentType: "application/json",
-  });
-  for (const sample of measurement.evidence) {
-    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
-      expect(
-        loaded,
-        `${sample.locale} ${sample.route} ${landmark}`,
-      ).not.toBeNull();
-      expect
-        .soft(
-          sample.server[landmark],
-          `${sample.locale} ${sample.route} cold ${landmark}`,
-        )
-        .toMatchObject({ top: loaded?.top, left: loaded?.left });
+  }, testInfo) => {
+    // timeout: Each locale needs a cold and hydrated document.
+    testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+    const measurement = await measureLoadingGeometry({
+      browser,
+      baseURL: baseURL ?? "http://localhost:3000",
+      storageState: STORAGE_STATE,
+      set: "knowledge-skill",
+    });
+    await testInfo.attach("knowledge-skill-loading-geometry.json", {
+      body: JSON.stringify(measurement, null, 2),
+      contentType: "application/json",
+    });
+    for (const sample of measurement.evidence) {
+      for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+        expect(
+          loaded,
+          `${sample.locale} ${sample.route} ${landmark}`,
+        ).not.toBeNull();
+        expect
+          .soft(
+            sample.server[landmark],
+            `${sample.locale} ${sample.route} cold ${landmark}`,
+          )
+          .toMatchObject({ top: loaded?.top, left: loaded?.left });
+      }
     }
-  }
-});
+  });
 
-test("records Knowledge loading landmarks in English and Czech", async ({
-  baseURL,
-  browser,
-}, testInfo) => {
-  // timeout: Each locale needs a cold and hydrated document for three routes.
-  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
-  const measurement = await measureLoadingGeometry({
+  test("records Knowledge loading landmarks in English and Czech", async ({
+    baseURL,
     browser,
-    baseURL: baseURL ?? "http://localhost:3000",
-    storageState: STORAGE_STATE,
-    set: "knowledge",
+  }, testInfo) => {
+    // timeout: Each locale needs a cold and hydrated document for three routes.
+    testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+    const measurement = await measureLoadingGeometry({
+      browser,
+      baseURL: baseURL ?? "http://localhost:3000",
+      storageState: STORAGE_STATE,
+      set: "knowledge",
+    });
+    await testInfo.attach("knowledge-loading-geometry.json", {
+      body: JSON.stringify(measurement, null, 2),
+      contentType: "application/json",
+    });
   });
-  await testInfo.attach("knowledge-loading-geometry.json", {
-    body: JSON.stringify(measurement, null, 2),
-    contentType: "application/json",
-  });
-});
 
-test("route coverage matches the authenticated route tree", async () => {
-  await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
-  expect(
-    routeScaleLedgerAdditions(),
-    "route scale allowances only shrink",
-  ).toEqual([]);
-  const routeKeys = new Set(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
-  expect(
-    SCALE_LEDGER.filter(({ route }) => !routeKeys.has(route)),
-    "scale allowances reference smoke routes",
-  ).toEqual([]);
-  // A write run may be adding the missing route entry; check the committed
-  // baseline only in comparison mode.
-  if (baselineMode !== "write" && baselineMode !== "rewrite") {
-    assertNetworkBaselineCoverage(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
-  }
-});
+  test("route coverage matches the authenticated route tree", async () => {
+    await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
+    // A write run may be adding the missing route entry; check the committed
+    // baseline only in comparison mode.
+    if (baselineMode !== "write" && baselineMode !== "rewrite") {
+      assertNetworkBaselineCoverage(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
+    }
+  });
+};
 
 if (baselineMode === "write" || baselineMode === "rewrite") {
+  declareRemainingStandaloneTests();
   // Baseline writes need one complete result set and one writer. Normal checks
   // use isolated groups because each independently compares its observed routes
   // against the same committed per-route budgets.
@@ -866,16 +812,28 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
     checkUnenrolledRoutes: true,
   });
 } else {
-  const { routeSmokeGroupCount } = resolveE2eExecutionProfile(
+  const routeSmokeGroupCount = resolveRouteSmokeGroupCount(
     process.env["E2E_EXECUTION_PROFILE"],
+    process.env["E2E_ROUTE_SMOKE_GROUPS"],
   );
   const groups = partitionRoundRobin(SMOKE_ROUTE_DEFS, routeSmokeGroupCount);
-  for (const [groupIndex, defs] of groups.entries()) {
+  const [firstGroup, ...remainingGroups] = groups;
+  if (firstGroup !== undefined) {
+    declareRouteSmokeGroup({
+      defs: firstGroup,
+      name: `authenticated routes render without browser errors 1/${groups.length}`,
+      requireAllRoutes: false,
+      checkUnenrolledRoutes: groups.length === 1,
+    });
+  }
+  declareRemainingStandaloneTests();
+  for (const [offset, defs] of remainingGroups.entries()) {
+    const groupIndex = offset + 1;
     declareRouteSmokeGroup({
       defs,
       name: `authenticated routes render without browser errors ${groupIndex + 1}/${groups.length}`,
       requireAllRoutes: false,
-      checkUnenrolledRoutes: groupIndex === 0,
+      checkUnenrolledRoutes: groupIndex === groups.length - 1,
     });
   }
 }

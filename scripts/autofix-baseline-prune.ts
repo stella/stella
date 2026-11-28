@@ -51,32 +51,15 @@ export const PRUNABLE_BASELINE_WRITERS = [
     baselines: [{ path: BASELINE_PATHS.aggregateLocks, collection: [] }],
   },
   {
-    write: ["bun", "scripts/sql-perf-baseline.ts", "--write"],
-    baselines: [{ path: BASELINE_PATHS.sqlPerf, collection: [] }],
-  },
-  {
     write: ["bun", "scripts/transfer-read-guard.ts", "--write"],
     baselines: [{ path: BASELINE_PATHS.transferRead, collection: [] }],
   },
   {
-    write: ["bun", "scripts/queue-authority.ts", "--write"],
-    baselines: [
-      { path: BASELINE_PATHS.queueAuthority, collection: ["members"] },
-      { path: BASELINE_PATHS.schedulerTaskAuthority, collection: ["members"] },
-    ],
-  },
-  {
     write: ["bun", "scripts/seed-test-determinism-baselines.ts"],
     baselines: [
-      { path: BASELINE_PATHS.testState, collection: [] },
-      { path: BASELINE_PATHS.testWallclockAssertion, collection: [] },
       { path: BASELINE_PATHS.testRealTimers, collection: [] },
       { path: BASELINE_PATHS.testAmbientTime, collection: [] },
     ],
-  },
-  {
-    write: ["bun", "scripts/check-rust-test-determinism.ts", "--write"],
-    baselines: [{ path: BASELINE_PATHS.rustTestDeterminism, collection: [] }],
   },
   {
     write: ["bun", "scripts/check-mutation-query-invalidation.ts", "--write"],

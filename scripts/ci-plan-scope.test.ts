@@ -1056,3 +1056,69 @@ test("a change to the planner or a module it imports plans every wide check", ()
     );
   }
 });
+
+test("web_build_required skips non-runtime test, fixture, and doc edits while retaining runtime assets", () => {
+  const planWebBuild = (file: string) =>
+    computeChangedFileScope(
+      {
+        changedFiles: [file],
+        comparisonBase: "base",
+        scopeUnknown: false,
+        eventName: "pull_request",
+        suiteDepth: "fast",
+        heavyOnly: false,
+        prTitle: "",
+      },
+      {
+        ...DEFAULT_DETECTORS,
+        packageChecks: () => true,
+        landingBuild: () => false,
+        landingDeploy: () => false,
+        desktopBrowser: () => false,
+      },
+    ).web_build_required;
+
+  for (const file of [
+    "apps/web/src/routes/index.test.tsx",
+    "apps/web/src/components/button.stories.tsx",
+    "apps/web/src/__fixtures__/route-shell/fixture.tsx",
+    "apps/web/src/i18n/TERMINOLOGY.md",
+    "packages/ui/src/button.test.tsx",
+    "packages/ui/src/__tests__/button.spec.ts",
+    "packages/ui/README.md",
+    "packages/api-contract/src/__fixtures__/sample.json",
+  ]) {
+    expect(planWebBuild(file), file).toBe("false");
+  }
+
+  for (const file of [
+    "apps/web/src/routes/index.tsx",
+    "apps/web/vite.config.ts",
+    "packages/ui/src/button.tsx",
+    "packages/template-packs/src/content/packs/default/templates/advisor-agreement/README.md",
+    "scripts/bundle-baseline.json",
+  ]) {
+    expect(planWebBuild(file), file).toBe("true");
+  }
+
+  const fullMergeGroupApiE2e = computeChangedFileScope(
+    {
+      changedFiles: ["apps/api/e2e/decision-reader.spec.mts"],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "merge_group",
+      suiteDepth: "full",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
+  );
+  expect(fullMergeGroupApiE2e.e2e_core_required).toBe("true");
+  expect(fullMergeGroupApiE2e.e2e_production_required).toBe("true");
+});

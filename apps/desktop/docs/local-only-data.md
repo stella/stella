@@ -9,6 +9,12 @@ device only for a stella AI description the user approved (see
 local-only feature follows every rule below and adds one entry to
 `tests/local-only-features.ts`, which the guard tests iterate.
 
+Every field Activity stores, where it is kept, whether it leaves the device
+and how long it stays is listed in the
+[Activity data map](activity-data-map.gen.md), generated from
+`src-tauri/src/activity_data_map.rs`. Its test fails when a stored field has
+no row there.
+
 ## Checklist
 
 - **Own encryption key.** Each store has its own keychain account

@@ -47,10 +47,11 @@ const SIZE_LINT_COMPONENT_LINES = 300;
 const SIZE_LINT_BACKLOG_RULES = [
   "eslint/complexity",
   "eslint/max-lines-per-function",
-  "eslint/max-params",
 ] as const;
 
-type SizeLintRule = (typeof SIZE_LINT_BACKLOG_RULES)[number];
+type SizeLintBacklogRule = (typeof SIZE_LINT_BACKLOG_RULES)[number];
+
+type SizeLintRule = SizeLintBacklogRule | "eslint/max-params";
 
 type SizeLintRuleMap = Record<SizeLintRule, DummyRuleMap[string]>;
 
@@ -119,41 +120,16 @@ export const SIZE_LINT_POLICY_OVERRIDES =
   sizeLintPolicyOverrides(SIZE_LINT_CEILINGS);
 
 /**
- * Built-in rules the vendored presets enable whose merged-code findings ride
- * the backlog below, so each one is on for every file the baseline does not
- * list. `oxlint.design.config.ts` measures them under the options the
- * repository lint resolves for them.
- */
-export const BUILTIN_LINT_BACKLOG_RULES = [
-  "react/no-children-prop",
-  "eslint/no-unexpected-multiline",
-] as const;
-
-type BuiltinLintBacklogRule = (typeof BUILTIN_LINT_BACKLOG_RULES)[number];
-
-/**
  * The `no-native-ui` rules (one per `@stll/ui` component that wraps native
  * markup, from `.oxlint-plugins/no-native-ui-registry.ts`) that product code
  * still breaks. A rule with no offenders is not listed: it is an error across
  * its whole scope.
  */
 const NO_NATIVE_UI_BACKLOG_RULES = [
-  "no-native-ui/no-native-accordion",
   "no-native-ui/no-native-button",
-  "no-native-ui/no-native-checkbox",
-  "no-native-ui/no-native-details-grid",
   "no-native-ui/no-native-dialog",
-  "no-native-ui/no-native-form",
-  "no-native-ui/no-native-input",
-  "no-native-ui/no-native-label",
-  "no-native-ui/no-native-menu",
-  "no-native-ui/no-native-number-input",
-  "no-native-ui/no-native-secret-input",
   "no-native-ui/no-native-select",
-  "no-native-ui/no-native-separator",
   "no-native-ui/no-native-table",
-  "no-native-ui/no-native-textarea",
-  "no-native-ui/no-native-tooltip",
 ] as const;
 
 /**
@@ -173,16 +149,10 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "shadcn/no-arbitrary-values",
   "no-raw-overflow-scroll/no-raw-overflow-scroll",
   "no-raw-context-menu/no-raw-context-menu",
-  "no-imported-class-constant/no-imported-class-constant",
-  "require-bounded-request-schema/require-bounded-request-schema",
-  "no-unbounded-response-body/no-unbounded-response-body",
-  "no-computed-key-record-assignment/no-computed-key-record-assignment",
-  "exhaustive-union-map/exhaustive-union-map",
   "no-direct-status-set/no-direct-status-set",
   "require-polite-publisher-fetch/require-polite-publisher-fetch",
   ...NO_NATIVE_UI_BACKLOG_RULES,
   ...SIZE_LINT_BACKLOG_RULES,
-  ...BUILTIN_LINT_BACKLOG_RULES,
 ] as const;
 
 export type DesignLintBacklogRule = (typeof DESIGN_LINT_BACKLOG_RULES)[number];
@@ -242,15 +212,8 @@ const SIZE_LINT_RULE_IDS: ReadonlySet<string> = new Set(
   SIZE_LINT_BACKLOG_RULES,
 );
 
-const isSizeLintRule = (rule: string): rule is SizeLintRule =>
+const isSizeLintRule = (rule: string): rule is SizeLintBacklogRule =>
   SIZE_LINT_RULE_IDS.has(rule);
-
-const BUILTIN_LINT_RULE_IDS: ReadonlySet<string> = new Set(
-  BUILTIN_LINT_BACKLOG_RULES,
-);
-
-const isBuiltinLintRule = (rule: string): rule is BuiltinLintBacklogRule =>
-  BUILTIN_LINT_RULE_IDS.has(rule);
 
 /**
  * The tracked rules this repository implements, as opposed to the preset's
@@ -258,10 +221,7 @@ const isBuiltinLintRule = (rule: string): rule is BuiltinLintBacklogRule =>
  */
 const DESIGN_LINT_LOCAL_RULES: ReadonlySet<string> = new Set(
   DESIGN_LINT_BACKLOG_RULES.filter(
-    (rule) =>
-      pluginOf(rule) !== SHADCN_PLUGIN &&
-      !isSizeLintRule(rule) &&
-      !isBuiltinLintRule(rule),
+    (rule) => pluginOf(rule) !== SHADCN_PLUGIN && !isSizeLintRule(rule),
   ),
 );
 
@@ -441,6 +401,7 @@ export const SHADCN_LINT_POLICY_OVERRIDES = [
  */
 export const DESIGN_LINT_MEASURED_RULES = {
   ...SIZE_LINT_RULES,
+  "eslint/max-params": "off",
   "shadcn/no-restyle": SHADCN_LINT_RULES["shadcn/no-restyle"],
   "shadcn/no-arbitrary-values": SHADCN_LINT_RULES["shadcn/no-arbitrary-values"],
   "shadcn/no-raw-colors": "off",
@@ -449,11 +410,6 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "shadcn/require-static-classes": "off",
   "no-raw-overflow-scroll/no-raw-overflow-scroll": "off",
   "no-raw-context-menu/no-raw-context-menu": "off",
-  "no-imported-class-constant/no-imported-class-constant": "off",
-  "require-bounded-request-schema/require-bounded-request-schema": "off",
-  "no-unbounded-response-body/no-unbounded-response-body": "off",
-  "no-computed-key-record-assignment/no-computed-key-record-assignment": "off",
-  "exhaustive-union-map/exhaustive-union-map": "off",
   "no-direct-status-set/no-direct-status-set": "off",
   "require-polite-publisher-fetch/require-polite-publisher-fetch": "off",
   ...Object.fromEntries(
