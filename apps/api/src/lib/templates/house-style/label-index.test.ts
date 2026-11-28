@@ -813,6 +813,63 @@ describe("buildLabelIndex", () => {
   });
 });
 
+test("a line set to the right in front of the first article that names an annex marks the document", () => {
+  const right = (text: string) => ({
+    ...manifestOf([text]).blocks[0]!,
+    alignment: "right" as const,
+  });
+  const manifest = manifestOf([
+    "Příloha č. 7",
+    "K Metodickému pokynu č. 1/2015",
+    "ROZHODNUTÍ",
+    "Článek I.\nPředmět",
+    "Text článku.",
+    "Příloha č. 1",
+    "Ceník",
+  ]);
+  const blocks = manifest.blocks.map((block, position) =>
+    position === 0 || position === 5
+      ? { ...right(block.text), id: block.id, index: block.index }
+      : block,
+  );
+  const index = buildLabelIndex({ ...manifest, blocks });
+  expect(index.entryByBlockId.has("p0")).toBe(false);
+  // Behind an article the same line heads an annex.
+  expect(index.entryByBlockId.get("p5")?.level).toBe("annex");
+});
+
+test("an annex line set to the right after the first clause, or in a list of the annexes, is still an annex", () => {
+  const right = (
+    manifest: ReturnType<typeof manifestOf>,
+    at: readonly number[],
+  ) => ({
+    ...manifest,
+    blocks: manifest.blocks.map((block, position) =>
+      at.includes(position) ? { ...block, alignment: "right" as const } : block,
+    ),
+  });
+  const clauses = manifestOf([
+    "SMLOUVA",
+    numbered("1.", "Zhotovitel provede dílo.", 3),
+    numbered("2.", "Objednatel zaplatí cenu.", 3),
+    "Příloha č. 1",
+    "Ceník",
+  ]);
+  expect(
+    buildLabelIndex(right(clauses, [3])).entryByBlockId.get("p3")?.level,
+  ).toBe("annex");
+  const listed = manifestOf([
+    "SMLOUVA",
+    "Přílohy:",
+    "Příloha č. 1 – Ceník",
+    "Příloha č. 2 – Harmonogram",
+    "Článek I.\nPředmět",
+    "Text článku.",
+  ]);
+  const index = buildLabelIndex(right(listed, [2, 3]));
+  expect(index.entryByBlockId.get("p2")?.listed).toBe(true);
+});
+
 describe("labels that print the counters above their own", () => {
   const block = (lvlText: string, ilvl: number) =>
     manifestOf([leveled("x", "text", { ilvl, lvlText })]).blocks[0]!;
