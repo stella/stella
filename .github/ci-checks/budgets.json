@@ -175,13 +175,6 @@
       "p99Seconds": 44,
       "peakRssMiB": 1356
     },
-    "Knip dead-export check (packages/cli)": {
-      "minutes": 5,
-      "samples": 10,
-      "p95Seconds": 29,
-      "p99Seconds": 29,
-      "peakRssMiB": 962
-    },
     "Knip dead-export budget (all workspaces)": {
       "minutes": 5,
       "samples": 10,

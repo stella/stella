@@ -2,9 +2,10 @@
 #
 # Runs the pre-push commands CONTRIBUTING.md gives fork contributors, the way
 # a fresh fork clone runs them: a separate worktree of this commit, a plain
-# `bun install`, then `bun run autofix` and the derived `bun run verify` plan,
-# each without arguments. Pull requests from forks get no CI autofix and rely
-# on these commands, so a change to the local harness must keep them running.
+# `bun install`, then `bun run autofix --base HEAD` and the derived
+# `bun run verify --list --base HEAD` plan. Scoping to `--base HEAD` keeps the
+# smoke runtime independent of PR diff size while exercising the full fresh-
+# worktree install, autofix, and verify-plan harness.
 #
 # Usage: bash scripts/fork-contributor-commands.sh
 set -euo pipefail
@@ -39,5 +40,5 @@ unset CI_GENERATED_SOURCES_MANIFEST
 export NPM_TOKEN=""
 # A contributor install runs the lifecycle scripts.
 bash scripts/retry.sh bun install --frozen-lockfile
-bun run autofix
-bun run verify --list
+bun run autofix --base HEAD
+bun run verify --list --base HEAD

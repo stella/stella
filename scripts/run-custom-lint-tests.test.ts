@@ -117,6 +117,31 @@ test("full-suite batches cover every discovered file exactly once within two wor
   expect(() => customLintTestCommands([], [])).toThrow("found no test files");
 });
 
+test("full-suite batches balance skewed file sizes with LPT bin-packing", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "custom-lint-lpt-"));
+  try {
+    // Alphabetical round-robin would pair a (10 KiB) + c (4 KiB) vs b (6 KiB).
+    // LPT places a (10 KiB) on worker 0 and b (6 KiB) + c (4 KiB) on worker 1.
+    const sizes = [
+      ["a.test.ts", 10_000],
+      ["b.test.ts", 6000],
+      ["c.test.ts", 4000],
+    ] as const;
+    const files = sizes.map(([name, bytes]) => {
+      const filename = path.join(directory, name);
+      writeFileSync(filename, "x".repeat(bytes));
+      return filename;
+    });
+    const commands = customLintTestCommands([], files);
+    expect(commands.map((command) => command.slice(4))).toEqual([
+      [files[0]],
+      [files[1], files[2]],
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("selectors and output flags retain their single-command semantics", () => {
   for (const args of [
     ["-t", "case"],
