@@ -40,18 +40,17 @@ runs:
       if: steps.stack.outcome == 'success' && inputs.pause-native-extraction == 'true'
       shell: bash
       run: |
-        for i in {1..60}; do
-          if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/ready > /dev/null 2>&1; then
-            break
-          fi
-          if [[ "$i" -eq 60 ]]; then
-            echo "::error::API never became ready before pausing scheduler job"
-            tail -200 /tmp/api.log || true
-            exit 1
+        # setup-e2e-stack waits on /live, while ensureDefaultJobs registers the
+        # scheduler_jobs rows right after listen. Retry until the row is present.
+        for i in {1..30}; do
+          if NODE_ENV=development STELLA_LOCAL_DEV=1 bun run --cwd apps/api scheduler:job-pause -- pause --job documentProcessing.dispatchNativeExtraction.twoMinute --for 1h --reason "route-smoke network measurement" --actor route-smoke --apply; then
+            exit 0
           fi
           sleep 1
         done
-        NODE_ENV=development STELLA_LOCAL_DEV=1 bun run --cwd apps/api scheduler:job-pause --           pause           --job documentProcessing.dispatchNativeExtraction.twoMinute           --for 1h           --reason "route-smoke network measurement"           --actor route-smoke           --apply
+        echo "::error::Failed to pause documentProcessing.dispatchNativeExtraction.twoMinute"
+        tail -200 /tmp/api.log || true
+        exit 1
 
     - name: Install Playwright browsers
       if: steps.stack.outcome == 'success'
