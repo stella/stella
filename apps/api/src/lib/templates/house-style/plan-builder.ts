@@ -1575,10 +1575,9 @@ const labelledLine = (
   // The line's own indent, where the plan gives it one, sets where its
   // first line starts; else its style's.
   const hanging = own?.hanging ?? 0;
+  const ownLeft = own?.left;
   const indentLeft =
-    own !== undefined && own.left !== undefined
-      ? own.left - hanging
-      : style?.indentLeft;
+    ownLeft === undefined ? style?.indentLeft : ownLeft - hanging;
   if (parts === undefined || indentLeft === undefined) {
     return null;
   }
@@ -1591,10 +1590,7 @@ const labelledLine = (
     blockId: block.id,
     labelEnd: (indentLeft ?? 0) + Math.ceil(width),
     tabs: (parts["tabs"] ?? "").length,
-    hangingLeft:
-      own !== undefined && own.left !== undefined && hanging > 0
-        ? own.left
-        : null,
+    hangingLeft: ownLeft !== undefined && hanging > 0 ? ownLeft : null,
   };
 };
 
