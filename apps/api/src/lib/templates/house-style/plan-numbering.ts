@@ -76,6 +76,9 @@ export type Placement = {
   /** The list's counters once the block is counted, down to its level. */
   counters: number[];
   keptReason: LabelKeptReason | null;
+  /** The source's own list the block keeps, where no level of the
+   *  template can print its list: the output carries a copy of it. */
+  sourceList: { numId: number; ilvl: number } | null;
 };
 
 export type OutlineLevels = {
@@ -241,6 +244,117 @@ const renderLabel = (
 const keepLabel = (placement: Placement, reason: LabelKeptReason): void => {
   placement.numbered = false;
   placement.keptReason = reason;
+};
+
+/** Why a label stays text that the source's own list answers: no level of
+ *  the template is left to print it, or its label is not one a level text
+ *  restates. */
+const SOURCE_LIST_REASONS: ReadonlySet<LabelKeptReason> = new Set([
+  "noListLevel",
+  "formatConflict",
+  "unreadable",
+]);
+
+/**
+ * Keeps the source's own list for every paragraph of a list definition
+ * whose automatic labels no level of the template prints, rather than
+ * writing those labels as text: the output carries a copy of the list, so
+ * the labels stay counted (and stay targets of the source's fields). Only
+ * a whole definition moves: one paragraph of it on the template's list
+ * would leave the copy counting without it. Bullets keep their marks on
+ * the template's levels.
+ */
+const keepSourceLists = (
+  placements: readonly Placement[],
+  { loose, excluded }: SourceListOptions,
+): Set<number> => {
+  const definitionOf = ({ numbering, label }: DocxBlock): number | null =>
+    numbering === null ||
+    numbering.bullet === true ||
+    (label ?? "").trim() === ""
+      ? null
+      : numbering.abstractNumId;
+  const byDefinition = new Map<number, Placement[]>();
+  /** Definitions a paragraph of which must stay as it is planned. */
+  const held = new Set<number>();
+  for (const placement of placements) {
+    const definition = definitionOf(placement.block);
+    if (definition === null) {
+      continue;
+    }
+    const { numbered, keptReason, entry } = placement;
+    // A label the index could not read at all is written as text too.
+    const unread = keptReason === null && entry === null;
+    if (
+      numbered ||
+      !(
+        unread ||
+        (keptReason !== null && SOURCE_LIST_REASONS.has(keptReason))
+      ) ||
+      excluded.has(placement.block.id)
+    ) {
+      held.add(definition);
+    }
+    const group = byDefinition.get(definition);
+    if (group === undefined) {
+      byDefinition.set(definition, [placement]);
+    } else {
+      group.push(placement);
+    }
+  }
+  const kept = new Set<number>();
+  // A cell paragraph read as no role is placed with its table, its label
+  // written as text: it counts in its list all the same.
+  for (const block of loose) {
+    const definition = definitionOf(block);
+    if (definition === null) {
+      continue;
+    }
+    if (excluded.has(block.id)) {
+      held.add(definition);
+    }
+    kept.add(definition);
+  }
+  for (const definition of byDefinition.keys()) {
+    kept.add(definition);
+  }
+  for (const definition of held) {
+    kept.delete(definition);
+  }
+  for (const [definition, group] of byDefinition) {
+    if (!kept.has(definition)) {
+      continue;
+    }
+    for (const placement of group) {
+      const { numbering } = placement.block;
+      if (numbering === null) {
+        continue;
+      }
+      placement.sourceList = { numId: numbering.numId, ilvl: numbering.ilvl };
+      placement.numbered = true;
+      placement.level = null;
+      placement.keptReason = null;
+    }
+  }
+  return kept;
+};
+
+/** The source lists kept: only when the source's numbering is kept. */
+const sourceListsOf = (
+  mode: NumberingMode,
+  placements: readonly Placement[],
+  { loose = [], excluded = new Set<string>() }: Partial<SourceListOptions>,
+): Set<number> =>
+  mode === "keepSource"
+    ? keepSourceLists(placements, { loose, excluded })
+    : new Set<number>();
+
+type SourceListOptions = {
+  /** Labelled paragraphs the plan places without a placement of their own
+   *  (cell paragraphs read as no role). */
+  loose: readonly DocxBlock[];
+  /** Paragraphs an earlier attempt showed the engine will not number. */
+  excluded: ReadonlySet<string>;
 };
 
 type Vote = { pattern: LabelPattern; n: number };
@@ -487,9 +601,13 @@ const takenIndent = (
 /** The label the plan's list prints for a paragraph; null when the
  *  paragraph joins no list. */
 export const plannedLabelOf = (
-  { numbered, level, counters }: Placement,
+  { numbered, level, counters, sourceList, block }: Placement,
   levelsByList: ReadonlyMap<number, readonly ListLevelFormat[]>,
 ): string | null => {
+  // The source's own list prints what it prints in the source.
+  if (numbered && sourceList !== null) {
+    return block.label?.trim() ?? null;
+  }
   const levels =
     numbered && level !== null
       ? levelsByList.get(level.abstractNumId)
@@ -505,6 +623,9 @@ type Numbered = {
   /** The levels each list counts with, patches applied, by list
    *  definition. */
   levelsByList: Map<number, ListLevelFormat[]>;
+  /** The source's list definitions the output keeps, each paragraph of
+   *  them counted in a copy of its own list. */
+  sourceLists: ReadonlySet<number>;
 };
 
 type NumberOptions = {
@@ -513,7 +634,7 @@ type NumberOptions = {
   spareLevels: readonly ProfileListLevel[];
   /** Levels outside the outline list, for marks that count nothing. */
   markLevels?: readonly ProfileListLevel[] | undefined;
-};
+} & Partial<SourceListOptions>;
 
 /**
  * Decides which of the placements that ask for a number get one, on which
@@ -525,6 +646,7 @@ export const numberPlacements = ({
   mode,
   spareLevels,
   markLevels = [],
+  ...sourceOptions
 }: NumberOptions): Numbered => {
   const candidates = placements.filter(({ numbered }) => numbered);
   const chosen =
@@ -577,6 +699,8 @@ export const numberPlacements = ({
     mismatch = countLists({ placements, levelsByList, mode });
   }
 
+  const sourceLists = sourceListsOf(mode, placements, sourceOptions);
+
   const patches: TemplatePlanNumberingPatch[] = [];
   for (const [key, level] of usedLevels) {
     const format = levelsByList
@@ -622,7 +746,7 @@ export const numberPlacements = ({
       });
     }
   }
-  return { patches, levelsByList };
+  return { patches, levelsByList, sourceLists };
 };
 
 /** The languages of a document and of the template it is formatted onto,

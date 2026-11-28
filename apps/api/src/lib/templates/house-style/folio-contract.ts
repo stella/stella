@@ -302,11 +302,14 @@ type TemplateInvisibleEffect = {
  *  template. Items that share a `group` are counted in one instance of that
  *  list, which the first of them starts; `restartFrom` is the number the
  *  instance begins the item's level with. */
+/** `sourceNumId` (with `numId: "new"`) keeps the source's own list: the
+ *  output carries a copy of it and the paragraph counts in that copy. */
 export type TemplatePlanNumbering = {
-  numId: number;
+  numId: number | "new";
   ilvl: number;
   restartFrom?: number;
   group?: string;
+  sourceNumId?: number;
 };
 
 type TemplatePlanMerge = "lineBreak" | "space" | "none";

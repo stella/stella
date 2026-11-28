@@ -1019,7 +1019,7 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
   ]);
   const composite = blockIdOf(manifest, "Bod se složeným");
 
-  for (const mode of ["keepSource", "houseScheme"] as const) {
+  for (const mode of ["houseScheme"] as const) {
     test(`are written as text and reported (${mode})`, () => {
       const { plan, note, labelsNotKept } = build(manifest, mode);
       expect(itemOf(plan, manifest, "Bod se složeným")).toMatchObject({
@@ -1072,20 +1072,72 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
     }
   });
 
-  test("a numbered cell placed with its table keeps its number as text", () => {
+  test("a numbered cell placed with its table keeps its number as text under the house scheme", () => {
     const table = inColumns(2, [
       numbered("I. 1)", "Položka", 7),
       "12 ks",
       numbered("I. 2)", "Další položka", 7),
       "3 ks",
     ]);
-    const { plan, labelsNotKept } = build(table);
+    const { plan, labelsNotKept } = build(table, "houseScheme");
     const nested = sourceItems(plan).at(0)?.nested ?? [];
     expect(nested.filter(({ labelAsText }) => labelAsText === true)).toEqual([
       { blockId: "p0", numbering: null, labelAsText: true },
       { blockId: "p2", numbering: null, labelAsText: true },
     ]);
     expect(labelsNotKept).toEqual([]);
+  });
+
+  test("a list no level of the template prints keeps the source's own list", () => {
+    // Keeping the source's numbering, the cells' list is carried whole:
+    // its labels stay counted rather than typed.
+    const table = inColumns(2, [
+      numbered("I. 1)", "Položka", 7),
+      "12 ks",
+      numbered("I. 2)", "Další položka", 7),
+      "3 ks",
+    ]);
+    const { plan, note, labelsNotKept } = build(table);
+    const nested = sourceItems(plan).at(0)?.nested ?? [];
+    const kept = nested.filter(
+      ({ numbering }) => numbering !== null && numbering !== undefined,
+    );
+    expect(kept.map(({ blockId, numbering }) => [blockId, numbering])).toEqual([
+      ["p0", { numId: "new", ilvl: 0, sourceNumId: 7 }],
+      ["p2", { numId: "new", ilvl: 0, sourceNumId: 7 }],
+    ]);
+    expect(nested.some(({ labelAsText }) => labelAsText === true)).toBe(false);
+    expect(note.counts.labelsConvertedToText).toBe(0);
+    expect(labelsNotKept).toEqual([]);
+    // So are placed paragraphs whose whole list no level prints.
+    const lettered = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+      numbered("I. 1)", "Bod se složeným označením.", 2),
+      numbered("I. 2)", "Další bod se složeným označením.", 2),
+    ]);
+    const placed = build(lettered);
+    expect(itemOf(placed.plan, lettered, "Bod se složeným")).toMatchObject({
+      numbering: { numId: "new", ilvl: 0, sourceNumId: 2 },
+    });
+    expect(placed.labelsNotKept).toEqual([]);
+  });
+
+  test("a list one paragraph of which a level of the template prints stays on the template's list", () => {
+    // Paragraph 1. and the composite items count in one definition: a copy
+    // of it would count without 1., so the composite labels stay text.
+    const shared = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 3),
+      numbered("I. 1)", "Bod se složeným označením.", 3),
+    ]);
+    const { plan } = build(shared);
+    expect(itemOf(plan, shared, "Bod se složeným")).toMatchObject({
+      numbering: null,
+      labelAsText: true,
+    });
   });
 
   test("a bullet of a cell read as no role keeps its mark on a list", () => {

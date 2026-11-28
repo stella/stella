@@ -499,6 +499,9 @@ type Context = {
   rejectedNumbers: ReadonlyMap<string, string> | null;
   /** The table a cell paragraph sits in. */
   tableOf: ReadonlyMap<string, string>;
+  /** The source's list definitions the output keeps as the source's own
+   *  lists, once the paragraphs are numbered. */
+  sourceLists: ReadonlySet<number>;
   topLevel: readonly DocxBlock[];
   /** The source's sections; empty when the manifest does not report them. */
   sections: readonly DocxSection[];
@@ -759,6 +762,7 @@ const placementOf = (
     group: null,
     counters: [],
     keptReason: null,
+    sourceList: null,
   };
   if (exclusions.numbering.has(block.id)) {
     placement.keptReason =
@@ -1402,7 +1406,8 @@ const textStartOf = (context: Context, placement: Placement): number => {
   if ((entry !== null || pattern?.numFmt === "bullet") && numberedAt !== null) {
     return numberedAt.indent.left ?? 0;
   }
-  // A number written as text hangs as a list's would.
+  // A number written as text, or counted by the source's own list,
+  // hangs as a list of the template would.
   const hang = hangOf(context, placement);
   if (hang?.left !== undefined) {
     return hang.left;
@@ -1780,7 +1785,11 @@ const underItemIndent = (
  * the text it belongs to. A table, a heading and a paragraph the source
  * sets further out end the item.
  */
-const indentContinuations = (context: Context, placed: Placed): void => {
+const indentContinuations = (
+  context: Context,
+  placed: Placed,
+  { settled = false }: { settled?: boolean } = {},
+): void => {
   let item: Placement | null = null;
   for (const block of context.topLevel) {
     const placement =
@@ -1798,10 +1807,18 @@ const indentContinuations = (context: Context, placed: Placed): void => {
       UNNUMBERED_ROLES.has(placement.role) &&
       standsUnder(placement, item)
     ) {
-      placed.itemIndents.set(
-        block.id,
-        underItemIndent(textStartOf(context, item), placement),
-      );
+      // Once the lists are settled, only the lines still set under an item
+      // the source's own list numbers move: that list sets its text where
+      // the source does.
+      if (
+        !settled ||
+        (item.sourceList !== null && placed.itemIndents.has(block.id))
+      ) {
+        placed.itemIndents.set(
+          block.id,
+          underItemIndent(textStartOf(context, item), placement),
+        );
+      }
     } else {
       item = null;
     }
@@ -2290,8 +2307,16 @@ const numberingOf = ({
   level,
   restartFrom,
   group,
-}: Placement): TemplatePlanNumbering | null =>
-  numbered && level !== null
+  sourceList,
+}: Placement): TemplatePlanNumbering | null => {
+  if (numbered && sourceList !== null) {
+    return {
+      numId: "new",
+      ilvl: sourceList.ilvl,
+      sourceNumId: sourceList.numId,
+    };
+  }
+  return numbered && level !== null
     ? {
         numId: level.numId,
         ilvl: level.ilvl,
@@ -2299,6 +2324,7 @@ const numberingOf = ({
         ...(group === null ? {} : { group }),
       }
     : null;
+};
 
 /** The automatic label a block shows, or null when it shows none. */
 const shownLabelOf = ({ label }: DocxBlock): string | null => {
@@ -2741,12 +2767,35 @@ const CELL_TEXT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
  * template; a number it shows goes with it as text. Undefined when it needs
  * nothing of its own.
  */
+/** The cell paragraphs placed with their tables only, read as no role. */
+const looseCellsOf = (
+  context: Context,
+  { placementById }: Placed,
+): DocxBlock[] =>
+  context.topLevel
+    .filter(({ kind }) => kind === "table")
+    .flatMap((table) => insideOf(table, context.blockById))
+    .filter(
+      (inner) => inner.kind === "paragraph" && !placementById.has(inner.id),
+    );
+
+/** The numbering of a cell paragraph read as no role whose list the output
+ *  keeps as the source's own; null for any other. */
+const looseNumberingOf = (
+  { sourceLists }: Context,
+  { numbering }: DocxBlock,
+): TemplatePlanNumbering | null =>
+  numbering !== null && sourceLists.has(numbering.abstractNumId)
+    ? { numId: "new", ilvl: numbering.ilvl, sourceNumId: numbering.numId }
+    : null;
+
 const looseCellOf = (
   context: Context,
   inner: DocxBlock,
 ): TemplatePlanNestedParagraph | undefined => {
   const styleId = context.profile.tableText?.styleId;
-  const labelled = shownLabelOf(inner) !== null;
+  const kept = looseNumberingOf(context, inner);
+  const labelled = kept === null && shownLabelOf(inner) !== null;
   // Where its text stands in the cell is the table's own layout: a centred
   // row that heads a group, an amount at the right.
   const alignment =
@@ -2772,6 +2821,7 @@ const looseCellOf = (
   if (
     styleId === undefined &&
     !labelled &&
+    kept === null &&
     alignment === undefined &&
     spacing === undefined &&
     indent === undefined &&
@@ -2783,6 +2833,7 @@ const looseCellOf = (
     blockId: inner.id,
     ...(styleId === undefined ? {} : { styleId }),
     ...(labelled ? { numbering: null, labelAsText: true } : {}),
+    ...(kept === null ? {} : { numbering: kept }),
     ...(alignment === undefined ? {} : { alignment }),
     ...(indent === undefined ? {} : { indent }),
     ...(spacing === undefined ? {} : { spacing }),
@@ -2940,10 +2991,14 @@ const paragraphItems = ({
     mergeNext = allLabel ? "none" : "space";
   }
   const numbering = numberingOf(placement);
-  // A number no list prints is text in front of the paragraph; one a list
-  // prints left of the item it belongs to hangs in from that item.
+  // A number no list of the template prints (text in front of the
+  // paragraph, or the source's own list) hangs as the template's would;
+  // one a list prints left of the item it belongs to hangs in from that
+  // item.
   const hang =
-    numbering === null ? hangOf(context, placement) : (nestedIndent ?? null);
+    numbering === null || placement.sourceList !== null
+      ? hangOf(context, placement)
+      : (nestedIndent ?? null);
   const under = itemIndent ?? null;
   const item: TemplatePlanSourceItem = {
     kind: "source",
@@ -4029,10 +4084,15 @@ const checkLabels = ({
       continue;
     }
     const placement = placed.placementById.get(blockId);
-    const planned =
-      request.numbered && placement !== undefined
-        ? plannedLabelOf(placement, levelsByList)
-        : null;
+    // A cell paragraph without a placement is numbered only by the
+    // source's own list, which prints what the source shows.
+    let planned: string | null = null;
+    if (request.numbered) {
+      planned =
+        placement === undefined
+          ? shown
+          : plannedLabelOf(placement, levelsByList);
+    }
     if (!request.numbered) {
       if (shown === null || !request.labelAsText) {
         issues.push({ blockId, kind: "lost" });
@@ -4221,18 +4281,25 @@ export const buildTemplatePlan = ({
     items: [],
     headerFill: null,
     rejectedNumbers: rejectedNumbersOf(manifest, rejectedView),
+    sourceLists: new Set(),
   };
   takeHeaderLines(context);
 
   context.keptSections = sectionsToKeep(context);
   context.pageMarks = pageMarksToDrop(context);
   const placed = placeParagraphs(context);
-  const { patches, levelsByList } = numberPlacements({
+  const { patches, levelsByList, sourceLists } = numberPlacements({
     placements: placed.placements,
     mode,
     spareLevels: profile.spareLevels,
     markLevels: profile.markLevels,
+    loose: looseCellsOf(context, placed),
+    excluded: exclusions.numbering,
   });
+  context.sourceLists = sourceLists;
+  if (sourceLists.size > 0) {
+    indentContinuations(context, placed, { settled: true });
+  }
   noteLanguages(context, languages, { patches, levelsByList });
   const breaks = breaksHeadings(profile, placed);
   settleBrokenHeadings(context, placed, patches, breaks);
