@@ -383,6 +383,23 @@ const noteItemsOf = (
   if (item.kind === "trackedChangesKept") {
     return keptChangesItems(item);
   }
+  // One item per header or footer that kept the document's, one per kind
+  // of thing that had no place.
+  if (item.kind === "sourceHeaders") {
+    return [
+      ...item.kept.map(({ family, kind, paragraphs }): ReformatNoteItem => ({
+        kind: "source_header_kept",
+        reason: `${family}:${kind}`,
+        count: paragraphs,
+      })),
+      ...Object.entries(item.leftOut).flatMap(
+        ([reason, count]): ReformatNoteItem[] =>
+          count === 0
+            ? []
+            : [{ kind: "source_header_left_out", reason, count }],
+      ),
+    ];
+  }
   // One item per cell of the letterhead that still shows the sample.
   if (item.kind === "letterheadFilled") {
     return item.left.map((cell): ReformatNoteItem => ({
