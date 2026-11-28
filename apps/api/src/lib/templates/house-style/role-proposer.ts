@@ -692,8 +692,18 @@ const readUnlabelled = (
       return sectionHeading();
     }
     // Text under a numbered provision continues it, in an annex as in the
-    // body.
-    return inProvision && printedLabel(block) === null
+    // body; so does text under an article the annex numbers itself.
+    const entryOf = (blockId: string | null | undefined) =>
+      blockId === null || blockId === undefined
+        ? undefined
+        : index.entryByBlockId.get(blockId);
+    const article = entryOf(context?.articleBlockId);
+    const annex = entryOf(context?.annexBlockId);
+    const underAnnexArticle =
+      article !== undefined &&
+      annex !== undefined &&
+      article.position > annex.position;
+    return (inProvision || underAnnexArticle) && printedLabel(block) === null
       ? reading("continuation", CONFIDENCE.continuation, {
           role: "body",
           confidence: CONFIDENCE.weakAlternative,

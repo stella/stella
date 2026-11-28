@@ -452,9 +452,12 @@ describe("proposeBlockRoles", () => {
       numbered("1.", "Pojmy", 2),
       numbered("1.1", "Následující pojmy mají tento význam:", 2),
       "Dílem se rozumí stavba podle projektové dokumentace.",
+      numbered("2.", "Rozhodné právo", 2),
+      "Tato příloha se řídí českým právem.",
     ]);
     expect(rolesOf(manifest)).toMatchObject({
       "Dílem se rozumí stavba podle": "continuation",
+      "Tato příloha se řídí českým ": "continuation",
     });
   });
 
