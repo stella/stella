@@ -221,6 +221,7 @@ describe("buildLabelIndex", () => {
       numbered("4.1.1", "on time;"),
       numbered("4.1.1.1", "in accordance with the Specification."),
       part("V.", "Annex – Processing Personal Data"),
+      "The Processor processes the data below.",
     ]);
     expect(keysOf(manifest)).toEqual([
       "article 1",
@@ -230,6 +231,33 @@ describe("buildLabelIndex", () => {
       "clause 4/1.1",
       "clause 4/1.1.1",
     ]);
+    // What follows a part stands under no article of the part before.
+    const { contextByBlockId } = buildLabelIndex(manifest);
+    for (const id of ["p9", "p10"]) {
+      expect(contextByBlockId.get(id)).toMatchObject({
+        articleBlockId: null,
+        clauseBlockId: null,
+      });
+    }
+  });
+
+  test("a roman article over its own clauses heads an article beside bare-number headings elsewhere", () => {
+    const roman = (label: string, text: string) => ({
+      ...heading(text),
+      label,
+      numId: 5,
+    });
+    const manifest = manifestOf([
+      roman("I.", "Terms"),
+      numbered("1.", "The Buyer pays the price.", 7),
+      roman("II.", "Price"),
+      numbered("1.", "The price is fixed.", 7),
+      { text: "Scope", label: "1", styleName: "Level 1", outlineLevel: 1 },
+      { text: "Term", label: "2", styleName: "Level 1", outlineLevel: 1 },
+    ]);
+    expect(keysOf(manifest)).toEqual(
+      expect.arrayContaining(["article I", "article II"]),
+    );
   });
 
   test("deeper dotted levels nest under their clause", () => {
