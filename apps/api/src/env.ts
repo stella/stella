@@ -3,10 +3,7 @@ import { panic } from "better-result";
 import { existsSync, statSync } from "node:fs";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
-import {
-  bindDeploymentFlagReader,
-  envFeatureAccess,
-} from "@/api/env-feature-access";
+import { envFeatureAccess } from "@/api/env-feature-access";
 import { envKillSwitches } from "@/api/env-kill-switches";
 import {
   envApiInvariantViolation,
@@ -14,6 +11,7 @@ import {
   resolveEmailProvider,
 } from "@/api/env-schema";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+import { bindDeploymentFlagReader } from "@/api/lib/deployment-flag-binding";
 import { bindActionSizeLimitsReader } from "@/api/lib/rate-limit/action-size-settings";
 import { bindRateLimitBudgetReader } from "@/api/lib/rate-limit/budget-config";
 import {

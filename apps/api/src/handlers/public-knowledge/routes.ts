@@ -7,7 +7,6 @@ import { env } from "@/api/env";
 import { createPublicKnowledgeEndpoints } from "@/api/handlers/public-knowledge/endpoints";
 import type { PublicKnowledgeDependencies } from "@/api/handlers/public-knowledge/endpoints";
 import { routes } from "@/api/http/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 let bundledCatalogue: TemplatePackCatalogue | null = null;
 
@@ -38,7 +37,7 @@ export const createPublicKnowledgeRoute = (
     },
     {
       prefix: PUBLIC_KNOWLEDGE_PATH,
-      middleware: [deploymentFeatureGate("FEATURE_PUBLIC_KNOWLEDGE")],
+      deployment: { type: "flag", flag: "FEATURE_PUBLIC_KNOWLEDGE" },
     },
   );
 };

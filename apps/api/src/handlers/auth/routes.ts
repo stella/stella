@@ -21,7 +21,6 @@ import {
 import { isReviewAccountConfigured } from "@/api/lib/auth/review-account";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { isEnterpriseSsoDeployed } from "@/api/lib/db/sso-access";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { isTransactionalEmailConfigured } from "@/api/lib/email/email";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { defineEndpoint } from "@/api/lib/endpoints";
@@ -157,7 +156,7 @@ export const authCapabilitiesRoute = mount(
           GET: readMemberOrganizationSsoProviders,
         },
       },
-      { middleware: [deploymentFeatureGate("FEATURE_ENTERPRISE_SSO")] },
+      { deployment: { type: "flag", flag: "FEATURE_ENTERPRISE_SSO" } },
     ),
   ],
   { prefix: "/auth" },

@@ -5,7 +5,6 @@ import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
 import regenerateReaderAnswer from "@/api/handlers/legal-reader/answers/regenerate";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import { routes } from "@/api/http/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 // Member routes declare no cache policy, so every answer is private, no-store.
 export const readerAnswersRoute = routes(
@@ -17,6 +16,6 @@ export const readerAnswersRoute = routes(
   },
   {
     prefix: "/answers",
-    middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")],
+    deployment: { type: "flag", flag: "FEATURE_PUBLIC_LAW" },
   },
 );

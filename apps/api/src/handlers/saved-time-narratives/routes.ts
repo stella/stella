@@ -4,7 +4,6 @@ import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
 import updateSavedTimeNarrative from "@/api/handlers/saved-time-narratives/update";
 import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const savedTimeNarrativesRoute = routes(
   {
@@ -16,9 +15,7 @@ export const savedTimeNarrativesRoute = routes(
   },
   {
     prefix: "/saved-time-narratives",
-    middleware: [
-      deploymentFeatureGate("FEATURE_TIME_BILLING"),
-      featureAccessGate("time-billing"),
-    ],
+    deployment: { type: "flag", flag: "FEATURE_TIME_BILLING" },
+    middleware: [featureAccessGate("time-billing")],
   },
 );

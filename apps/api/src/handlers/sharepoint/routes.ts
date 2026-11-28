@@ -9,7 +9,6 @@ import setSharepointEnablement from "@/api/handlers/sharepoint/set-enablement";
 import listSharepointSites from "@/api/handlers/sharepoint/sites/list";
 import sharepointConnectionStatus from "@/api/handlers/sharepoint/status";
 import { mount, routes } from "@/api/http/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const sharepointRoute = mount(
   [
@@ -35,7 +34,7 @@ export const sharepointRoute = mount(
         },
         "/imports/:workspaceId": { POST: importSharepointFiles },
       },
-      { middleware: [deploymentFeatureGate("FEATURE_SHAREPOINT")] },
+      { deployment: { type: "flag", flag: "FEATURE_SHAREPOINT" } },
     ),
   ],
   { prefix: "/sharepoint" },
