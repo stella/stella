@@ -297,7 +297,7 @@ export type TemplatePlanAlignment = "left" | "center" | "right" | "both";
  *  point: at least one side. */
 /** How a line spacing is counted: `auto` in 240ths of a line, `exact` and
  *  `atLeast` in twentieths of a point. */
-export type TemplatePlanLineRule = "auto" | "exact" | "atLeast";
+type TemplatePlanLineRule = "auto" | "exact" | "atLeast";
 
 export type TemplatePlanSpacing = {
   before?: number;
