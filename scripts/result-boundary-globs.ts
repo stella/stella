@@ -447,6 +447,12 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
   // adapters convert its typed failures to Result at their ingestion boundary.
   "packages/case-law-adapters/src/retry.ts",
+  // Moved from apps/api/src/handlers/case-law/ingestion/adapters/; internal
+  // pagination/fetch helpers throw AdapterFetchError before converting to
+  // Result at the adapter boundary.
+  "packages/case-law-adapters/src/at-courts.ts",
+  "packages/case-law-adapters/src/pagination.ts",
+  "packages/case-law-adapters/src/pl-courts.ts",
   // The CLI entry point catches the dynamic load of the application shell so
   // a checkout without installed packages gets one actionable line; it cannot
   // import the Result library, which is one of the packages that may be missing.

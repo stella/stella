@@ -1039,7 +1039,7 @@ export default eslintCompatPlugin({
           }
           const helper = resolveImport(context, initializer.callee);
           return (
-            helper !== undefined &&
+            helper !== null &&
             PUBLISHER_TARGET_MODULES.has(helper.moduleId) &&
             helper.imported === PUBLISHER_TARGET_HELPER
           );

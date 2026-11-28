@@ -269,7 +269,9 @@ const fetchPublisherRequest = async (
     // Each request, including a redirect or backoff attempt, is observed.
     const sendRequest = async () =>
       await withPublisherReadIo(
-        async (io) => await io.fetchStream(target, requestOptions),
+        async (io) =>
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
+          await io.fetchStream(target, requestOptions),
       );
     if (fetchStage === "listing") {
       return await sendRequest();
