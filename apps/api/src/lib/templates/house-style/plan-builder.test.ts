@@ -3446,6 +3446,68 @@ describe("buildTemplatePlan, the lines of the parties", () => {
     expect(note.items).toContainEqual({ kind: "cellSpacingKept", blocks: 2 });
   });
 
+  test("a cell paragraph in no style of the template keeps its source's tight space, left edge and indent", () => {
+    const table = inColumns(2, [
+      "Na základě:",
+      "Gemäß der:",
+      "Nařízení",
+      "Verordnung",
+    ]);
+    const cells = table.blocks.filter(({ kind }) => kind === "paragraph");
+    const looks: readonly (Partial<DocxBlock> | undefined)[] = [
+      // Tight by its style on both sides, at the left, moved in.
+      {
+        spacingInEffect: { before: 0, after: 0, line: 276, lineRule: "auto" },
+        indent: { left: 727, firstLine: 0 },
+      },
+      // Tight in front only; a hanging first line.
+      {
+        spacingInEffect: { before: 0, after: 240 },
+        indent: { left: 727, firstLine: -360 },
+      },
+      // Justified by the source itself, at the margin.
+      { spacingInEffect: { before: 120, after: 120 }, alignment: "both" },
+      undefined,
+    ];
+    for (const [position, look] of looks.entries()) {
+      const cell = cells[position];
+      if (cell !== undefined && look !== undefined) {
+        Object.assign(cell, look);
+      }
+    }
+    const justifying = { ...PROFILE, defaultAlignment: "both" as const };
+    const nestedOf = (profile: typeof PROFILE) =>
+      sourceItems(build(table, "keepSource", { profile }).plan).flatMap(
+        (item) => item.nested ?? [],
+      );
+    const lookOf = (nested: ReturnType<typeof nestedOf>, position: number) =>
+      nested.find(({ blockId }) => blockId === cells[position]?.id);
+    const placed = nestedOf(justifying);
+    // Its lines stand as close as the source sets them.
+    expect(lookOf(placed, 0)).toMatchObject({
+      alignment: "left",
+      spacing: { before: 0, after: 0, line: 276, lineRule: "auto" },
+      indent: { left: 727, firstLine: 0 },
+    });
+    expect(lookOf(placed, 1)).toMatchObject({
+      spacing: { before: 0 },
+      indent: { left: 727, hanging: 360 },
+    });
+    expect(lookOf(placed, 2)).toBeUndefined();
+    expect(lookOf(placed, 3)?.indent).toBeUndefined();
+    // A template that does not justify its text leaves the edge alone.
+    expect(lookOf(nestedOf(PROFILE), 0)?.alignment).toBeUndefined();
+    // With a table style of the template, that style decides.
+    const styled = nestedOf({
+      ...justifying,
+      tableText: { styleId: "TableText" },
+    });
+    expect(lookOf(styled, 0)).toEqual({
+      blockId: cells[0]?.id ?? "",
+      styleId: "TableText",
+    });
+  });
+
   test("a template whose style indent is not known leaves the lines as they are", () => {
     const { plan, note } = build(manifest);
     expect(
@@ -3942,5 +4004,54 @@ describe("buildTemplatePlan, lines the source brings back to the margin", () => 
     expect(styleOf(flat, "Tolik k předmětu")).toBe("Indent");
     // And one that states no indents says nothing about its lines.
     expect(styleOf(contract({}), "Tolik k předmětu")).toBe("Indent");
+  });
+});
+
+describe("buildTemplatePlan, list items in a table cell", () => {
+  test("a lettered item of a cell keeps the source's indent and spacing on the template's list", () => {
+    const table = inColumns(2, [
+      "“Buyer System”",
+      numbered(
+        "(a)",
+        "is used by the Buyer in connection with this Contract;",
+        3,
+      ),
+      "“Certifications”",
+      numbered("(b)", "interfaces with the Supplier System; and", 3),
+    ]);
+    const items = table.blocks.filter(({ label }) => label !== null);
+    for (const item of items) {
+      Object.assign(item, {
+        indent: { left: 720, firstLine: -720 },
+        spacingInEffect: {
+          before: 120,
+          after: 120,
+          line: 240,
+          lineRule: "auto",
+        },
+      });
+    }
+    const nested = sourceItems(build(table).plan).flatMap(
+      ({ nested: inner }) => inner ?? [],
+    );
+    for (const item of items) {
+      const planned = nested.find(({ blockId }) => blockId === item.id);
+      if (planned?.numbering === null || planned?.numbering === undefined) {
+        // Read as no list item: nothing of a list's look to keep.
+        continue;
+      }
+      expect(planned).toMatchObject({
+        indent: { left: 720, hanging: 720 },
+        spacing: { before: 120, after: 120, line: 240, lineRule: "auto" },
+      });
+    }
+    expect(
+      nested.some(
+        ({ blockId, numbering }) =>
+          numbering !== null &&
+          numbering !== undefined &&
+          items.some(({ id }) => id === blockId),
+      ),
+    ).toBe(true);
   });
 });
