@@ -131,6 +131,7 @@ import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable
 import { queryView } from "@/lib/query-view.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -983,7 +984,8 @@ const useContextMentionSearch = ({
   const { id: userId } = useAuthenticatedUser();
   const [query] = useDebounce(search.trim(), CHAT_MENTION_SEARCH_DEBOUNCE_MS);
   const enabled = open && query !== "";
-  const mentionQuery = useQuery({
+  const mentionQuery = useResourceQuery({
+    resourceReads: { type: "independent" },
     queryKey: contextMentionSearchKey({
       organizationId,
       query,

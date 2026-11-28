@@ -1,5 +1,7 @@
 import {
   type DefaultError,
+  type DefinedInitialDataOptions,
+  type DefinedUseQueryResult,
   hashKey,
   matchQuery,
   partialMatchKey,
@@ -8,7 +10,10 @@ import {
   useMutation,
   type UseMutationOptions,
   type UseMutationResult,
+  useQuery,
   useQueryClient,
+  type UseQueryOptions,
+  type UseQueryResult,
 } from "@tanstack/react-query";
 import type { revokeOtherSessions, updateUser } from "better-auth/api";
 import type { OrganizationCreator } from "better-auth/plugins";
@@ -166,6 +171,50 @@ export const resourceQueryOptions = <
   ...options,
   meta: { ...options.meta, resourceReads },
 });
+
+/**
+ * A TanStack Query hook that requires a compile-time `resourceReads`
+ * declaration and attaches it via `resourceQueryOptions(...)` without
+ * changing cache identity.
+ */
+export function useResourceQuery<
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  options: DefinedInitialDataOptions<TQueryFnData, TError, TData, TQueryKey> & {
+    resourceReads: ResourceReads;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError>;
+export function useResourceQuery<
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  options: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey> & {
+    resourceReads: ResourceReads;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError>;
+export function useResourceQuery<
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  {
+    resourceReads,
+    ...options
+  }: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey> & {
+    resourceReads: ResourceReads;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> {
+  return useQuery(resourceQueryOptions(options, resourceReads), queryClient);
+}
 
 export const RESOURCE_MUTATION_CONTRACTS = {
   updateUser: {

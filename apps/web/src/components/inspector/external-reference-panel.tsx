@@ -52,6 +52,7 @@ import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 
 import { externalReferencePreviewOptions } from "./external-reference-preview";
 
@@ -112,8 +113,9 @@ const useExternalPdfBuffer = ({
   enabled: boolean;
   url?: string | undefined;
 }): ExternalPdfState => {
-  const query = useQuery({
+  const query = useResourceQuery({
     queryKey: ["external-pdf", url],
+    resourceReads: { type: "independent" },
     queryFn: async ({ signal }): Promise<ExternalPdfPayload> => {
       if (url === undefined) {
         throw new FetchBoundaryError({

@@ -50,27 +50,6 @@
   "statusConnected": {
     "message": "Połączono"
   },
-  "statusNotConnected": {
-    "message": "Brak połączenia"
-  },
-  "statusWebsiteAccessNeeded": {
-    "message": "Wymagany dostęp do stron"
-  },
-  "statusOpenStella": {
-    "message": "Otwórz stellę, aby się połączyć"
-  },
-  "allowAndConnect": {
-    "message": "Zezwól na dostęp i połącz"
-  },
-  "allowWebsiteAccess": {
-    "message": "Zezwól na dostęp do stron"
-  },
-  "connectStella": {
-    "message": "Połącz stellę"
-  },
-  "openStella": {
-    "message": "Otwórz stellę"
-  },
   "adoptTab": {
     "message": "Użyj tej karty ze stellą"
   },
@@ -80,28 +59,25 @@
   "revokeAccess": {
     "message": "Usuń dostęp"
   },
-  "checkingAccess": {
-    "message": "Sprawdzanie połączenia…"
-  },
-  "statusConnectedElsewhere": {
-    "message": "Połączono gdzie indziej"
-  },
-  "connectStellaInstead": {
-    "message": "Połącz stellę tutaj zamiast tamtej"
-  },
-  "allowDesktop": {
-    "message": "Używaj ze stella desktop"
-  },
-  "desktopConnected": {
-    "message": "stella desktop: połączono"
-  },
-  "desktopNotRunning": {
-    "message": "stella desktop nie jest uruchomiony"
-  },
   "desktopUpdateNeeded": {
     "message": "Zaktualizuj stella desktop i to rozszerzenie"
   },
-  "desktopConnecting": {
-    "message": "Łączenie ze stella desktop…"
+  "lineWebsite": {
+    "message": "Strona stella"
+  },
+  "lineDesktop": {
+    "message": "Aplikacja stella desktop"
+  },
+  "lineConnect": {
+    "message": "Połącz"
+  },
+  "lineConnecting": {
+    "message": "Łączenie…"
+  },
+  "lineOpenApp": {
+    "message": "Otwórz aplikację"
+  },
+  "lineUpdateApp": {
+    "message": "Zaktualizuj aplikację"
   }
 }

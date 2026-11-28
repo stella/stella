@@ -388,7 +388,10 @@ function isSignalCall(node: CallExpression, depth: number): boolean {
   }
   const receiver = textOf(callee.object);
   return (
-    (LOG_METHODS.has(name) && /(?:logger|log|console)$/iu.test(receiver)) ||
+    (LOG_METHODS.has(name) &&
+      /(?:logger|log|console|getIngestionDiagnosticsSink\(\))$/iu.test(
+        receiver,
+      )) ||
     (METRIC_METHODS.has(name) &&
       /(?:metric|counter|skip|reject|fail)/iu.test(receiver)) ||
     (name === "push" &&

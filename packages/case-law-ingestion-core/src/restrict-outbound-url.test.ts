@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { restrictOutboundUrl } from "./restrict-outbound-url";
 
 describe("provider-issued outbound URL restriction", () => {
   test("accepts only declared exact origins and path prefixes", () => {

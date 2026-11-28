@@ -653,7 +653,7 @@ describe("transcription failure isolation", () => {
         }),
         code: "audio_unreadable",
       },
-    ];
+    ] as const;
     for (const { bytes, code } of cases) {
       let calls = 0;
       const result = await transcribeAudio({

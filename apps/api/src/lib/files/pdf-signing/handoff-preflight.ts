@@ -67,8 +67,11 @@ const STAMP_REJECTION_MESSAGES = {
   too_small: "The stamp is too small to read.",
 } as const satisfies Record<StampPlacementRejection, string>;
 
+type StampRejectionCode =
+  StampPlacementRejection | "time_zone" | "unreadable" | "unrenderable";
+
 const stampRejected = (
-  code: string,
+  code: StampRejectionCode,
   message: string,
 ): Result<never, HandlerError> =>
   Result.err(

@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: ReadonlyMap court-name lookup preserves identical runtime output
@@ -16,6 +17,7 @@ import {
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
 import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -52,6 +54,7 @@ import type {
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { parsePlCommonCourtDecision } from "@stll/case-law-parsers/pl-courts";
 import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
 import type { PlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
@@ -145,8 +148,6 @@ import { type ReadOutcome, readPresent } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -743,7 +744,7 @@ const documentRoleOf = (
   const roles: (DecisionDocumentRole | undefined)[] = [];
   for (const component of components) {
     if (!isKnownComponent(component)) {
-      logger.warn(DOCUMENT_ROLE_UNMAPPED, {
+      getIngestionDiagnosticsSink().warn(DOCUMENT_ROLE_UNMAPPED, {
         adapterKey: ADAPTER_KEYS.PL_NCOURT,
         publisherValue: component,
       });
@@ -815,7 +816,7 @@ const courtNameOf = (courtId: string | undefined): CourtName | undefined => {
   if (name !== undefined) {
     return { name, known: true };
   }
-  logger.warn("case_law.ingestion.court_unmapped", {
+  getIngestionDiagnosticsSink().warn("case_law.ingestion.court_unmapped", {
     adapterKey: ADAPTER_KEYS.PL_NCOURT,
     courtId,
   });
@@ -918,10 +919,13 @@ const typeOf = (
     components.some((component) => !isKnownComponent(component)) ||
     (rawType !== undefined && decisionType === undefined)
   ) {
-    logger.warn("case_law.ingestion.decision_type_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      decisionForm: rawType ?? "",
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.decision_type_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        decisionForm: rawType ?? "",
+      },
+    );
   }
   return { components, decisionType, documentRole: documentRoleOf(components) };
 };
@@ -960,13 +964,16 @@ const unmappedFieldsOf = ({
   }
   const unmapped: Record<string, string> = Object.fromEntries(unmappedMap);
   for (const name of unmappedMap.keys()) {
-    logger.warn("case_law.ingestion.source_field_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      field: name,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.source_field_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        field: name,
+      },
+    );
   }
   for (const name of arrayOrEmpty(content?.unmappedMarkup)) {
-    logger.warn("case_law.ingestion.markup_unmapped", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.markup_unmapped", {
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
       element: name,
     });
@@ -1672,11 +1679,14 @@ export const fetchPlNcourtDecision = async ({
     timeoutMs: ADAPTER_TIMEOUT.LIST,
   });
   if (detail.outcome.type === "absent") {
-    logger.warn("case_law.ingestion.listed_record_not_found", {
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      cursor,
-      sourceDocumentId: id,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.listed_record_not_found",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+        sourceDocumentId: id,
+      },
+    );
     return Result.ok(
       assemblePlNcourtDecision({
         listingXml,
@@ -1703,11 +1713,14 @@ export const fetchPlNcourtDecision = async ({
       ? readPlNcourtDetail(detailAnswer.body)
       : null;
   if (record?.type === "not-found") {
-    logger.warn("case_law.ingestion.listed_record_not_found", {
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      cursor,
-      sourceDocumentId: id,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.listed_record_not_found",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+        sourceDocumentId: id,
+      },
+    );
     return Result.ok(
       assemblePlNcourtDecision({
         listingXml,
@@ -1820,11 +1833,14 @@ const quarantineAt = async ({
   if (Result.isError(next)) {
     return next;
   }
-  logger.warn("case_law.ingestion.listing_row_quarantined", {
-    adapterKey: ADAPTER_KEYS.PL_NCOURT,
-    cursor,
-    offset,
-  });
+  getIngestionDiagnosticsSink().warn(
+    "case_law.ingestion.listing_row_quarantined",
+    {
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+      cursor,
+      offset,
+    },
+  );
   return Result.ok({
     query,
     offset,
@@ -2367,7 +2383,7 @@ const plNcourtFetchPage = async (
     return await fetchUnreadableWindow(cursor, listed.value.url, signal);
   }
   if (listed.value.type === "shifted") {
-    logger.warn("case_law.ingestion.listing_shifted", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.listing_shifted", {
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
       cursor: encoded,
       found: listed.value.found ?? "",

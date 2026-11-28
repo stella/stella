@@ -13,6 +13,7 @@ import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { HandlerErrorCode } from "@/api/lib/errors/tagged-errors";
 
 /**
  * S3 lifetime of the issued URL. Short enough that an intercepted
@@ -90,7 +91,7 @@ export const tmpUploadKeys = (props: TmpUploadKeyProps): string[] => [
 ];
 
 export class UploadFinalizeError extends TaggedError("UploadFinalizeError")<{
-  code?: string;
+  code?: HandlerErrorCode;
   status: 400 | 404 | 409 | 422 | 500;
   message: string;
   hint?: string;

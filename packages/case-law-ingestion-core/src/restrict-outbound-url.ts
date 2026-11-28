@@ -50,10 +50,8 @@ export const restrictOutboundUrl = ({
     return null;
   }
 
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
+  const url = URL.parse(rawUrl);
+  if (url === null) {
     return null;
   }
 

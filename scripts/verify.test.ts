@@ -414,6 +414,20 @@ test("options reject unknown arguments and missing refs", () => {
     mode: "check",
     concurrency: 3,
   });
+  expect(parseVerifyArgs(["--fast"])).toEqual({
+    base: "origin/main",
+    scope: "affected",
+    mode: "check",
+    fast: true,
+  });
+  expect(
+    parseVerifyArgs(["--fast", "--list", "--base", "upstream/main"]),
+  ).toEqual({
+    base: "upstream/main",
+    scope: "affected",
+    mode: "list",
+    fast: true,
+  });
   for (const { args, message } of [
     { args: ["--base"], message: "--base requires a ref" },
     { args: ["--base", "--all"], message: "--base requires a ref" },
@@ -424,6 +438,14 @@ test("options reject unknown arguments and missing refs", () => {
     {
       args: ["--concurrency", "0"],
       message: "--concurrency requires a positive integer",
+    },
+    {
+      args: ["--fast", "--fix"],
+      message: "--fast cannot be combined with --fix or --fix-only",
+    },
+    {
+      args: ["--fast", "--fix-only"],
+      message: "--fast cannot be combined with --fix or --fix-only",
     },
     { args: ["--unknown"], message: "Unknown verify argument: --unknown" },
   ]) {
@@ -605,6 +627,7 @@ for (const conflict of [false, true]) {
         "verify-admission.ts",
         "verify-workflow.ts",
         "verify-error.ts",
+        "verify-fast.ts",
         "workflow-steps.ts",
         "ci-check-pool-registry.ts",
       ]) {
@@ -942,6 +965,7 @@ exit 0
             "verify-admission.ts",
             "verify-workflow.ts",
             "verify-error.ts",
+            "verify-fast.ts",
             "workflow-steps.ts",
             "ci-check-pool-registry.ts",
             "verify.sh",

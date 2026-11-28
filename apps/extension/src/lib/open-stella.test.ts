@@ -20,8 +20,9 @@ const fakeBrowser = (tabs: readonly OpenStellaTab[]) => {
     activateTab: async (tabId) => {
       calls.push(`activate ${tabId}`);
     },
-    createTab: async (url) => {
+    createTab: async (url): Promise<{ id?: number }> => {
       calls.push(`create ${url}`);
+      return { id: 99 };
     },
     focusWindow: async (windowId) => {
       calls.push(`focus window ${windowId}`);
@@ -118,7 +119,22 @@ describe("opening stella from the popup", () => {
         originFromUrl,
         startOrigin: START_ORIGIN,
       }),
-    ).toEqual({ status: "opened", url: `${START_ORIGIN}/` });
+    ).toEqual({ status: "opened", tabId: 99, url: `${START_ORIGIN}/` });
+    expect(calls).toEqual([`create ${START_ORIGIN}/`]);
+  });
+
+  test("says so when Chrome opened no tab", async () => {
+    const { browser, calls } = fakeBrowser(untrustedTabs);
+    browser.createTab = async (url) => {
+      calls.push(`create ${url}`);
+      return {};
+    };
+    expect(
+      await openOrFocusStella(browser, {
+        originFromUrl,
+        startOrigin: START_ORIGIN,
+      }),
+    ).toEqual({ status: "not-opened" });
     expect(calls).toEqual([`create ${START_ORIGIN}/`]);
   });
 

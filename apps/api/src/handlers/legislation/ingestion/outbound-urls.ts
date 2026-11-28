@@ -1,6 +1,7 @@
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+import type { OutboundHostPolicy } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
-import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
 
 /**
  * The URL boundary for legislation ingestion (case-law rule 21).

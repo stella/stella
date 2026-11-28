@@ -1,3 +1,4 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
@@ -17,6 +18,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import {
   decodeSourceRawEnvelope,
@@ -32,7 +34,6 @@ import {
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 const ATOM = "http://www.w3.org/2005/Atom";
 const TNA = "https://caselaw.nationalarchives.gov.uk";

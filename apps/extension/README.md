@@ -33,9 +33,10 @@ preserves any prerelease label.
    server, run `bun --filter @stll/extension build:dev` instead.
 2. Open `chrome://extensions`, enable Developer mode, and choose **Load unpacked**.
 3. Select `apps/extension/.output/chrome-mv3` (or `chrome-mv3-dev`).
-4. Open a stella app tab, then open the extension popup.
-5. Choose **Allow website access and connect**, or **Connect stella**.
-6. Refresh the stella tab once after installing a new extension build.
+4. Open the extension popup and choose **Connect** on the stella website
+   line. One click asks Chrome for website access if needed, opens or
+   brings forward a stella tab, and connects it.
+5. Refresh the stella tab once after installing a new extension build.
 
 ## Trust boundary
 
@@ -87,7 +88,9 @@ choose **Use this tab with stella**, then ask about it in chat.
 
 Coding agents that run on the member's computer reach the extension through
 stella desktop's native messaging host (`app.stll.browser`), behind the
-optional `nativeMessaging` permission the popup asks for on its own. The same
+optional `nativeMessaging` permission: the popup's stella desktop app line
+asks for it on its own, and website access asks for it too. Once allowed,
+the extension connects by itself whenever the app runs. The same
 control session, origin policy, containment, budgets and execution ledger
 apply as for a stella tab; results go back through the host and never through
 stella's servers. A desktop chat's commands run under their own controller

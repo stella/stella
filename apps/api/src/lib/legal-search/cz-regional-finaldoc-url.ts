@@ -1,4 +1,4 @@
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 
 const CZ_REGIONAL_ORIGIN = "https://rozhodnuti.justice.cz";
 const CZ_REGIONAL_FINALDOC_PATH = "/api/finaldoc/";

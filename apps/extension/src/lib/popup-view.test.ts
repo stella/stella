@@ -4,14 +4,14 @@ import { fileURLToPath } from "node:url";
 
 import { DESKTOP_LINK_STATE } from "./desktop-link";
 import {
-  connectedOrigin,
   containedTabRows,
-  desktopLinkView,
-  handedTabView,
+  desktopLineStatus,
   type PopupActiveTab,
   type PopupController,
   type PopupMessageKey,
   popupView,
+  type PopupWebsiteView,
+  websiteLineStatus,
 } from "./popup-view";
 
 const activeTabs = [
@@ -27,208 +27,232 @@ const controllers = [
   { origin: "https://app.stll.app" },
 ] as const satisfies readonly (PopupController | null)[];
 const grants = [false, true] as const;
+const handedTabs = [false, true] as const;
 
-describe("popupView", () => {
+const everyInput = function* () {
   for (const granted of grants) {
     for (const controller of controllers) {
       for (const activeTab of activeTabs) {
-        test(`${granted ? "granted" : "not granted"}, ${controller ? "controller" : "no controller"}, ${activeTab.kind}${activeTab.kind === "stella" ? ` tab ${activeTab.tabId}` : ""}`, () => {
-          const view = popupView({ activeTab, controller, granted });
-          if (!granted) {
-            expect(view.state.type).toBe("website-access-needed");
-            expect(view.primary?.action).toBe(
-              activeTab.kind === "stella" ? "grant-and-connect" : "grant",
-            );
-            expect(view.secondary.map(({ action }) => action)).toEqual(
-              controller === null ? [] : ["disconnect"],
-            );
-            return;
-          }
-          if (controller === null && activeTab.kind === "stella") {
-            expect(view.state.type).toBe("not-connected");
-            expect(view.primary?.action).toBe("connect");
-            expect(view.secondary.map(({ action }) => action)).toEqual([
-              "revoke",
-            ]);
-            return;
-          }
-          if (controller === null) {
-            expect(view.state.type).toBe("open-stella-to-connect");
-            expect(view.statusMessageKey).toBe("statusOpenStella");
-            expect(view.primary).toEqual({
-              action: "open-stella",
-              messageKey: "openStella",
-            });
-            expect(view.secondary.map(({ action }) => action)).toEqual([
-              "revoke",
-            ]);
-            return;
-          }
-          if (
-            activeTab.kind === "stella" &&
-            activeTab.origin !== controller.origin
-          ) {
-            expect(view).toEqual({
-              primary: {
-                action: "connect",
-                messageKey: "connectStellaInstead",
-              },
-              secondary: [
-                {
-                  action: "disconnect",
-                  appearance: "button",
-                  messageKey: "disconnectTab",
-                },
-                {
-                  action: "revoke",
-                  appearance: "link",
-                  messageKey: "revokeAccess",
-                },
-              ],
-              showPurpose: false,
-              state: { type: "connected-elsewhere" },
-              statusMessageKey: "statusConnectedElsewhere",
-            });
-            return;
-          }
-          expect(view.statusMessageKey).toBe("statusConnected");
-          expect(view.state).toEqual({
-            origin: "https://app.stll.app",
-            type: "connected",
-          });
-          expect(view.primary?.action ?? null).toBe(
-            activeTab.kind === "controllable" ? "adopt" : null,
-          );
-          expect(view.secondary.map(({ action }) => action)).toEqual([
-            "disconnect",
-            "revoke",
-          ]);
-        });
+        for (const handedTab of handedTabs) {
+          yield { activeTab, controller, granted, handedTab };
+        }
       }
     }
   }
+};
 
-  test("cannot show connected without a controller", () => {
-    for (const activeTab of activeTabs) {
-      expect(
-        popupView({ activeTab, controller: null, granted: true }).state.type,
-      ).not.toBe("connected");
-    }
-  });
+const CONTROLLER = { origin: "https://app.stll.app" } as const;
+const STELLA_TAB = activeTabs[0];
+const STELLA_TAB_ELSEWHERE = activeTabs[2];
+const SITE_TAB = { kind: "controllable" } as const;
+const OTHER_TAB = { kind: "unsupported" } as const;
+const connectButton = (
+  askAccess: boolean,
+  tabId: number | null,
+): PopupWebsiteView => ({
+  connect: { action: "connect-website", askAccess, tabId },
+  type: "connect",
+});
+const connectedLine = {
+  origin: "https://app.stll.app",
+  type: "connected",
+} as const satisfies PopupWebsiteView;
 
-  test("represents a tab handed to stella after adoption", () => {
-    expect(handedTabView("https://example.com")).toMatchObject({
-      primary: null,
-      showPurpose: false,
-      state: { origin: "https://example.com", type: "tab-handed-to-stella" },
-      statusMessageKey: "statusConnected",
+describe("the stella website line", () => {
+  const cases = [
+    {
+      name: "first time, on a stella tab: one click asks for access and connects this tab",
+      input: { activeTab: STELLA_TAB, controller: null, granted: false },
+      view: { footer: [], offerTab: false, website: connectButton(true, 1) },
+    },
+    {
+      name: "first time, elsewhere: one click asks for access, then opens stella and connects it",
+      input: { activeTab: SITE_TAB, controller: null, granted: false },
+      view: { footer: [], offerTab: false, website: connectButton(true, null) },
+    },
+    {
+      name: "access granted, not connected: Connect opens stella without asking again",
+      input: { activeTab: OTHER_TAB, controller: null, granted: true },
+      view: {
+        footer: ["revoke"],
+        offerTab: false,
+        website: connectButton(false, null),
+      },
+    },
+    {
+      name: "connected, access since removed in Chrome: Connect asks again",
+      input: { activeTab: SITE_TAB, controller: CONTROLLER, granted: false },
+      view: {
+        footer: ["disconnect"],
+        offerTab: false,
+        website: connectButton(true, null),
+      },
+    },
+    {
+      name: "connected, another stella tab on the same origin in front",
+      input: {
+        activeTab: activeTabs[1],
+        controller: CONTROLLER,
+        granted: true,
+      },
+      view: {
+        footer: ["disconnect", "revoke"],
+        offerTab: false,
+        website: connectedLine,
+      },
+    },
+    {
+      name: "connected, a stella tab on another origin in front: Connect moves the connection here",
+      input: {
+        activeTab: STELLA_TAB_ELSEWHERE,
+        controller: CONTROLLER,
+        granted: true,
+      },
+      view: {
+        footer: ["disconnect", "revoke"],
+        offerTab: false,
+        website: connectButton(false, 3),
+      },
+    },
+    {
+      name: "connected, on a normal site: the tab can be handed to stella",
+      input: { activeTab: SITE_TAB, controller: CONTROLLER, granted: true },
+      view: {
+        footer: ["disconnect", "revoke"],
+        offerTab: true,
+        website: connectedLine,
+      },
+    },
+    {
+      name: "connected, the site in front just handed over",
+      input: {
+        activeTab: SITE_TAB,
+        controller: CONTROLLER,
+        granted: true,
+        handedTab: true,
+      },
+      view: {
+        footer: ["disconnect", "revoke"],
+        offerTab: false,
+        website: connectedLine,
+      },
+    },
+    {
+      name: "connected, on a page stella cannot use",
+      input: { activeTab: OTHER_TAB, controller: CONTROLLER, granted: true },
+      view: {
+        footer: ["disconnect", "revoke"],
+        offerTab: false,
+        website: connectedLine,
+      },
+    },
+  ] as const;
+
+  for (const { input, name, view } of cases) {
+    test(name, () => {
+      const actual = popupView(input);
+      expect({
+        ...actual,
+        footer: actual.footer.map(({ action }) => action),
+      }).toEqual({ ...view, footer: [...view.footer] });
     });
-  });
+  }
 
-  test("offers to open stella only while no stella tab is in front to connect", () => {
-    for (const granted of grants) {
-      for (const controller of controllers) {
-        for (const activeTab of activeTabs) {
-          const view = popupView({ activeTab, controller, granted });
-          expect(view.primary?.action === "open-stella").toBe(
-            granted && controller === null && activeTab.kind !== "stella",
-          );
-        }
+  test("never says connected without a connection and website access", () => {
+    for (const input of everyInput()) {
+      const view = popupView(input);
+      if (view.website.type === "connected") {
+        expect(input.controller).not.toBeNull();
+        expect(input.granted).toBe(true);
       }
+      expect(websiteLineStatus(view)).toEqual(
+        view.website.type === "connected"
+          ? { messageKey: "statusConnected", tone: "connected", type: "status" }
+          : { type: "connect" },
+      );
     }
   });
 
-  test("says what connecting does only until stella is connected", () => {
-    for (const granted of grants) {
-      for (const controller of controllers) {
-        for (const activeTab of activeTabs) {
-          const view = popupView({ activeTab, controller, granted });
-          expect(view.showPurpose).toBe(
-            !granted ||
-              view.state.type === "not-connected" ||
-              view.state.type === "open-stella-to-connect",
-          );
-        }
+  test("asks Chrome for access only when it has not granted it", () => {
+    for (const input of everyInput()) {
+      const { website } = popupView(input);
+      if (website.type === "connect") {
+        expect(website.connect.askAccess).toBe(!input.granted);
       }
     }
-  });
-
-  test("names the connected address only while connected here", () => {
-    for (const granted of grants) {
-      for (const controller of controllers) {
-        for (const activeTab of activeTabs) {
-          const view = popupView({ activeTab, controller, granted });
-          expect(connectedOrigin(view)).toBe(
-            view.state.type === "connected" ? "https://app.stll.app" : null,
-          );
-        }
-      }
-    }
-    expect(connectedOrigin(handedTabView("https://app.stll.app"))).toBe(
-      "https://app.stll.app",
-    );
   });
 });
 
-const returnedMessageKeys = new Set<PopupMessageKey>();
-for (const granted of grants) {
-  for (const controller of controllers) {
-    for (const activeTab of activeTabs) {
-      const view = popupView({ activeTab, controller, granted });
-      returnedMessageKeys.add(view.statusMessageKey);
-      if (view.primary) {
-        returnedMessageKeys.add(view.primary.messageKey);
-      }
-      for (const secondary of view.secondary) {
-        returnedMessageKeys.add(secondary.messageKey);
-      }
-    }
-  }
-}
-const handed = handedTabView("https://example.com");
-returnedMessageKeys.add(handed.statusMessageKey);
-for (const allowed of grants) {
-  for (const state of Object.values(DESKTOP_LINK_STATE)) {
-    returnedMessageKeys.add(desktopLinkView({ allowed, state }).messageKey);
-  }
-}
-// Shown by the popup outside the view.
-for (const key of [
-  "checkingAccess",
-  "connectionPurpose",
-  "usingTabs",
-] as const satisfies readonly PopupMessageKey[]) {
-  returnedMessageKeys.add(key);
-}
-
-describe("the stella desktop row", () => {
-  test("offers the permission until the member allows it", () => {
+describe("the stella desktop app line", () => {
+  test("is the Connect button until the member allows it", () => {
     for (const state of Object.values(DESKTOP_LINK_STATE)) {
-      expect(desktopLinkView({ allowed: false, state })).toEqual({
-        messageKey: "allowDesktop",
-        type: "allow",
+      expect(desktopLineStatus({ allowed: false, state })).toEqual({
+        type: "connect",
       });
     }
   });
 
-  test("says connected only once stella desktop answered", () => {
+  test("once allowed, offers nothing to click and says connected only once the app answered", () => {
     expect(
-      desktopLinkView({ allowed: true, state: DESKTOP_LINK_STATE.connected }),
-    ).toEqual({ messageKey: "desktopConnected", type: "connected" });
+      desktopLineStatus({ allowed: true, state: DESKTOP_LINK_STATE.connected }),
+    ).toEqual({
+      messageKey: "statusConnected",
+      tone: "connected",
+      type: "status",
+    });
     expect(
-      desktopLinkView({ allowed: true, state: DESKTOP_LINK_STATE.waiting }),
-    ).toEqual({ messageKey: "desktopConnecting", type: "connecting" });
+      desktopLineStatus({ allowed: true, state: DESKTOP_LINK_STATE.waiting }),
+    ).toEqual({ messageKey: "lineConnecting", tone: "idle", type: "status" });
     expect(
-      desktopLinkView({ allowed: true, state: DESKTOP_LINK_STATE.offline }),
-    ).toEqual({ messageKey: "desktopNotRunning", type: "not-running" });
+      desktopLineStatus({ allowed: true, state: DESKTOP_LINK_STATE.offline }),
+    ).toEqual({ messageKey: "lineOpenApp", tone: "idle", type: "status" });
     expect(
-      desktopLinkView({
+      desktopLineStatus({
         allowed: true,
         state: DESKTOP_LINK_STATE.incompatible,
       }),
-    ).toEqual({ messageKey: "desktopUpdateNeeded", type: "update-needed" });
+    ).toEqual({
+      detailKey: "desktopUpdateNeeded",
+      messageKey: "lineUpdateApp",
+      tone: "warning",
+      type: "status",
+    });
   });
 });
+
+const returnedMessageKeys = new Set<PopupMessageKey>();
+for (const input of everyInput()) {
+  const view = popupView(input);
+  const line = websiteLineStatus(view);
+  if (line.type === "status") {
+    returnedMessageKeys.add(line.messageKey);
+  }
+  for (const { messageKey } of view.footer) {
+    returnedMessageKeys.add(messageKey);
+  }
+}
+for (const allowed of grants) {
+  for (const state of Object.values(DESKTOP_LINK_STATE)) {
+    const line = desktopLineStatus({ allowed, state });
+    if (line.type === "status") {
+      returnedMessageKeys.add(line.messageKey);
+      if (line.detailKey !== undefined) {
+        returnedMessageKeys.add(line.detailKey);
+      }
+    }
+  }
+}
+// Shown by the popup outside the view.
+for (const key of [
+  "adoptTab",
+  "connectionPurpose",
+  "lineConnect",
+  "lineDesktop",
+  "lineWebsite",
+  "usingTabs",
+] as const satisfies readonly PopupMessageKey[]) {
+  returnedMessageKeys.add(key);
+}
 
 describe("naming the tabs stella keeps contained", () => {
   test("a tab is named by its title, with its host beside it", () => {

@@ -40,7 +40,9 @@ import {
 import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
+import type { EntityVersionTargetErrorCode } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerErrorCode } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
   scanUpload,
@@ -185,13 +187,30 @@ const failed = (
   message: error.message,
 });
 
+const ENTITY_VERSION_TARGET_HANDLER_CODES = {
+  "current-version-changed": "current_version_changed",
+  "current-version-not-found": "current_version_not_found",
+  "document-too-large": "document_too_large",
+  "edit-session-open": "edit_session_open",
+  "entity-not-found": "entity_not_found",
+  "entity-read-only": "entity_read_only",
+  "missing-file-field": "missing_file_field",
+  "source-version-not-found": "source_version_not_found",
+  "target-file-not-found": "target_file_not_found",
+  "workspace-not-active": "workspace_not_active",
+} as const satisfies Record<EntityVersionTargetErrorCode, HandlerErrorCode>;
+
 const storeFailure = (
   error:
     | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
     | { _tag: "MissingFilePropertyError" }
-    | { _tag: "EntityVersionTargetError"; code: string; message: string }
+    | {
+        _tag: "EntityVersionTargetError";
+        code: EntityVersionTargetErrorCode;
+        message: string;
+      }
     | DocumentWriteRefusedError
     | OrganizationFileUsageError,
 ): HandlerError => {
@@ -229,7 +248,7 @@ const storeFailure = (
     case "EntityVersionTargetError":
       return new HandlerError({
         status: 409,
-        code: error.code.replaceAll("-", "_"),
+        code: ENTITY_VERSION_TARGET_HANDLER_CODES[error.code],
         message: error.message,
       });
     default:

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -47,6 +48,7 @@ import {
 import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 import { ClauseBody } from "@/routes/knowledge/-components/clause-body";
 import { filterClauseLinkCandidates } from "@/routes/knowledge/-components/link-clause-dialog.logic";
 
@@ -213,7 +215,14 @@ export const LinkClauseDialog = ({
   const clauses = clauseData && "items" in clauseData ? clauseData.items : [];
 
   // Variants of the currently selected clause, offered at link time.
-  const variantsResultQuery = useQuery({
+  const variantsResultQuery = useResourceQuery({
+    resourceReads: {
+      resources: [RESOURCE_TYPE.CLAUSE, RESOURCE_TYPE.CLAUSE_VARIANT],
+      scope: {
+        type: "organization",
+        organizationId: activeOrganizationId,
+      },
+    },
     queryKey: ["clause-variants", selectedClauseId],
     queryFn: async ({ signal }) => {
       if (!selectedClauseId) {
