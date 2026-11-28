@@ -6,10 +6,16 @@
 // Each check's peak memory is the largest peak RSS those runs measured. The
 // pool admits checks by it, so concurrent checks never exceed the runner.
 //
+// Pull-request runs never see a release candidate's width: its PR-depth run
+// checks everything since the merge base. Each check keeps the longest such
+// full-range run as a record that no refresh lowers, and its budget stays
+// FULL_RANGE_HEADROOM times above it (the budgets parser enforces this).
+//
 //   bun scripts/ci-check-budgets.ts refresh [runs]
 //
-// reads the pool logs of the latest passing CI runs (gh) and rewrites
-// .github/ci-checks/budgets.json; a check without samples gets the default.
+// reads the pool logs of the latest passing CI runs and dispatched PR-depth
+// runs (gh) and rewrites .github/ci-checks/budgets.json; a check without
+// samples gets the default.
 import { panic } from "better-result";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -19,7 +25,9 @@ import {
   CHECK_POOL_JOBS,
   type CheckBudget,
   type CheckPoolJob,
+  FULL_RANGE_HEADROOM,
   parseCheckPool,
+  readCheckBudgets,
   readWorkingTreeCheckPool,
   type TimeBudget,
 } from "./ci-check-pool-registry";
@@ -96,7 +104,8 @@ export const peakRssMiB = (samples: readonly number[]) =>
     ? DEFAULT_PEAK_RSS_MIB
     : Math.max(1, Math.ceil(Math.max(...samples)));
 
-const JOB_NAME = /^(?<job>[\w-]+)(?: \(\d+\))?$/u;
+// A run that calls ci.yml as a reusable workflow prefixes its jobs.
+const JOB_NAME = /^(?:[\w-]+ \/ )?(?<job>[\w-]+)(?: \(\d+\))?$/u;
 /** The pool a CI job (or one of its matrix partitions) runs, if any. */
 export const poolJobOf = (jobName: string): CheckPoolJob | undefined => {
   const job = JOB_NAME.exec(jobName)?.groups?.["job"];
@@ -130,6 +139,47 @@ export const passedPeaks = (log: string) =>
     return name === undefined || !Number.isFinite(mib) ? [] : [{ name, mib }];
   });
 
+/**
+ * The longest full-range run, in whole seconds: the committed record or a
+ * newly measured sample, whichever is longer. A refresh that sees no
+ * full-range run keeps the record, so narrow samples never lower it.
+ */
+export const fullRangeSeconds = (
+  recorded: number | undefined,
+  samples: readonly number[],
+) => {
+  const all = recorded === undefined ? samples : [recorded, ...samples];
+  return all.length === 0 ? undefined : Math.ceil(Math.max(...all));
+};
+
+/** A check's budget from its samples, minimum and full-range record. */
+export const derivedBudget = ({
+  samples,
+  minimumSeconds = 0,
+  recordedFullRangeSeconds,
+  fullRangeSamples,
+  peaks,
+}: {
+  samples: readonly number[];
+  minimumSeconds?: number | undefined;
+  recordedFullRangeSeconds: number | undefined;
+  fullRangeSamples: readonly number[];
+  peaks: readonly number[];
+}): CheckBudget => {
+  const fullRange = fullRangeSeconds(
+    recordedFullRangeSeconds,
+    fullRangeSamples,
+  );
+  return {
+    ...checkBudget(
+      samples,
+      Math.max(minimumSeconds, (fullRange ?? 0) * FULL_RANGE_HEADROOM),
+    ),
+    ...(fullRange === undefined ? {} : { fullRangeSeconds: fullRange }),
+    peakRssMiB: peakRssMiB(peaks),
+  };
+};
+
 const GH_RETRY = path.resolve(import.meta.dir, "gh-retry.sh");
 // Every GitHub API call goes through the retry owner.
 const gh = (...args: string[]) => {
@@ -145,61 +195,95 @@ const gh = (...args: string[]) => {
 
 const REPOSITORY = "stella/stella";
 
-const refresh = (runs: number) => {
-  const samples = new Map<string, number[]>();
-  const peaks = new Map<string, number[]>();
-  const runIds = gh(
+type Samples = Map<string, number[]>;
+const add = (into: Samples, key: string, value: number) =>
+  into.set(key, [...(into.get(key) ?? []), value]);
+
+/** Run ids of a workflow's latest runs matching a query. */
+const runIdsOf = (workflow: string, query: string) =>
+  gh(
     "api",
-    `repos/${REPOSITORY}/actions/workflows/ci.yml/runs?status=success&per_page=${runs}`,
+    `repos/${REPOSITORY}/actions/workflows/${workflow}/runs?${query}`,
     "--jq",
     ".workflow_runs[].id",
   )
     .split("\n")
     .filter((id) => id !== "");
-  for (const runId of runIds) {
-    const jobs = gh(
+
+/** Durations and peaks of the passed checks in a run's pool jobs. */
+const collect = (
+  runId: string,
+  conclusions: readonly string[],
+  durations: Samples,
+  peaks?: Samples,
+) => {
+  const jobs = gh(
+    "api",
+    `repos/${REPOSITORY}/actions/runs/${runId}/jobs?per_page=100`,
+    "--jq",
+    `.jobs[] | select(.conclusion | IN(${conclusions.map((conclusion) => JSON.stringify(conclusion)).join(", ")})) | "\\(.id)\\t\\(.name)"`,
+  )
+    .split("\n")
+    .flatMap((line) => {
+      const [id, name] = line.split("\t");
+      const job = name === undefined ? undefined : poolJobOf(name);
+      return id === undefined || job === undefined ? [] : [{ id, job }];
+    });
+  for (const { id, job } of jobs) {
+    const log = gh(
       "api",
-      `repos/${REPOSITORY}/actions/runs/${runId}/jobs?per_page=100`,
-      "--jq",
-      '.jobs[] | select(.conclusion == "success") | "\\(.id)\\t\\(.name)"',
-    )
-      .split("\n")
-      .flatMap((line) => {
-        const [id, name] = line.split("\t");
-        const job = name === undefined ? undefined : poolJobOf(name);
-        return id === undefined || job === undefined ? [] : [{ id, job }];
-      });
-    for (const { id, job } of jobs) {
-      const log = gh(
-        "api",
-        "--allow-escape-sequences",
-        `repos/${REPOSITORY}/actions/jobs/${id}/logs`,
-      );
-      for (const { name, seconds } of passedDurations(log)) {
-        const key = `${job}\0${name}`;
-        samples.set(key, [...(samples.get(key) ?? []), seconds]);
-      }
+      "--allow-escape-sequences",
+      `repos/${REPOSITORY}/actions/jobs/${id}/logs`,
+    );
+    for (const { name, seconds } of passedDurations(log)) {
+      add(durations, `${job}\0${name}`, seconds);
+    }
+    if (peaks !== undefined) {
       for (const { name, mib } of passedPeaks(log)) {
-        const key = `${job}\0${name}`;
-        peaks.set(key, [...(peaks.get(key) ?? []), mib]);
+        add(peaks, `${job}\0${name}`, mib);
       }
     }
+  }
+};
+
+const refresh = (runs: number) => {
+  const committed = readCheckBudgets();
+  const samples: Samples = new Map();
+  const peaks: Samples = new Map();
+  const fullRange: Samples = new Map();
+  const runIds = runIdsOf("ci.yml", `status=success&per_page=${runs}`);
+  for (const runId of runIds) {
+    collect(runId, ["success"], samples, peaks);
+  }
+  // A release dispatches the PR-depth run for its candidate. A check that
+  // passed there measured the full range even when another check failed.
+  const fullRangeRunIds = runIdsOf(
+    "main-pr-depth.yml",
+    `event=workflow_dispatch&status=completed&per_page=${runs}`,
+  );
+  for (const runId of fullRangeRunIds) {
+    collect(runId, ["success", "failure"], fullRange);
   }
   const budgets = Object.fromEntries(
     CHECK_POOL_JOBS.map((job) => [
       job,
       Object.fromEntries(
         parseCheckPool(readWorkingTreeCheckPool(job)).map(
-          ({ name }): [string, CheckBudget] => [
-            name,
-            {
-              ...checkBudget(
-                samples.get(`${job}\0${name}`) ?? [],
-                MINIMUM_BUDGET_SECONDS[job]?.[name],
-              ),
-              peakRssMiB: peakRssMiB(peaks.get(`${job}\0${name}`) ?? []),
-            },
-          ],
+          ({ name }): [string, CheckBudget] => {
+            const key = `${job}\0${name}`;
+            return [
+              name,
+              derivedBudget({
+                samples: samples.get(key) ?? [],
+                minimumSeconds: MINIMUM_BUDGET_SECONDS[job]?.[name],
+                recordedFullRangeSeconds: Object.hasOwn(committed[job], name)
+                  ? committed[job][name]?.fullRangeSeconds
+                  : undefined,
+                fullRangeSamples: fullRange.get(key) ?? [],
+                peaks: peaks.get(key) ?? [],
+              }),
+            ];
+          },
         ),
       ),
     ]),
@@ -207,7 +291,7 @@ const refresh = (runs: number) => {
   const file = path.resolve(import.meta.dir, "..", CHECK_BUDGETS_PATH);
   writeFileSync(file, `${JSON.stringify(budgets, null, 2)}\n`);
   console.log(
-    `Budgets from ${runIds.length} passing runs written to ${CHECK_BUDGETS_PATH}`,
+    `Budgets from ${runIds.length} passing runs and ${fullRangeRunIds.length} full-range runs written to ${CHECK_BUDGETS_PATH}`,
   );
 };
 

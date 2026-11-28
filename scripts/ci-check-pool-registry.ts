@@ -200,7 +200,16 @@ export type TimeBudget = {
   samples: number;
   p95Seconds?: number;
   p99Seconds?: number;
+  /**
+   * The longest a full-range run measured for the check, in whole seconds: a
+   * release candidate's PR-depth run checks everything since its merge base,
+   * far more than any pull request. Ordinary samples never see that width, so
+   * the record outlives every refresh and holds the budget above it.
+   */
+  fullRangeSeconds?: number;
 };
+/** How far a budget stays above the longest full-range run it recorded. */
+export const FULL_RANGE_HEADROOM = 2;
 export type CheckBudget = TimeBudget & {
   /** The largest peak RSS a passing run measured, in MiB: the pool's admission weight. */
   peakRssMiB?: number;
@@ -214,6 +223,7 @@ const BUDGET_KEYS = new Set([
   "samples",
   "p95Seconds",
   "p99Seconds",
+  "fullRangeSeconds",
   "peakRssMiB",
 ]);
 // A budget without a measured peak still parses: only its own check fails,
@@ -227,7 +237,10 @@ const isBudget = (value: unknown): value is CheckBudget =>
   Number(value["samples"]) >= 0 &&
   (value["peakRssMiB"] === undefined ||
     (Number.isInteger(value["peakRssMiB"]) &&
-      Number(value["peakRssMiB"]) >= 1));
+      Number(value["peakRssMiB"]) >= 1)) &&
+  (value["fullRangeSeconds"] === undefined ||
+    (Number.isInteger(value["fullRangeSeconds"]) &&
+      Number(value["fullRangeSeconds"]) >= 0));
 
 export const parseCheckBudgets = (source: string): CheckBudgets => {
   const parsed: unknown = JSON.parse(source);
@@ -249,6 +262,14 @@ export const parseCheckBudgets = (source: string): CheckBudgets => {
       Object.entries(budgets).map(([name, budget]) => {
         if (!isBudget(budget)) {
           throw new CheckPoolRegistryError(`${job}: invalid budget: ${name}`);
+        }
+        // A budget below a recorded full-range run would stop every release
+        // candidate's run of the check, however the budget was derived.
+        const fullRange = budget.fullRangeSeconds ?? 0;
+        if (budget.minutes * 60 < fullRange * FULL_RANGE_HEADROOM) {
+          throw new CheckPoolRegistryError(
+            `${job}: ${name}: ${budget.minutes} min is below ${FULL_RANGE_HEADROOM} x its recorded full-range run of ${fullRange} s`,
+          );
         }
         return [name, budget];
       }),

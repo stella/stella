@@ -4,6 +4,8 @@ import {
   checkBudget,
   DEFAULT_BUDGET_MINUTES,
   DEFAULT_PEAK_RSS_MIB,
+  derivedBudget,
+  fullRangeSeconds,
   MINIMUM_BUDGET_SECONDS,
   passedDurations,
   passedPeaks,
@@ -11,7 +13,12 @@ import {
   percentile,
   poolJobOf,
 } from "./ci-check-budgets";
-import { CHECK_POOL_JOBS, readCheckBudgets } from "./ci-check-pool-registry";
+import {
+  CHECK_POOL_JOBS,
+  FULL_RANGE_HEADROOM,
+  parseCheckBudgets,
+  readCheckBudgets,
+} from "./ci-check-pool-registry";
 
 test("percentiles use the nearest rank", () => {
   const samples = Array.from({ length: 100 }, (_, index) => index + 1);
@@ -80,6 +87,9 @@ test("a check's peak is the largest measured, and an unmeasured check gets the d
 test("matrix partitions map to their pool", () => {
   expect(poolJobOf("ci-checks-rest (2)")).toBe("ci-checks-rest");
   expect(poolJobOf("ci-checks-policy")).toBe("ci-checks-policy");
+  // The PR-depth workflow calls ci.yml as a reusable workflow.
+  expect(poolJobOf("suites / ci-checks-rest (1)")).toBe("ci-checks-rest");
+  expect(poolJobOf("suites / ci-tests (api-1)")).toBeUndefined();
   expect(poolJobOf("ci-tests (api-1)")).toBeUndefined();
 });
 
@@ -93,6 +103,74 @@ test("a check's own minimum raises its budget, and committed budgets keep it", (
     )) {
       const committed = budgets[job][name]?.minutes ?? 0;
       expect(committed * 60, `${job}: ${name}`).toBeGreaterThanOrEqual(seconds);
+    }
+  }
+});
+
+test("a full-range record survives a refresh that sees only narrow runs", () => {
+  expect(fullRangeSeconds(702, [])).toBe(702);
+  expect(fullRangeSeconds(702, [673.3, 600])).toBe(702);
+  expect(fullRangeSeconds(702, [740.2])).toBe(741);
+  expect(fullRangeSeconds(undefined, [])).toBeUndefined();
+  // Ten pull-request runs of about two minutes alone allow 10 min, below
+  // the 702 s a full-range run of the same check took.
+  const narrow = [...Array.from({ length: 9 }, () => 90), 116];
+  expect(checkBudget(narrow).minutes).toBe(10);
+  const budget = derivedBudget({
+    samples: narrow,
+    recordedFullRangeSeconds: 702,
+    fullRangeSamples: [],
+    peaks: [512],
+  });
+  expect(budget).toEqual({
+    minutes: 24,
+    samples: 10,
+    p95Seconds: 116,
+    p99Seconds: 116,
+    fullRangeSeconds: 702,
+    peakRssMiB: 512,
+  });
+  expect(budget.minutes * 60).toBeGreaterThanOrEqual(702 * FULL_RANGE_HEADROOM);
+  // A check no full-range run measured keeps its ordinary budget.
+  expect(
+    derivedBudget({
+      samples: narrow,
+      recordedFullRangeSeconds: undefined,
+      fullRangeSamples: [],
+      peaks: [],
+    }),
+  ).toEqual({ ...checkBudget(narrow), peakRssMiB: DEFAULT_PEAK_RSS_MIB });
+});
+
+test("a budget below its recorded full-range run never parses", () => {
+  const budgets = (budget: Record<string, number>) =>
+    JSON.stringify({
+      "ci-checks-policy": {},
+      "ci-checks-rest": { Guard: budget },
+      "code-quality-web-rest": {},
+    });
+  expect(() =>
+    parseCheckBudgets(
+      budgets({ minutes: 10, samples: 10, fullRangeSeconds: 702 }),
+    ),
+  ).toThrow("Guard: 10 min is below 2 x its recorded full-range run of 702 s");
+  expect(() =>
+    parseCheckBudgets(
+      budgets({ minutes: 24, samples: 10, fullRangeSeconds: 702.5 }),
+    ),
+  ).toThrow("invalid budget: Guard");
+  expect(
+    parseCheckBudgets(
+      budgets({ minutes: 24, samples: 10, fullRangeSeconds: 702 }),
+    )["ci-checks-rest"]["Guard"]?.fullRangeSeconds,
+  ).toBe(702);
+  // The committed budgets parse, so every recorded run keeps its headroom.
+  const committed = readCheckBudgets();
+  for (const job of CHECK_POOL_JOBS) {
+    for (const [name, budget] of Object.entries(committed[job])) {
+      expect(budget.minutes * 60, `${job}: ${name}`).toBeGreaterThanOrEqual(
+        (budget.fullRangeSeconds ?? 0) * FULL_RANGE_HEADROOM,
+      );
     }
   }
 });
