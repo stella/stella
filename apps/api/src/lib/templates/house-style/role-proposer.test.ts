@@ -9,6 +9,7 @@ import {
   czechContract,
   czechDecimalContract,
   englishAgreement,
+  heading,
   inColumns,
   manifestOf,
   numbered,
@@ -30,6 +31,36 @@ const rolesOf = (
 };
 
 describe("proposeBlockRoles", () => {
+  test("heads the parts of a pack, whatever their words", () => {
+    const part = (label: string, text: string) => ({
+      ...heading(text),
+      label,
+      numId: 5,
+    });
+    const article = (label: string, text: string) => ({
+      text,
+      label,
+      styleName: "Level 1",
+      outlineLevel: 1,
+    });
+    const manifest = manifestOf([
+      part("III.", "Order Form"),
+      "The Buyer orders the Deliverables.",
+      part("IV.", "Short form Terms"),
+      article("1", "Definitions"),
+      numbered("1.1", "Terms have the meaning given."),
+      article("4", "The Supplier's obligations"),
+      numbered("4.1", "The Supplier must deliver."),
+      part("VI.", "[Annex – Specification] (Optional)"),
+    ]);
+    expect(rolesOf(manifest)).toMatchObject({
+      "Order Form": "heading",
+      "Short form Terms": "heading",
+      Definitions: "articleHeading",
+      "[Annex – Specification] (Opt": "heading",
+    });
+  });
+
   test("reads the parts of a Czech contract", () => {
     const manifest = czechContract("Viz čl. II této smlouvy.");
     expect(rolesOf(manifest)).toMatchObject({
