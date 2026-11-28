@@ -20,6 +20,10 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   decodeSourceRawEnvelopeObjects,
@@ -48,10 +52,6 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import {
   censusCaseLawRawObjectsPage,
   RAW_CENSUS_MODE,

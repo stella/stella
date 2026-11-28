@@ -14,7 +14,7 @@ import {
 } from "@stll/case-law-parsers/sanitize-url";
 import { declareFingerprintFields } from "@stll/errors";
 
-import { isRecord } from "./internal-helpers";
+import { isIngestionRecord } from "./internal-helpers";
 import {
   metadataUrlChildSchema,
   metadataUrlItemSchema,
@@ -142,7 +142,10 @@ export const toPlainTextMetadata = (
       ),
     );
   }
-  if (isRecord(value) && Object.getPrototypeOf(value) === Object.prototype) {
+  if (
+    isIngestionRecord(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
     return projectPlainMetadataObject(value, schema);
   }
   return Result.err(

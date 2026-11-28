@@ -41,7 +41,7 @@ import {
   normalizeDecisionKeywords,
 } from "./decision-headnote";
 import type { AdapterKey } from "./ingestion-constants";
-import { isRecord } from "./internal-helpers";
+import { isIngestionRecord } from "./internal-helpers";
 import {
   approveMetadataUrls,
   META_URL_DIAGNOSTICS,
@@ -244,7 +244,7 @@ type StoredDecisionMetadataProjectionOptions = {
 const isStoredMetadataProjection = (
   value: unknown,
 ): value is StoredDecisionMetadataProjectionOptions =>
-  isRecord(value) &&
+  isIngestionRecord(value) &&
   value["type"] === "stored" &&
   Object.hasOwn(value, "schema");
 
@@ -307,7 +307,7 @@ export const storeDecisionTextFields = ({
   const ecliAvailability = metadata["ecliAvailability"];
   if (ecliAvailability !== undefined) {
     if (
-      !isRecord(ecliAvailability) ||
+      !isIngestionRecord(ecliAvailability) ||
       !isEcliAvailabilityStatus(ecliAvailability["status"])
     ) {
       return panic("ECLI availability must carry a publisher status");
@@ -320,7 +320,7 @@ export const storeDecisionTextFields = ({
   const decisionDateAvailability = metadata["decisionDateAvailability"];
   if (decisionDateAvailability !== undefined) {
     if (
-      !isRecord(decisionDateAvailability) ||
+      !isIngestionRecord(decisionDateAvailability) ||
       !isDecisionDateAvailabilityStatus(decisionDateAvailability["status"])
     ) {
       return panic("Decision date availability must carry a source status");
@@ -336,7 +336,7 @@ export const storeDecisionTextFields = ({
   const decisionTypeAvailability = metadata["decisionTypeAvailability"];
   if (decisionTypeAvailability !== undefined) {
     if (
-      !isRecord(decisionTypeAvailability) ||
+      !isIngestionRecord(decisionTypeAvailability) ||
       !isDecisionTypeAvailabilityStatus(decisionTypeAvailability["status"])
     ) {
       return panic("Decision type availability must carry a source status");

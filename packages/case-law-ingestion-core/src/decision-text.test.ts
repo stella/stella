@@ -27,7 +27,7 @@ import {
   storeTextField,
   TEXT_ABSENCE_REASON,
 } from "./decision-text";
-import { isRecord } from "./internal-helpers";
+import { isIngestionRecord } from "./internal-helpers";
 import {
   MAX_METADATA_URL_DIAGNOSTICS,
   META_URL_DIAGNOSTICS,
@@ -93,7 +93,10 @@ test("URL metadata provenance is explicit at the checked boundary", () => {
   );
   expect(current["url"]).toBe("https://example.test/?stated=&amp;");
   const diagnostics = current[META_URL_DIAGNOSTICS];
-  if (!isRecord(diagnostics) || !Array.isArray(diagnostics["entries"])) {
+  if (
+    !isIngestionRecord(diagnostics) ||
+    !Array.isArray(diagnostics["entries"])
+  ) {
     throw new TypeError("Expected validated diagnostic sidecar");
   }
   expect(diagnostics["entries"].length).toBeLessThanOrEqual(
@@ -101,7 +104,7 @@ test("URL metadata provenance is explicit at the checked boundary", () => {
   );
   expect(
     diagnostics["entries"].some(
-      (entry) => isRecord(entry) && entry["address"] === "url",
+      (entry) => isIngestionRecord(entry) && entry["address"] === "url",
     ),
   ).toBe(false);
 });

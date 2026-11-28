@@ -2,16 +2,16 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
 import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import {
   decisionFallbackState,
   decisionStorageIdentity,

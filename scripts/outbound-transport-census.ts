@@ -350,7 +350,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/lib/errors/tagged-errors.ts",
+    path: "packages/case-law-ingestion-core/src/adapter-fetch-error.ts",
     class: "package-owned-client",
     reason: "Classifies failures produced by the shared HTTP client.",
     transports: ["module:@stll/fetch"],

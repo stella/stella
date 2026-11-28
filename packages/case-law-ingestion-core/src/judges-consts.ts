@@ -1,7 +1,7 @@
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 
-import type { ConstantMap } from "./internal-helpers";
+import type { EnumConstantMap } from "./internal-helpers";
 
 /**
  * Where the roster row was read, for a later re-import to start from. Not
@@ -29,7 +29,7 @@ export type PortraitSource = (typeof PORTRAIT_SOURCES)[number];
 
 export const PORTRAIT_SOURCE = {
   COURT_OFFICIAL: PORTRAIT_SOURCES[0],
-} as const satisfies ConstantMap<PortraitSource>;
+} as const satisfies EnumConstantMap<PortraitSource>;
 
 /** How a judge is named on a decision, by the contract's own member names. */
 export const DECISION_JUDGE_ROLE = {
@@ -38,7 +38,7 @@ export const DECISION_JUDGE_ROLE = {
   PANEL_MEMBER: DECISION_JUDGE_ROLES[2],
   DISSENTING: DECISION_JUDGE_ROLES[3],
   ADVOCATE_GENERAL: DECISION_JUDGE_ROLES[4],
-} as const satisfies ConstantMap<DecisionJudgeRole>;
+} as const satisfies EnumConstantMap<DecisionJudgeRole>;
 
 /**
  * Reading order of the roles, as the decision read sorts its bench in SQL.

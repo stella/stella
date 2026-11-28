@@ -54,7 +54,7 @@ import {
   withDocumentStageWindow,
 } from "./document-stage-observation";
 import { ADAPTER_KEYS, type AdapterKey } from "./ingestion-constants";
-import { isRecord } from "./internal-helpers";
+import { isIngestionRecord } from "./internal-helpers";
 import type { ObservationDetail } from "./partial-observation";
 import {
   type PlainText,
@@ -449,7 +449,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
   Result.gen(function* () {
     if (
       "plainTextOutcome" in raw &&
-      isRecord(raw.plainTextOutcome) &&
+      isIngestionRecord(raw.plainTextOutcome) &&
       raw.plainTextOutcome["type"] === "item_build_failed" &&
       raw.plainTextOutcome["error"] instanceof PlainTextError
     ) {
@@ -1064,7 +1064,7 @@ export const readStoredRawListing = ({
     try: (): unknown => JSON.parse(listingRaw),
     catch: () => null,
   }).unwrapOr(null);
-  if (!isRecord(listing)) {
+  if (!isIngestionRecord(listing)) {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST,

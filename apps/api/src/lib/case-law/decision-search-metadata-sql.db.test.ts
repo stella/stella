@@ -9,12 +9,12 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
+import { readStoredDecisionTextAbsence } from "@stll/case-law-ingestion-core/decision-text";
 
 import {
   decisionHasLegalSentenceSql,
   decisionSearchCategorySql,
 } from "@/api/lib/case-law/decision-search-metadata-sql";
-import { readStoredDecisionTextAbsence } from "@/api/lib/case-law/decision-text";
 import {
   storedDecisionTextAbsenceEntriesSql,
   storedDecisionTextAbsenceValidSql,

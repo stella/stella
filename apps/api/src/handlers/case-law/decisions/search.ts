@@ -40,6 +40,10 @@ import {
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { decisionHeadnoteMaxChars } from "@stll/case-law-ingestion-core/decision-headnote";
+import {
+  readDecisionHeadnote,
+  readDecisionKeywords,
+} from "@stll/case-law-ingestion-core/decision-text";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
@@ -143,10 +147,6 @@ import {
   decisionSearchCursorAfterSql,
   decisionSortKeySql,
 } from "@/api/lib/case-law/decision-search-order-sql";
-import {
-  readDecisionHeadnote,
-  readDecisionKeywords,
-} from "@/api/lib/case-law/decision-text";
 import {
   decisionTypeFilterSql,
   decisionTypeKindSql,

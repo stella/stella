@@ -1,5 +1,6 @@
 import { fail as panic } from "node:assert";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -42,6 +43,7 @@ export const generateParserRegistry = (
     }
     return;
   }
+  mkdirSync(path.dirname(output), { recursive: true });
   writeFileSync(output, source);
 };
 

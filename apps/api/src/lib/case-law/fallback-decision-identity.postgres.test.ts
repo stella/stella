@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
 import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 
 import { FALLBACK_DECISION_UNIQUE_INDEXES } from "@/api/db/online-unique-indexes";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import {
   decisionFallbackState,
   decisionStorageIdentity,

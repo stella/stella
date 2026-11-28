@@ -7,15 +7,14 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
-import { assertProperty } from "@stll/property-testing";
-
 import {
   absentTextField,
   presentTextField,
   readDecisionTextMetadata,
   readStoredDecisionTextAbsence,
   storeDecisionTextFields,
-} from "@/api/lib/case-law/decision-text";
+} from "@stll/case-law-ingestion-core/decision-text";
+import { assertProperty } from "@stll/property-testing";
 
 const textField = fc.oneof(
   fc.constantFrom(...TEXT_ABSENCE_REASONS).map(absentTextField),

@@ -2,6 +2,7 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { splitStoredDecisionTextMetadata } from "@stll/case-law-ingestion-core/decision-text";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -12,7 +13,6 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import { listingCourtIdentity } from "@/api/lib/case-law/decision-court-identity";
 import type { ListingCourtIdentity } from "@/api/lib/case-law/decision-court-identity";
-import { splitStoredDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { FALLBACK_DECISION_IDENTITY_PREFIX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
