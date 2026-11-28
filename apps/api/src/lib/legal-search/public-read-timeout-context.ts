@@ -391,4 +391,6 @@ export const withPublicReadIo = async <T>(
   });
 };
 
-registerPublicReadIo((transport, fn) => withPublicReadIo(transport, fn));
+registerPublicReadIo(
+  async (transport, fn) => await withPublicReadIo(transport, fn),
+);

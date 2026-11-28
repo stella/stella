@@ -15,16 +15,16 @@ import * as v from "valibot";
 
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import { DESKTOP_UPDATE_FEED_URL } from "@stll/api-contract/desktop-release";
-import { Temporal } from "@stll/time";
-
-import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
-import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   type ReadOutcome,
   readOutcomeOfStatus,
   readPresent,
   readUnavailable,
-} from "@/api/lib/errors/read-outcome";
+} from "@stll/case-law-ingestion-core/read-outcome";
+import { Temporal } from "@stll/time";
+
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type {
   SafeOutboundFetchError,
   SafeOutboundFetchResponse,

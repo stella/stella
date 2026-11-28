@@ -50,7 +50,7 @@ test("reports named duplicate partition and backoff helpers at their owners", as
       "const chunk = (items,size) => [];",
     ],
     [
-      "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+      "packages/case-law-adapters/src/retry.ts",
       "export function backoffMs(attempt) { return 1000; }",
     ],
   ] as const) {
