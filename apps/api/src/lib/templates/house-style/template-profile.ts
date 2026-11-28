@@ -1795,7 +1795,6 @@ const headerFieldIssues = (
  * part: a field is kept whole, in one run and in its order, or not at all.
  */
 const fieldsKeptInPart = (
-  profile: TemplateProfile,
   inspection: TemplateInspection,
   { order, emitted }: { order: readonly string[]; emitted: readonly string[] },
 ): TemplateProfileIssue[] => {
@@ -1930,7 +1929,7 @@ export const validateTemplateProfile = (
   // Every region that keeps template blocks, in the order they are placed:
   // the front blocks, then the contents.
   issues.push(
-    ...fieldsKeptInPart(profile, inspection, {
+    ...fieldsKeptInPart(inspection, {
       order,
       emitted: [...keepBefore, ...contents],
     }),
