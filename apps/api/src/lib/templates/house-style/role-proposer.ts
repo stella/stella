@@ -95,6 +95,11 @@ const PARTY_MARKER = new RegExp(
 );
 const PREAMBLE_MARKER =
   /uzavřel[yi]|uzavírají|se dohodl[yi]|preambule|whereas|have agreed|have concluded|agree as follows|präambel|vereinbaren/iu;
+/** A sentence that ends by naming who follows (`… uzavírají následující
+ *  účastníci:`, `… between the following parties:`): it introduces the
+ *  parties, the operative part has not opened. */
+const PARTIES_FOLLOW =
+  /(?:účastníci|smluvní strany|strany|parties|parteien|vertragspartner|between|zwischen)[  ]*:[  ]*$/iu;
 const SIGNATURE_MARKER = new RegExp(
   String.raw`^\s*(?:ve?[ \u00A0].{0,40}[ \u00A0]dne${NOT_LETTER}|(?:in|at)[ \u00A0].{0,40}[ ,]on${NOT_LETTER}|(?:ort|datum|date|place|místo)[^\n]{0,20}[:.…_]{2,}|(?:za|for and on behalf of|on behalf of|für|im namen)[ \u00A0])|_{4,}|\.{6,}|…{3,}|podpis|signature|unterschrift|signed by|name:|title:|jméno:|funkce:`,
   "iu",
@@ -344,9 +349,17 @@ const enumerated = ({
   ordinal,
   core,
   clausePath,
+  shape,
 }: LabelEntry): number | null => {
   if (level === "clause") {
     return clausePath.length <= 1 ? ordinal : null;
+  }
+  // A bare `1.` read as an article (the articles are `1.` with `1.1`
+  // under them) counts as well; one led by a word (`Článek 1`) heads more.
+  if (level === "article") {
+    return shape.keyword === null && (shape.path?.length ?? 1) <= 1
+      ? ordinal
+      : null;
   }
   return level === "letter" ? letterOrdinal(core) : null;
 };
@@ -371,7 +384,9 @@ const partyHeadsOf = (
   const opened = blocks
     .slice(0, provisions.at(0)?.position ?? 0)
     .some(
-      ({ text }) => PARTY_IDENTITY.test(text) || PREAMBLE_MARKER.test(text),
+      ({ text }) =>
+        PARTY_IDENTITY.test(text) ||
+        (PREAMBLE_MARKER.test(text) && !PARTIES_FOLLOW.test(text.trim())),
     );
   if (opened) {
     return new Set();

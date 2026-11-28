@@ -269,6 +269,15 @@ describe("buildTemplatePlan, parties headed by a number", () => {
     expect(
       (item?.numbering ?? null) !== null || item?.labelAsText === true,
     ).toBe(true);
+    // A number written as text hangs as a clause's does, so the party's
+    // name stands at one tab stop.
+    if (item?.labelAsText === true) {
+      const clause = PROFILE.roles.clause1?.numbering?.indent;
+      expect(item.indent).toEqual({
+        left: clause?.left,
+        hanging: clause?.hanging,
+      });
+    }
   });
 });
 

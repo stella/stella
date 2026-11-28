@@ -253,6 +253,26 @@ describe("proposeBlockRoles", () => {
     expect(roles["Prodávající dodá zboží."]).toBe("clause1");
     expect(roles["Kupující zaplatí cenu."]).toBe("clause1");
 
+    // A sentence that concludes the agreement and ends by naming who
+    // follows announces the parties; it opens no operative part.
+    const announced = rolesOf(
+      manifestOf([
+        "DOHODA O MLČENLIVOSTI",
+        "Tuto dohodu uzavírají níže uvedeného dne následující účastníci:",
+        numbered("1.", "Alfa s.r.o., sídlo: Dlouhá 1, Praha", 5),
+        "(dále jen „Poskytovatel“)",
+        "a",
+        numbered("2.", "Beta a.s., IČO: 00000002", 5),
+        "(dále jen „Příjemce“)",
+        numbered("1.", "Úvodní ujednání", 10),
+        numbered("1.1.", "Poskytovatel je správcem díla.", 10),
+      ]),
+    );
+    expect(announced["Alfa s.r.o., sídlo: Dlouhá 1, Praha".slice(0, 28)]).toBe(
+      "party",
+    );
+    expect(announced["Beta a.s., IČO: 00000002"]).toBe("party");
+
     // Letters head them as numbers do, and the second party may have no
     // details of its own behind the word that joins the two.
     const lettered = rolesOf(
