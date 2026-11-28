@@ -12,6 +12,8 @@
 
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import {
   roleItemId,
   scopeItemId,
@@ -2645,7 +2647,7 @@ const hangValuesAtTheirStop = (context: Context, placed: Placed): void => {
  */
 const setKeptContentsLines = (context: Context, placed: Placed): void => {
   const { index, profile } = context;
-  const styles = profile.contentsLineStyles ?? [];
+  const styles = profile.contentsLineStyles;
   for (const placement of placed.placements) {
     const { block } = placement;
     const name = block.styleName ?? "";
@@ -2655,8 +2657,11 @@ const setKeptContentsLines = (context: Context, placed: Placed): void => {
     if (!index.contentsBlockIds.has(block.id) || level === undefined) {
       continue;
     }
-    const own = styles.find((style) => style.level === Number(level));
-    const style = own ?? styles.at(0);
+    const number = parseIntegerToken(level, { sign: "unsigned" }).unwrapOr(
+      null,
+    );
+    const own = styles?.find((style) => style.level === number);
+    const style = own ?? styles?.at(0);
     if (style !== undefined) {
       placement.styleId = style.styleId;
     }
@@ -2686,17 +2691,21 @@ const CONTENTS_LEVEL = /(?<level>[1-9])\s*$/u;
 /** The page number behind a contents line's leader tab. */
 const CONTENTS_PAGE = /\t[ \u00A0]*[0-9ivxlcIVXLC]{1,6}[ \u00A0]*$/u;
 const BLANKS = /[\s\u00A0]+/gu;
-const TRAILING_STOPS = /[.:]+$/u;
+/** The text without the full stops and colons it ends in. */
+const withoutTrailingStops = (text: string): string => {
+  let end = text.length;
+  while (end > 0 && (text[end - 1] === "." || text[end - 1] === ":")) {
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
 
 /** A line's text as a contents entry and its heading compare: blanks one
  *  space, no page number, case and closing stops ignored. */
 const contentsKey = (text: string): string =>
-  text
-    .replace(CONTENTS_PAGE, "")
-    .replace(BLANKS, " ")
-    .trim()
-    .replace(TRAILING_STOPS, "")
-    .toLowerCase();
+  withoutTrailingStops(
+    text.replace(CONTENTS_PAGE, "").replace(BLANKS, " ").trim(),
+  ).toLowerCase();
 
 /**
  * Keeps the depth of the source's own contents. The template's contents
@@ -2723,9 +2732,10 @@ const listSourceContentsEntries = (context: Context, placed: Placed): void => {
   const entries = new Map<string, number>();
   for (const id of index.contentsBlockIds) {
     const block = blockById.get(id);
-    const level = Number(
+    const level = parseIntegerToken(
       CONTENTS_LEVEL.exec(block?.styleName ?? "")?.groups?.["level"] ?? "0",
-    );
+      { sign: "unsigned" },
+    ).unwrapOr(0);
     const key = block === undefined ? "" : contentsKey(block.text);
     if (level > 0 && key !== "" && !entries.has(key)) {
       entries.set(key, level);
@@ -4086,7 +4096,7 @@ const pageSwitchesOf = (instruction: string): string | null => {
   if (rest.replace(PAGE_SWITCH, "").trim() !== "") {
     return null;
   }
-  return (rest.match(PAGE_SWITCH) ?? []).join(" ");
+  return rest.match(PAGE_SWITCH)?.join(" ") ?? "";
 };
 
 const carriedSwitchesOf = (instruction: string): string | null => {
@@ -4290,7 +4300,11 @@ const carryCrossReferences = ({
     ) {
       return;
     }
-    spans.set(block.id, [...(spans.get(block.id) ?? []), { start, end }]);
+    const claimed = spans.get(block.id);
+    spans.set(
+      block.id,
+      claimed === undefined ? [{ start, end }] : [...claimed, { start, end }],
+    );
     references.push({
       blockId: block.id,
       start,
