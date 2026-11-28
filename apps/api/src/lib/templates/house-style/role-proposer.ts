@@ -73,6 +73,7 @@ const CONFIDENCE = {
   sectionHeading: 0.65,
   bullet: 0.35,
   annexBody: 0.4,
+  editorialNote: 0.6,
   plain: 0.5,
   alternative: 0.3,
   weakAlternative: 0.2,
@@ -666,12 +667,30 @@ const sectionHeading = (): Reading =>
     confidence: CONFIDENCE.alternative,
   });
 
+/**
+ * A drafter's note to whoever fills the form in: it opens with a note's
+ * word (`Note:`, `[Drafting note`, `Hinweis:`, `Pozn.`, `Bitte wählen`,
+ * `Variante 1`). It is no text of the provision it stands under, and is set
+ * as plain text.
+ */
+const NOTE_WORDS = String.raw`(?:drafting note|guidance(?: note)?|notes?|hinweise?|anmerkung(?:en)?|pozn(?:ámka|\.)|pokyny?|instrukce|bitte wählen|alternativen?|variante \d+)`;
+const EDITORIAL_NOTE = new RegExp(
+  String.raw`^(?:[[(]\s*${NOTE_WORDS}|${NOTE_WORDS}\s*(?:[:.\]–-]|$))`,
+  "iu",
+);
+
 const readUnlabelled = (
   block: DocxBlock,
   position: number,
   zones: Zones,
   index: LabelIndex,
 ): Reading => {
+  if (EDITORIAL_NOTE.test(block.text.trim()) && printedLabel(block) === null) {
+    return reading("body", CONFIDENCE.editorialNote, {
+      role: "continuation",
+      confidence: CONFIDENCE.alternative,
+    });
+  }
   // A part of the document is headed, whatever its heading's words: its
   // number stays what the source shows.
   if (index.partHeadingBlockIds.has(block.id)) {

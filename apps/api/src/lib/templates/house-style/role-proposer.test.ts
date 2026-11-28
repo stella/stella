@@ -461,6 +461,22 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a drafter's note under a provision is plain text", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPředmět",
+      numbered("1.", "Zhotovitel provede dílo.", 1),
+      "[Pozn. pro uchazeče: doplní uchazeč podle nabídky.]",
+      "Hinweis: Die Parteien können abweichend vereinbaren.",
+      "Note that the price is fixed for the whole term.",
+    ]);
+    expect(rolesOf(manifest)).toMatchObject({
+      "[Pozn. pro uchazeče: doplní": "body",
+      "Hinweis: Die Parteien können": "body",
+      "Note that the price is fixed": "continuation",
+    });
+  });
+
   test("a table cell is not taken for the title, and a memo has no signature zone", () => {
     const cells = inColumns(1, ["CONFIDENTIAL"]);
     const memo = manifestOf([
