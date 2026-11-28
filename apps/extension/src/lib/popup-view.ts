@@ -16,7 +16,7 @@ export type PopupController = Pick<BrowserController, "origin">;
  * when Chrome has not granted it, then the stella tab in front, or else a
  * stella tab opened or brought forward.
  */
-export type ConnectWebsiteAction = {
+type ConnectWebsiteAction = {
   action: "connect-website";
   askAccess: boolean;
   /** The stella tab in front to connect; null opens or finds one. */
@@ -37,7 +37,7 @@ export type PopupLineStatus =
     };
 
 /** The quiet links at the bottom of the popup. */
-export type PopupFooterAction = {
+type PopupFooterAction = {
   action: "disconnect" | "revoke";
   messageKey: PopupMessageKey;
 };
