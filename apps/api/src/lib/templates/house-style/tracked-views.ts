@@ -15,11 +15,23 @@ type Pair = readonly [kept: number, rejected: number];
 /** What a paragraph says, whatever blank separates its words. */
 const wordsOf = ({ text }: DocxBlock): string => text.replaceAll(/\s+/gu, "");
 
-/** The number a paragraph shows: the one its list prints, or else the first
- *  word of its text, which is where a typed number stands. */
+/** A typed number led by its keyword: `Article 2`, `Článek IV.`. */
+const KEYWORD_AND_NUMBER =
+  /^(\p{L}+\.?)[ \t\u00A0]+(\d[\d.()\p{Ll}]*|[IVXLCDM]+\.?)(?=\s|$)/u;
+
+/** The number a paragraph shows: the one its list prints, or else the
+ *  typed number its text opens with, with the keyword that leads it, or
+ *  its first word. */
 const numberOf = ({ label, text }: DocxBlock): string => {
   const printed = (label ?? "").trim();
-  return printed === "" ? (text.trim().split(/\s/u).at(0) ?? "") : printed;
+  if (printed !== "") {
+    return printed;
+  }
+  const line = text.trim();
+  const typed = KEYWORD_AND_NUMBER.exec(line);
+  return typed === null
+    ? (line.split(/\s/u).at(0) ?? "")
+    : `${typed[1] ?? ""} ${typed[2] ?? ""}`;
 };
 
 /** Whether all of the paragraph's text is one insertion: with the changes
@@ -132,7 +144,9 @@ export const numbersWhenRejected = (
 ): Map<string, string> => {
   const said = (block: DocxBlock): boolean =>
     block.kind === "paragraph" && wordsOf(block) !== "";
-  const before = kept.filter(said);
+  // A paragraph inserted whole is not there with the changes rejected: it
+  // anchors nothing.
+  const before = kept.filter((block) => said(block) && !isInserted(block));
   const after = rejected.filter(said);
   const anchors = sameWords(before.map(wordsOf), after.map(wordsOf));
   const numbers = new Map<string, string>();

@@ -34,12 +34,29 @@ describe("numbersWhenRejected", () => {
       numbered("1.", "Dodavatel dodá zboží."),
       numbered("2.", "Objednatel zaplatí cenu."),
     ]);
-    // The heading has no number of a list: its first word stands for it.
+    // The heading has no number of a list: its typed number stands for it.
     expect([...numbersWhenRejected(kept, rejected)]).toEqual([
-      ["p0", "Článek"],
+      ["p0", "Článek I."],
       ["p1", "1."],
       ["p3", "2."],
     ]);
+  });
+
+  test("a typed heading's number counts whole, keyword and number", () => {
+    const kept = blocksOf(["Article 3 Fees", "The fee is due."]);
+    const rejected = blocksOf(["Article 2 Fees", "The fee is due."]);
+    expect(numbersWhenRejected(kept, rejected).get("p0")).toBe("Article 2");
+  });
+
+  test("a paragraph inserted whole anchors nothing, even with the words of another", () => {
+    const kept = blocksOf([
+      numbered("1.", "The fee is due."),
+      numbered("2.", "The fee is due."),
+    ]);
+    insertedWhole(kept[0]);
+    const rejected = blocksOf([numbered("1.", "The fee is due.")]);
+    // With the changes rejected only the second is there, as 1.
+    expect([...numbersWhenRejected(kept, rejected)]).toEqual([["p1", "1."]]);
   });
 
   test("a paragraph somebody reworded pairs with the one in its place", () => {

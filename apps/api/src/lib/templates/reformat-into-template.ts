@@ -354,7 +354,8 @@ const noteItemOf = (
       return {
         kind: "tracked_changes_resolved",
         reason: item.view,
-        count: changesOf(item),
+        // Accepted or rejected, a change of formatting is resolved too.
+        count: changesOf(item) + item.formattingChanges,
       };
     case "fieldsAsText":
       return {
