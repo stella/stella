@@ -192,6 +192,7 @@ const KNOWN_NOTE_KINDS = [
   "templateBlocksKept",
   "pageMarksDropped",
   "pageMarksKept",
+  "fieldsAsText",
 ] as const satisfies readonly NoteSource["kind"][];
 
 type KnownNoteSource = Extract<
@@ -323,6 +324,14 @@ const noteItemOf = (
         count: item.marks,
         reason: "signature",
         ...textOf(item.blockId, 0, LABEL_EXCERPT_MAX),
+      };
+    case "fieldsAsText":
+      return {
+        kind: "fields_as_text",
+        reason: item.fields
+          .map(({ kind, count }) => `${kind}:${String(count)}`)
+          .join(","),
+        count: item.fields.reduce((total, { count }) => total + count, 0),
       };
     default: {
       item satisfies never;

@@ -18,9 +18,11 @@ import { load } from "@stll/html";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { LINE_WRAP_TYPE, planBlockLineWrap } from "@stll/legal-ast/line-wrap";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
-const FIXTURES = new URL("__fixtures__/", import.meta.url);
+const FIXTURES = PARSER_FIXTURES_DIR;
 const SNAPSHOT = new URL(
   "__snapshots__/cz-us-parser-output.snapshot.json.gz",
   import.meta.url,

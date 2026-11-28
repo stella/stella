@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 
-const FIXTURES = new URL("__fixtures__/", import.meta.url);
+const FIXTURES = PARSER_FIXTURES_DIR;
 
 /** The decision's paragraphs and headings, role and text, in reading order. */
 const readDecision = async (file: string, caseNumber: string) => {

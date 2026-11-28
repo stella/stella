@@ -10,6 +10,8 @@ import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import * as astValidation from "@stll/case-law-parsers/validate-ast";
 import { load } from "@stll/html";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
 // Spies created in a test stay attached if it fails before restoring them.
@@ -17,7 +19,7 @@ afterEach(() => {
   mock.restore();
 });
 
-const FIXTURES = new URL("__fixtures__/", import.meta.url);
+const FIXTURES = PARSER_FIXTURES_DIR;
 const decoder = new TextDecoder();
 
 const gunzip = async (url: URL): Promise<string> =>

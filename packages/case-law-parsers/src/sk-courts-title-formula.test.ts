@@ -1,17 +1,18 @@
+import { describe, expect, test } from "bun:test";
 /**
  * The title of a Slovak court decision and the formula it decides under,
  * which the court sets in one type, read apart: the formula is the court's
  * opening words, not its title.
  */
 
-import { describe, expect, test } from "bun:test";
-
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 
-const FIXTURES = new URL("__fixtures__/", import.meta.url);
+const FIXTURES = PARSER_FIXTURES_DIR;
 
 const headMatter = async (file: string, caseNumber: string) => {
   const parsed = await parseSkDecisionPdf({

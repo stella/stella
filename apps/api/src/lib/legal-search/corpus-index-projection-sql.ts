@@ -7,6 +7,9 @@ import {
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_DELETING_INTENT_STATUSES,
   CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES,
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS,
+  CORPUS_INDEX_PROJECTION_LEGACY_SINGLE_APPEND_REQUEST_CAP,
   CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
   type CorpusIndexDesiredAction,
   corpusIndexIntentStatusesWithCopy,
@@ -29,6 +32,37 @@ type CorpusProjectionWorkColumns = {
   appliedIndexId: SQLWrapper;
   desiredIndexId: SQLWrapper;
 };
+
+/** The request cap check: one of the powers of two the contract lists. */
+export const corpusIndexProjectionAppendRequestCapIsValid = (
+  appendRequestCap: SQLWrapper,
+) =>
+  sql`${appendRequestCap} IN (${sql.raw(CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS.join(", "))})`;
+
+type CorpusProjectionAppendRequestCapColumns = {
+  appendMode: SQLWrapper;
+  appendRequestCap: SQLWrapper;
+};
+
+/**
+ * An entity's effective request cap, the SQL twin of
+ * `corpusIndexProjectionAppendRequestCapOf`: a row the retired `single` mode
+ * still marks is capped at the legacy single cap.
+ */
+export const corpusIndexProjectionAppendRequestCap = ({
+  appendMode,
+  appendRequestCap,
+}: CorpusProjectionAppendRequestCapColumns): SQL<number> =>
+  sql<number>`CASE WHEN ${appendMode} = 'single'
+    THEN LEAST(${appendRequestCap}, ${sql.raw(String(CORPUS_INDEX_PROJECTION_LEGACY_SINGLE_APPEND_REQUEST_CAP))})
+    ELSE ${appendRequestCap}
+  END`;
+
+/** The entity is not capped below a full request. */
+export const corpusIndexProjectionAppendRequestIsFull = (
+  columns: CorpusProjectionAppendRequestCapColumns,
+): SQL<boolean> =>
+  sql<boolean>`${corpusIndexProjectionAppendRequestCap(columns)} = ${sql.raw(String(CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL))}`;
 
 /** One source of truth for the scheduler and its partial queue index. */
 export const corpusIndexProjectionNeedsWork = ({

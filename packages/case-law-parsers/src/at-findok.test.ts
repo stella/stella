@@ -4,12 +4,12 @@ import { describe, expect, it } from "bun:test";
 import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
 
 const fixture = async (): Promise<string> =>
-  await Bun.file(
-    new URL("__fixtures__/at-findok-bfg-2026.xml", import.meta.url),
-  ).text();
+  await Bun.file(new URL("at-findok-bfg-2026.xml", PARSER_FIXTURES_DIR)).text();
 
 describe("Austrian Findok XML parser", () => {
   it("preserves the embedded decision structure and official metadata", async () => {
@@ -79,7 +79,7 @@ it("keeps a line break between the sentences it separates", async () => {
     sourceDocumentId: "test",
     sourceUrl: "https://findok.bmf.gv.at/",
     xml: await Bun.file(
-      new URL("__fixtures__/at-findok-bfg-umbrueche.xml", import.meta.url),
+      new URL("at-findok-bfg-umbrueche.xml", PARSER_FIXTURES_DIR),
     ).text(),
   }).unwrap();
 

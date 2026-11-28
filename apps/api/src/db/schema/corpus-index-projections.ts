@@ -12,12 +12,14 @@ import {
   CORPUS_INDEX_INTENT_STATUSES,
   CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
   CORPUS_INDEX_PROJECTION_APPEND_MODES,
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
   CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
   CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS,
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   corpusIndexProjectionAppendIsUnblocked,
+  corpusIndexProjectionAppendRequestCapIsValid,
   corpusIndexProjectionErasureIsPending,
   corpusIndexProjectionIsAbsent,
   corpusIndexProjectionIsBlocked,
@@ -630,9 +632,25 @@ export const corpusIndexProjectionStates = p.pgTable(
       .text("work_status", { enum: CORPUS_INDEX_PROJECTION_WORK_STATUSES })
       .default("eligible")
       .notNull(),
+    /**
+     * Retired: whether a failed shared append isolated the entity into single
+     * requests. `append_request_cap` replaced it; a row still marked `single`
+     * reads as the legacy single cap until its next state write clears the
+     * mark (`corpusIndexProjectionAppendRequestCap`).
+     */
     appendMode: p
       .text("append_mode", { enum: CORPUS_INDEX_PROJECTION_APPEND_MODES })
       .default("batchable")
+      .notNull(),
+    /**
+     * The most revisions the entity's next append may share a request with,
+     * itself included; a power of two, halved by every shared append that
+     * failed without saying which revision failed
+     * (`CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS`).
+     */
+    appendRequestCap: p
+      .integer("append_request_cap")
+      .default(CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL)
       .notNull(),
     retryNotBefore: timestamptz("retry_not_before"),
     failureAttempts: p.integer("failure_attempts").default(0).notNull(),
@@ -796,6 +814,10 @@ export const corpusIndexProjectionStates = p.pgTable(
     p.check(
       "corpus_index_projection_states_append_mode_values",
       sql`${t.appendMode} IN (${sqlValues(CORPUS_INDEX_PROJECTION_APPEND_MODES)})`,
+    ),
+    p.check(
+      "corpus_index_projection_states_append_request_cap_values",
+      corpusIndexProjectionAppendRequestCapIsValid(t.appendRequestCap),
     ),
     p.check(
       "corpus_index_projection_states_failure_kind_values",

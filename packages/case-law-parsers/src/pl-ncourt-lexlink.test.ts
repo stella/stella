@@ -10,11 +10,13 @@ import {
 } from "@stll/case-law-parsers/pl-ncourt-lexlink";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const KPC_TITLE =
   "Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego";
 
 const fixture = async (name: string) =>
-  await Bun.file(new URL(`__fixtures__/${name}`, import.meta.url)).text();
+  await Bun.file(new URL(name, PARSER_FIXTURES_DIR)).text();
 
 const anchorsOf = (
   html: string,

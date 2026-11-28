@@ -2164,6 +2164,20 @@ describe("buildTemplatePlan, tables and omissions", () => {
     });
   });
 
+  test("a template without contents keeps the source's contents, so no entry goes missing", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+      "Článek I.\nPředmět",
+      numbered("1.", "Text.", 1),
+    ]);
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...PROFILE, regions: { ...PROFILE.regions, contents: [] } },
+    });
+    expect(plan.omit).toEqual([]);
+    expect(itemOf(plan, manifest, "Článek I. Předmět")).toBeDefined();
+  });
+
   test("a blank paragraph stays where it parts two tables or closes the document after one", () => {
     const table = (id: string) =>
       inColumns(1, ["položka"]).blocks.map((block) => ({

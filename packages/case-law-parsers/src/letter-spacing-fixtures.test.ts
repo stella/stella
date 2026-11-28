@@ -1,11 +1,10 @@
+import { describe, expect, test } from "bun:test";
 /**
  * Letter-spaced emphasis in recorded decisions, read the one way the owner
  * (`collapseLetterSpacing` in `@stll/text-normalize`) reads it, in every
  * parser that meets it. Asserted on the text the stored inlines draw, not
  * only on the folded `plainText`: a reader shows the inlines.
  */
-
-import { describe, expect, test } from "bun:test";
 import { gunzipSync } from "node:zlib";
 
 import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
@@ -21,12 +20,14 @@ import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@stll
 import { load } from "@stll/html";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 
-const FIXTURES = new URL("__fixtures__/", import.meta.url);
+const FIXTURES = PARSER_FIXTURES_DIR;
 
 const bytesOf = async (name: string): Promise<Uint8Array> => {
   const bytes = new Uint8Array(

@@ -41,10 +41,14 @@ import {
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
   type CorpusIndexAppendFault,
   type CorpusIndexIntentStatus,
-  type CorpusIndexProjectionAppendMode,
+  type CorpusIndexProjectionAppendRequestCap,
+  corpusIndexProjectionAppendRequestCapOf,
   type CorpusIndexProjectionFailureKind,
+  corpusIndexProjectionHalvedAppendRequestCap,
+  requireCorpusIndexProjectionAppendRequestCap,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   lockActiveCorpusProjectionManifestForMutation,
@@ -53,6 +57,7 @@ import {
 import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  corpusProjectionAppendStartMarginMs,
   type CorpusProjectionPresenceCensus,
   type CorpusProjectionPresenceProof,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -95,7 +100,13 @@ export type CorpusProjectionIntentLease = {
   indexId: string;
   leaseToken: string;
   leaseExpiresAt: Date;
-  appendMode: CorpusIndexProjectionAppendMode;
+  /**
+   * The entity's request cap when it was reserved
+   * (`CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAPS`). Only an append of the
+   * entity in flight lowers it, and the lease holds the entity's appends
+   * back, so the cap cannot shrink while the lease is held.
+   */
+  appendRequestCap: CorpusIndexProjectionAppendRequestCap;
 };
 
 type ReserveCorpusProjectionIntentsOptions<Family extends CorpusFamily> =
@@ -169,7 +180,7 @@ export const reserveCorpusProjectionIntentsTx = async <
   (
     await reserveFromQueueTx(tx, options, {
       after: null,
-      batchableOnly: false,
+      fullRequestsOnly: false,
       skipEntityIds: [],
     })
   ).leases;
@@ -204,8 +215,8 @@ export type CorpusProjectionRoutePage = {
  * at the head of the queue are not read again on every page. Correctness
  * still rests on the claim, not the cursor: a state whose position moves
  * behind the cursor is left to the per-row path, which owns completeness.
- * Only batchable entities are taken; one isolated into single requests stays
- * with the per-row path.
+ * Only entities at the full request cap are taken; one a failed shared append
+ * capped stays with the per-row path, which bisects its requests.
  */
 export const reserveCorpusProjectionRoutePageTx = async <
   Family extends CorpusFamily,
@@ -240,7 +251,7 @@ export const reserveCorpusProjectionRoutePageTx = async <
   return await reserveFromQueueTx(
     tx,
     { ...options, scope: { type: "route", indexId } },
-    { after, batchableOnly: true, skipEntityIds },
+    { after, fullRequestsOnly: true, skipEntityIds },
   );
 };
 
@@ -258,11 +269,11 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
   }: ReserveCorpusProjectionIntentsOptions<Family>,
   {
     after,
-    batchableOnly,
+    fullRequestsOnly,
     skipEntityIds,
   }: {
     after: CorpusProjectionReservationQueueKey | null;
-    batchableOnly: boolean;
+    fullRequestsOnly: boolean;
     skipEntityIds: readonly string[];
   },
 ): Promise<CorpusProjectionRoutePage> => {
@@ -291,7 +302,7 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
     scopedIndexId,
     excludedIndexIds,
     after,
-    batchableOnly,
+    fullRequestsOnly,
     skipEntityIds,
   });
 
@@ -332,7 +343,9 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
       fingerprint: candidate.fingerprint,
       indexId: candidate.indexId,
       leaseToken: newLeaseToken(),
-      appendMode: candidate.appendMode,
+      appendRequestCap: requireCorpusIndexProjectionAppendRequestCap(
+        candidate.appendRequestCap,
+      ),
     } satisfies Omit<CorpusProjectionIntentLease, "leaseExpiresAt">;
   });
   const inserted = await tx
@@ -393,7 +406,7 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
       indexId: reservation.indexId,
       leaseToken: reservation.leaseToken,
       leaseExpiresAt: insertedExpiry,
-      appendMode: reservation.appendMode,
+      appendRequestCap: reservation.appendRequestCap,
     });
   }
   return { type: "page", leases, cursor, exhausted };
@@ -457,7 +470,7 @@ type StartCorpusProjectionAppendOptions = {
 export const startCorpusProjectionAppendTx = async (
   tx: Transaction,
   { intentId, leaseToken, testNow }: StartCorpusProjectionAppendOptions,
-): Promise<"started" | "stale_cancelled" | "lease_lost"> => {
+): Promise<CorpusProjectionAppendStart["status"]> => {
   const identities = await tx
     .select({
       family: corpusIndexProjectionIntents.family,
@@ -515,6 +528,9 @@ export const startCorpusProjectionAppendTx = async (
   // would let a lease that was live when the start was rejected read as
   // expired a moment later and take the blame from the desired state.
   const transitionAt = testNow ?? (await readPostgresClock(tx));
+  const leaseFloor = new Date(
+    transitionAt.getTime() + corpusProjectionAppendStartMarginMs(manifest),
+  );
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -528,7 +544,7 @@ export const startCorpusProjectionAppendTx = async (
         eq(corpusIndexProjectionIntents.id, intentId),
         eq(corpusIndexProjectionIntents.status, "reserved"),
         eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
-        sql`${corpusIndexProjectionIntents.leaseExpiresAt} > ${transitionAt}::timestamptz`,
+        sql`${corpusIndexProjectionIntents.leaseExpiresAt} >= ${leaseFloor}::timestamptz`,
         attestedAtAppendStart(unattestedIndexIds),
         sql`EXISTS (
           SELECT 1
@@ -562,16 +578,38 @@ export const startCorpusProjectionAppendTx = async (
         eq(corpusIndexProjectionIntents.id, intentId),
         eq(corpusIndexProjectionIntents.status, "reserved"),
         eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
+        // A live lease too short for the request stays reserved for the
+        // caller to hand back, as in a batch start.
+        or(
+          sql`${corpusIndexProjectionIntents.leaseExpiresAt} >= ${leaseFloor}::timestamptz`,
+          sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= ${transitionAt}::timestamptz`,
+        ),
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
-  return cancelled.length === 1 ? "stale_cancelled" : "lease_lost";
+  if (cancelled.length === 1) {
+    return "stale_cancelled";
+  }
+  // The intent is locked and still reserved under this token (checked
+  // above), so a lease neither started nor cancelled is live and short.
+  return "lease_ends_before_run";
 };
 
-export type CorpusProjectionAppendStart = {
+type CorpusProjectionAppendStartDecided = {
   intentId: ProjectionIntentId;
   status: "started" | "stale_cancelled" | "lease_lost";
 };
+
+/**
+ * What an ingest start did with one lease. `lease_ends_before_run`: the lease
+ * is live but shorter than the generation's start margin
+ * (`corpusProjectionAppendStartMarginMs`), so the revision stays reserved for
+ * the caller to hand back; it only gets shorter, so the caller starts nothing
+ * more under it.
+ */
+export type CorpusProjectionAppendStart =
+  | CorpusProjectionAppendStartDecided
+  | { intentId: ProjectionIntentId; status: "lease_ends_before_run" };
 
 type StartCorpusProjectionAppendBatchOptions = {
   leases: readonly CorpusProjectionIntentLease[];
@@ -609,7 +647,7 @@ type CorpusProjectionOfflineNotStarted = {
 };
 
 export type CorpusProjectionOfflineStart =
-  CorpusProjectionAppendStart | CorpusProjectionOfflineNotStarted;
+  CorpusProjectionAppendStartDecided | CorpusProjectionOfflineNotStarted;
 
 type AppendStartTransaction = {
   /** The request's first start after this transaction, or null for none. */
@@ -622,22 +660,36 @@ type AppendStartTransaction = {
  * timestamp after all state locks are held. Recovery can therefore anchor its
  * unknown-outcome barrier to the actual request boundary, not to an earlier
  * per-revision lock wait.
+ *
+ * A request may carry no more revisions than the smallest request cap among
+ * them, and starts only revisions whose lease still covers the generation's
+ * start margin; a shorter live lease is left reserved
+ * (`lease_ends_before_run`).
  */
 export const startCorpusProjectionAppendBatchTx = async (
   tx: Transaction,
   { leases, testNow }: StartCorpusProjectionAppendBatchOptions,
-): Promise<CorpusProjectionAppendStart[]> =>
-  (
+): Promise<CorpusProjectionAppendStart[]> => {
+  if (leases.some(({ appendRequestCap }) => leases.length > appendRequestCap)) {
+    return panic(
+      "An ingest request carries more revisions than one of their request caps",
+    );
+  }
+  return (
     await startAppendBatchTx(tx, {
       leases,
       delivery: { type: "ingest_api" },
       testNow,
     })
-  ).outcomes.map((outcome) =>
-    outcome.status === "not_started"
-      ? panic(`An ingest request left ${outcome.intentId} unstarted`)
-      : outcome,
-  );
+  ).outcomes.map((outcome): CorpusProjectionAppendStart => {
+    if (outcome.status !== "not_started") {
+      return outcome;
+    }
+    return outcome.reason === "lease_ends_before_run"
+      ? { intentId: outcome.intentId, status: "lease_ends_before_run" }
+      : panic(`An ingest request left ${outcome.intentId} unstarted`);
+  });
+};
 
 type OfflineCorpusProjectionAppendLease = {
   lease: CorpusProjectionIntentLease;
@@ -1096,14 +1148,19 @@ const startAppendBatchTx = async (
       })),
     };
   }
+  // A lease must outlast what the request can still do once it starts, or
+  // the expired-lease sweep reclaims a request still in flight and its
+  // revisions read as unknown: an ingest request's start margin (its whole
+  // ingest budget, its census and the unknown-outcome margin), an offline
+  // request's kill deadline plus the record margin.
   const leaseFloor =
     offline === null
-      ? null
+      ? new Date(
+          transitionAt.getTime() +
+            corpusProjectionAppendStartMarginMs(manifest),
+        )
       : corpusProjectionOfflineRequestLeaseFloor(requestStartedAt, manifest);
-  const coversRun =
-    leaseFloor === null
-      ? undefined
-      : sql`${corpusIndexProjectionIntents.leaseExpiresAt} >= ${leaseFloor}::timestamptz`;
+  const coversRun = sql`${corpusIndexProjectionIntents.leaseExpiresAt} >= ${leaseFloor}::timestamptz`;
   const started = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -1174,26 +1231,29 @@ const startAppendBatchTx = async (
         eq(corpusIndexProjectionIntents.family, first.family),
         eq(corpusIndexProjectionIntents.generation, first.generation),
         eq(corpusIndexProjectionIntents.status, "reserved"),
-        coversRun === undefined
-          ? undefined
-          : or(
-              coversRun,
-              sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= ${transitionAt}::timestamptz`,
-            ),
+        or(
+          coversRun,
+          sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= ${transitionAt}::timestamptz`,
+        ),
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
   const cancelledIds = new Set(cancelled.map(({ id }) => id));
+  const reservedUntil =
+    startedIds.size + cancelledIds.size === leases.length
+      ? new Map<ProjectionIntentId, Date>()
+      : await readLeftReservedLeasesTx(tx, exactLeases, leases.length);
   return {
     requestStartedAt:
       offline === null
         ? null
         : (offline.requestStartedAt ??
           (started.length > 0 ? transitionAt : null)),
-    outcomes: leases.map((lease) =>
-      appendStartOutcome(lease, {
+    outcomes: leases.map(({ intentId }) =>
+      appendStartOutcome(intentId, {
         startedIds,
         cancelledIds,
+        reservedUntil,
         leaseFloor,
         transitionAt,
       }),
@@ -1201,19 +1261,49 @@ const startAppendBatchTx = async (
   };
 };
 
+/**
+ * The lease of each named revision a start left reserved, read back rather
+ * than judged from the caller's copy of the lease, which need not be the
+ * row's: only the row says whether a lease is live but short, or gone.
+ */
+const readLeftReservedLeasesTx = async (
+  tx: Transaction,
+  exactLeases: SQL,
+  count: number,
+): Promise<Map<ProjectionIntentId, Date>> =>
+  new Map(
+    (
+      await tx
+        .select({
+          id: corpusIndexProjectionIntents.id,
+          leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
+        })
+        .from(corpusIndexProjectionIntents)
+        .where(
+          and(exactLeases, eq(corpusIndexProjectionIntents.status, "reserved")),
+        )
+        .limit(count)
+    ).flatMap(({ id, leaseExpiresAt }) =>
+      leaseExpiresAt === null ? [] : [[id, leaseExpiresAt] as const],
+    ),
+  );
+
 /** What one start transaction did with one lease. */
 const appendStartOutcome = (
-  { intentId, leaseExpiresAt }: CorpusProjectionIntentLease,
+  intentId: ProjectionIntentId,
   {
     startedIds,
     cancelledIds,
+    reservedUntil,
     leaseFloor,
     transitionAt,
   }: {
     startedIds: ReadonlySet<ProjectionIntentId>;
     cancelledIds: ReadonlySet<ProjectionIntentId>;
-    /** The lease an offline start required, or null for an ingest start. */
-    leaseFloor: Date | null;
+    /** The lease of each revision the transaction left reserved. */
+    reservedUntil: ReadonlyMap<ProjectionIntentId, Date>;
+    /** The lease the start required (`startAppendBatchTx`). */
+    leaseFloor: Date;
     transitionAt: Date;
   },
 ): CorpusProjectionOfflineStart => {
@@ -1223,8 +1313,9 @@ const appendStartOutcome = (
   if (cancelledIds.has(intentId)) {
     return { intentId, status: "stale_cancelled" };
   }
+  const leaseExpiresAt = reservedUntil.get(intentId);
   if (
-    leaseFloor !== null &&
+    leaseExpiresAt !== undefined &&
     leaseExpiresAt.getTime() > transitionAt.getTime() &&
     leaseExpiresAt.getTime() < leaseFloor.getTime()
   ) {
@@ -1413,14 +1504,16 @@ type AppendFailureCharge = {
   workStatus: "blocked" | "retry_scheduled";
   retryNotBefore: Date | null;
   failureAttempts: number;
-  appendMode: CorpusIndexProjectionAppendMode;
+  appendRequestCap: CorpusIndexProjectionAppendRequestCap;
 };
 
 /**
  * What a failed or unproven append costs its entity. Only a document fault
- * sent in a request of its own is charged; one sent with others splits the
- * entity into single appends uncharged, so one bad revision cannot block the
- * revisions it travelled with.
+ * sent in a request of its own is charged; one sent with others halves the
+ * entity's request cap uncharged
+ * (`corpusIndexProjectionHalvedAppendRequestCap`), so one bad revision cannot
+ * block the revisions it travelled with, and the rest of its request is
+ * retried in requests of half the size rather than one request each.
  */
 const appendFailureCharge = ({
   state,
@@ -1458,9 +1551,31 @@ const appendFailureCharge = ({
       ? null
       : new Date(transitionAt.getTime() + retryDelayMs),
     failureAttempts,
-    appendMode: documentFault && !isolated ? "single" : state.appendMode,
+    appendRequestCap:
+      documentFault && !isolated
+        ? sharedAppendFailureRequestCap({
+            current: corpusIndexProjectionAppendRequestCapOf(state),
+            sharedWith: appendRequestRevisionCount,
+          })
+        : corpusIndexProjectionAppendRequestCapOf(state),
   };
 };
+
+/**
+ * The request cap a document fault in a shared request leaves: half the
+ * request. A revision started before requests recorded their size has no
+ * count to halve, so it goes to a request of its own.
+ */
+const sharedAppendFailureRequestCap = ({
+  current,
+  sharedWith,
+}: {
+  current: CorpusIndexProjectionAppendRequestCap;
+  sharedWith: number | null;
+}): CorpusIndexProjectionAppendRequestCap =>
+  sharedWith === null
+    ? 1
+    : corpusIndexProjectionHalvedAppendRequestCap({ sharedWith, current });
 
 /** Failed append outcomes are assumed written and cleaned exactly before retry. */
 export const abandonCorpusProjectionAppendTx = async (
@@ -1544,7 +1659,10 @@ export const abandonCorpusProjectionAppendTx = async (
       workStatus: charge.workStatus,
       retryNotBefore: charge.retryNotBefore,
       failureAttempts: charge.failureAttempts,
-      appendMode: charge.appendMode,
+      // The cap carries what the retired mark said; clearing it here drains
+      // the mark as the entities it isolated are retried.
+      appendMode: "batchable",
+      appendRequestCap: charge.appendRequestCap,
       lastFailureKind: charge.kind,
       lastFailureMessage: errorMessage.slice(0, 2048),
       updatedAt: transitionAt,
@@ -2845,6 +2963,7 @@ const writeCorpusProjectionProofTransitionsTx = async (
         retryNotBefore: null,
         failureAttempts: 0,
         appendMode: "batchable",
+        appendRequestCap: CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
         lastFailureKind: null,
         lastFailureMessage: null,
         updatedAt: transitionAt,
@@ -2958,7 +3077,11 @@ const chargeGivenUpRevisionsTx = async (
         ({ failureAttempts }) => failureAttempts,
         "integer",
       ),
-      appendMode: byEntity(({ appendMode }) => appendMode, "text"),
+      appendMode: "batchable",
+      appendRequestCap: byEntity(
+        ({ appendRequestCap }) => appendRequestCap,
+        "integer",
+      ),
       lastFailureKind: byEntity(({ kind }) => kind, "text"),
       lastFailureMessage: sqlCaseFragment({
         operand: sql`${corpusIndexProjectionStates.entityId}`,

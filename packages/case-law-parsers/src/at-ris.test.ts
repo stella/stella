@@ -5,12 +5,11 @@ import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@stll/case-
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
 const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 
-const FIXTURE_URL = new URL(
-  "__fixtures__/at-ris-jjt-1925.xml",
-  import.meta.url,
-);
+const FIXTURE_URL = new URL("at-ris-jjt-1925.xml", PARSER_FIXTURES_DIR);
 
 describe("Austrian RIS XML parser", () => {
   it("preserves the publisher's sections and operative-part role", async () => {

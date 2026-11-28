@@ -227,6 +227,10 @@ export type FormattingNoteItem =
    *  picture; the output is written without them, so numbers and text are
    *  text. The template's own findings are in its profile. */
   | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
+  /** Fields of the source the output shows as their text, by kind: a
+   *  form field's box or list, a citation's link, an entry of the source's
+   *  contents no longer update. */
+  | { kind: "fieldsAsText"; fields: { kind: string; count: number }[] }
   /** The template's style for a numbered level sets it apart from its
    *  sibling levels (bold, or another size). `blocks` paragraphs of the
    *  role were placed in the sibling's style instead, on their own level of
@@ -1939,9 +1943,30 @@ const settledContentsHolder = (
   return null;
 };
 
+/** Why a paragraph of the source is left out with what it carries, if it
+ *  is. `held` says the source starts a page in front of it or it is kept
+ *  for a section or a table. */
+const leftOutOfSource = (
+  context: Context,
+  block: DocxBlock,
+  held: boolean,
+): "sourceToc" | "pageArtifact" | null => {
+  // The source's own contents give way to the template's; a template
+  // without contents keeps the source's, so no entry goes missing.
+  if (
+    context.index.contentsBlockIds.has(block.id) &&
+    context.profile.regions.contents.length > 0
+  ) {
+    return "sourceToc";
+  }
+  // A paragraph that holds nothing but marks of the source's page goes
+  // with them, unless it is held: then it stays, without its marks.
+  return goesWithPageMarks(context, block, held) ? "pageArtifact" : null;
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
-  const { topLevel, blockById, index, exclusions, proposalById } = context;
+  const { topLevel, blockById, exclusions, proposalById } = context;
   const pageHolders = pageHoldersBeforeTables(context);
   const contentsHolder = pageHolderBeforeContents(context);
   // A blank paragraph that ends a section which stays one carries it.
@@ -1982,21 +2007,13 @@ const placeParagraphs = (context: Context): Placed => {
       }
       continue;
     }
-    if (index.contentsBlockIds.has(block.id)) {
-      placed.omitted.set(block.id, "sourceToc");
-      continue;
-    }
-    // A paragraph that holds nothing but marks of the source's page goes
-    // with them, unless the source starts a page in front of it or it is
-    // kept for a section or a table: then it stays, without its marks.
-    if (
-      goesWithPageMarks(
-        context,
-        block,
-        startsPage.has(block.id) || kept.has(block.id),
-      )
-    ) {
-      placed.omitted.set(block.id, "pageArtifact");
+    const leftOut = leftOutOfSource(
+      context,
+      block,
+      startsPage.has(block.id) || kept.has(block.id),
+    );
+    if (leftOut !== null) {
+      placed.omitted.set(block.id, leftOut);
       continue;
     }
     const role = roleOf(context, block);
