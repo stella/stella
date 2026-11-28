@@ -121,6 +121,10 @@ export type DocxSection = {
     left: number | null;
   };
   columns: number;
+  /** The section shows a header or footer of its own: other content than
+   *  the section before it shows on those pages. Absent from an engine
+   *  that does not report it. */
+  ownHeaders?: true;
 };
 
 export type DocxBlockManifest = {
@@ -702,6 +706,7 @@ const sectionSchema = v.strictObject({
     left: twips,
   }),
   columns: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  ownHeaders: v.exactOptional(v.literal(true)),
 });
 
 const count = v.pipe(v.number(), v.integer(), v.minValue(0));
