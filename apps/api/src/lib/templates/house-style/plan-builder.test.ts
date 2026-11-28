@@ -3649,6 +3649,37 @@ test("the lines of the signatures keep the source's indents, which their tabs co
   });
 });
 
+test("the lines of the signatures keep the source's tab stops, and only those", () => {
+  const plain = czechContract("Text.");
+  const manifest = {
+    ...plain,
+    blocks: plain.blocks.map((block) =>
+      block.text.startsWith("V Praze dne")
+        ? {
+            ...block,
+            text: "V Praze dne ……………\tV Brně dne ……………",
+            tabStops: [
+              { position: 4536, alignment: "center" as const },
+              {
+                position: 9072,
+                alignment: "right" as const,
+                leader: "dot" as const,
+              },
+            ],
+          }
+        : block,
+    ),
+  };
+  const { plan } = build(manifest);
+  expect(itemOf(plan, manifest, "V Praze dne")).toMatchObject({
+    tabStops: [
+      { position: 4536, alignment: "center" },
+      { position: 9072, alignment: "right", leader: "dot" },
+    ],
+    tabStopsOnly: true,
+  });
+});
+
 describe("buildTemplatePlan, the lines of the parties", () => {
   const manifest = manifestOf([
     "SMLOUVA",
