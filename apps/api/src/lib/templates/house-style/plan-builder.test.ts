@@ -891,6 +891,19 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("the plan names the template section its body stands in, where the template gives one", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    expect(build(manifest).plan.bodySection).toBeUndefined();
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...PROFILE, bodySection: 0 },
+    });
+    expect(plan.bodySection).toBe(0);
+  });
+
   test("a bullet takes a level outside the outline list where the template has one", () => {
     const manifest = manifestOf([
       "SMLOUVA",
