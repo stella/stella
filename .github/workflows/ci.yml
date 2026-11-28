@@ -5156,6 +5156,7 @@ jobs:
           expected-sha: ${{ inputs.heavy_only == true && inputs.sha || github.sha }}
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          scheduled-jobs-mode: disabled
 
       - name: Prepare merge-base network budget
         if: startsWith(matrix.mode, 'network-baseline-')
@@ -5338,6 +5339,7 @@ jobs:
           expected-sha: ${{ inputs.heavy_only == true && inputs.sha || github.sha }}
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          scheduled-jobs-mode: ${{ matrix.shard == 'network-baseline' && 'disabled' || 'enabled' }}
 
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.

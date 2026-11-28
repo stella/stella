@@ -107,6 +107,7 @@ jobs:
         uses: ./.github/actions/setup-production-e2e
         with:
           expected-sha: ${{ github.sha }}
+          scheduled-jobs-mode: disabled
 
       - name: Seed write mode from the latest published recording
         timeout-minutes: 5

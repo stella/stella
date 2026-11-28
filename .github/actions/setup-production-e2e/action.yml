@@ -13,16 +13,32 @@ inputs:
     description: Optional Docker Hub token for image pulls
     required: false
     default: ""
+  scheduled-jobs-mode:
+    description: API SCHEDULED_JOBS_MODE (enabled or disabled); route-smoke / network-baseline runs disable background writers so scheduled tasks do not emit SSE invalidations during measurement
+    required: false
+    default: "enabled"
 
 runs:
   using: composite
   steps:
     - name: Prepare environment
       shell: bash
+      env:
+        SCHEDULED_JOBS_MODE: ${{ inputs.scheduled-jobs-mode }}
       run: |
         cp apps/api/.env.example apps/api/.env
         # The route baseline measures the enabled usage endpoint's query budget.
         echo 'FEATURE_USAGE=true' >> apps/api/.env
+        case "$SCHEDULED_JOBS_MODE" in
+          enabled) ;;
+          disabled)
+            echo 'SCHEDULED_JOBS_MODE=disabled' >> apps/api/.env
+            ;;
+          *)
+            echo "::error::Unsupported scheduled-jobs-mode: $SCHEDULED_JOBS_MODE"
+            exit 1
+            ;;
+        esac
         cp apps/web/.env.example apps/web/.env
 
     - name: Start docker stack and API server
