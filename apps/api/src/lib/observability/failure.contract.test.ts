@@ -462,7 +462,14 @@ const GRADING_ROWS: readonly GradingRow[] = [
   {
     name: "a HandlerError 502 carrying a provider 429 code",
     error: () =>
-      new HandlerError({ status: 502, code: "429", message: SENTINEL }),
+      Object.assign(
+        new HandlerError({
+          status: 502,
+          code: "upstream_unavailable",
+          message: SENTINEL,
+        }),
+        { code: "429" },
+      ),
     reason: "tagged_failure",
     grade: "defect",
   },
@@ -1314,12 +1321,15 @@ describe("canonical fields", () => {
   test("carry the SQLSTATE and the provider status with provenance", () => {
     const fields = errorFields(
       readEvidence(
-        new HandlerError({
-          status: 502,
-          code: "429",
-          message: "x",
-          cause: drizzle(bunPgError("40001")),
-        }),
+        Object.assign(
+          new HandlerError({
+            status: 502,
+            code: "upstream_unavailable",
+            message: "x",
+            cause: drizzle(bunPgError("40001")),
+          }),
+          { code: "429" },
+        ),
       ),
     );
 

@@ -47,7 +47,30 @@ export const availabilityFailuresRequireCode = (
     message: "Internal failure",
   });
   const caller = new HandlerError({ status: 400, message: "Invalid request" });
+
+  // Unregistered or typo'd refusal codes must fail at compile time.
+  const unregistered4xx = new HandlerError({
+    status: 400,
+    // @ts-expect-error Arbitrary string codes are rejected by the closed ApiRefusalCode union.
+    code: "unregistered_typo",
+    message: "Invalid request",
+  });
+  const typo404 = new HandlerError({
+    status: 404,
+    // @ts-expect-error Typos in known codes are rejected by the closed ApiRefusalCode union.
+    code: "not_foud",
+    message: "Not found",
+  });
+  const unregistered502 = new HandlerError({
+    status: 502,
+    // @ts-expect-error Gateway failures must use a registered ApiRefusalCode or GatewayErrorCode.
+    code: "unregistered_gateway_typo",
+    message: "Unavailable",
+  });
   return {
+    unregistered4xx,
+    typo404,
+    unregistered502,
     gateway,
     availability,
     widened,

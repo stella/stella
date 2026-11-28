@@ -24,6 +24,7 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { reserveOrganizationFileObjectTransitions } from "@/api/lib/db/file-object-transitions";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerErrorCode } from "@/api/lib/errors/tagged-errors";
 import {
   insertWritingObjectCleanupIntents,
   lockOrganizationObjectIntentsForWriter,
@@ -52,8 +53,22 @@ type OrganizationFileUsageErrorProps = {
   cause?: unknown;
 };
 
+const ORGANIZATION_FILE_USAGE_CODE = {
+  capacity_exceeded: "FILE_USAGE_CAPACITY_EXCEEDED",
+  destination_unavailable: "FILE_USAGE_DESTINATION_UNAVAILABLE",
+  key_conflict: "FILE_USAGE_KEY_CONFLICT",
+  reservation_busy: "FILE_USAGE_RESERVATION_BUSY",
+  storage_unavailable: "FILE_USAGE_STORAGE_UNAVAILABLE",
+} as const satisfies Record<
+  OrganizationFileUsageErrorProps["reason"],
+  HandlerErrorCode
+>;
+
+type OrganizationFileUsageErrorCode =
+  (typeof ORGANIZATION_FILE_USAGE_CODE)[OrganizationFileUsageErrorProps["reason"]];
+
 export class OrganizationFileUsageError extends HandlerError<409 | 503> {
-  declare code: string;
+  declare code: OrganizationFileUsageErrorCode;
   static {
     declareFingerprintFields(this, ["reason"]);
   }
@@ -64,7 +79,7 @@ export class OrganizationFileUsageError extends HandlerError<409 | 503> {
     super({
       message,
       status: reason === "storage_unavailable" ? 503 : 409,
-      code: `FILE_USAGE_${reason.toUpperCase()}`,
+      code: ORGANIZATION_FILE_USAGE_CODE[reason],
       cause,
     });
     this.name = "OrganizationFileUsageError";
