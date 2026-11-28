@@ -69,7 +69,9 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
    *  in the output: `reason` says which (`firstPageParts`: the output does
    *  not set its first page apart; `evenPageParts`; `sharedParts`: the
    *  template's part serves pages that take other content;
-   *  `unsupportedObjects`: an embedded object other than a picture). */
+   *  `unsupportedObjects`: an embedded object other than a picture;
+   *  `laterSectionParts`: a later section's own, where the output merges
+   *  that section into another). */
   "source_header_left_out",
   /** `count` links of the document to a place in itself (a bookmark, a
    *  heading) show as plain text in the output: they no longer jump.

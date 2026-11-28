@@ -510,12 +510,19 @@ export type SourceHeadersReport = {
     paragraphs: number;
     /** The template had none for those pages: a new part holds them. */
     created: boolean;
+    /** The output section a later section's content went to; absent for
+     *  the content every section shows. */
+    section?: number;
   }[];
   leftOut: {
     firstPageParts: number;
     evenPageParts: number;
     sharedParts: number;
     unsupportedObjects: number;
+    /** Parts of later sections of the source the output merges into
+     *  another section. Absent from an engine that carries the first
+     *  section's alone. */
+    laterSectionParts?: number;
   };
 };
 

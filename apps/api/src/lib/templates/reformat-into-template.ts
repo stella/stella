@@ -387,14 +387,16 @@ const noteItemsOf = (
   // of thing that had no place.
   if (item.kind === "sourceHeaders") {
     return [
-      ...item.kept.map(({ family, kind, paragraphs }): ReformatNoteItem => ({
-        kind: "source_header_kept",
-        reason: `${family}:${kind}`,
-        count: paragraphs,
-      })),
+      ...item.kept.map(
+        ({ family, kind, paragraphs, section }): ReformatNoteItem => ({
+          kind: "source_header_kept",
+          reason: `${family}:${kind}${section === undefined ? "" : `:section${String(section + 1)}`}`,
+          count: paragraphs,
+        }),
+      ),
       ...Object.entries(item.leftOut).flatMap(
         ([reason, count]): ReformatNoteItem[] =>
-          count === 0
+          count === undefined || count === 0
             ? []
             : [{ kind: "source_header_left_out", reason, count }],
       ),
