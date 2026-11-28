@@ -2,10 +2,6 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   DOCUMENT_DELIVERY,
   EMPTY_AST,
 } from "@stll/case-law-ingestion-core/ingestion-types";
@@ -21,6 +17,10 @@ import {
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 

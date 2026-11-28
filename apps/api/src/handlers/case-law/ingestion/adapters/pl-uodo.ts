@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and narrow-union lookup refactor preserves identical runtime output
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
@@ -16,12 +17,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
-import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  presentTextField,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -112,6 +107,12 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  presentTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";

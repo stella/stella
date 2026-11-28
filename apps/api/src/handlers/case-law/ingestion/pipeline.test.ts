@@ -14,14 +14,6 @@ import {
   DECISION_DOCUMENT_ROLE_METADATA_KEY,
 } from "@stll/api-contract/decision-document-role";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
-import {
-  absentDecisionTextFields,
-  absentTextField,
-  presentTextField,
-  readDecisionTextMetadata,
-  splitStoredDecisionTextMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { observePublisherDocumentFetch } from "@stll/case-law-ingestion-core/document-stage-observation";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
@@ -73,6 +65,14 @@ import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/o
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
+import {
+  absentDecisionTextFields,
+  absentTextField,
+  presentTextField,
+  readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";

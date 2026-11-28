@@ -4,10 +4,6 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
@@ -51,6 +47,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/replay-failure";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import {
   RAW_SOURCE_FAMILY,
   sourceBinaryRef,

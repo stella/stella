@@ -28,17 +28,17 @@ import {
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentTextComparisonsFor,
   readDecisionTextMetadata,
   sourceTextField,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-} from "@stll/case-law-ingestion-core/decision-text";
-
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
-import { createSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/case-law/decision-text";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {

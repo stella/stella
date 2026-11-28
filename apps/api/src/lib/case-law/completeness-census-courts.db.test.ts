@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { observedCensusCourt } from "@stll/case-law-ingestion-core/census-listing-identity";
 import type { CensusListingIdentity } from "@stll/case-law-ingestion-core/ingestion-types";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -11,6 +10,7 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import { readCompletenessCensusQuery } from "@/api/lib/case-law/completeness-census";
 import { publisherCensusOf } from "@/api/lib/case-law/completeness-census-contract";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";

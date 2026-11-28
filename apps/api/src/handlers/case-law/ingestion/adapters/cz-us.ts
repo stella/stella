@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
@@ -18,17 +19,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
-import { czDecisionCourt } from "@stll/case-law-ingestion-core/cz-ecli-courts";
-import {
-  absentDecisionTextFields,
-  absentTextField,
-  checkedDecisionMetadata,
-  type DecisionTextFields,
-  sourceTextField,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-  type TextField,
-} from "@stll/case-law-ingestion-core/decision-text";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -108,6 +98,17 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechConstitutionalIdentifiersFromParallelCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
+import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
+import {
+  absentDecisionTextFields,
+  absentTextField,
+  checkedDecisionMetadata,
+  type DecisionTextFields,
+  sourceTextField,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  type TextField,
+} from "@/api/lib/case-law/decision-text";
 import {
   READ_OUTCOME_METADATA_KEY,
   type ReadOutcome,

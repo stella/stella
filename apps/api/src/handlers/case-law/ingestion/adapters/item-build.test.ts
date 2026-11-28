@@ -5,19 +5,19 @@ import {
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   decodeSourceRawEnvelope,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@stll/case-law-ingestion-core/ingestion-types";
-import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 

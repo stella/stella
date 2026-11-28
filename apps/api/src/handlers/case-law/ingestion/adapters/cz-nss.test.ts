@@ -23,21 +23,12 @@ import {
   DECISION_TEXT_FIELD_KEYS,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
-import {
-  absentDecisionTextFields,
-  readDecisionTextMetadata,
-  splitStoredDecisionTextMetadata,
-  storeDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { StoredRawReparseInput } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@stll/case-law-ingestion-core/ingestion-types";
-import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
 import {
   inspectPublisherFieldCoverage,
   PUBLISHER_FIELD_COVERAGE_EVENT,
@@ -67,6 +58,15 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import {
+  absentDecisionTextFields,
+  readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
+  storeDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@/api/lib/case-law/decision-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
   isReadRefusal,
   isStoredReadUnavailable,

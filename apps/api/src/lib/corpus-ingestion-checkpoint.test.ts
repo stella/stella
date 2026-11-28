@@ -12,10 +12,6 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   EMPTY_AST,
   PUBLISHER_REQUEST,
 } from "@stll/case-law-ingestion-core/ingestion-types";
@@ -37,6 +33,10 @@ import { encodePlUodoCursor } from "@/api/handlers/case-law/ingestion/adapters/p
 import { encodePlUokikCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,

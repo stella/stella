@@ -2,14 +2,14 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { courtListenerIngestFixture } from "@/api/tests/helpers/case-law-ingest-fixture";
 
 import { observeDecision } from "./decision-identity";

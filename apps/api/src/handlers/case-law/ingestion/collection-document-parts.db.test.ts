@@ -4,10 +4,6 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { RawIngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -33,6 +29,10 @@ import type { AttachToHeldDecisionOptions } from "@/api/handlers/case-law/ingest
 import { sourceContractForAdapter } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { createSafeId } from "@/api/lib/branded-types";
 import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { UNPERSISTABLE_DECISION_FIELDS } from "@/api/lib/errors/tagged-errors";
 import {
   type CollectionDocumentPart,

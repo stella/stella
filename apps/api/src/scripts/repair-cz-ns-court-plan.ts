@@ -12,9 +12,8 @@ import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
-import { czCourtFromEcli } from "@stll/case-law-ingestion-core/cz-ecli-courts";
-
 import type { SafeId } from "@/api/lib/branded-types";
+import { czCourtFromEcli } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   pgTimestampCursorBoundary,
   pgTimestampCursorValue,

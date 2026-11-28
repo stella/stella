@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -32,13 +33,6 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
-import {
-  absentDecisionTextFields,
-  absentTextField,
-  checkedDecisionMetadata,
-  sourceTextField,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -110,6 +104,13 @@ import type {
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { arrayOrEmpty } from "@/api/lib/array";
+import {
+  absentDecisionTextFields,
+  absentTextField,
+  checkedDecisionMetadata,
+  sourceTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import { logger } from "@/api/lib/observability/logger";

@@ -30,7 +30,6 @@ import {
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
-import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlNsaDecision as uncheckedParsePlNsaDecision } from "@stll/case-law-parsers/pl-nsa";
 import { createSha256 } from "@stll/sha256/node";
@@ -71,6 +70,7 @@ import {
   decisionIdentifiersFromMetadata,
   normalizeDecisionIdentifier,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

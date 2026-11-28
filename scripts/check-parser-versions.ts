@@ -159,6 +159,7 @@ const OUTPUT_SHAPING_ROOTS = [
   LEGISLATION_ADAPTER_DIRECTORY,
   ...PARSER_DIRECTORIES,
   CASE_LAW_DIRECTORY,
+  "packages/case-law-ingestion-core/",
   "packages/case-law-parsers/",
   "packages/legal-ast/",
   "packages/text-normalize/",

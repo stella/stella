@@ -12,7 +12,6 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { czCourtFromEcli } from "@stll/case-law-ingestion-core/cz-ecli-courts";
 import { CZ_NS_SBIRKA_VAZNY_SLICE } from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   decodeSourceRawEnvelope,
@@ -37,6 +36,7 @@ import {
   readCzNsSbirkaSitemap,
   readCzNsSbirkaSitemapIndex,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
+import { czCourtFromEcli } from "@/api/lib/case-law/cz-ecli-courts";
 import { decisionTypeKind } from "@/api/lib/case-law/decision-type-kind";
 import {
   CZ_NS_COLLECTION_METADATA_KEY,

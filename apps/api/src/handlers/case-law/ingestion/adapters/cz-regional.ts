@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
@@ -20,13 +21,6 @@ import {
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
 import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
-// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
-import { observedCensusCourt } from "@stll/case-law-ingestion-core/census-listing-identity";
-import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -97,6 +91,13 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
   READ_OUTCOME_METADATA_KEY,

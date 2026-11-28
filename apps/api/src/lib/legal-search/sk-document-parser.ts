@@ -1,15 +1,15 @@
 // parser-output-unchanged: the deferred parser is shared with stored-object replay without changing its output.
 import { Result } from "better-result";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import { parseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { EmptyAst } from "@stll/legal-ast/document-types";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";

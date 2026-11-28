@@ -2,10 +2,6 @@ import { Result } from "better-result";
 
 import type { TextField } from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
-import {
-  splitStoredDecisionTextMetadata,
-  TEXT_FIELD_TYPE,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type {
   DecisionJudgeInput,
   IngestionResult,
@@ -22,6 +18,10 @@ import { createSha256 } from "@stll/sha256/bun";
 
 import type { caseLawDecisions } from "@/api/db/schema";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
+import {
+  splitStoredDecisionTextMetadata,
+  TEXT_FIELD_TYPE,
+} from "@/api/lib/case-law/decision-text";
 import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord } from "@/api/lib/type-guards";
 

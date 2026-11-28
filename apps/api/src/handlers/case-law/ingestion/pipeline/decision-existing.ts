@@ -3,7 +3,6 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DOCUMENT_DELIVERY } from "@stll/case-law-ingestion-core/ingestion-types";
-import type { PlainTextMetadataValue } from "@stll/case-law-ingestion-core/plain-text";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
@@ -26,6 +25,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { unreadOutcomeOf } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import type { PlainTextMetadataValue } from "@/api/lib/case-law/plain-text";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { corpusCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import { errorTag } from "@/api/lib/errors/error-tag";

@@ -4,7 +4,6 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
-import { TEXT_ABSENCE_REASON } from "@stll/case-law-ingestion-core/decision-text";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DecisionSection } from "@stll/legal-ast/document-types";
 
@@ -23,6 +22,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { TEXT_ABSENCE_REASON } from "@/api/lib/case-law/decision-text";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { GateSurface } from "@/api/lib/case-law/public-subject";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";

@@ -22,13 +22,13 @@ import {
   resolveUsCourt,
   type UsCourtResolution,
 } from "@stll/api-contract/us-courts";
-import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
 import { declareFingerprintFields } from "@stll/errors";
 
 import {
   type CourtDirectoryJurisdiction,
   isCourtDirectoryJurisdiction,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 
 /**
  * The directory that admits a jurisdiction's court ids for writing: every

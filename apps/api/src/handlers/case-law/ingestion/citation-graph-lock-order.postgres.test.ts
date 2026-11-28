@@ -2,10 +2,6 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 
 import type { Transaction } from "@/api/db/root";
@@ -23,6 +19,10 @@ import {
   tryCitationGraphTransaction,
 } from "@/api/handlers/case-law/citation-graph-transaction";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

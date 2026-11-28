@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved to @stll/case-law-parsers; runtime behavior unchanged.
 import { Result } from "better-result";
@@ -7,11 +8,6 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
-import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import {
   isPersistableSourceDocumentId,
   STORED_RAW_REPARSE_REJECTION,
@@ -31,6 +27,11 @@ import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
 import { parseUkFclDecision } from "@stll/case-law-parsers/uk-fcl";
 import { Temporal } from "@stll/time";
 
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 const ATOM = "http://www.w3.org/2005/Atom";

@@ -11,10 +11,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   IngestionResult,
@@ -32,6 +28,10 @@ import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestio
 import { UNAVAILABLE_ITEMS_CONFIG_KEY } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import {
   isReadRefusal,
   READ_OUTCOME_METADATA_KEY,

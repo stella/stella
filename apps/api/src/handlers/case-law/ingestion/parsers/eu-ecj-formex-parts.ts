@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: Retained ZIP directory markers contain no document text; original archive bytes remain stored.
 // parser-output-unchanged: imports byte-identical raw-envelope codecs from their pure owner.
 import { panic } from "better-result";

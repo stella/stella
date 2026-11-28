@@ -10,16 +10,16 @@ import {
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
-import {
-  readStoredDecisionTextAbsence,
-  splitStoredDecisionTextMetadata,
-  storeDecisionTextFields,
-} from "@stll/case-law-ingestion-core/decision-text";
-import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import {
+  readStoredDecisionTextAbsence,
+  splitStoredDecisionTextMetadata,
+  storeDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

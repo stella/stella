@@ -17,7 +17,6 @@ import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@stll/case-law-ingestion-core/ingestion-types";
-import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
 
 import {
   assembleHuBhgyDecision,
@@ -37,6 +36,7 @@ import {
   readHuBhgySearch,
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 import {

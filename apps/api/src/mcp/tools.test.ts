@@ -58,7 +58,6 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
-import { readDecisionTextMetadata } from "@stll/case-law-ingestion-core/decision-text";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -101,6 +100,7 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import type { readDecisionReviews } from "@/api/lib/case-law/decision-reviews";
+import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";

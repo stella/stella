@@ -10,13 +10,13 @@ import {
   opaqueMetadataValue,
   rehydrateMetadataUrls,
 } from "@stll/case-law-ingestion-core/metadata-urls";
-import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 import {
   MetadataUrlDefect,
   toMetadataUrl,
 } from "@stll/case-law-parsers/sanitize-url";
 import { assertProperty } from "@stll/property-testing";
 
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { isRecord } from "@/api/lib/type-guards";
 

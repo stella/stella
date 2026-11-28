@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import {
@@ -30,6 +26,10 @@ import {
   type RetentionPolicy,
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import {
   type LogRecord,
   resetLogSinkForTesting,

@@ -3,11 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import {
-  absentDecisionTextFields,
-  splitStoredDecisionTextMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/ingestion-constants";
@@ -60,6 +55,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/replay";
 import { BACKGROUND_REPLAY_LIMITS } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { buildCaseLawReplayCompactionQuery } from "@/api/lib/db/aggregate-lock";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {

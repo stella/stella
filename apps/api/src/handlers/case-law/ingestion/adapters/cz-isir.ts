@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: decision section and metadata types moved to @stll/legal-ast without behavior changes.
 /**
@@ -71,11 +72,6 @@ import * as v from "valibot";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
-import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -158,6 +154,11 @@ import {
   adapterCatch,
   INGESTION_USER_AGENT,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 

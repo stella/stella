@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 /**
  * One surface census for the eleven tribunals this publisher serves.

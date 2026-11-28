@@ -5,10 +5,6 @@ import * as v from "valibot";
 
 import { directoryCourtIdentities } from "@stll/api-contract/court-identity";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { RawIngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -26,6 +22,10 @@ import { observeDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { matchHostDecisionsTx } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import { createSafeId } from "@/api/lib/branded-types";
 import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import {
   heldDecisionEcliIdentity,
   readHeldDecisionCandidates,

@@ -1,10 +1,6 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { EMPTY_AST } from "@stll/legal-ast/document-types";
 
@@ -12,6 +8,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { applyStoredDecisionBackfill } from "@/api/handlers/case-law/ingestion/pipeline/stored-decision-backfill";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 

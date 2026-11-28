@@ -28,7 +28,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
-import { storeTextField } from "@stll/case-law-ingestion-core/decision-text";
 import {
   decodeSourceRawEnvelope,
   EMPTY_AST,
@@ -67,6 +66,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { SOFT_LAW_ADMISSIONS } from "@/api/handlers/soft-law/adapters/registry";
+import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { isRecord } from "@/api/lib/type-guards";

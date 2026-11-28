@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: Named fetchDecisionContent options preserve its body, argument values and evaluation order.
@@ -22,15 +23,6 @@ import {
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
 import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
-import { czDecisionCourt } from "@stll/case-law-ingestion-core/cz-ecli-courts";
-import {
-  absentDecisionTextFields,
-  absentTextField,
-  checkedDecisionMetadata,
-  sourceTextField,
-  splitStoredDecisionTextMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -64,7 +56,6 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@stll/case-law-ingestion-core/ingestion-types";
-import { PlainTextError } from "@stll/case-law-ingestion-core/plain-text";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
@@ -108,7 +99,17 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechReporterIdentifiersFromCitationLabel } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { CzechAppealReview } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
+import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
+import {
+  absentDecisionTextFields,
+  absentTextField,
+  checkedDecisionMetadata,
+  sourceTextField,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { isDocketShapedDecisionType } from "@/api/lib/case-law/decision-type-key";
+import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
   READ_OUTCOME_METADATA_KEY,

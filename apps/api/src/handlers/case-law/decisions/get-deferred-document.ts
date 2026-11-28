@@ -15,12 +15,6 @@ import { panic } from "better-result";
 
 import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
-import {
-  absentDecisionTextFields,
-  absentTextField,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import type { TextAbsenceReason } from "@stll/case-law-ingestion-core/decision-text";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { envBase } from "@/api/env-base";
@@ -43,6 +37,12 @@ import {
 } from "@/api/handlers/case-law/decisions/text-completion";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  absentDecisionTextFields,
+  absentTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import type { TextAbsenceReason } from "@/api/lib/case-law/decision-text";
 import type {
   DecisionSubjectLocator,
   RedistributableDecisionSubject,

@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { desc, eq } from "drizzle-orm";
 
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
-import { readDecisionHeadnote } from "@stll/case-law-ingestion-core/decision-text";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawMatterLinks } from "@/api/db/schema";
@@ -12,6 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { capabilityRoute } from "@/api/lib/capability-route";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readMatterLinkDecisions } from "@/api/lib/case-law/matter-link-decisions";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";

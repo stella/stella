@@ -2,10 +2,6 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import {
@@ -27,6 +23,10 @@ import { stableStringify } from "@stll/stable-stringify";
 import { mapCourtListenerRecord as uncheckedMapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { recordedClusters } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { sortDeep } from "@/api/lib/sort-deep";
 

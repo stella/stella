@@ -14,12 +14,6 @@ import {
   directoryCourtIdentities,
   readPrintedCourt,
 } from "@stll/api-contract/court-identity";
-import {
-  absentDecisionTextFields,
-  absentTextField,
-  presentTextField,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
@@ -42,6 +36,12 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  absentTextField,
+  presentTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical lookup results.
 import { panic } from "better-result";
 

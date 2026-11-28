@@ -3,16 +3,6 @@ import { panic, Result } from "better-result";
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
 import {
-  absentTextField,
-  DECISION_TEXT_FIELD,
-  type DecisionTextFields,
-  presentTextField,
-  storeDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-  type TextField,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   EMPTY_AST,
   type IngestionResult,
   isPersistableSourceDocumentId,
@@ -33,6 +23,16 @@ import { withStableBlockAnchors } from "@stll/legal-ast/stable-block-anchors";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
+import {
+  absentTextField,
+  DECISION_TEXT_FIELD,
+  type DecisionTextFields,
+  presentTextField,
+  storeDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  type TextField,
+} from "@/api/lib/case-law/decision-text";
 import { isDocketShapedDecisionType } from "@/api/lib/case-law/decision-type-key";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";

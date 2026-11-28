@@ -14,11 +14,6 @@ import * as v from "valibot";
 
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   PUBLISHER_REQUEST,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@stll/case-law-ingestion-core/ingestion-types";
@@ -27,7 +22,6 @@ import {
   approveMetadataUrls,
   META_URL_DIAGNOSTICS,
 } from "@stll/case-law-ingestion-core/metadata-urls";
-import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { compareCodeUnit } from "@stll/collation";
@@ -89,7 +83,13 @@ import {
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { parkAttachmentsOfErasedDecisionTx } from "@/api/lib/case-law/held-attachment-erasure";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   CORPUS_INDEX_MANIFESTS,

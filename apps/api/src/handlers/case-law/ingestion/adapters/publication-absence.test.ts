@@ -13,13 +13,13 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
+
+import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   absentDecisionTextFields,
   splitStoredDecisionTextMetadata,
   storeDecisionTextFields,
-} from "@stll/case-law-ingestion-core/decision-text";
-
-import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+} from "@/api/lib/case-law/decision-text";
 import { isRecord } from "@/api/lib/type-guards";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { TYPED_ABSENCE_DEBT } from "@/api/tests/helpers/case-law-publication-absence-debt";

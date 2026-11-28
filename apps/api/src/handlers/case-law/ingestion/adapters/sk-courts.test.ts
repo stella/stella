@@ -28,7 +28,6 @@ import {
   toPlainTextIngestionResult,
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
-import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
@@ -42,6 +41,7 @@ import {
   planUnreadItems,
   type UnavailableStreaks,
 } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   isReadRefusal,
   isStoredReadAbsence,

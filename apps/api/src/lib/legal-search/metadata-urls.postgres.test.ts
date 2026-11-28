@@ -2,18 +2,18 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
-  checkedDecisionMetadata,
-  readDecisionTextMetadata,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   approveMetadataUrls,
   META_URL_DIAGNOSTICS,
   rehydrateMetadataUrls,
 } from "@stll/case-law-ingestion-core/metadata-urls";
-import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 
 import { SK_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/sk-courts.metadata-urls";
+import {
+  checkedDecisionMetadata,
+  readDecisionTextMetadata,
+} from "@/api/lib/case-law/decision-text";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

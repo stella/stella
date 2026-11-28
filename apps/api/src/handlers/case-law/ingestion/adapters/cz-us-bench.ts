@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 import { panic } from "better-result";
 
 import type { CzechDeclinedDecisionJudge } from "@stll/case-law-ingestion-core/ingestion-types";

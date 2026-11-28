@@ -2,10 +2,6 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type {
   IngestionResult,
   UnreadListedItem,
@@ -19,6 +15,10 @@ import {
   UNAVAILABLE_ITEMS_CONFIG_KEY,
   type UnavailableStreaks,
 } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import {
   isReadRefusal,
   isStoredReadUnavailable,

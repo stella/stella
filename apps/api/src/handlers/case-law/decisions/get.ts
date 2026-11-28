@@ -5,10 +5,6 @@ import * as v from "valibot";
 import type { DecisionBodySource } from "@stll/api-contract/case-law-body-source";
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import { caseLawSourceLanguagesOf } from "@stll/api-contract/case-law-source-languages";
-import {
-  readDecisionTextMetadata,
-  readWholeDecisionHeadnote,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { DECISION_JUDGE_ROLE_RANK } from "@stll/case-law-ingestion-core/judges-consts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
@@ -57,6 +53,10 @@ import {
 } from "@/api/lib/case-law/decision-reviews";
 import { readCachedDecisionRowAst } from "@/api/lib/case-law/decision-row-ast-cache";
 import { readDecisionSectionIndex } from "@/api/lib/case-law/decision-section-cache";
+import {
+  readDecisionTextMetadata,
+  readWholeDecisionHeadnote,
+} from "@/api/lib/case-law/decision-text";
 import { decisionPayloadKey } from "@/api/lib/case-law/decision-versioned-payload";
 import { decisionWorkOf } from "@/api/lib/case-law/decision-work";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";

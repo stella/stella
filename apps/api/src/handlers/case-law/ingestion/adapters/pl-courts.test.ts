@@ -22,7 +22,6 @@ import type {
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
 import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
-import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 
@@ -31,6 +30,7 @@ import {
   normalizeSaosDumpItem,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   installRecordingAnalytics,

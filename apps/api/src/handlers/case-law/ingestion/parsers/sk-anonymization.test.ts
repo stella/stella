@@ -3,16 +3,16 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import type { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@stll/case-law-parsers/sk-courts";
 import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@stll/case-law-parsers/sk-us";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);

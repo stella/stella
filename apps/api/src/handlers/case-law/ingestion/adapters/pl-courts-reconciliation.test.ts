@@ -12,11 +12,6 @@ import { afterEach, describe, expect, test } from "bun:test";
  * identity held and take the document out of every later reconciliation.
  */
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   listingIdentityKey,
@@ -35,6 +30,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";

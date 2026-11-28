@@ -61,14 +61,14 @@
 import { and, eq } from "drizzle-orm";
 
 import type { AdapterKey } from "@stll/case-law-ingestion-core/case-law-consts";
-import {
-  absentTextComparisonsFor,
-  ADAPTERS_DECLARING_ABSENT_TEXT,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  absentTextComparisonsFor,
+  ADAPTERS_DECLARING_ABSENT_TEXT,
+} from "@/api/lib/case-law/decision-text";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,

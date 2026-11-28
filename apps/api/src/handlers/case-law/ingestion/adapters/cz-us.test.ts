@@ -13,11 +13,6 @@ import {
 } from "bun:test";
 
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@stll/case-law-ingestion-core/ingestion-types";
@@ -31,6 +26,11 @@ import {
   RESULTS_PAGE_SIZE,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@/api/lib/case-law/decision-text";
 import {
   isReadRefusal,
   isStoredReadUnavailable,

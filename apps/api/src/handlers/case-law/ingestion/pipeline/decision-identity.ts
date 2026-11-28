@@ -7,8 +7,6 @@ import {
   type StatedEcliIdentity,
 } from "@stll/case-law-ingestion-core/adapter-manifest";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
-import type { PlainTextError } from "@stll/case-law-ingestion-core/plain-text";
-import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -50,6 +48,8 @@ import {
   fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import type { DecisionStorageIdentity } from "@/api/lib/case-law/fallback-decision-identity";
+import type { PlainTextError } from "@/api/lib/case-law/plain-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";

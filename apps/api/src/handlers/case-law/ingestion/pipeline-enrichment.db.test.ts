@@ -3,10 +3,6 @@ import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 
@@ -23,6 +19,10 @@ import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestio
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { readSourceContract } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import { caseLawCanonicalPayload } from "@/api/lib/legal-search/decision-payload";
 import { isRecord } from "@/api/lib/type-guards";

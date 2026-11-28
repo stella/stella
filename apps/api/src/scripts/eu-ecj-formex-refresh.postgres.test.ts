@@ -8,10 +8,6 @@ import { setImmediate } from "node:timers/promises";
 
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   EMPTY_AST,
   StoredRawReadError,
   toPlainTextIngestionResult,
@@ -22,6 +18,10 @@ import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import {
   STORED_CORPUS_VALIDATION_CODE,
   StoredCorpusValidationError,

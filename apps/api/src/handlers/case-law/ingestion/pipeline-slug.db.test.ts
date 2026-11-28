@@ -4,10 +4,6 @@ import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
@@ -23,6 +19,10 @@ import {
 } from "@/api/handlers/case-law/decisions/slug";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

@@ -6,10 +6,6 @@
 
 import { Result } from "better-result";
 
-import {
-  censusListingEvidenceKey,
-  censusListingIdentity,
-} from "@stll/case-law-ingestion-core/census-listing-identity";
 import type {
   CensusListingIdentity,
   ReconciliationListingItem,
@@ -18,6 +14,10 @@ import type {
 import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
 
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
+import {
+  censusListingEvidenceKey,
+  censusListingIdentity,
+} from "@/api/lib/case-law/census-listing-identity";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**

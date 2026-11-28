@@ -2,11 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import type { TextField } from "@stll/api-contract/case-law-text-field";
 import {
-  absentDecisionTextFields,
-  presentTextField,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   type DecisionJudgeInput,
   encodeSourceRawEnvelope,
   type RawIngestionResult,
@@ -22,6 +17,11 @@ import {
   protectEcjFormexParts,
   protectEcjLegacyDocument,
 } from "@/api/handlers/case-law/ingestion/eu-completion-protection";
+import {
+  absentDecisionTextFields,
+  presentTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 type ProtectOptions = Omit<

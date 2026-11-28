@@ -20,7 +20,6 @@ import type {
   StoredRawReparseInput,
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
-import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@stll/case-law-parsers/pl-kis";
 import {
@@ -56,6 +55,7 @@ import {
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { installTestFetch } from "@/api/tests/helpers/test-fetch";

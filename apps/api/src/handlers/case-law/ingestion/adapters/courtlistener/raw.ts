@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 import { Result, TaggedError } from "better-result";
 

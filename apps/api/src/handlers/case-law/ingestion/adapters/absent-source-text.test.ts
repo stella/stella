@@ -4,6 +4,9 @@ import { readdirSync } from "node:fs";
 
 import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { load } from "@stll/html";
+import { isTag, isText } from "@stll/html/nodes";
+
 import {
   absentTextComparison,
   readDecisionTextMetadata,
@@ -11,10 +14,7 @@ import {
   sourceTextField,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-} from "@stll/case-law-ingestion-core/decision-text";
-import { load } from "@stll/html";
-import { isTag, isText } from "@stll/html/nodes";
-
+} from "@/api/lib/case-law/decision-text";
 import { PROVENANCE_SUFFIX } from "@/api/tests/fixture-provenance";
 
 const utf8 = new TextDecoder();

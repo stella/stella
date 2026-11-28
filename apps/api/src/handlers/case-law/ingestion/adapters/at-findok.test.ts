@@ -4,7 +4,6 @@ import {
   decodeSourceRawEnvelope,
   PUBLISHER_REQUEST,
 } from "@stll/case-law-ingestion-core/ingestion-types";
-import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
 import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
@@ -14,6 +13,7 @@ import {
   createAtFindokAdapter,
   parseFindokManifest,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 

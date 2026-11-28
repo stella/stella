@@ -5,7 +5,6 @@ import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-sour
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
-import { readDecisionTextMetadata } from "@stll/case-law-ingestion-core/decision-text";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { createTestState } from "@stll/test-state";
 
@@ -16,6 +15,7 @@ import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sa
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";

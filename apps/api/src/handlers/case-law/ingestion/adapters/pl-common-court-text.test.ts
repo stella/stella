@@ -11,10 +11,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import {
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
@@ -28,6 +24,10 @@ import {
   assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
   readPlNcourtListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@/api/lib/case-law/decision-text";
 import { isRecord } from "@/api/lib/type-guards";
 
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);

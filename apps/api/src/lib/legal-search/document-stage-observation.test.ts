@@ -2,10 +2,6 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import {
   observePublisherDocumentFetch,
   withDocumentStageObserver,
   withDocumentStageWindow,
@@ -23,6 +19,10 @@ import {
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 

@@ -10,10 +10,6 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { directoryCourtIdentities } from "@stll/api-contract/court-identity";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
@@ -36,6 +32,10 @@ import {
   sourceContractForAdapter,
 } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { selectAttachmentDocumentIds } from "@/api/lib/case-law/held-attachment-reads";
 import { readHeldDecisionAttachmentCensus } from "@/api/lib/case-law/held-decision-attachment-census";
 import { readStoredListingIdentities } from "@/api/lib/case-law/stored-listing-identities";

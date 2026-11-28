@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 
 import {

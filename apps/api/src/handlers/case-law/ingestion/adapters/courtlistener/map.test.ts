@@ -8,12 +8,12 @@ import {
   type IngestionResult,
   type StoredRawReparseInput,
 } from "@stll/case-law-ingestion-core/ingestion-types";
-import { toPlainTextMetadata } from "@stll/case-law-ingestion-core/plain-text";
 import { OPINION_TYPES } from "@stll/case-law-parsers/courtlistener/vocabulary";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
+import { toPlainTextMetadata } from "@/api/lib/case-law/plain-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 

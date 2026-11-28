@@ -20,10 +20,6 @@ import {
   DECISION_TEXT_FIELD,
 } from "@stll/api-contract/case-law-text-field";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type {
   IngestionResult,
@@ -57,6 +53,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { isRecord } from "@/api/lib/type-guards";

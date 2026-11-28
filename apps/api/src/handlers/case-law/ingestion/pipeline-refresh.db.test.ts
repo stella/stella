@@ -27,10 +27,6 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   DOCUMENT_DELIVERY,
@@ -47,6 +43,10 @@ import {
   type CaseLawCorpusDependencies,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { zstdCompress } from "@/api/lib/compression";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";

@@ -16,7 +16,6 @@ import {
   caseLawSourceLanguagesOf,
 } from "@stll/api-contract/case-law-source-languages";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
-import { splitStoredDecisionTextMetadata } from "@stll/case-law-ingestion-core/decision-text";
 import { withDocumentStageWindow } from "@stll/case-law-ingestion-core/document-stage-observation";
 import type {
   IngestionResult,
@@ -65,6 +64,7 @@ import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipelin
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { splitStoredDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";

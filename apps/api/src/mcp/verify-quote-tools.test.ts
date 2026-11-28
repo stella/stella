@@ -3,11 +3,11 @@ import * as v from "valibot";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
-import { readDecisionTextMetadata } from "@stll/case-law-ingestion-core/decision-text";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { status } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

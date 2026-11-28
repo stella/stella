@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 import {
   isWholeEntryIdentifier,
   parseDecisionQuery,

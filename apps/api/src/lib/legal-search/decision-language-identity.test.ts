@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
-} from "@stll/case-law-ingestion-core/decision-text";
-import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
-
+} from "@/api/lib/case-law/decision-text";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,

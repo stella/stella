@@ -17,7 +17,6 @@ import {
   type DecisionListSort,
   DEFAULT_DECISION_LIST_SORT,
 } from "@stll/api-contract/search";
-import { readDecisionHeadnote } from "@stll/case-law-ingestion-core/decision-text";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { status } from "@/api/http/status";
@@ -48,6 +47,7 @@ import {
   decisionPageRequestRefusal,
 } from "@/api/lib/case-law/decision-page-offset";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
+import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import { classifiedDecisionTypeKind } from "@/api/lib/case-law/decision-type-kind";
 import { readCaseLawFilterScope } from "@/api/lib/case-law/filter-country-scope";

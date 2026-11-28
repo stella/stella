@@ -1,9 +1,9 @@
-import { readDecisionTextMetadata } from "@stll/case-law-ingestion-core/decision-text";
 import { decisionReaderTextPieces } from "@stll/decision-reader/reader-text-pieces.logic";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ReaderTextPiece } from "@stll/legal-ast/reader-text-quote";
 
+import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { readerTextFields } from "@/api/lib/case-law/reader-text-fields";
 
 /**

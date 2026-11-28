@@ -1,11 +1,10 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import { readDecisionHeadnote } from "@stll/case-law-ingestion-core/decision-text";
-
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
+import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";

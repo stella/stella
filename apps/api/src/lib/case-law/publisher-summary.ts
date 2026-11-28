@@ -7,10 +7,10 @@ import {
   DECISION_TEXT_FIELD,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
-import { readStoredDecisionTextAbsence } from "@stll/case-law-ingestion-core/decision-text";
 import { PUBLISHER_SUMMARY_ROLES } from "@stll/legal-ast/document-ast";
 import type { ApparatusRole, DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { readStoredDecisionTextAbsence } from "@/api/lib/case-law/decision-text";
 import {
   storedDecisionTextAbsenceEntriesSql,
   storedDecisionTextAbsenceValidSql,
