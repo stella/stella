@@ -1,6 +1,12 @@
 import { panic } from "better-result";
 
 import {
+  caseLawDocumentStemLanguage,
+  documentMorphologyLanguage,
+} from "@stll/legal-morphology/corpus-language";
+import { morphologyKey } from "@stll/legal-morphology/stem";
+
+import {
   publisherHeadnoteOf,
   publisherKeywordsOf,
   publisherSummaryOf,
@@ -26,11 +32,6 @@ import {
   type LegislationExpressionClassification,
   typedLegislationClassification,
 } from "@/api/lib/legal-search/legislation-expression-classification";
-import {
-  caseLawDocumentStemLanguage,
-  documentMorphologyLanguage,
-} from "@/api/lib/legal-search/morphology/corpus-language";
-import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
 
 type ProjectionInputBase = {
   documentId: string;

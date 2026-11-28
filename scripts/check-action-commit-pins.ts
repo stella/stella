@@ -2,6 +2,8 @@
 import { Result, TaggedError } from "better-result";
 import { readFileSync } from "node:fs";
 
+import { failCheck } from "../packages/scripts/src/check-failure";
+
 const REQUEST_TIMEOUT_MS = 15_000;
 const ACTION_PIN =
   /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?:\/[A-Za-z0-9_./-]+)?@([a-fA-F0-9]{40})$/u;
@@ -201,8 +203,16 @@ if (import.meta.main) {
     git(["merge-base", "origin/main", "HEAD"]).trim(),
   );
   if (!/^[a-f0-9]{40}$/u.test(base) || process.argv.length > 3) {
-    process.stderr.write("Usage: check-action-commit-pins.ts [base-sha]\n");
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-action-commit-pins",
+        summary:
+          "Invalid arguments. Usage: check-action-commit-pins.ts [base-sha]",
+        remediation:
+          "Pass at most one 40-character base commit SHA, or omit it to use the merge-base with origin/main.",
+        rerunCommand: "bun scripts/check-action-commit-pins.ts",
+      }),
+    );
   }
   const changes = git([
     "diff",
@@ -232,8 +242,15 @@ if (import.meta.main) {
     token: process.env["GITHUB_TOKEN"],
   });
   if (result.isErr()) {
-    process.stderr.write(`${result.error.message}\n`);
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-action-commit-pins",
+        summary: result.error.message,
+        remediation:
+          "Pin every changed remote GitHub Action to a verified 40-character commit SHA (not a tag or branch) and ensure GITHUB_TOKEN is set when verifying.",
+        rerunCommand: "bun scripts/check-action-commit-pins.ts",
+      }),
+    );
   }
   process.stdout.write(
     `Verified ${result.value} changed action commit pin(s).\n`,

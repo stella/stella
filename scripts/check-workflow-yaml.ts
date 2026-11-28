@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
+import { failCheck } from "../packages/scripts/src/check-failure";
 import { checkWorkflowPrivileges } from "./check-workflow-pr-write-token";
 import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { flattenWorkflowSteps } from "./workflow-steps";
@@ -655,5 +656,21 @@ export const checkWorkflowYaml = async (
 };
 
 if (import.meta.main) {
-  await checkWorkflowYaml(path.resolve(import.meta.dirname, ".."));
+  const checked = await Result.tryPromise({
+    try: async () => checkWorkflowYaml(path.resolve(import.meta.dirname, "..")),
+    catch: (cause) => cause,
+  });
+  if (checked.isErr()) {
+    const { error } = checked;
+    if (error instanceof WorkflowYamlError) {
+      process.exitCode = failCheck({
+        check: "check-workflow-yaml",
+        summary: error.message,
+        remediation: `Fix the workflow or action YAML violation in ${error.file} and re-run the validator.`,
+        rerunCommand: "bun scripts/check-workflow-yaml.ts",
+      });
+    } else {
+      throw error;
+    }
+  }
 }

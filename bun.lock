@@ -117,6 +117,7 @@
         "@stll/invoicing": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
+        "@stll/legal-morphology": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/mcp-apps": "workspace:*",
         "@stll/mcp-kit": "workspace:^",
@@ -1367,6 +1368,22 @@
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/sha256": "workspace:^",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
+      },
+    },
+    "packages/legal-morphology": {
+      "name": "@stll/legal-morphology",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/api-contract": "workspace:*",
+        "@stll/concurrency": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
@@ -3660,6 +3677,8 @@
     "@stll/legal-atlas": ["@stll/legal-atlas@workspace:packages/legal-atlas"],
 
     "@stll/legal-atlas-runner": ["@stll/legal-atlas-runner@workspace:apps/legal-atlas-runner"],
+
+    "@stll/legal-morphology": ["@stll/legal-morphology@workspace:packages/legal-morphology"],
 
     "@stll/locales": ["@stll/locales@workspace:packages/locales"],
 

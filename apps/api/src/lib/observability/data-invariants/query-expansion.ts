@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 
+import type { MorphologyLanguage } from "@stll/legal-morphology/stem";
+
 import type { ExpansionDictionaryProbe } from "@/api/lib/legal-search/expansion";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import type { QueryExpansionMode } from "@/api/lib/legal-search/query-expansion-mode";
 import {
   DATA_INVARIANT_ID,

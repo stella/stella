@@ -2,6 +2,7 @@ import { type InferOk, panic, Result, UnhandledException } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { CaseLawDocumentLanguageUndeclaredError } from "@stll/legal-morphology/corpus-language";
 import { Temporal } from "@stll/time";
 
 import { corpusIndexProjectionStates } from "@/api/db/schema";
@@ -55,7 +56,6 @@ import {
   readCorpusForRecovery,
   type SizedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
-import { CaseLawDocumentLanguageUndeclaredError } from "@/api/lib/legal-search/morphology/corpus-language";
 import type { StoredAstOutcome } from "@/api/lib/legal-search/stored-ast-outcome";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";

@@ -372,11 +372,6 @@
     "apps/web/src/components/inspector/anonymization-context-menu.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx": 3
   },
-  "no-imported-class-constant/no-imported-class-constant": {},
-  "require-bounded-request-schema/require-bounded-request-schema": {},
-  "no-unbounded-response-body/no-unbounded-response-body": {},
-  "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
-  "exhaustive-union-map/exhaustive-union-map": {},
   "no-direct-status-set/no-direct-status-set": {
     "apps/api/scripts/seed-matter-activity.ts": 2,
     "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
@@ -540,35 +535,23 @@
     "scripts/sync-railway-template-source.ts": 1,
     "scripts/tanstack-drift.ts": 3
   },
-  "no-native-ui/no-native-accordion": {},
   "no-native-ui/no-native-button": {
     "apps/web/src/components/catalogue/catalogue-row.tsx": 1,
     "apps/web/src/components/file-tree/file-tree.tsx": 1,
     "packages/decision-reader/src/annotation-anchors.tsx": 1
   },
-  "no-native-ui/no-native-checkbox": {},
-  "no-native-ui/no-native-details-grid": {},
   "no-native-ui/no-native-dialog": {
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/features/chat/answer-edit/answer-edit-panel.tsx": 1
   },
-  "no-native-ui/no-native-form": {},
-  "no-native-ui/no-native-input": {},
-  "no-native-ui/no-native-label": {},
-  "no-native-ui/no-native-menu": {},
-  "no-native-ui/no-native-number-input": {},
-  "no-native-ui/no-native-secret-input": {},
   "no-native-ui/no-native-select": {
     "apps/web/src/routes/knowledge/-components/template-studio-slash-menu.tsx": 2
   },
-  "no-native-ui/no-native-separator": {},
   "no-native-ui/no-native-table": {
     "apps/web/src/components/workspaces/table/workspace-grid.tsx": 3,
     "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 3,
     "packages/decision-reader/src/document-ast-text.tsx": 3
   },
-  "no-native-ui/no-native-textarea": {},
-  "no-native-ui/no-native-tooltip": {},
   "eslint/complexity": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 5,
     ".oxlint-plugins/no-known-value-widening.ts": 1,
@@ -609,7 +592,6 @@
     "apps/api/src/lib/docx/lookup-fields.ts": 1,
     "apps/api/src/lib/entities/query-entities.ts": 1,
     "apps/api/src/lib/entity-versions/write-file-version.ts": 1,
-    "apps/api/src/lib/legal-search/morphology/slovak.ts": 1,
     "apps/api/src/lib/observability/failure-evidence.ts": 1,
     "apps/api/src/lib/safe-outbound-fetch.ts": 1,
     "apps/api/src/lib/search/index-global.ts": 1,
@@ -657,6 +639,7 @@
     "packages/cli/src/input-contract-help.ts": 1,
     "packages/cli/src/json-schema-validate.ts": 1,
     "packages/cli/src/registry-trust.ts": 1,
+    "packages/legal-morphology/src/slovak.ts": 1,
     "packages/scripts/src/model-catalog-capabilities-gen.ts": 1,
     "packages/scripts/src/property-timeout-convention.ts": 1,
     "scripts/check-marketing-content.ts": 1,
@@ -876,8 +859,5 @@
     "scripts/env-tool.ts": 1,
     "scripts/ratchet.ts": 1,
     "scripts/suppression-waivers.ts": 1
-  },
-  "eslint/max-params": {},
-  "react/no-children-prop": {},
-  "eslint/no-unexpected-multiline": {}
+  }
 }

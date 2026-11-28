@@ -9,6 +9,7 @@ import type {
   CaseLawSearchWarning,
   SearchPhaseState,
 } from "@stll/api-contract/search";
+import { functionWordsFor } from "@stll/legal-morphology/function-words";
 
 import type { TermDecisionCounts } from "@/api/handlers/case-law/decisions/search-relaxed";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
@@ -27,7 +28,6 @@ import {
   type LegalAlternatives,
   normalizeLegalAlternatives,
 } from "@/api/lib/legal-search/legal-alternatives";
-import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
 
 /**
  * What a case-law search will require of the corpus, and what it has to say

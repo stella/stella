@@ -18,7 +18,10 @@ import {
   staticStringValue,
 } from "./utils.ts";
 
-const getClassNameAttribute = (openingElement: unknown): AstNode | null => {
+const getJsxAttribute = (
+  openingElement: unknown,
+  name: string,
+): AstNode | null => {
   if (!isAstNode(openingElement) || !Array.isArray(openingElement.attributes)) {
     return null;
   }
@@ -27,10 +30,19 @@ const getClassNameAttribute = (openingElement: unknown): AstNode | null => {
       (attribute): attribute is AstNode =>
         isAstNode(attribute) &&
         attribute.type === "JSXAttribute" &&
-        jsxName(attribute.name) === "className",
+        jsxName(attribute.name) === name,
     ) ?? null
   );
 };
+
+const getClassNameAttribute = (openingElement: unknown): AstNode | null =>
+  getJsxAttribute(openingElement, "className");
+
+const isWhitespaceNormalToken = (token: string): boolean =>
+  classBaseName(token).replaceAll("!", "") === "whitespace-normal";
+
+const isBareWhitespaceNormalToken = (token: string): boolean =>
+  token.replaceAll("!", "") === "whitespace-normal";
 
 const classNameValue = (attribute: AstNode): unknown => {
   const value = attribute.value;
@@ -60,9 +72,7 @@ const templateElementString = (node: AstNode): string | null => {
 };
 
 const stringContainsNormalWhitespace = (value: string): boolean =>
-  classTokens(value).some(
-    (token) => classBaseName(token).replaceAll("!", "") === "whitespace-normal",
-  );
+  classTokens(value).some(isWhitespaceNormalToken);
 
 const containsNormalWhitespace = (className: unknown): boolean => {
   const value = staticStringValue(className);
@@ -115,6 +125,7 @@ export default eslintCompatPlugin({
     "no-button-whitespace-normal": {
       meta: {
         type: "problem",
+        fixable: "code",
         messages: {
           wrappingButton:
             'Use Button layout="wrap"; fixed size heights let wrapped text overlap following rows.',
@@ -141,7 +152,72 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            context.report({ node: className, messageId: "wrappingButton" });
+            context.report({
+              node: className,
+              messageId: "wrappingButton",
+              fix: (fixer) => {
+                const valueNode = className.value;
+                if (
+                  !isAstNode(valueNode) ||
+                  valueNode.type !== "Literal" ||
+                  typeof valueNode.value !== "string"
+                ) {
+                  return null;
+                }
+                const rawLiteral = context.sourceCode.getText(valueNode);
+                if (
+                  rawLiteral.length < 2 ||
+                  rawLiteral.includes("\\") ||
+                  /&(?:#(?:x[\da-f]+|\d+)|[a-z][\da-z]+);/iu.test(rawLiteral)
+                ) {
+                  return null;
+                }
+                const quote = rawLiteral.at(0);
+                if (quote !== '"' && quote !== "'") {
+                  return null;
+                }
+                const tokens = classTokens(valueNode.value);
+                if (
+                  !tokens.some(isBareWhitespaceNormalToken) ||
+                  tokens.some(
+                    (token) =>
+                      isWhitespaceNormalToken(token) &&
+                      !isBareWhitespaceNormalToken(token),
+                  )
+                ) {
+                  return null;
+                }
+                const remaining = tokens.filter(
+                  (token) => !isBareWhitespaceNormalToken(token),
+                );
+                const layoutAttr = getJsxAttribute(node, "layout");
+                if (layoutAttr !== null) {
+                  if (
+                    staticStringValue(classNameValue(layoutAttr)) !== "wrap"
+                  ) {
+                    return null;
+                  }
+                  if (remaining.length === 0) {
+                    const [start, end] = className.range;
+                    const text = context.sourceCode.text;
+                    const removeStart =
+                      start > 0 && text.at(start - 1) === " "
+                        ? start - 1
+                        : start;
+                    return fixer.removeRange([removeStart, end]);
+                  }
+                  return fixer.replaceText(
+                    valueNode,
+                    `${quote}${remaining.join(" ")}${quote}`,
+                  );
+                }
+                const replacement =
+                  remaining.length === 0
+                    ? 'layout="wrap"'
+                    : `layout="wrap" className=${quote}${remaining.join(" ")}${quote}`;
+                return fixer.replaceText(className, replacement);
+              },
+            });
           },
         };
       },
