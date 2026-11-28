@@ -3142,7 +3142,7 @@ describe("buildTemplatePlan, the lines of the parties", () => {
         Object.assign(cell, look);
       }
     }
-    const justifying = { ...PROFILE, defaultAlignment: "both" };
+    const justifying = { ...PROFILE, defaultAlignment: "both" as const };
     const nestedOf = (profile: typeof PROFILE) =>
       sourceItems(build(table, "keepSource", { profile }).plan).flatMap(
         (item) => item.nested ?? [],
@@ -3170,7 +3170,7 @@ describe("buildTemplatePlan, the lines of the parties", () => {
       tableText: { styleId: "TableText" },
     });
     expect(lookOf(styled, 0)).toEqual({
-      blockId: cells[0]?.id,
+      blockId: cells[0]?.id ?? "",
       styleId: "TableText",
     });
   });

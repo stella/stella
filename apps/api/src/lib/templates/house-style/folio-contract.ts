@@ -316,6 +316,8 @@ export type TemplatePlanNestedParagraph = {
   /** As on a source item. */
   labelAsText?: boolean;
   /** As on a source item. */
+  indent?: TemplatePlanIndent;
+  /** As on a source item. */
   alignment?: TemplatePlanAlignment;
   /** The paragraph's own space in front of it and behind it, over its
    *  style's; a side left out is the style's. Left out by an engine that
