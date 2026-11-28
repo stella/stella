@@ -94,7 +94,6 @@ import {
 import { readCourtRegistry } from "@/api/lib/case-law/court-presentation";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -549,6 +548,6 @@ export const publicCaseLawRoute = routes(
   },
   {
     prefix: "/case",
-    middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")],
+    deployment: { type: "flag", flag: "FEATURE_PUBLIC_LAW" },
   },
 );

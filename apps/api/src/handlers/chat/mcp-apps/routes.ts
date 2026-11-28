@@ -1,5 +1,4 @@
 import { routes } from "@/api/http/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 import callChatMcpAppTool from "./call-tool";
 import readChatMcpAppBundle from "./read-bundle";
@@ -17,6 +16,6 @@ export const chatMcpAppsRoute = routes(
   },
   {
     prefix: "/chat",
-    middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")],
+    deployment: { type: "flag", flag: "FEATURE_PUBLIC_LAW" },
   },
 );
