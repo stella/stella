@@ -13,6 +13,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { failCheck } from "../packages/scripts/src/check-failure";
+
 const WORKFLOW = ".github/workflows/ci.yml";
 
 // --- Expression renderings ----------------------------------------------------
@@ -408,15 +410,26 @@ if (import.meta.main) {
   const workflow: unknown = Bun.YAML.parse(readFileSync(file, "utf-8"));
   const jobs = record(workflow) ? workflow["jobs"] : undefined;
   if (!record(jobs)) {
-    process.stderr.write(`${WORKFLOW}: no jobs mapping\n`);
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-ci-job-names",
+        summary: `${WORKFLOW}: no jobs mapping`,
+        remediation: `Restore a top-level jobs mapping in ${WORKFLOW}.`,
+        rerunCommand: "bun scripts/check-ci-job-names.ts",
+      }),
+    );
   }
   const errors = checkCiJobNames(jobs);
-  for (const error of errors) {
-    process.stderr.write(`${WORKFLOW}: ${error}\n`);
-  }
   if (errors.length > 0) {
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-ci-job-names",
+        summary: `${WORKFLOW}: ${errors.length} CI job name issue(s) found`,
+        details: errors.map((error) => `${WORKFLOW}: ${error}`),
+        remediation: `Give each job in ${WORKFLOW} a distinct static or literal-only name.`,
+        rerunCommand: "bun scripts/check-ci-job-names.ts",
+      }),
+    );
   }
   process.stdout.write(
     `CI job names: OK. ${Object.keys(jobs).length} jobs resolve to distinct names.\n`,
