@@ -1,5 +1,5 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 type ParserParitySpec = {
   readonly adapterKey: AdapterKey;

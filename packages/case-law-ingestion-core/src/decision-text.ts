@@ -34,20 +34,20 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 
+import { ADAPTER_MANIFESTS } from "./adapter-manifest";
 import {
   collapseDecisionHeadnote,
   normalizeDecisionHeadnote,
   normalizeDecisionKeywords,
-} from "@/api/lib/case-law/decision-headnote";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+} from "./decision-headnote";
+import type { AdapterKey } from "./ingestion-constants";
+import { isRecord } from "./internal-helpers";
 import {
   approveMetadataUrls,
   META_URL_DIAGNOSTICS,
   type MetadataUrlSchema,
   rehydrateMetadataUrls,
-} from "@/api/lib/legal-search/metadata-urls";
-import { isRecord } from "@/api/lib/type-guards";
+} from "./metadata-urls";
 
 export { DECISION_TEXT_FIELD, TEXT_ABSENCE_REASON, TEXT_FIELD_TYPE };
 export type { DecisionHeadnotePreview, TextAbsenceReason, TextField };

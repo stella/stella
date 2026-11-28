@@ -17,6 +17,7 @@
  */
 import { Result } from "better-result";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 // Type-only: the column precedence is checked against the parser's list.
 import type { COURTLISTENER_TEXT_FORMATS } from "@stll/case-law-parsers/courtlistener/select";
 import { load } from "@stll/html";
@@ -30,7 +31,6 @@ import {
   type RetentionPolicy,
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const CLUSTER_PART: (typeof COURTLISTENER_RAW_PART)["CLUSTER"] = "cl-cluster";

@@ -9,13 +9,14 @@
  */
 import { Result } from "better-result";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,
   type RetentionPolicy,
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** The envelope part the adapter writes the dataset row under. */

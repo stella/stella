@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
 import {
   validateAst,
   type ValidationResult,
@@ -8,11 +13,6 @@ import {
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
 import { czUsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 import { czUsRetention } from "./cz-us";

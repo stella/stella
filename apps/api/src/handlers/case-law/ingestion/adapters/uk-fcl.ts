@@ -7,12 +7,7 @@ import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { GBR_EWHC_DIVISIONS } from "@stll/api-contract/decision-docket-grammar";
-import { load } from "@stll/html";
-import { readCappedBytes } from "@stll/skills/streaming";
-import { Temporal } from "@stll/time";
-
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   defineSourceAdapter,
   excludedSourceSurface,
@@ -21,14 +16,19 @@ import {
   sourceTotalProbeFailed,
   sourceTotalRead,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   IngestionResult,
   SourceFieldDisposition,
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { load } from "@stll/html";
+import { readCappedBytes } from "@stll/skills/streaming";
+import { Temporal } from "@stll/time";
+
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 import { publisherRequestIntervalMs } from "./publisher-policy";

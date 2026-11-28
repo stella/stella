@@ -3,6 +3,7 @@ import { and, eq, inArray, not, or, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
+import type { DecisionJudgeInput } from "@stll/case-law-ingestion-core/ingestion-types";
 
 import {
   caseLawDecisionJudges,
@@ -15,7 +16,6 @@ import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayRawWrite, replayWrite } from "@/api/lib/case-law/replay-write";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";

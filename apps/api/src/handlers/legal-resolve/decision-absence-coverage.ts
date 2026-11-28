@@ -20,12 +20,11 @@ import type {
   DecisionAbsenceCoverage,
   DecisionAbsenceSourceVerdict,
 } from "@stll/api-contract/legal-resolve";
-
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 
 /**
  * A source's reconciled-listing state, as the coverage snapshot reports it

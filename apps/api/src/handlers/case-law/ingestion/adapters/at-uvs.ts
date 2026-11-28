@@ -1,4 +1,5 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
 import {
   createAtRisSourceAdapter,
   defineAtRisSource,

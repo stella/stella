@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import { citationScopeAstHash } from "@stll/case-law-parsers/citation-scopes";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
@@ -10,7 +11,6 @@ import {
 
 import { graphFingerprintOf } from "@/api/handlers/case-law/analysis/significance";
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
   sourceStoredTotalNextRefreshAt,

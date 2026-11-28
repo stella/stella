@@ -56,6 +56,52 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
+import { czDecisionCourt } from "@stll/case-law-ingestion-core/cz-ecli-courts";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  sourceTextField,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  CZ_NS_SBIRKA_VAZNY_SLICE,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import {
   CZ_NS_SBIRKA_TEXT_HEADING,
   type CzNsSbirkaPage,
@@ -73,7 +119,6 @@ import {
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -87,59 +132,14 @@ import {
   INGESTION_USER_AGENT,
   parseCeDate,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
-import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
-import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  sourceTextField,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
   CZ_NS_COLLECTION_METADATA_KEY,
   CZ_NS_COLLECTION_METADATA_URL_SCHEMA,
   type CzNsCollectionEntry,
   czNsCollectionPartOfKind,
 } from "@/api/lib/legal-search/cz-ns-collection-entry";
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  CZ_NS_SBIRKA_VAZNY_SLICE,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  PUBLISHER_REQUEST,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { LANGUAGE_STOPWORDS } from "@/api/lib/templates/template-languages";
 import { isRecord } from "@/api/lib/type-guards";

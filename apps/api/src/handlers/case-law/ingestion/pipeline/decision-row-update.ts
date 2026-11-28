@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { preserveStoredTextAfterParseFailure } from "@stll/case-law-ingestion-core/decision-text";
 import {
   CITATION_SCOPE_METADATA_KEY,
   preserveCitationScopeEnvelope,
@@ -50,7 +51,6 @@ import {
   DECISION_IDENTIFIER_CLAIM,
   type DecisionIdentifierClaim,
 } from "@/api/lib/case-law/decision-identifier-claims";
-import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";

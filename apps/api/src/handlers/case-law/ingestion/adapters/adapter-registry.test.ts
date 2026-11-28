@@ -1,6 +1,13 @@
 import { Panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  MAX_CYCLE_MS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import {
   listAdapterKeys as listEagerAdapterKeys,
   listAdapters,
@@ -10,12 +17,6 @@ import {
   listAdapterKeys as listLazyAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  MAX_CYCLE_MS,
-} from "@/api/lib/legal-search/ingestion-constants";
 
 describe("case-law adapter capabilities", () => {
   test("every adapter can start a page inside its own cycle budget", () => {

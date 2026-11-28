@@ -3,8 +3,8 @@ import type {
   CensusCourtEvidence,
   CensusListingIdentity,
   ReconciliationListingItem,
-} from "@/api/lib/legal-search/ingestion-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+} from "./ingestion-types";
+import { listingIdentityKey } from "./ingestion-types";
 
 export const censusListingIdentity = ({
   identity,

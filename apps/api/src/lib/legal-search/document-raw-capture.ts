@@ -1,7 +1,7 @@
 import {
   ADAPTER_KEYS,
   type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 
 /** The envelope locations that keep fetched document responses, before parsing. */
 type DocumentRawCapture =

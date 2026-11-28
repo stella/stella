@@ -1,12 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
-import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
-import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
+import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   rejectionOf,

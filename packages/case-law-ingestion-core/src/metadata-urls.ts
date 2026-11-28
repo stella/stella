@@ -8,7 +8,7 @@ import {
   toMetadataUrl,
 } from "@stll/case-law-parsers/sanitize-url";
 
-import { includes, isRecord } from "@/api/lib/type-guards";
+import { includes, isRecord } from "./internal-helpers";
 
 export const META_URL_DIAGNOSTICS = "metadataUrlDiagnostics";
 export const MAX_METADATA_URL_DIAGNOSTICS = 64;

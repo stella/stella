@@ -3,6 +3,12 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
+import {
+  SK_COLLECTION_PARSER_VERSION,
+  SK_COLLECTION_SERIES,
+  type SkCollectionIssueCache,
+  SkCollectionIssueError,
+} from "@stll/case-law-ingestion-core/sk-collection-enrichment";
 
 import {
   joinSkCollectionRecords,
@@ -14,12 +20,6 @@ import {
   readPresent,
   readUnavailable,
 } from "@/api/lib/errors/read-outcome";
-import {
-  SK_COLLECTION_PARSER_VERSION,
-  SK_COLLECTION_SERIES,
-  type SkCollectionIssueCache,
-  SkCollectionIssueError,
-} from "@/api/lib/legal-search/sk-collection-enrichment";
 
 import samples from "./__fixtures__/sk-collection-headnotes.json";
 

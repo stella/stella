@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 
+import type {
+  SourceFieldTarget,
+  SourceRawParts,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { isRecord } from "../type-guards";
-import type { SourceFieldTarget, SourceRawParts } from "./ingestion-types";
 
 /** A missing path stays missing, including a missing field in any array row. */
 const readPath = (value: unknown, path: readonly string[]): unknown => {

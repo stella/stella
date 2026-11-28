@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "./case-law-consts";
 import {
   absentDecisionTextFields,
   absentTextField,
@@ -26,12 +26,12 @@ import {
   storeDecisionTextFields,
   storeTextField,
   TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
+} from "./decision-text";
+import { isRecord } from "./internal-helpers";
 import {
   MAX_METADATA_URL_DIAGNOSTICS,
   META_URL_DIAGNOSTICS,
-} from "@/api/lib/legal-search/metadata-urls";
-import { isRecord } from "@/api/lib/type-guards";
+} from "./metadata-urls";
 
 test("publisher metadata cannot collide with generated URL diagnostics", () => {
   for (const value of [

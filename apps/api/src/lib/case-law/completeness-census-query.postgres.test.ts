@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { databaseRelations } from "@/api/db/database-relations";
 import { createDatabase } from "@/api/db/sql-client";
 import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
@@ -9,7 +11,6 @@ import {
   currentCensusSourceScopes,
   readCompletenessCensusQuery,
 } from "@/api/lib/case-law/completeness-census";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { withMigratedRolePrivilegeCensus } from "@/api/tests/helpers/role-privilege-census-fixture";
 import { capturedStatementQuery } from "@/api/tests/query-perf/statement-measurement";
 import {

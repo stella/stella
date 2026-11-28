@@ -1,13 +1,13 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { ukFclRetention } from "@/api/handlers/case-law/ingestion/retention/sources/uk-fcl";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { ukFclFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { buildCaseLawFixture } from "@/api/tests/helpers/case-law-parity";
 

@@ -10,6 +10,16 @@ import {
   test,
 } from "bun:test";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/case-law-ingestion-core/decision-text";
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { isDecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 
 import { caseLawDecisions } from "@/api/db/schema";
@@ -25,16 +35,6 @@ import {
   decisionIdentifiersFromMetadata,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-} from "@/api/lib/case-law/decision-text";
-import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

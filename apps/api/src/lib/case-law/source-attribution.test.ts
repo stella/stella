@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { appReaderTextForSource } from "@/api/lib/case-law/app-reader-text";
-import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
 import {
   ADAPTER_MANIFESTS,
   APP_READER_TEXT,
-} from "@/api/lib/legal-search/adapter-manifest";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
+import { appReaderTextForSource } from "@/api/lib/case-law/app-reader-text";
+import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 

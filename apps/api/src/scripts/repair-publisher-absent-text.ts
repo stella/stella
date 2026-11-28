@@ -60,15 +60,15 @@
 
 import { and, eq } from "drizzle-orm";
 
-import { runScriptWithErrorOutput } from "@stll/errors/script-error";
-
-import { caseLawDecisions } from "@/api/db/schema";
-import type { AdapterKey } from "@/api/handlers/case-law/consts";
-import type { SafeId } from "@/api/lib/branded-types";
+import type { AdapterKey } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   absentTextComparisonsFor,
   ADAPTERS_DECLARING_ABSENT_TEXT,
-} from "@/api/lib/case-law/decision-text";
+} from "@stll/case-law-ingestion-core/decision-text";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
+import { caseLawDecisions } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,

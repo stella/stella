@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
 import { readPublisher } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import type { PublisherRemovalRead } from "@/api/handlers/case-law/ingestion/removal-reconciliation";

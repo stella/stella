@@ -5,6 +5,8 @@
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { Result } from "better-result";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
 import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@stll/case-law-parsers/cz-nss";
 import {
@@ -18,8 +20,6 @@ import {
 } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
 
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { PublisherTargetError } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 
 const NSS_REGISTRY_ORIGIN = "https://www.nssoud.cz";

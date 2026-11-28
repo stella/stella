@@ -1,15 +1,15 @@
 import { Result } from "better-result";
 
-import { load } from "@stll/html";
-
 import {
   excludedSourceSurface,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   SourceFieldDisposition,
   SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { load } from "@stll/html";
+
 import { SOFT_LAW_AUTHORITY_POLICIES } from "@/api/lib/legal-search/soft-law-authority-policy";
 import { extractSoftLawPdfText } from "@/api/lib/legal-search/soft-law-document-text";
 import {

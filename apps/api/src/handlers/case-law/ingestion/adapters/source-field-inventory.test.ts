@@ -26,12 +26,36 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import { storeTextField } from "@stll/case-law-ingestion-core/decision-text";
+import {
+  decodeSourceRawEnvelope,
+  EMPTY_AST,
+  PLAIN_TEXT_FIELD_DEBT,
+  PLAIN_TEXT_RESULT_FIELDS,
+  SOURCE_EXCLUSION_REASONS,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+  SourceFieldTarget,
+  SourceRawParts,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  approveMetadataUrls,
+  metadataUrlAddresses,
+} from "@stll/case-law-ingestion-core/metadata-urls";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import {
+  publisherFieldRetentionAudit,
+  sourceExclusionCensus,
+} from "@stll/case-law-ingestion-core/source-exclusion-census";
 import { entityResiduesInStoredText } from "@stll/case-law-parsers/entity-residue";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   getSourceRegistration,
   listSourceRegistrations,
@@ -43,30 +67,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { SOFT_LAW_ADMISSIONS } from "@/api/handlers/soft-law/adapters/registry";
-import { storeTextField } from "@/api/lib/case-law/decision-text";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import {
-  decodeSourceRawEnvelope,
-  EMPTY_AST,
-  PLAIN_TEXT_FIELD_DEBT,
-  PLAIN_TEXT_RESULT_FIELDS,
-  SOURCE_EXCLUSION_REASONS,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  SourceFieldDisposition,
-  SourceFieldTarget,
-  SourceRawParts,
-} from "@/api/lib/legal-search/ingestion-types";
-import {
-  approveMetadataUrls,
-  metadataUrlAddresses,
-} from "@/api/lib/legal-search/metadata-urls";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import {
-  publisherFieldRetentionAudit,
-  sourceExclusionCensus,
-} from "@/api/lib/legal-search/source-exclusion-census";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { isRecord } from "@/api/lib/type-guards";

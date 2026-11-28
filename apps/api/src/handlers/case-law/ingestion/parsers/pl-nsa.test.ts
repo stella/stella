@@ -1,6 +1,16 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+/**
+ * The pl-nsa reader against whole rows of the dataset.
+ *
+ * `pl-nsa-text-rows.json.gz` holds eight rows of the pinned revision, kept
+ * whole: decisions whose line breaks the dataset turned into paragraph
+ * breaks (before one-letter words, and at an old document's margin), one
+ * whose page numbers follow its closing rule, one whose page footer sits
+ * inside a sentence, and two citing article numbers with superscripts.
+ */
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlNsaDecision as uncheckedParsePlNsaDecision,
@@ -11,16 +21,6 @@ import {
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-/**
- * The pl-nsa reader against whole rows of the dataset.
- *
- * `pl-nsa-text-rows.json.gz` holds eight rows of the pinned revision, kept
- * whole: decisions whose line breaks the dataset turned into paragraph
- * breaks (before one-letter words, and at an old document's margin), one
- * whose page numbers follow its closing rule, one whose page footer sits
- * inside a sentence, and two citing article numbers with superscripts.
- */
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const parsePlNsaDecision = guardParser(uncheckedParsePlNsaDecision);

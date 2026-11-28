@@ -17,6 +17,16 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  SourceReconciliation,
+  StoredRawResultReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { DAY_IN_MS } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -39,22 +49,12 @@ import {
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import type {
-  SourceReconciliation,
-  StoredRawResultReader,
-} from "@/api/lib/legal-search/ingestion-types";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";

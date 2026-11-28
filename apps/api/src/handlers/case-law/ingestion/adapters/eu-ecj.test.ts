@@ -2,6 +2,16 @@ import { Result } from "better-result";
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  listingIdentityKey,
+  parseListingIdentityKey,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  STORED_RAW_REPARSE_REJECTION,
+  type StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -17,16 +27,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  listingIdentityKey,
-  parseListingIdentityKey,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  STORED_RAW_REPARSE_REJECTION,
-  type StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

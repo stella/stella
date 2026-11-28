@@ -1,16 +1,16 @@
 import { panic, Result } from "better-result";
 
-import { load } from "@stll/html";
-import type { CheerioAPI } from "@stll/html";
-
 import {
   excludedSourceSurface,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   SourceFieldDisposition,
   SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { load } from "@stll/html";
+import type { CheerioAPI } from "@stll/html";
+
 import { extractSoftLawPdfText } from "@/api/lib/legal-search/soft-law-document-text";
 import {
   SOFT_LAW_BATCH_LIMIT,

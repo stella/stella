@@ -5,7 +5,7 @@ import { panic } from "better-result";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/lib/legal-search/source-raw-envelope";
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
 
 export const FORMEX_ARCHIVE_PREFIX = "formex-archive:";
 

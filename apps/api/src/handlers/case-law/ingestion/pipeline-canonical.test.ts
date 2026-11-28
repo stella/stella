@@ -1,6 +1,19 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  absentDecisionTextFields,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  approveMetadataUrls,
+  rehydrateMetadataUrls,
+} from "@stll/case-law-ingestion-core/metadata-urls";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -21,11 +34,6 @@ import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipel
 import { processDecision as processDecisionWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  splitStoredDecisionTextMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
@@ -36,18 +44,10 @@ import {
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  approveMetadataUrls,
-  rehydrateMetadataUrls,
-} from "@/api/lib/legal-search/metadata-urls";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

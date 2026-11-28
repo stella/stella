@@ -46,35 +46,30 @@ import type {
   DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
+import { AdapterFetchError } from "./adapter-fetch-error";
+import { ADAPTER_MANIFESTS } from "./adapter-manifest";
+import type { DecisionSupplementKind } from "./decision-supplement-kind";
+import {
+  type DocumentStagePageOptions,
+  withDocumentStageWindow,
+} from "./document-stage-observation";
+import { ADAPTER_KEYS, type AdapterKey } from "./ingestion-constants";
+import { isRecord } from "./internal-helpers";
+import type { ObservationDetail } from "./partial-observation";
 import {
   type PlainText,
   PlainTextError,
   type PlainTextMetadataValue,
   toPlainText,
   toPlainTextMetadataObject,
-} from "@/api/lib/case-law/plain-text";
-import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
-import {
-  type DocumentStagePageOptions,
-  withDocumentStageWindow,
-} from "@/api/lib/legal-search/document-stage-observation";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
-import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
+} from "./plain-text";
+import type { SkCollectionConnector } from "./sk-collection-enrichment";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type SourceRawParts,
-} from "@/api/lib/legal-search/source-raw-envelope";
-import { readStoredRawReparseResult } from "@/api/lib/legal-search/stored-raw-reparse-boundary";
-import { isRecord } from "@/api/lib/type-guards";
-
-import type { ObservationDetail } from "./partial-observation";
+} from "./source-raw-envelope";
+import { readStoredRawReparseResult } from "./stored-raw-reparse-boundary";
 
 export { EMPTY_AST };
 export type { EmptyAst };
@@ -703,10 +698,25 @@ export type PublisherRequest =
   (typeof PUBLISHER_REQUEST)[keyof typeof PUBLISHER_REQUEST];
 
 /** A read that did not produce a listed item, in the read-outcome vocabulary. */
-export type UnreadOutcome = Extract<
-  ReadOutcome<never>,
-  { type: "unavailable" | "refused" }
->;
+export type UnreadOutcome =
+  | {
+      readonly type: "refused";
+      readonly status: 401 | 403 | 451;
+      readonly scope: "document" | "part" | "source";
+      readonly cause: {
+        readonly kind: "http-status";
+        readonly retryAfter: string | null;
+      };
+    }
+  | {
+      readonly type: "unavailable";
+      readonly cause:
+        | { readonly kind: "status"; readonly status: number }
+        | { readonly kind: "no-content"; readonly status: number }
+        | { readonly kind: "empty-body"; readonly status: number }
+        | { readonly kind: "too-large"; readonly maxBytes: number }
+        | { readonly kind: "thrown"; readonly error: unknown };
+    };
 
 /**
  * A listed item whose detail read was `unavailable` or `refused`.
@@ -732,12 +742,12 @@ export {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   withSourceRawObjects,
-} from "@/api/lib/legal-search/source-raw-envelope";
+} from "./source-raw-envelope";
 export type {
   SourceRawObjectRef,
   SourceRawObjects,
   SourceRawParts,
-} from "@/api/lib/legal-search/source-raw-envelope";
+} from "./source-raw-envelope";
 
 /**
  * A stored raw payload that is not an envelope, and the part names its own
@@ -1985,7 +1995,7 @@ export const defineSourceAdapter = <
     };
   const inspectRecord = async (result: IngestionResult) => {
     const { inspectPublisherFieldCoverage } =
-      await import("@/api/lib/legal-search/publisher-field-coverage");
+      await import("./publisher-field-coverage");
     await inspectPublisherFieldCoverage({
       adapterKey: adapter.key,
       inventory: adapter.sourceFields,

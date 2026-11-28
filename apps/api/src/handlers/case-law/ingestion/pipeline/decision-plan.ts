@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
 import {
   CITATION_SCOPE_METADATA_KEY,
   citationScopeEnvelope,
@@ -66,7 +68,6 @@ import { nssPublisherColumns } from "@/api/handlers/case-law/ingestion/pipeline/
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { corpusCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import {
@@ -85,7 +86,6 @@ import {
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";

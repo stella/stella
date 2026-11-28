@@ -10,10 +10,22 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  SyncPage,
+  UnreadListedItem,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
@@ -21,24 +33,13 @@ import { UNAVAILABLE_ITEMS_CONFIG_KEY } from "@/api/handlers/case-law/ingestion/
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import {
   isReadRefusal,
   READ_OUTCOME_METADATA_KEY,
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  SyncPage,
-  UnreadListedItem,
-} from "@/api/lib/legal-search/ingestion-types";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";

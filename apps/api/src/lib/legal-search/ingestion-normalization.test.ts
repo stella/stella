@@ -1,14 +1,15 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { isDocumentAst, parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import {
   CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES,
   fitsSearchCandidateRow,
@@ -23,7 +24,6 @@ import {
   normalizeDecisionType,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const decision = plainTextIngestionResult({
   caseNumber: "reference",

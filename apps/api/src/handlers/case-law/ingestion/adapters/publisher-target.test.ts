@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 const refusal = (url: string): string | undefined => {
   const checked = publisherTarget(ADAPTER_KEYS.EU_ECJ, url);

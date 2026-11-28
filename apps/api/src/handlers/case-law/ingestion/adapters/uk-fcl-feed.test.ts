@@ -1,11 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
-
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/lib/legal-search/source-raw-envelope";
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
+import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
 
 import {
   buildUkFclDecision,

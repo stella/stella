@@ -2,14 +2,6 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  MetadataUrlDefect,
-  toMetadataUrl,
-} from "@stll/case-law-parsers/sanitize-url";
-import { assertProperty } from "@stll/property-testing";
-
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
-import {
   approveMetadataUrls,
   MAX_METADATA_URL_DIAGNOSTICS,
   META_URL_DIAGNOSTICS,
@@ -17,7 +9,15 @@ import {
   metadataUrlKeys,
   opaqueMetadataValue,
   rehydrateMetadataUrls,
-} from "@/api/lib/legal-search/metadata-urls";
+} from "@stll/case-law-ingestion-core/metadata-urls";
+import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
+import {
+  MetadataUrlDefect,
+  toMetadataUrl,
+} from "@stll/case-law-parsers/sanitize-url";
+import { assertProperty } from "@stll/property-testing";
+
+import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { isRecord } from "@/api/lib/type-guards";
 
 const SCHEMA = { url: "url", documents: { items: { href: "url" } } } as const;

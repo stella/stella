@@ -6,9 +6,9 @@ export default {
     "Representing publisher-authored decision text at ingestion and public read boundaries",
   owner: [
     "packages/api-contract/src/case-law-text-field.ts",
-    "apps/api/src/lib/case-law/decision-headnote.ts",
+    "packages/case-law-ingestion-core/src/decision-headnote.ts",
     "apps/api/src/lib/case-law/decision-headnote-schema.ts",
-    "apps/api/src/lib/case-law/decision-text.ts",
+    "packages/case-law-ingestion-core/src/decision-text.ts",
     "apps/api/src/lib/case-law/decision-text-sql.ts",
   ],
   summary:

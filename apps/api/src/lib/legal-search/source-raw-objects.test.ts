@@ -11,14 +11,15 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { envBase } from "@/api/env-base";
-import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
   withSourceRawObjects,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import { envBase } from "@/api/env-base";
+import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,

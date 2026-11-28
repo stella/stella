@@ -3,15 +3,15 @@ import { encodeHTML } from "entities";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { assertProperty } from "@stll/property-testing";
-
 import {
   type PlainText,
   PlainTextError,
   toPlainText,
   toPlainTextMetadata,
-} from "@/api/lib/case-law/plain-text";
-import { containsTagLikeMarkup } from "@/api/lib/case-law/plain-text-markup";
+} from "@stll/case-law-ingestion-core/plain-text";
+import { containsTagLikeMarkup } from "@stll/case-law-ingestion-core/plain-text-markup";
+import { assertProperty } from "@stll/property-testing";
+
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("plain text preserves publisher wording without presentation syntax", () => {

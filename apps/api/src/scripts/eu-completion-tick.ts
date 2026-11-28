@@ -2,6 +2,10 @@ import { panic, Result } from "better-result";
 import type { ReservedSQL } from "bun";
 import { eq } from "drizzle-orm";
 
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
@@ -21,10 +25,6 @@ import {
   enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { isLocalTestRun } from "@/api/runtime-mode";
 import {
   assertReplaySlot,

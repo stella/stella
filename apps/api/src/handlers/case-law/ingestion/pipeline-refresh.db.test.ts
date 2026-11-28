@@ -23,29 +23,32 @@ import { beforeAll, describe, expect, test } from "bun:test";
  */
 import { eq, inArray } from "drizzle-orm";
 
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
   CASE_LAW_CORPUS_DEPENDENCIES,
   type CaseLawCorpusDependencies,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { zstdCompress } from "@/api/lib/compression";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  DOCUMENT_DELIVERY,
-  EMPTY_AST,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];

@@ -1,3 +1,4 @@
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 /**
  * Retention projection for the Hungarian court decision collection.
  *
@@ -22,7 +23,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { docxParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/docx-paragraphs";
 import { rtfParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/rtf-paragraphs";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 /** The envelope part the decision file is stored under, base64. */
 const DOCUMENT_PART = "document";

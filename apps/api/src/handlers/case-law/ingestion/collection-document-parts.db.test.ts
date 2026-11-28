@@ -4,6 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import type { RawIngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { EMPTY_AST } from "@stll/legal-ast/document-types";
@@ -27,10 +33,6 @@ import type { AttachToHeldDecisionOptions } from "@/api/handlers/case-law/ingest
 import { sourceContractForAdapter } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { createSafeId } from "@/api/lib/branded-types";
 import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { UNPERSISTABLE_DECISION_FIELDS } from "@/api/lib/errors/tagged-errors";
 import {
   type CollectionDocumentPart,
@@ -38,8 +40,6 @@ import {
   decodeCollectionDocumentBody,
 } from "@/api/lib/legal-search/collection-document-part";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,

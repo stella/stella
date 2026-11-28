@@ -4,6 +4,7 @@ import nodePath from "node:path";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { US_COURTS } from "@stll/api-contract/us-courts";
+import { SK_ECLI_COURTS } from "@stll/case-law-ingestion-core/ecli-court-codes";
 
 import {
   COURT_WEIGHT_SEED,
@@ -14,7 +15,6 @@ import {
   courtWeightSeedSql,
   seededCourtWeightEntries,
 } from "@/api/handlers/case-law/court-weight-seed";
-import { SK_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
 import {
   HIGHEST_COURT_TIER,
   LOWEST_COURT_TIER,

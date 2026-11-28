@@ -1,30 +1,7 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  assembleSkCourtsDecision,
-  reparseSkCourtsStoredMetadata,
-  SK_COURTS_SOURCE_FIELD_PATHS,
-  skCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import {
-  planUnreadItems,
-  type UnavailableStreaks,
-} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import {
-  isReadRefusal,
-  isStoredReadAbsence,
-  isStoredReadUnavailable,
-  READ_OUTCOME_METADATA_KEY,
-  type StoredReadOutcome,
-  UNAVAILABLE_CYCLES_BEFORE_MARKING,
-} from "@/api/lib/errors/read-outcome";
-import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
-import { readGzipJson } from "@/api/lib/gzip-json";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 /**
  * What this adapter does with the record its publisher serves.
  *
@@ -49,8 +26,32 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type StoredRawReparseOutcome,
   toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
+import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
+
+import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import {
+  assembleSkCourtsDecision,
+  reparseSkCourtsStoredMetadata,
+  SK_COURTS_SOURCE_FIELD_PATHS,
+  skCourtsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import {
+  planUnreadItems,
+  type UnavailableStreaks,
+} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import {
+  isReadRefusal,
+  isStoredReadAbsence,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+  type StoredReadOutcome,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+} from "@/api/lib/errors/read-outcome";
+import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
+import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { deferredSkDocumentRawFixture } from "@/api/tests/helpers/sk-document-raw-storage";

@@ -12,6 +12,7 @@ import {
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -45,7 +46,6 @@ import {
   requireDecisionReviews,
 } from "@/api/lib/case-law/decision-reviews";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
 import { toPlainCorpusText } from "@/api/mcp/tool-utils";

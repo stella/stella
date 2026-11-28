@@ -23,6 +23,27 @@ import {
   DECISION_TEXT_FIELD_KEYS,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
+import {
+  absentDecisionTextFields,
+  readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
+  storeDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/case-law-ingestion-core/decision-text";
+import type { StoredRawReparseInput } from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  listingIdentityKey,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
+import {
+  inspectPublisherFieldCoverage,
+  PUBLISHER_FIELD_COVERAGE_EVENT,
+} from "@stll/case-law-ingestion-core/publisher-field-coverage";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -46,32 +67,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
-import {
-  absentDecisionTextFields,
-  readDecisionTextMetadata,
-  splitStoredDecisionTextMetadata,
-  storeDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-} from "@/api/lib/case-law/decision-text";
-import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
   isReadRefusal,
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
-import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
-import {
-  decodeSourceRawEnvelope,
-  listingIdentityKey,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/lib/legal-search/ingestion-types";
-import {
-  inspectPublisherFieldCoverage,
-  PUBLISHER_FIELD_COVERAGE_EVENT,
-} from "@/api/lib/legal-search/publisher-field-coverage";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";

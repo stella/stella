@@ -6,16 +6,16 @@ import type {
 } from "@stll/api-contract/legislation-expression";
 import type { LegislationPublisherEvidence } from "@stll/api-contract/legislation-publisher-evidence";
 import type { LegislationDocumentStatus } from "@stll/api-contract/legislation-status";
+import type {
+  SliceCoverage,
+  SourceSliceWalk,
+  SourceTotalCount,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type {
-  SliceCoverage,
-  SourceSliceWalk,
-  SourceTotalCount,
-} from "@/api/lib/legal-search/ingestion-types";
 import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
 
 import type { LegislationAmendmentEffect } from "./legislation-amendment-effect";

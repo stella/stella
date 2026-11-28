@@ -4,6 +4,22 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  SourceAdapter,
+  StoredRawReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import {
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -36,25 +52,9 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import type {
-  SourceAdapter,
-  StoredRawReader,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import {
   RAW_SOURCE_FAMILY,
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
-import {
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The walk's boundary is the thing under test. Postgres stores `timestamptz`

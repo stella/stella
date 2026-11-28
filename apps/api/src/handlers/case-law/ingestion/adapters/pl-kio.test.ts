@@ -8,6 +8,11 @@ import { Result } from "better-result";
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
@@ -31,11 +36,6 @@ import {
   fitsDecisionSearchCandidateRow,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

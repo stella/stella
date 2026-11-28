@@ -12,6 +12,7 @@ import { panic, Result } from "better-result";
 import path from "node:path";
 import * as v from "valibot";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
 import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
 import { parseCzIsirDecision as parseCzIsirDecisionUnguarded } from "@stll/case-law-parsers/cz-isir";
 import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@stll/case-law-parsers/cz-ns";
@@ -50,7 +51,6 @@ import {
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-field-inventory";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 

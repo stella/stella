@@ -20,6 +20,10 @@ import {
   US_REPORTER_JURISDICTION,
 } from "@stll/api-contract/us-reporter-citation";
 import {
+  type DecisionJudgeInput,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
   COURTLISTENER_REJECTION_REASON,
   type CourtListenerRecordRejectedError,
   type CourtListenerRejectionReason,
@@ -46,10 +50,6 @@ import {
 
 import { normalizeDecisionIdentifierIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { canonicalDecisionDate } from "@/api/lib/dates";
-import {
-  type DecisionJudgeInput,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 
 import { courtListenerRawHash, encodeCourtListenerRaw } from "./raw";
 import {

@@ -1,6 +1,17 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import {
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import {
@@ -10,18 +21,8 @@ import {
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import {
-  DOCUMENT_DELIVERY,
-  EMPTY_AST,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 // A source fingerprint that leaves the record out hashes a listing-only
 // observation and the complete one that follows it the same. The complete

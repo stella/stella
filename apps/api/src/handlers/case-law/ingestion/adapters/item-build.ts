@@ -1,17 +1,17 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic } from "better-result";
 
-import { classifyFailure } from "@stll/errors";
-
 import {
   type AdapterKey,
   PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { classifyFailure } from "@stll/errors";
+
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 

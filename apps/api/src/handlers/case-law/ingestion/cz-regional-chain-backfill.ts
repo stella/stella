@@ -29,6 +29,15 @@ import { panic, Result } from "better-result";
 import type { UnhandledException } from "better-result";
 import { and, asc, eq, gt, isNotNull, sql } from "drizzle-orm";
 
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  StoredRawReader,
+  StoredRawReparseOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
@@ -40,14 +49,6 @@ import {
 import { applyStoredDecisionBackfill } from "@/api/handlers/case-law/ingestion/pipeline/stored-decision-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  StoredRawReader,
-  StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /**

@@ -11,8 +11,9 @@
 
 import { Result, TaggedError } from "better-result";
 
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { publisherHosts } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
 /** A publisher URL that is not on the publisher's declared hosts. */
 export class PublisherTargetError extends TaggedError("PublisherTargetError")<{

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { sanitizeErrorForOutput } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -20,7 +21,6 @@ import {
   enqueueCaseLawRawSweepTx,
   rawSweepSettleAfter,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type {
   RawSourceWriteFailure,
   RawSourceWriteWindow,

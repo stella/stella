@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { createHttpApp } from "@/api/http/app";
@@ -12,7 +14,6 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";

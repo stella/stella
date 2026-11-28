@@ -12,8 +12,13 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   assembleHuBhgyDecision,
   encodeHuBhgyCursor,
@@ -32,12 +37,7 @@ import {
   readHuBhgySearch,
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   rejectionOf,

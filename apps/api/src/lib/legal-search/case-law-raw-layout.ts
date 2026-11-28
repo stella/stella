@@ -1,6 +1,11 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 
+import {
+  decodeSourceRawEnvelopeObjects,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -8,10 +13,6 @@ import {
   enqueueCaseLawRawSweepTx,
   rawSweepSettleAfter,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
-import {
-  decodeSourceRawEnvelopeObjects,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 import {
   classifyCaseLawRawKey,
   copyRawObject,

@@ -17,9 +17,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadRemainingDocuments } from "@/api/lib/legal-search/sk-document-backfill";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

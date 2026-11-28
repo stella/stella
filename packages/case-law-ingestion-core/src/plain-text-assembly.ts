@@ -2,16 +2,13 @@
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
+import { absentDecisionTextFields, TEXT_ABSENCE_REASON } from "./decision-text";
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
   type RawIngestionResult,
   toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "./ingestion-types";
 
 const PLAIN_TEXT_QUARANTINE_ID_PREFIX = "plaintext-quarantine:";
 

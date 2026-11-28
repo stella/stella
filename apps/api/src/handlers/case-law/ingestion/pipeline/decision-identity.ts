@@ -2,6 +2,13 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 
 import { isPrintedCourtJurisdiction } from "@stll/api-contract/court-identity";
+import {
+  STATED_ECLI_IDENTITY,
+  type StatedEcliIdentity,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { PlainTextError } from "@stll/case-law-ingestion-core/plain-text";
+import { toPlainText } from "@stll/case-law-ingestion-core/plain-text";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -43,21 +50,14 @@ import {
   fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import type { DecisionStorageIdentity } from "@/api/lib/case-law/fallback-decision-identity";
-import type { PlainTextError } from "@/api/lib/case-law/plain-text";
-import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
-import {
-  STATED_ECLI_IDENTITY,
-  type StatedEcliIdentity,
-} from "@/api/lib/legal-search/adapter-manifest";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import {
   observedDocketOf,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** An ECLI's lookup spelling, or undefined when nothing searchable remains. */

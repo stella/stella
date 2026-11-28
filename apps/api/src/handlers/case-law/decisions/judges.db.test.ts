@@ -12,6 +12,11 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  DECISION_JUDGE_ROLE,
+  PORTRAIT_SOURCE,
+} from "@stll/case-law-ingestion-core/judges-consts";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import {
   caseLawDecisionJudges,
@@ -21,10 +26,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
-import {
-  DECISION_JUDGE_ROLE,
-  PORTRAIT_SOURCE,
-} from "@/api/handlers/case-law/judges/consts";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

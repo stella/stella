@@ -10,6 +10,39 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  sourceTextField,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import type { DecisionTextFields } from "@stll/case-law-ingestion-core/decision-text";
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceAdapter,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { parseRisDecisionXml } from "@stll/case-law-parsers/at-ris";
 import type { RisDocumentSections } from "@stll/case-law-parsers/at-ris";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
@@ -19,11 +52,6 @@ import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
 import {
   AT_RIS_APPLICATIONS,
   AT_RIS_PART,
@@ -42,13 +70,6 @@ import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/ad
 import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  sourceTextField,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
-import {
   isReadRefusal,
   READ_OUTCOME_METADATA_KEY,
   type ReadOutcome,
@@ -56,27 +77,6 @@ import {
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceAdapter,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 

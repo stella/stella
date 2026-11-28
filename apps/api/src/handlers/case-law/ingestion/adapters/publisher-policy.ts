@@ -27,6 +27,10 @@
 import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -35,10 +39,6 @@ import {
   PublisherPacingStopped,
   type PublisherRequestGateDependencies,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
 import {
   PUBLISHER_GATES,
   type PublisherGateId,

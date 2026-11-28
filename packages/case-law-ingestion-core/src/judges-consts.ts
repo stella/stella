@@ -1,7 +1,7 @@
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 
-import type { ConstantMap } from "@/api/lib/constant-map";
+import type { ConstantMap } from "./internal-helpers";
 
 /**
  * Where the roster row was read, for a later re-import to start from. Not

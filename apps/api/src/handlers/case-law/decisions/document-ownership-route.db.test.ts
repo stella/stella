@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import {
   caseLawDecisions,
   caseLawSources,
@@ -19,7 +21,6 @@ import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";

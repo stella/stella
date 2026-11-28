@@ -12,6 +12,16 @@ import {
   test,
 } from "bun:test";
 
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/case-law-ingestion-core/decision-text";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
 import {
@@ -22,21 +32,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
-} from "@/api/lib/case-law/decision-text";
-import {
   isReadRefusal,
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import {
   faultedResponse,

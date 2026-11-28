@@ -3,31 +3,34 @@
 import { Result } from "better-result";
 import * as slimdom from "slimdom";
 
-import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
-import { parseUkFclDecision } from "@stll/case-law-parsers/uk-fcl";
-import { Temporal } from "@stll/time";
-
-import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
+} from "@stll/case-law-ingestion-core/decision-text";
 import {
   isPersistableSourceDocumentId,
   STORED_RAW_REPARSE_REJECTION,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
+import { ParseXmlError } from "@stll/case-law-parsers/parse-xml-error";
+import { parseUkFclDecision } from "@stll/case-law-parsers/uk-fcl";
+import { Temporal } from "@stll/time";
+
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 const ATOM = "http://www.w3.org/2005/Atom";

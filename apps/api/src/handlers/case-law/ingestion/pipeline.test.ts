@@ -13,6 +13,29 @@ import {
   DECISION_DOCUMENT_ROLE,
   DECISION_DOCUMENT_ROLE_METADATA_KEY,
 } from "@stll/api-contract/decision-document-role";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  absentDecisionTextFields,
+  absentTextField,
+  presentTextField,
+  readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { observePublisherDocumentFetch } from "@stll/case-law-ingestion-core/document-stage-observation";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  PUBLISHER_REQUEST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  IngestionResult,
+  RawIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -50,14 +73,6 @@ import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/o
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
-import {
-  absentDecisionTextFields,
-  absentTextField,
-  presentTextField,
-  readDecisionTextMetadata,
-  splitStoredDecisionTextMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -67,10 +82,7 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   fitsDecisionSearchCandidateRow,
   markListingOnly,
@@ -80,18 +92,6 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  PUBLISHER_REQUEST,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  DecisionJudgeInput,
-  IngestionResult,
-  RawIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

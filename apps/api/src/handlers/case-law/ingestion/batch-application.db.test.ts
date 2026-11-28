@@ -12,6 +12,23 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import {
+  PUBLISHER_REQUEST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  approveMetadataUrls,
+  META_URL_DIAGNOSTICS,
+} from "@stll/case-law-ingestion-core/metadata-urls";
+import { toPlainTextMetadataObject } from "@stll/case-law-ingestion-core/plain-text";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 import { compareCodeUnit } from "@stll/collation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -35,7 +52,6 @@ import {
   corpusIndexProjectionStates,
   relations,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -73,13 +89,7 @@ import {
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { parkAttachmentsOfErasedDecisionTx } from "@/api/lib/case-law/held-attachment-erasure";
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -87,16 +97,6 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
-import {
-  PUBLISHER_REQUEST,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  approveMetadataUrls,
-  META_URL_DIAGNOSTICS,
-} from "@/api/lib/legal-search/metadata-urls";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";

@@ -20,6 +20,15 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import type {
+  IngestionResult,
+  UnreadListedItem,
+  UnreadOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  type PlainTextMetadataValue,
+  toPlainTextMetadataObject,
+} from "@stll/case-law-ingestion-core/plain-text";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -27,20 +36,11 @@ import type { IngestionScopedDb } from "@/api/db/safe-db-types";
 import { caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  type PlainTextMetadataValue,
-  toPlainTextMetadataObject,
-} from "@/api/lib/case-law/plain-text";
-import {
   READ_OUTCOME_METADATA_KEY,
   type StoredReadOutcome,
   storedReadUnavailable,
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
-import type {
-  IngestionResult,
-  UnreadListedItem,
-  UnreadOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** The `case_law_sources.config` key that holds the counts. */

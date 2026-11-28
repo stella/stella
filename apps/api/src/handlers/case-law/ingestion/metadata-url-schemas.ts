@@ -1,3 +1,10 @@
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  IMPORT_SOURCE_KEYS,
+  type ImportSourceKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -14,12 +21,6 @@ import { PL_TK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/ada
 import { PL_UOKIK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik.metadata-urls";
 import { SK_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/sk-courts.metadata-urls";
 import { CZ_NS_COLLECTION_METADATA_URL_SCHEMA } from "@/api/lib/legal-search/cz-ns-collection-entry";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-  IMPORT_SOURCE_KEYS,
-  type ImportSourceKey,
-} from "@/api/lib/legal-search/ingestion-constants";
 
 const DOCUMENT_SUPPLEMENTS_METADATA_URL_SCHEMA = {
   documentSupplements: { items: { sourceUrl: "url" } },

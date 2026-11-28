@@ -1,7 +1,7 @@
 import { TaggedError } from "better-result";
 import type { Result } from "better-result";
 
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type { RawIngestionResult } from "./ingestion-types";
 
 /**
  * The revision a cached issue outcome was read with. Bump it when the parser

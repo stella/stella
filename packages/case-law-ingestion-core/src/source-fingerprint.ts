@@ -25,7 +25,7 @@ import { panic } from "better-result";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "./ingestion-types";
 
 declare const sourceFingerprintProof: unique symbol;
 

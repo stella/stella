@@ -5,6 +5,11 @@ import * as v from "valibot";
 import type { DecisionBodySource } from "@stll/api-contract/case-law-body-source";
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import { caseLawSourceLanguagesOf } from "@stll/api-contract/case-law-source-languages";
+import {
+  readDecisionTextMetadata,
+  readWholeDecisionHeadnote,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { DECISION_JUDGE_ROLE_RANK } from "@stll/case-law-ingestion-core/judges-consts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   hasUsableAst,
@@ -34,7 +39,6 @@ import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-sub
 import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
 import { readServedDecisionText } from "@/api/handlers/case-law/decisions/served-text";
 import { decisionTextCompletionReasons } from "@/api/handlers/case-law/decisions/text-completion";
-import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
 import { status } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -53,10 +57,6 @@ import {
 } from "@/api/lib/case-law/decision-reviews";
 import { readCachedDecisionRowAst } from "@/api/lib/case-law/decision-row-ast-cache";
 import { readDecisionSectionIndex } from "@/api/lib/case-law/decision-section-cache";
-import {
-  readDecisionTextMetadata,
-  readWholeDecisionHeadnote,
-} from "@/api/lib/case-law/decision-text";
 import { decisionPayloadKey } from "@/api/lib/case-law/decision-versioned-payload";
 import { decisionWorkOf } from "@/api/lib/case-law/decision-work";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";

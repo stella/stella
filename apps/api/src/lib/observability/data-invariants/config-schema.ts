@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 /**
  * Deployment-owned expectations for the case-law data invariants.

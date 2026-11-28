@@ -2,12 +2,13 @@ import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { censusListingEvidenceKey } from "@stll/case-law-ingestion-core/census-listing-identity";
+import type { CensusListingIdentity } from "@stll/case-law-ingestion-core/ingestion-types";
 import { chunk } from "@stll/concurrency/chunk";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawCompletenessCensus as census } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { censusListingEvidenceKey } from "@/api/lib/case-law/census-listing-identity";
 import type { censusScope } from "@/api/lib/case-law/completeness-census";
 import { censusCapabilityFor } from "@/api/lib/case-law/completeness-census-capabilities";
 import {
@@ -19,7 +20,6 @@ import {
   readStoredListingIdentities,
 } from "@/api/lib/case-law/stored-listing-identities";
 import { lockCaseLawSourceIngestionLease } from "@/api/lib/db/aggregate-lock";
-import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,

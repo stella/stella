@@ -1,10 +1,12 @@
 import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 
+import type { StoredRawReparseInput } from "@stll/case-law-ingestion-core/ingestion-types";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@stll/case-law-ingestion-core/ingestion-types";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
 import {
   openRawSourceWriteWindow,
   rawSourcePayloadKey,
@@ -12,7 +14,6 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { SkDocumentRawStorage } from "@/api/lib/legal-search/sk-document-raw";
 import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 export const memorySkDocumentRawStorage = () => {
   const objects = new Map<string, Uint8Array>();

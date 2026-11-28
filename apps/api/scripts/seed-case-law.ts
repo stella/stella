@@ -23,6 +23,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { FIXTURE_SOURCE_KEYS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { compareCodeUnit } from "@stll/collation";
 import { logErrorOutput, printError } from "@stll/errors";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
@@ -40,7 +41,6 @@ import type { CaseLawWriteHandles } from "@/api/lib/case-law/maintenance-lane";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";

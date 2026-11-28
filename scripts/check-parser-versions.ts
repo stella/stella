@@ -1063,7 +1063,7 @@ const boundaryErrors = (
     }
     if (
       file === PARSER_REGISTRY_OUTPUT ||
-      file === "apps/api/src/lib/legal-search/ingestion-constants.ts" ||
+      file === "packages/case-law-ingestion-core/src/ingestion-constants.ts" ||
       file.startsWith(PARSER_ENTRY_DIRECTORY) ||
       OUTPUT_SHAPING_ROOTS.some((root) => file.startsWith(root))
     ) {

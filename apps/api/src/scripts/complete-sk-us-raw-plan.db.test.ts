@@ -4,6 +4,8 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@stll/case-law-ingestion-core/ingestion-types";
 import { assertProperty } from "@stll/property-testing";
 
 import { caseLawSources } from "@/api/db/schema";
@@ -11,8 +13,6 @@ import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-pol
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   completeSkUsRawStatement,

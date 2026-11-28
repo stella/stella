@@ -53,34 +53,18 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
-import { parseBrTjdftDocument } from "@stll/case-law-parsers/br-tjdft";
-import type { BrTjdftDocumentContent } from "@stll/case-law-parsers/br-tjdft";
-import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
-import { sha256Hex } from "@stll/sha256/bun";
-import { Temporal } from "@stll/time";
-
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  readPublisherText,
-  unreadPublisherError,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
   sourceTextField,
   TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+} from "@stll/case-law-ingestion-core/decision-text";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -95,7 +79,7 @@ import {
   sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   DecisionJudgeInput,
   IngestionResult,
@@ -111,8 +95,24 @@ import type {
   SyncPage,
   UnreadListedItem,
   UnreadOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
+import { parseBrTjdftDocument } from "@stll/case-law-parsers/br-tjdft";
+import type { BrTjdftDocumentContent } from "@stll/case-law-parsers/br-tjdft";
+import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
+import { sha256Hex } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
+
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import {
+  readPublisherText,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 

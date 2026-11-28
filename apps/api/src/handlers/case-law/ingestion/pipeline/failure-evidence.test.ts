@@ -2,15 +2,16 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+
+import {
   captureFailureEvidence,
   ingestionFailureRecordIdentity,
 } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const rawInput = {
   caseNumber: "No. 24-100",

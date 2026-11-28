@@ -14,16 +14,16 @@ import {
 } from "@stll/case-law-parsers/sanitize-url";
 import { declareFingerprintFields } from "@stll/errors";
 
-import {
-  containsTagLikeMarkup,
-  TAG_LIKE_MARKUP_SOURCE,
-} from "@/api/lib/case-law/plain-text-markup";
+import { isRecord } from "./internal-helpers";
 import {
   metadataUrlChildSchema,
   metadataUrlItemSchema,
   rehydrateMetadataUrls,
-} from "@/api/lib/legal-search/metadata-urls";
-import { isRecord } from "@/api/lib/type-guards";
+} from "./metadata-urls";
+import {
+  containsTagLikeMarkup,
+  TAG_LIKE_MARKUP_SOURCE,
+} from "./plain-text-markup";
 
 const plainTextBrand = Symbol("PlainText");
 const plainTextSchema = v.pipe(v.string(), v.brand(plainTextBrand));

@@ -3,9 +3,8 @@ import {
   parseDecisionQuery,
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
-
 // parser-output-unchanged: [cz-nss] validates the optional stored-document constructor; standing parsing and replay output are unchanged.
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
 
 /** The first docket in the publisher header must name the selected sheet. */
 export const nssDocumentReferenceMatches = (

@@ -15,7 +15,8 @@ import {
   type SourceSurfaceCensus,
   type SourceSurfaceDisposition,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 import { COURTLISTENER_RAW_PART } from "./raw";

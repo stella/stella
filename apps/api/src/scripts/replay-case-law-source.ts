@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { open } from "node:fs/promises";
 
+import type { StoredRawReader } from "@stll/case-law-ingestion-core/ingestion-types";
 import { printError } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
@@ -65,7 +66,6 @@ import {
 import { parseReplayArguments } from "@/api/handlers/case-law/ingestion/replay-arguments";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type { StoredRawReader } from "@/api/lib/legal-search/ingestion-types";
 import {
   readS3ObjectIfPresent,
   refreshCorpusS3,

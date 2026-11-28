@@ -1,13 +1,14 @@
 // parser-output-unchanged: [at-findok] migrated throttle wrapper to readPublisher; served response parsing is unchanged.
 import { panic } from "better-result";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   type PublisherReadInit,
   readPublisher,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 /**

@@ -17,6 +17,14 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { STATED_ECLI_IDENTITY } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -33,17 +41,9 @@ import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestio
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";

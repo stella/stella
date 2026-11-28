@@ -16,11 +16,12 @@
 import type { Column, SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
-import type { SafeId } from "@/api/lib/branded-types";
 import {
   DECISION_SUPPLEMENT_KINDS,
   type DecisionSupplementKind,
-} from "@/api/lib/legal-search/decision-supplement-kind";
+} from "@stll/case-law-ingestion-core/decision-supplement-kind";
+
+import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 

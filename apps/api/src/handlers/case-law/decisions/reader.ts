@@ -3,6 +3,10 @@ import { panic, TaggedError } from "better-result";
 import { decisionBodyAllowsDerivedAi } from "@stll/api-contract/case-law-body-source";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
+import {
+  APP_READER_TEXT,
+  type AppReaderText,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
 import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -18,10 +22,6 @@ import { appReaderTextForSource } from "@/api/lib/case-law/app-reader-text";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
-import {
-  APP_READER_TEXT,
-  type AppReaderText,
-} from "@/api/lib/legal-search/adapter-manifest";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { failureSink } from "@/api/lib/observability/failure";

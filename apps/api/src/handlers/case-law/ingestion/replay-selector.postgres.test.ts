@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { STORED_RAW_REPARSE_REJECTION } from "@stll/case-law-ingestion-core/ingestion-types";
 import { compareCodeUnit } from "@stll/collation";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -15,7 +16,6 @@ import {
   selectScopeEnd,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];

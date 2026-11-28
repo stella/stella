@@ -2,6 +2,14 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
@@ -17,14 +25,6 @@ import type {
   StoredSupplement,
   SupplementJudgmentCandidate,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 type Ruling = SupplementJudgmentCandidate & { id: string };
 

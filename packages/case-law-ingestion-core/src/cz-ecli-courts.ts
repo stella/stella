@@ -22,11 +22,7 @@
 
 import { panic } from "better-result";
 
-import {
-  CZ_ECLI_COURTS,
-  type CzEcliCourtCode,
-} from "@/api/lib/case-law/ecli-court-codes";
-
+import { CZ_ECLI_COURTS, type CzEcliCourtCode } from "./ecli-court-codes";
 import { getIngestionDiagnosticsSink } from "./ingestion-diagnostics-sink";
 
 /**

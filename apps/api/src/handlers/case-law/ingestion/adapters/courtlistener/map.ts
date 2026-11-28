@@ -2,6 +2,22 @@
 import { panic, Result } from "better-result";
 
 import {
+  absentTextField,
+  checkedDecisionMetadata,
+  presentTextField,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import { IMPORT_SOURCE_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  toPlainTextIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
   composeCourtListenerText,
   type CourtListenerTextOutcome,
 } from "@stll/case-law-parsers/courtlistener/compose";
@@ -11,23 +27,6 @@ import {
   rejectCourtListenerRecord,
 } from "@stll/case-law-parsers/courtlistener/rejection";
 import { COURTLISTENER_TEXT_USABILITY } from "@stll/case-law-parsers/courtlistener/usability";
-
-import {
-  absentTextField,
-  checkedDecisionMetadata,
-  presentTextField,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  STORED_RAW_REPARSE_REJECTION,
-  toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
 
 import { planCourtListenerRecord } from "./plan";
 import { decodeCourtListenerRaw } from "./raw";

@@ -6,18 +6,19 @@
 
 import { Result } from "better-result";
 
-import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import {
   censusListingEvidenceKey,
   censusListingIdentity,
-} from "@/api/lib/case-law/census-listing-identity";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+} from "@stll/case-law-ingestion-core/census-listing-identity";
 import type {
   CensusListingIdentity,
   ReconciliationListingItem,
   SourceReconciliation,
-} from "@/api/lib/legal-search/ingestion-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
+
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * Pages requested for one slice before the listing gives up on it.

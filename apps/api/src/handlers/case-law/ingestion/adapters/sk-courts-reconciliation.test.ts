@@ -20,6 +20,11 @@ import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   parseDecisionTextAbsence,
 } from "@stll/api-contract/case-law-text-field";
+import { storeDecisionTextFields } from "@stll/case-law-ingestion-core/decision-text";
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 
 import type { SkApiItem } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import {
@@ -30,13 +35,8 @@ import {
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { storeDecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-} from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
