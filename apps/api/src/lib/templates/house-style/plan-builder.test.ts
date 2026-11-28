@@ -3728,7 +3728,7 @@ describe("buildTemplatePlan, labelled lines under an item with indents of their 
     };
     const reading = (
       blockId: string,
-      role: "title" | "articleHeading" | "clause1" | "continuation",
+      role: "title" | "articleHeading" | "clause1" | "continuation" | "body",
     ) => ({
       blockId,
       role,
