@@ -17,6 +17,12 @@ import {
   test,
 } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { parsePlTkPage } from "@stll/case-law-parsers/pl-tk";
 import { load } from "@stll/html";
 import { DAY_IN_MS, Temporal } from "@stll/time";
@@ -45,12 +51,6 @@ import type {
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

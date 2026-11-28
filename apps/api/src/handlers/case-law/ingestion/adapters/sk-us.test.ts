@@ -11,6 +11,16 @@ import {
 } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  type IngestionResult,
+  listingIdentityKey,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -23,7 +33,6 @@ import {
   skUsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   isReadRefusal,
@@ -39,15 +48,6 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  type IngestionResult,
-  listingIdentityKey,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";

@@ -5,7 +5,6 @@ import type { PushDeviceRegistrationResponse } from "@stll/api-contract/mobile-p
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { registerPushDevice } from "@/api/lib/push/push-devices";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -26,6 +25,11 @@ const config = {
   ),
   access: "write",
   body: pushDeviceRegistrationSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Upserts the caller's own device row by its token and trims the caller's oldest devices; no aggregate spans other rows.",
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -64,11 +68,5 @@ const registerPushDeviceEndpoint = createSafeRootHandler(
     } satisfies PushDeviceRegistrationResponse);
   },
 );
-
-declareAggregateMutation(registerPushDeviceEndpoint, {
-  type: "independent",
-  reason:
-    "Upserts the caller's own device row by its token and trims the caller's oldest devices; no aggregate spans other rows.",
-});
 
 export default registerPushDeviceEndpoint;

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
+import { readDecisionHeadnote } from "@stll/case-law-ingestion-core/decision-text";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -22,7 +23,6 @@ import {
   courtPresentation,
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
-import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import {

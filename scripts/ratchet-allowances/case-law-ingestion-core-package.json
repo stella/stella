@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 6,
+  "reason": "The new @stll/case-law-ingestion-core package extracts pure case-law ingestion foundation modules from apps/api and declares the six existing third-party packages those modules already use (@stll/time, better-result, entities, valibot, bun-types, fast-check); no new third-party dependency is added to the repository."
+}

@@ -1,14 +1,15 @@
 import { TaggedError } from "better-result";
 
-import { captureError } from "@/api/lib/analytics/capture";
 import {
   ADAPTER_KEYS,
   IMPORT_SOURCE_KEYS,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import type {
   AdapterKey,
   ImportSourceKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
+import { captureError } from "@/api/lib/analytics/capture";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 

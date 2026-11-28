@@ -1,5 +1,5 @@
 // parser-output-unchanged: The common-court ruling-key implementation is moved without changing its output.
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type { RawIngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 
 const collapse = (text: string): string => text.replace(/\s+/gu, " ").trim();
 

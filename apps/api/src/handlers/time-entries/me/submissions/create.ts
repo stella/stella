@@ -8,7 +8,6 @@ import { parsePlainDate } from "@stll/time";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { submitTimeEntries } from "@/api/lib/billing/time-entry-submission";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
@@ -49,6 +48,11 @@ const config = {
       ),
     ),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Moves only the caller's own draft entries for the dates, each with a status-guarded update. Approving in the same step takes the approval queue's timer owner, matter and entry locks before any row moves, then reconciles those matters' billing caps.",
+  },
 } satisfies HandlerConfig;
 
 const submitMyTimeEntries = createSafeRootHandler(
@@ -92,11 +96,5 @@ const submitMyTimeEntries = createSafeRootHandler(
     return outcome;
   },
 );
-
-declareAggregateMutation(submitMyTimeEntries, {
-  type: "independent",
-  reason:
-    "Moves only the caller's own draft entries for the dates, each with a status-guarded update. Approving in the same step takes the approval queue's timer owner, matter and entry locks before any row moves, then reconciles those matters' billing caps.",
-});
 
 export default submitMyTimeEntries;

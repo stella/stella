@@ -9,7 +9,6 @@ import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { lockSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -29,6 +28,10 @@ const config = {
   realtime: sharepointRealtimeUpdates,
   mcp: { type: "internal", reason: "provider_secret" },
   body: requestBody,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["organizationSettings"],
+  },
 } satisfies HandlerConfig;
 
 // This endpoint changes individual capability policy and exists only where
@@ -112,10 +115,5 @@ export const createSetSharepointCapabilities = (
   );
 
 const setSharepointCapabilities = createSetSharepointCapabilities();
-
-declareAggregateMutation(setSharepointCapabilities, {
-  type: "aggregate",
-  aggregates: ["organizationSettings"],
-});
 
 export default setSharepointCapabilities;

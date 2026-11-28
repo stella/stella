@@ -1,9 +1,10 @@
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   APP_READER_TEXT,
   type AppReaderText,
   SOURCE_APP_READER_TEXT,
-} from "@/api/lib/legal-search/adapter-manifest";
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 

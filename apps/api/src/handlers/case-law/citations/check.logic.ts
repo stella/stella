@@ -27,11 +27,11 @@ import type {
 } from "@stll/api-contract/citation-check";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
 import { stripCitationPrefix } from "@stll/legal-ast/citation-prefix";
 
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { NO_SOURCE } from "@/api/lib/workflow/decisions/answer-questions";
 import type { AnswerSource } from "@/api/lib/workflow/decisions/answer-questions";
 import type { Decision } from "@/api/lib/workflow/decisions/decide";

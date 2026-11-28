@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { assertProperty } from "@stll/property-testing";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {

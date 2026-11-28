@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { EMPTY_AST } from "@stll/legal-ast/document-types";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -12,7 +13,6 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 const BACKFILL_OUTCOMES = [

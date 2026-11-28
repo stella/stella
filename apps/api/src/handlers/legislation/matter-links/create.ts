@@ -9,7 +9,6 @@ import { linkProvisionsToMatter } from "@/api/handlers/legislation/matter-links/
 import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
 import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
@@ -85,6 +84,10 @@ const config = {
     consumesServices: false,
   },
   body: createLegislationMatterLinkBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["workspace"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 export const createLegislationMatterLinkHandler = (
@@ -129,10 +132,5 @@ export const createLegislationMatterLinkHandler = (
 export const createLegislationMatterLink = createLegislationMatterLinkHandler(
   legislationPublicReadDb,
 );
-
-declareAggregateMutation(createLegislationMatterLink, {
-  type: "aggregate",
-  aggregates: ["workspace"],
-});
 
 export default createLegislationMatterLink;

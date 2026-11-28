@@ -2,6 +2,24 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  toPlainTextIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+/**
+ * pl-kis against payloads eureka.mf.gov.pl served.
+ *
+ * One listing page and one detail per ingested category are captured verbatim
+ * with provenance sidecars. Paging, resuming and the tip are driven through a
+ * stubbed transport, because the behaviour under test is the cursor's.
+ */
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@stll/case-law-parsers/pl-kis";
 import {
@@ -38,24 +56,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-/**
- * pl-kis against payloads eureka.mf.gov.pl served.
- *
- * One listing page and one detail per ingested category are captured verbatim
- * with provenance sidecars. Paging, resuming and the tip are driven through a
- * stubbed transport, because the behaviour under test is the cursor's.
- */
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
-import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { installTestFetch } from "@/api/tests/helpers/test-fetch";

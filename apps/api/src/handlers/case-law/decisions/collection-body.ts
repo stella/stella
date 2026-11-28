@@ -6,6 +6,9 @@ import {
   COLLECTION_PUBLICATION_CONTRIBUTION,
   COLLECTION_PUBLICATION_PROJECTION_MAX,
 } from "@stll/api-contract/case-law-body-source";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { readStoredRawListing } from "@stll/case-law-ingestion-core/ingestion-types";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import {
   parseCzNsSbirkaText,
   readCzNsSbirkaPage,
@@ -23,9 +26,6 @@ import { decodeCollectionDocumentBody } from "@/api/lib/legal-search/collection-
 import { collectionDocumentPartReadSchema } from "@/api/lib/legal-search/collection-document-part-read";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { heldDecisionAttachmentForAdapter } from "@/api/lib/legal-search/held-decision-attachment";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { readStoredRawListing } from "@/api/lib/legal-search/ingestion-types";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/source-raw-envelope";
 import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
 
 import {

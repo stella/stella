@@ -5,6 +5,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { getCollator } from "@stll/collation";
 
 import {
@@ -70,7 +71,6 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import type {
   LegislationReadDb,

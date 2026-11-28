@@ -3,6 +3,11 @@ import fc from "fast-check";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
+import {
+  ADAPTER_MANIFESTS,
+  decisionDocketGrammarForCountry,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -13,11 +18,6 @@ import {
   EXCLUSIVE_DOCKET_REGISTERS,
   sourceAbsenceVerdict,
 } from "@/api/handlers/legal-resolve/decision-absence-coverage";
-import {
-  ADAPTER_MANIFESTS,
-  decisionDocketGrammarForCountry,
-} from "@/api/lib/legal-search/adapter-manifest";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 

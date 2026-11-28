@@ -7,6 +7,8 @@ import {
   type PublicCaseLawCountry,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import type { AdapterEdition } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { CASE_LAW_SOURCE_ROWS_BOUND } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { caseLawSourcePlacement } from "@/api/handlers/case-law/decisions/coverage";
@@ -31,9 +33,7 @@ import {
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { errorTag } from "@/api/lib/errors/utils";
-import type { AdapterEdition } from "@/api/lib/legal-search/adapter-manifest";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
-import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import {
   readPublicLawCountry,
   tPublicLawCountry,

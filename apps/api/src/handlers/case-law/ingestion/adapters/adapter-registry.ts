@@ -2,6 +2,17 @@
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import type { Result } from "better-result";
 
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  IMPORT_SOURCE_KEYS,
+  type ImportSourceKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { atAsylghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { atBksAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { atBvwgAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
@@ -37,16 +48,6 @@ import { plUokikAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uo
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { ukFclAdapter } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-  IMPORT_SOURCE_KEYS,
-  type ImportSourceKey,
-} from "@/api/lib/legal-search/ingestion-constants";
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/lib/legal-search/ingestion-types";
 
 import { courtListenerImport } from "./courtlistener/import";
 import { checkedSourceRegistrations } from "./source-registrations";

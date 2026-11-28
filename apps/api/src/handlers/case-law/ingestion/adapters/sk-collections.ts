@@ -1,7 +1,9 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: listing-stage labels do not alter collection parsing.
 // parser-output-unchanged: publisher reads use readPublisher with identical status handling; collection parsing is unchanged.
 import { panic, Result } from "better-result";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -16,7 +18,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   SK_COLLECTION_PARSER_VERSION,
   SK_COLLECTION_SERIES,

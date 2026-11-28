@@ -8,7 +8,6 @@ import type { TimerActivityDeviceRegistrationResponse } from "@stll/api-contract
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   issueTimerActivityActionKey,
   registerTimerActivityDevice,
@@ -35,6 +34,11 @@ const config = {
   access: "write",
   params: timerActivityDeviceParamsSchema,
   body: timerActivityDeviceRegistrationSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Upserts the caller's own phone row by its device id and trims the caller's oldest phones; no aggregate spans other rows.",
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -73,11 +77,5 @@ const registerTimerActivityDeviceEndpoint = createSafeRootHandler(
     } satisfies TimerActivityDeviceRegistrationResponse);
   },
 );
-
-declareAggregateMutation(registerTimerActivityDeviceEndpoint, {
-  type: "independent",
-  reason:
-    "Upserts the caller's own phone row by its device id and trims the caller's oldest phones; no aggregate spans other rows.",
-});
 
 export default registerTimerActivityDeviceEndpoint;

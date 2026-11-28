@@ -13,7 +13,6 @@ import { createTimeEntryBodySchema } from "@/api/lib/billing/time-entry-body";
 import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
@@ -46,6 +45,11 @@ export const createDesktopTimeEntryEndpoint = (
       response: safePublicHandlerResponseSchemasWithStatusText(
         v.object({ id: resourceIdSchema("timeEntry") }),
       ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Inserts one time entry for an authorized matter; no cross-row invariant.",
+      },
     },
     async function* ({ request, params: { workspaceId }, body }) {
       const account = yield* Result.await(
@@ -99,10 +103,5 @@ const desktopTimeEntryEndpoint = createDesktopTimeEntryEndpoint();
 
 // Inserts one entry through the shared time-entry insert, which takes no
 // aggregate lock and maintains no invariant across rows.
-declareAggregateMutation(desktopTimeEntryEndpoint, {
-  type: "independent",
-  reason:
-    "Inserts one time entry for an authorized matter; no cross-row invariant.",
-});
 
 export default desktopTimeEntryEndpoint;

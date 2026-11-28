@@ -17,6 +17,13 @@ import { panic } from "better-result";
  */
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
+import type { DecisionSupplementKind } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import type {
+  DecisionSupplementTarget,
+  EmptyAst,
+  IngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { segmentDecision } from "@stll/case-law-parsers/segment-decision";
 import type {
   Block,
@@ -34,13 +41,6 @@ import { composedMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/met
 import type { SafeId } from "@/api/lib/branded-types";
 import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
-import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
-import type {
-  DecisionSupplementTarget,
-  EmptyAst,
-  IngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 /**
  * The metadata key a composed decision lists its supplements under: which

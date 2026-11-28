@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 import { listAdapters } from "./adapters/adapter-registry";
 import { replayCapability } from "./replay";

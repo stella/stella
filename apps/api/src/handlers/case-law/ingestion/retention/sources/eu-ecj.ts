@@ -1,3 +1,4 @@
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * Retention projection for the Court of Justice of the European Union.
@@ -27,7 +28,6 @@ import {
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { htmlParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/html-paragraphs";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 /** The envelope part the XHTML manifestation is stored under. */
 const DOCUMENT_PART = "document";

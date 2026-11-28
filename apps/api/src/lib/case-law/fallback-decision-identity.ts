@@ -2,6 +2,8 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { splitStoredDecisionTextMetadata } from "@stll/case-law-ingestion-core/decision-text";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   DECISION_IDENTIFIER_TYPES,
   normalizeStructuredDecisionIdentifier,
@@ -11,7 +13,6 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import { listingCourtIdentity } from "@/api/lib/case-law/decision-court-identity";
 import type { ListingCourtIdentity } from "@/api/lib/case-law/decision-court-identity";
-import { splitStoredDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { FALLBACK_DECISION_IDENTITY_PREFIX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
@@ -26,7 +27,6 @@ import {
   storeDecisionIdentifiersInMetadata,
 } from "@/api/lib/legal-search/decision-identifier-metadata";
 import { caseLawCanonicalPayload } from "@/api/lib/legal-search/decision-payload";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
 import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";

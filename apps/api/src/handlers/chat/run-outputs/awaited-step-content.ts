@@ -15,7 +15,6 @@ import {
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -37,6 +36,11 @@ const config = {
   response: safePublicHandlerResponseSchemasWithStatusText(
     chatLocalRunStepContentUploadedSchema,
   ),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Settles one awaited step's content row, and for an image one immutable file row with its audit event and storage object, against the run's own storage counters; it changes no aggregate's ordered state.",
+  },
 } satisfies PublicHandlerConfig;
 
 type AwaitedStepContentDependencies = {
@@ -120,11 +124,5 @@ export const createStoreAwaitedStepContent = (
 };
 
 const storeAwaitedStepContent = createStoreAwaitedStepContent();
-
-declareAggregateMutation(storeAwaitedStepContent, {
-  type: "independent",
-  reason:
-    "Settles one awaited step's content row, and for an image one immutable file row with its audit event and storage object, against the run's own storage counters; it changes no aggregate's ordered state.",
-});
 
 export default storeAwaitedStepContent;

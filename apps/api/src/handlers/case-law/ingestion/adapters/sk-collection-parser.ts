@@ -1,10 +1,9 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: replacing static Record lookup tables with Map preserves identical lookup results.
 import { panic } from "better-result";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
-import { Temporal } from "@stll/time";
-
 import {
   SK_COLLECTION_SERIES,
   type SkCollectionDecision,
@@ -13,7 +12,8 @@ import {
   type SkCollectionJoinOutcome,
   type SkCollectionParseOutcome,
   type SkCollectionRecord,
-} from "@/api/lib/legal-search/sk-collection-enrichment";
+} from "@stll/case-law-ingestion-core/sk-collection-enrichment";
+import { Temporal } from "@stll/time";
 
 export type SkCollectionTextPage = { page: number; lines: readonly string[] };
 

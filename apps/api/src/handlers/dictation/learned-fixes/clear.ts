@@ -11,7 +11,6 @@ import {
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { clearLearnedFixes } from "@/api/lib/dictation/learned-fixes";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -25,6 +24,11 @@ const config = {
   mcp: { type: "internal", reason: "native_tool_ui" },
   query: dictationLearnedFixesClearQuerySchema,
   response: safeHandlerResponseSchemas(dictationLearnedFixesSchema),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+  },
 } as const satisfies HandlerConfig;
 
 /**
@@ -47,11 +51,5 @@ const clearLearnedFixesHandler = createSafeRootHandler(
     return Result.ok(fixes);
   },
 );
-
-declareAggregateMutation(clearLearnedFixesHandler, {
-  type: "independent",
-  reason:
-    "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
-});
 
 export default clearLearnedFixesHandler;

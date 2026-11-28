@@ -1,22 +1,23 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
+
+import {
   buildCzNsDecision,
   czNsAdapter,
   type CzNsListingRow,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { recaptureDecisionFromListing } from "@/api/handlers/case-law/ingestion/recapture";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  type IngestionResult,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  type StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

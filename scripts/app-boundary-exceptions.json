@@ -62,12 +62,6 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
-    "specifier": "@/api/handlers/case-law/consts",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
     "specifier": "@/api/handlers/case-law/ingestion/adapters/adapter-registry",
     "target": "apps/api"
   },
@@ -223,26 +217,8 @@
   },
   {
     "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.test.ts",
-    "specifier": "@/api/lib/legal-search/ingestion-constants",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.test.ts",
-    "specifier": "@/api/lib/legal-search/ingestion-types",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.ts",
     "specifier": "@/api/handlers/case-law/ingestion/source-totals",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.ts",
-    "specifier": "@/api/lib/legal-search/ingestion-types",
     "target": "apps/api"
   },
   {
@@ -259,18 +235,6 @@
   },
   {
     "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.test.ts",
-    "specifier": "@/api/lib/legal-search/ingestion-constants",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.test.ts",
-    "specifier": "@/api/lib/legal-search/ingestion-types",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/source-total-poll.ts",
     "specifier": "@/api/handlers/case-law/ingestion/source-totals",
     "target": "apps/api"
@@ -279,12 +243,6 @@
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/source-total-poll.ts",
     "specifier": "@/api/lib/errors/error-tag",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.ts",
-    "specifier": "@/api/lib/legal-search/ingestion-types",
     "target": "apps/api"
   },
   {

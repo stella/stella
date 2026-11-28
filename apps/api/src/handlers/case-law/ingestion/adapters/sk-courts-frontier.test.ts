@@ -17,8 +17,9 @@ import {
   test,
 } from "bun:test";
 
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

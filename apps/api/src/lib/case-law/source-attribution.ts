@@ -1,10 +1,11 @@
-import { captureError } from "@/api/lib/analytics/capture";
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
+import { captureError } from "@/api/lib/analytics/capture";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type DecisionSourceAttributionInput = {

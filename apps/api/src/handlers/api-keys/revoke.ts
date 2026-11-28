@@ -21,6 +21,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: revokeApiKeyBody,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Revokes a single organization API key row with no cross-table aggregate invariant.",
+  },
 } satisfies HandlerConfig;
 
 /**

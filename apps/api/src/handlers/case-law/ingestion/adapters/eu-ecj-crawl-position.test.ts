@@ -11,14 +11,15 @@ import {
 } from "bun:test";
 
 import {
+  decodeSourceRawEnvelope,
+  type SyncPage,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import {
   euEcjAdapter,
   parseEcjCrawlCursor,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  decodeSourceRawEnvelope,
-  type SyncPage,
-} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

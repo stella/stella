@@ -1,12 +1,13 @@
 import { panic } from "better-result";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 

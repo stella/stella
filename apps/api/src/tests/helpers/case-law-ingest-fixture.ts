@@ -18,6 +18,8 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 
 import { mapCourtListenerRecord as uncheckedMapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
@@ -25,8 +27,6 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 
 const mapCourtListenerRecord = guardParser(uncheckedMapCourtListenerRecord);

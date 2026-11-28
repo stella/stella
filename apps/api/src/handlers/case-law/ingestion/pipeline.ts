@@ -1,5 +1,11 @@
 import { panic, Result } from "better-result";
 
+import {
+  ADAPTER_TIMEOUT,
+  MAX_SYNC_PAGES,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { SyncPage } from "@stll/case-law-ingestion-core/ingestion-types";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
@@ -14,10 +20,6 @@ import {
 
 import type { IngestionScopedDb } from "@/api/db/safe-db-types";
 import type { caseLawSources } from "@/api/db/schema";
-import {
-  ADAPTER_TIMEOUT,
-  MAX_SYNC_PAGES,
-} from "@/api/handlers/case-law/consts";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   applyDecisionBatch,
@@ -83,8 +85,6 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
-import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";

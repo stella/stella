@@ -10,6 +10,11 @@ import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { CZ_ISIR_METADATA_KEY } from "@stll/legal-ast/cz-isir-decision";
 
 import {
@@ -20,11 +25,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-isir";
 import { CZ_ISIR_FEED_URL } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-feed";
 import { probeCzIsirRemoval } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-removal";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   CZ_ISIR_FIXTURE_CURSOR,
   czIsirDecisionParagraphs,

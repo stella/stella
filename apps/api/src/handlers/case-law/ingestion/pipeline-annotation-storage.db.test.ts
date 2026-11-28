@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import {
   CITATION_SCOPE_METADATA_KEY,
   citationScopeAstHash,
@@ -37,8 +39,6 @@ import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

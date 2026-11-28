@@ -7,7 +7,6 @@ import { bindOwnerSyntheticSessionStore } from "@/api/db/root";
 import { env } from "@/api/env";
 import type { HandlerContext } from "@/api/http/context";
 import { routes } from "@/api/http/route";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { getRequestId } from "@/api/lib/observability/request-context";
 import { reserveSyntheticSessionBudget } from "@/api/lib/rate-limit/synthetic-session-budget";
@@ -81,13 +80,16 @@ const createSyntheticSessionHandler = ({
     return session;
   };
   // The key travels in a header; the body is never read.
-  return declareAggregateMutation(
-    defineEndpoint.public({ bodyMode: "none" }, createSession),
+  return defineEndpoint.public(
     {
-      type: "independent",
-      reason:
-        "The dedicated session store serializes its singleton control row and owns the account, session, and audit writes in one transaction.",
+      bodyMode: "none",
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "The dedicated session store serializes its singleton control row and owns the account, session, and audit writes in one transaction.",
+      },
     },
+    createSession,
   );
 };
 

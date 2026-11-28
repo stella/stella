@@ -12,6 +12,7 @@ import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { CzIsirParagraph } from "@stll/case-law-parsers/cz-isir";
 
 import {
@@ -21,7 +22,6 @@ import {
 import { CZ_ISIR_FEED_URL } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-feed";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

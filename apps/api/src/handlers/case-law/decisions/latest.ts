@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import { parseCaseLawReadingLanguages } from "@stll/api-contract/case-law-reading-languages";
 import type { DecisionHeadnotePreview } from "@stll/api-contract/case-law-text-field";
+import { readDecisionHeadnote } from "@stll/case-law-ingestion-core/decision-text";
 
 import { readBrowseFacets } from "@/api/handlers/case-law/decisions/facets";
 import {
@@ -20,7 +21,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decisionDateSortKeySql } from "@/api/lib/case-law/decision-date-order";
 import { languageVersionRankSql } from "@/api/lib/case-law/decision-language-sql";
-import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import {
   type PublicDecisionLanguageAlternate,
   readPublicDecisionLanguageAlternatesByGroup,

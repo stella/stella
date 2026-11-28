@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
@@ -11,10 +15,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
-import {
-  decodeSourceRawEnvelope,
-  PUBLISHER_REQUEST,
-} from "@/api/lib/legal-search/ingestion-types";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 
 import { PublisherPageError } from "./publisher-page";

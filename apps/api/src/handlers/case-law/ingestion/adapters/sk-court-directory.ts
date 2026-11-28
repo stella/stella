@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: listing-stage labels do not alter directory parsing.
 import { panic, Result } from "better-result";
 
@@ -5,9 +6,12 @@ import {
   SK_COURT_REGISTRY_TIERS,
   SK_COURT_TIERS,
 } from "@stll/api-contract/sk-court-tiers";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+} from "@stll/case-law-ingestion-core/case-law-consts";
 import { readCappedBytes } from "@stll/skills/streaming";
 
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import { readPublisher } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { isNullishString } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {

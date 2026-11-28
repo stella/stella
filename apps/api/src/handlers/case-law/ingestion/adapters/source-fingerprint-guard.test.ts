@@ -12,12 +12,12 @@ import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 
+import { SOURCE_FINGERPRINT_VERSIONS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
-import { SOURCE_FINGERPRINT_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { plCourtsSearchFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {

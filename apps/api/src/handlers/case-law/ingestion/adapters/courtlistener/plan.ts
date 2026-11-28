@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: CourtListener parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: [us-courtlistener] named declaration types leave emitted runtime unchanged.
@@ -19,6 +20,10 @@ import {
   parseUsReporterReference,
   US_REPORTER_JURISDICTION,
 } from "@stll/api-contract/us-reporter-citation";
+import {
+  type DecisionJudgeInput,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   COURTLISTENER_REJECTION_REASON,
   type CourtListenerRecordRejectedError,
@@ -46,10 +51,6 @@ import {
 
 import { normalizeDecisionIdentifierIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { canonicalDecisionDate } from "@/api/lib/dates";
-import {
-  type DecisionJudgeInput,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 
 import { courtListenerRawHash, encodeCourtListenerRaw } from "./raw";
 import {

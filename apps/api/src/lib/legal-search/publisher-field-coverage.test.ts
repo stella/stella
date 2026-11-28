@@ -1,19 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
-
-import type { SourceFieldInventory } from "@/api/lib/legal-search/ingestion-types";
+import type { SourceFieldInventory } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   inspectPublisherFieldCoverage,
   PUBLISHER_FIELD_COVERAGE_EVENT,
   recordPublisherFieldCoverage,
   retainedPublisherParts,
-} from "@/api/lib/legal-search/publisher-field-coverage";
+} from "@stll/case-law-ingestion-core/publisher-field-coverage";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/lib/legal-search/source-raw-envelope";
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
+import { assertProperty } from "@stll/property-testing";
+
 import type { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 

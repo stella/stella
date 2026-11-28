@@ -15,6 +15,7 @@ import {
   rulingGroupKeys,
   rulingKeysOf,
 } from "@stll/api-contract/decision-ruling-identity";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 
 import {
   buildPlDecision,
@@ -28,7 +29,6 @@ import {
   plUodoRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { plTkFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 

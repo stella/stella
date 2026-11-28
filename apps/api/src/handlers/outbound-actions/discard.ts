@@ -8,7 +8,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 
@@ -18,6 +17,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "human_confirmation" },
   params: v.object({ actionId: resourceIdSchema("outboundAction") }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["outboundAction"],
+  },
 } satisfies HandlerConfig;
 
 /** Drop a pending action so it can never be confirmed. Idempotent. */
@@ -93,10 +96,5 @@ const discardOutboundAction = createSafeRootHandler(
     return Result.ok({ discarded: discarded > 0 });
   },
 );
-
-declareAggregateMutation(discardOutboundAction, {
-  type: "aggregate",
-  aggregates: ["outboundAction"],
-});
 
 export default discardOutboundAction;

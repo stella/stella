@@ -19,6 +19,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "native_tool_ui" },
   access: "write",
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Marks the caller's unread notification rows read without modifying any shared aggregate.",
+  },
 } satisfies HandlerConfig;
 
 const markAllNotificationsRead = createSafeRootHandler(

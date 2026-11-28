@@ -31,10 +31,11 @@ import {
   test,
 } from "bun:test";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { AdapterKey } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import type { AdapterKey } from "@stll/case-law-ingestion-core/case-law-consts";
+import type { SourceAdapter } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

@@ -28,7 +28,7 @@ import {
   type AdapterKey,
   IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 
 /**
  * The processed fields every source declares. Grows one member at a time:

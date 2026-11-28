@@ -2,6 +2,14 @@ import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { parseFormexBibliography } from "@stll/case-law-parsers/eu-ecj-formex-bibliography";
 import { parseEcjNotice } from "@stll/case-law-parsers/eu-ecj-notice";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
@@ -43,14 +51,6 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { zstdCompressAsync } from "@/api/lib/compression";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import { isRecord } from "@/api/lib/type-guards";
 import {

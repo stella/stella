@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { ListingIdentity } from "@stll/case-law-ingestion-core/ingestion-types";
+import { listingIdentityKey } from "@stll/case-law-ingestion-core/ingestion-types";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -8,8 +10,6 @@ import {
   czRegionalListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { toUtcDateString } from "@/api/lib/dates";
-import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 
 /**
  * Day enumeration and the listing diff for the cz-regional reconciliation

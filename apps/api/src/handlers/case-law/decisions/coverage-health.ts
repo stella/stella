@@ -1,8 +1,7 @@
 import { panic } from "better-result";
 
+import type { AdapterEdition } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { DAY_IN_MS } from "@stll/time";
-
-import type { AdapterEdition } from "@/api/lib/legal-search/adapter-manifest";
 
 /**
  * How current a source is, and how complete it is, as named states.

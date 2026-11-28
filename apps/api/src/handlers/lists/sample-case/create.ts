@@ -42,7 +42,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { displayNameSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   documentWriteRefusal,
   documentWriteRefusalHandlerError,
@@ -119,6 +118,10 @@ const config = {
     consumesServices: true,
   },
   body: v.object({ filePropertyName: displayNameSchema() }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["sampleCase"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 type SampleCaseResult = {
@@ -647,10 +650,5 @@ const createSampleCase = createSafeHandler(
     return Result.ok(sample);
   },
 );
-
-declareAggregateMutation(createSampleCase, {
-  type: "aggregate",
-  aggregates: ["sampleCase"],
-});
 
 export default createSampleCase;

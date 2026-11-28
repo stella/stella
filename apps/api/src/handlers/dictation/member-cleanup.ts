@@ -16,7 +16,6 @@ import {
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 
 const config = {
@@ -30,6 +29,11 @@ const config = {
   body: desktopDictationCleanupRequestSchema,
   response: safeHandlerResponseSchemas(desktopDictationCleanupResponseSchema),
   requiresUsage: { actionType: "chat", modelTask: "short-text" },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Returns transient typed text for one dictation and stores nothing; the action-admission lifecycle owns model usage accounting.",
+  },
 } as const satisfies HandlerConfig;
 
 type MemberDictationCleanupOptions = DictationCleanupGeneration & {
@@ -75,11 +79,5 @@ export const createMemberDictationCleanupEndpoint = ({
   );
 
 const cleanUpMemberDictation = createMemberDictationCleanupEndpoint();
-
-declareAggregateMutation(cleanUpMemberDictation, {
-  type: "independent",
-  reason:
-    "Returns transient typed text for one dictation and stores nothing; the action-admission lifecycle owns model usage accounting.",
-});
 
 export default cleanUpMemberDictation;

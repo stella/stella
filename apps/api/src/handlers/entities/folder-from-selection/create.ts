@@ -12,7 +12,6 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   isTreeParentGuardError,
   lockTree,
@@ -198,6 +197,11 @@ const config = {
     consumesServices: false,
   },
   body: createFolderFromSelectionBodySchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Serialized by the matter's entity tree lock, which every entity reparent and the parent-acyclic trigger take; the folder insert and the moves commit or roll back together.",
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const createFolderFromSelection = createSafeHandler(
@@ -212,11 +216,5 @@ const createFolderFromSelection = createSafeHandler(
     });
   },
 );
-
-declareAggregateMutation(createFolderFromSelection, {
-  type: "independent",
-  reason:
-    "Serialized by the matter's entity tree lock, which every entity reparent and the parent-acyclic trigger take; the folder insert and the moves commit or roll back together.",
-});
 
 export default createFolderFromSelection;

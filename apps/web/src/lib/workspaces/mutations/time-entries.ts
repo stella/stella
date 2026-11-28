@@ -11,6 +11,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import { useResourceMutation } from "@/lib/workspace-realtime";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
@@ -124,7 +125,8 @@ type CreateTimeEntryVars = {
 export const useCreateTimeEntry = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: { mutation: "createTimeEntry" },
     mutationFn: async ({
       workspaceId,
       workItemId,
@@ -170,7 +172,8 @@ type UpdateTimeEntryVars = {
 export const useUpdateTimeEntry = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: { mutation: "updateTimeEntry" },
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
       const { id, workItemId, moveTo, ...restBody } = body;
       await updateTimeEntry(workspaceId, {
@@ -213,18 +216,11 @@ type DecideTimeSuggestionVars = {
 
 export const useDecideTimeSuggestion = () => {
   const analytics = useAnalytics();
-  const queryClient = useQueryClient();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: { mutation: "decideTimeSuggestion" },
     mutationFn: async ({ workspaceId, ...body }: DecideTimeSuggestionVars) => {
       await decideTimeSuggestion(workspaceId, body);
-    },
-    onSuccess: async (_result, { workspaceId }) => {
-      // Accept creates an entry and both decisions retire a suggestion, so the
-      // day's entries, summary, and suggestions all refetch together.
-      await queryClient.invalidateQueries({
-        queryKey: timeEntriesKeys.all(workspaceId),
-      });
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -247,7 +243,8 @@ type DeleteTimeEntryVars = {
 export const useDeleteTimeEntry = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: { mutation: "deleteTimeEntry" },
     mutationFn: async ({ workspaceId, id }: DeleteTimeEntryVars) => {
       await deleteTimeEntry(workspaceId, id);
     },

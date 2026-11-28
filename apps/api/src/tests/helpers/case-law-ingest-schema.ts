@@ -8,6 +8,8 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { IMPORT_SOURCE_KEYS } from "@stll/case-law-ingestion-core/parser-registry.gen";
 import { chunk } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
@@ -25,8 +27,6 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/parser-registry.gen";
 import { isRecord } from "@/api/lib/type-guards";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 

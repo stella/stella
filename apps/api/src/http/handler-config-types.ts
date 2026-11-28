@@ -7,6 +7,7 @@ import type { WorkspaceStatusAccess } from "@/api/lib/auth/accessible-workspace"
 import type { AccountAccess } from "@/api/lib/auth/account-access";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
+import type { AggregateMutationDeclaration } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
@@ -334,10 +335,15 @@ export type ContentDeliveryDisposition = {
   contentDelivery?: ContentDelivery;
 };
 
+export type AggregateMutationDisposition = {
+  readonly aggregateMutation?: AggregateMutationDeclaration;
+};
+
 /** The request and response schemas a handler config declares. */
 export type InputSchema = RouteConfig;
 
 export type HandlerConfig = InputSchema &
+  AggregateMutationDisposition &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &

@@ -19,6 +19,7 @@ const validSources = [
     text: `
 import { RESOURCE_TYPE } from "@stll/api-contract";
 export const resourceMutation = (options: { mutationFn: () => unknown }) => options.mutationFn;
+export const useResourceMutation = (options: { resource: unknown; mutationFn: () => unknown }) => options;
 export const resourceQueryOptions = (options: unknown) => options;
 export const RESOURCE_MUTATION_CONTRACTS = {
   renameEntity: {
@@ -1890,6 +1891,74 @@ test("reader identity domains do not extend mutation scope declarations", () => 
             )
           : source.text,
     }));
+    assertInvalidCannotBeBaselined(violations(sources));
+  }
+});
+
+test("useResourceMutation validates resource contracts and explicit opt-outs natively", () => {
+  const sources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { useResourceMutation } from "@/lib/workspace-realtime";
+import { api } from "@/lib/api";
+export const rename = () => useResourceMutation({
+  resource: { mutation: "renameEntity" },
+  mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }),
+});
+export const draftPrompt = () => useResourceMutation({
+  resource: { type: "none", reason: "Drafts a prompt without changing cached resources." },
+  mutationFn: () => api.properties({ workspaceId: "123" })["suggest-prompt"].post({ name: "Col" }),
+});
+`,
+    },
+  ];
+  expect(violations(sources)).toEqual([]);
+});
+
+test("useResourceMutation rejects missing, malformed, or mismatched resource declarations without baselining", () => {
+  for (const body of [
+    `export const missing = () => useResourceMutation({
+      mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }),
+    });`,
+    `export const emptyReason = () => useResourceMutation({
+      resource: { type: "none", reason: "   " },
+      mutationFn: () => api.properties({ workspaceId: "123" })["suggest-prompt"].post({ name: "Col" }),
+    });`,
+    `export const noneOnRegistered = () => useResourceMutation({
+      resource: { type: "none", reason: "Should not bypass registered contract." },
+      mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }),
+    });`,
+    `export const unknownContract = () => useResourceMutation({
+      resource: { mutation: "doesNotExist" },
+      mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }),
+    });`,
+    `export const mismatchedRoute = () => useResourceMutation({
+      resource: { mutation: "renameEntity" },
+      mutationFn: () => api.properties({ workspaceId: "123" })["suggest-prompt"].post({ name: "Col" }),
+    });`,
+    `export const nestedHelper = () => useResourceMutation({
+      resource: { mutation: "renameEntity" },
+      mutationFn: resourceMutation({
+        mutation: "renameEntity",
+        queryClient,
+        mutationFn: () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" }),
+      }),
+    });`,
+  ]) {
+    const sources = [
+      ...validSources.slice(0, 2),
+      {
+        file: "apps/web/src/features.ts",
+        text: `
+import { resourceMutation, useResourceMutation } from "@/lib/workspace-realtime";
+import { api } from "@/lib/api";
+const queryClient = {};
+${body}
+`,
+      },
+    ];
     assertInvalidCannotBeBaselined(violations(sources));
   }
 });

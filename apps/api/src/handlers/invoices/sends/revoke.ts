@@ -8,7 +8,6 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { revokeLiveInvoiceSends } from "@/api/lib/billing/invoice-send-revocation";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -27,6 +26,11 @@ const config = {
     invoiceId: resourceIdSchema("invoice"),
     sendId: resourceIdSchema("invoiceSend"),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Stamps the revocation on one send row of the invoice; the invoice and its lines do not change.",
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const revokeInvoiceSend = createSafeHandler(
@@ -87,11 +91,5 @@ const revokeInvoiceSend = createSafeHandler(
     return Result.ok({ id: params.sendId, revokedAt: revoked.toISOString() });
   },
 );
-
-declareAggregateMutation(revokeInvoiceSend, {
-  type: "independent",
-  reason:
-    "Stamps the revocation on one send row of the invoice; the invoice and its lines do not change.",
-});
 
 export default revokeInvoiceSend;

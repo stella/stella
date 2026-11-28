@@ -1,12 +1,11 @@
 import * as v from "valibot";
 
-import { load } from "@stll/html";
-
 import type {
   SourceFieldDisposition,
   SourceFieldInventory,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { SourceRawParts } from "@/api/lib/legal-search/source-raw-envelope";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { SourceRawParts } from "@stll/case-law-ingestion-core/source-raw-envelope";
+import { load } from "@stll/html";
 
 /**
  * Soft-law publishers expose listings only: no count endpoint and no

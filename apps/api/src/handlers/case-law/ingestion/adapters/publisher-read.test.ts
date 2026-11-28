@@ -2,11 +2,11 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   isReadRefusal,
   readOutcomeOfStatus,

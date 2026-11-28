@@ -3,17 +3,14 @@ import { panic, Result } from "better-result";
 import {
   getIngestionDiagnosticsSink,
   type IngestionDiagnosticsLogFn,
-} from "@/api/lib/case-law/ingestion-diagnostics-sink";
-import { errorTag } from "@/api/lib/errors/error-tag";
-import type {
-  IngestionResult,
-  SourceFieldInventory,
-} from "@/api/lib/legal-search/ingestion-types";
-import { publisherFieldRetentionAudit } from "@/api/lib/legal-search/source-exclusion-census";
+} from "./ingestion-diagnostics-sink";
+import type { IngestionResult, SourceFieldInventory } from "./ingestion-types";
+import { taggedErrorTag } from "./internal-helpers";
+import { publisherFieldRetentionAudit } from "./source-exclusion-census";
 import {
   decodeSourceRawEnvelope,
   type SourceRawParts,
-} from "@/api/lib/legal-search/source-raw-envelope";
+} from "./source-raw-envelope";
 
 export const PUBLISHER_FIELD_COVERAGE_EVENT = {
   UNMAPPED: "case_law.ingestion.publisher_fields_unmapped",
@@ -113,7 +110,7 @@ export const inspectPublisherFieldCoverage = async ({
       adapterKey,
       recordCount: 1,
       retainedRaw: true,
-      readerFailure: errorTag(observed.error),
+      readerFailure: taggedErrorTag(observed.error),
     });
     return;
   }

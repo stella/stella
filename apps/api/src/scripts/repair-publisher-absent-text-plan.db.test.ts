@@ -27,9 +27,9 @@ import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {

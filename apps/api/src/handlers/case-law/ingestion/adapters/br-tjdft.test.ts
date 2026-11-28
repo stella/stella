@@ -1,6 +1,9 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -18,9 +21,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import type { BrTjdftCursor } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

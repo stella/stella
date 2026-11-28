@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { rejectionOf, settledWithin, WaitTimeoutError } from "@stll/test-kit";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -13,7 +14,6 @@ import {
 } from "@/api/db/schema";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import { createSafeId } from "@/api/lib/branded-types";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { applyRepublishedDecisionBatch } from "@/api/scripts/link-republished-decisions-plan";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

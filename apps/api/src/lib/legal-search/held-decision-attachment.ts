@@ -1,6 +1,12 @@
 import { panic } from "better-result";
 import type * as v from "valibot";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  type ImportSourceKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
   CZ_ISIR_METADATA_KEY,
   czIsirDecisionMetadataSchema,
@@ -10,17 +16,11 @@ import {
   type DecisionIdentifierType,
 } from "@stll/legal-ast/decision-identifier";
 
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
   CZ_NS_COLLECTION_METADATA_KEY,
   czNsCollectionDocumentPartSchema,
   storedCzNsCollectionEntrySchema,
 } from "@/api/lib/legal-search/cz-ns-collection-entry";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-  type ImportSourceKey,
-} from "@/api/lib/legal-search/ingestion-constants";
 
 import type { CollectionDocumentPart } from "./collection-document-part";
 

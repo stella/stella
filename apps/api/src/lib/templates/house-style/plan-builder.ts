@@ -77,6 +77,7 @@ import {
   isBlankParagraph,
   isBulleted,
   isSetAsTitle,
+  isSignatureLine,
 } from "@/api/lib/templates/house-style/role-proposer";
 import type {
   HouseStyleRole,
@@ -310,6 +311,24 @@ export type FormattingNoteItem =
       filled: ("addressee" | "date" | "reference")[];
       left: ("addressee" | "date" | "reference")[];
     }
+  /** Drawn marks of the page the source was laid out on (dots, rules and
+   *  lines placed at coordinates of that page) were left out: `marks` of
+   *  them, anchored in the paragraph `blockId`. Set anew, the text stands
+   *  elsewhere and they would stand over it. A paragraph that held nothing
+   *  else is left out with them, and `paragraphOmitted` says so. For a
+   *  paragraph without words `nearBlockId` is the next paragraph with
+   *  text, to find the place by. */
+  | {
+      kind: "pageMarksDropped";
+      blockId: string;
+      marks: number;
+      nearBlockId?: string;
+      paragraphOmitted?: true;
+    }
+  /** Such marks next to the words of a signature were kept, `marks` of
+   *  them in the paragraph `blockId`: one of them may be the line to sign
+   *  on. They may stand in the wrong place. */
+  | { kind: "pageMarksKept"; blockId: string; marks: number }
   /** The fields of the header the template keeps (a memo's `To:`,
    *  `From:`): each of `filled` took the value of the document's own line
    *  for that field, which lost its own name of the field (`from`, as
@@ -470,6 +489,8 @@ type BuiltPlan = {
 
 /** What every step of one build reads. */
 type Context = {
+  /** The paragraphs written without their marks of the source's page. */
+  pageMarks: ReadonlySet<string>;
   blocks: readonly DocxBlock[];
   blockById: ReadonlyMap<string, DocxBlock>;
   /** For a manifest that keeps its tracked changes: the number each
@@ -801,7 +822,7 @@ type Placed = {
   titleOf: Map<string, DocxBlock>;
   /** The heading a joined title paragraph ends up in. */
   mergedInto: Map<string, string>;
-  omitted: Map<string, "empty" | "sourceToc">;
+  omitted: Map<string, "empty" | "sourceToc" | "pageArtifact">;
   /** Placed paragraphs that start a page. */
   pageStarts: Set<string>;
   /** Placed paragraphs that stay on the page of the one after them. */
@@ -833,7 +854,8 @@ const roleOf = (
 
 /**
  * The blank paragraphs that stay: the first one after a table that only
- * blank paragraphs part from the next table or from the document's end.
+ * blank paragraphs (or ones holding only marks of the source's page) part
+ * from the next table or from the document's end.
  * Two tables with nothing between them are one table to a word processor,
  * and a document's last block has to be a paragraph.
  */
@@ -865,7 +887,12 @@ const tableSeparators = (
     if (!afterTable || index.contentsBlockIds.has(block.id)) {
       continue;
     }
-    if (roleOf(context, block) === null && isBlankParagraph(block)) {
+    // A paragraph that holds only marks of the source's page parts two
+    // tables as a blank one does; it stays, without its marks.
+    if (
+      (roleOf(context, block) === null && isBlankParagraph(block)) ||
+      holdsOnlyPageMarks(block)
+    ) {
       firstBlank ??= block.id;
       held ||= pageHolders.has(block.id);
       continue;
@@ -2084,6 +2111,27 @@ const settledContentsHolder = (
   return null;
 };
 
+/** Why a paragraph of the source is left out with what it carries, if it
+ *  is. `held` says the source starts a page in front of it or it is kept
+ *  for a section or a table. */
+const leftOutOfSource = (
+  context: Context,
+  block: DocxBlock,
+  held: boolean,
+): "sourceToc" | "pageArtifact" | null => {
+  // The source's own contents give way to the template's; a template
+  // without contents keeps the source's, so no entry goes missing.
+  if (
+    context.index.contentsBlockIds.has(block.id) &&
+    context.profile.regions.contents.length > 0
+  ) {
+    return "sourceToc";
+  }
+  // A paragraph that holds nothing but marks of the source's page goes
+  // with them, unless it is held: then it stays, without its marks.
+  return goesWithPageMarks(context, block, held) ? "pageArtifact" : null;
+};
+
 /** An automatic bullet: a mark of a font, which no engine writes as text. */
 const isListBullet = (block: DocxBlock): boolean =>
   isBulleted(block) && shownLabelOf(block) !== null;
@@ -2134,7 +2182,7 @@ const joinsItsHeading = (
 
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
-  const { topLevel, index, proposalById } = context;
+  const { topLevel, proposalById } = context;
   const pageHolders = pageHoldersBeforeTables(context);
   const contentsHolder = pageHolderBeforeContents(context);
   // A blank paragraph that ends a section which stays one carries it.
@@ -2170,13 +2218,13 @@ const placeParagraphs = (context: Context): Placed => {
       placed.placements.push(...cellPlacementsOf(context, block));
       continue;
     }
-    // The source's own contents give way to the template's; a template
-    // without contents keeps the source's, so no entry goes missing.
-    if (
-      index.contentsBlockIds.has(block.id) &&
-      context.profile.regions.contents.length > 0
-    ) {
-      placed.omitted.set(block.id, "sourceToc");
+    const leftOut = leftOutOfSource(
+      context,
+      block,
+      startsPage.has(block.id) || kept.has(block.id),
+    );
+    if (leftOut !== null) {
+      placed.omitted.set(block.id, leftOut);
       continue;
     }
     const role = roleOf(context, block);
@@ -2267,6 +2315,102 @@ const asTextOf = (
   numbering === null && shownLabelOf(block) !== null
     ? { labelAsText: true }
     : {};
+
+const NO_PAGE_MARKS: ReadonlySet<string> = new Set();
+/** How many paragraphs with text on either side of one are looked at for
+ *  the words of a signature: the one right above and the one right below. */
+const SIGNATURE_REACH = 1;
+
+/**
+ * Whether a paragraph holds nothing but drawn marks fixed to the page. One
+ * that starts a page or ends a section holds that too: it stays, without
+ * its marks, so the page still starts where the source starts it.
+ */
+const holdsOnlyPageMarks = (block: DocxBlock): boolean =>
+  block.kind === "paragraph" &&
+  block.text.trim() === "" &&
+  printedLabel(block) === null &&
+  block.pageShapes !== undefined &&
+  block.inlineObjects === block.pageShapes &&
+  // A number a field counts is in no text and is content of its own.
+  (block.selfNumbers === undefined || block.selfNumbers.length === 0) &&
+  (block.pageBreaks ?? 0) === 0 &&
+  block.pageBreakBefore !== true &&
+  block.endsSection !== true;
+
+/**
+ * The paragraphs that are written without their drawn marks fixed to the
+ * page, and the note of each. Such a mark (a dot, a rule, a line a
+ * conversion from a fixed layout left behind) was placed by the source's
+ * page; set anew, the text stands elsewhere and the mark over it. A mark in
+ * or next to the words of a signature stays: it may be the line to sign on,
+ * and one mark out of place is the lesser harm.
+ */
+const pageMarksToDrop = ({ blocks, items }: Context): Set<string> => {
+  const dropped = new Set<string>();
+  const hasText = (block: DocxBlock | undefined): block is DocxBlock =>
+    block?.kind === "paragraph" && block.text.trim() !== "";
+  /** The paragraphs with text nearest to a place, going one way. */
+  const nearest = (from: number, step: 1 | -1): DocxBlock[] => {
+    const found: DocxBlock[] = [];
+    for (
+      let at = from;
+      at >= 0 && at < blocks.length && found.length < SIGNATURE_REACH;
+      at += step
+    ) {
+      const block = blocks[at];
+      if (hasText(block)) {
+        found.push(block);
+      }
+    }
+    return found;
+  };
+  for (const [position, block] of blocks.entries()) {
+    const marks = block.pageShapes;
+    if (block.kind !== "paragraph" || marks === undefined) {
+      continue;
+    }
+    const around = [
+      block,
+      ...nearest(position - 1, -1),
+      ...nearest(position + 1, 1),
+    ];
+    if (around.some(({ text }) => isSignatureLine(text))) {
+      items.push({ kind: "pageMarksKept", blockId: block.id, marks });
+      continue;
+    }
+    dropped.add(block.id);
+    const [near] = hasText(block) ? [] : nearest(position + 1, 1);
+    items.push({
+      kind: "pageMarksDropped",
+      blockId: block.id,
+      marks,
+      ...(near === undefined ? {} : { nearBlockId: near.id }),
+    });
+  }
+  return dropped;
+};
+
+/**
+ * Whether a paragraph goes with the page marks it holds: it holds nothing
+ * else and nothing `holds` it in place (a page the source starts in front
+ * of it, a section or a table it is kept for). Its note then says so.
+ */
+const goesWithPageMarks = (
+  context: Context,
+  block: DocxBlock,
+  holds: boolean,
+): boolean => {
+  if (holds || !context.pageMarks.has(block.id) || !holdsOnlyPageMarks(block)) {
+    return false;
+  }
+  for (const item of context.items) {
+    if (item.kind === "pageMarksDropped" && item.blockId === block.id) {
+      item.paragraphOmitted = true;
+    }
+  }
+  return true;
+};
 
 /**
  * What a plan does with its source's tracked changes: a manifest read in one
@@ -2623,12 +2767,15 @@ const looseCellOf = (
     styleId === undefined
       ? looseSpacingOf(inner, setTightOf(inner))
       : setTightOf(inner);
+  // Marks of the source's page it holds are written without it.
+  const marked = context.pageMarks.has(inner.id);
   if (
     styleId === undefined &&
     !labelled &&
     alignment === undefined &&
     spacing === undefined &&
-    indent === undefined
+    indent === undefined &&
+    !marked
   ) {
     return undefined;
   }
@@ -2639,6 +2786,7 @@ const looseCellOf = (
     ...(alignment === undefined ? {} : { alignment }),
     ...(indent === undefined ? {} : { indent }),
     ...(spacing === undefined ? {} : { spacing }),
+    ...(marked ? { dropPageShapes: true } : {}),
   };
 };
 
@@ -2724,6 +2872,7 @@ const tableItem = (
             (context.index.entryByBlockId.get(inner.id)?.column ?? null) !==
             null,
         }),
+        ...(context.pageMarks.has(inner.id) ? { dropPageShapes: true } : {}),
       });
     } else if (inner.kind === "paragraph") {
       const loose = looseCellOf(context, inner);
@@ -2805,6 +2954,7 @@ const paragraphItems = ({
     ...stripped,
     ...(dropsLabelBreak(profile, placement) ? { stripLabelBreak: true } : {}),
     ...asTextOf(block, numbering),
+    ...(context.pageMarks.has(block.id) ? { dropPageShapes: true } : {}),
     ...(title === undefined ? {} : { mergeNext }),
     ...(pageStart ? { pageBreakBefore: true } : {}),
     ...(endsSection === undefined ? {} : { endsSection }),
@@ -2823,6 +2973,7 @@ const paragraphItems = ({
           blockId: title.id,
           hash: title.hash,
           ...asTextOf(title, null),
+          ...(context.pageMarks.has(title.id) ? { dropPageShapes: true } : {}),
         },
       ];
 };
@@ -4060,6 +4211,7 @@ export const buildTemplatePlan = ({
     }
   }
   const context: Context = {
+    pageMarks: NO_PAGE_MARKS,
     blocks,
     blockById: new Map(blocks.map((block) => [block.id, block])),
     tableOf,
@@ -4082,6 +4234,7 @@ export const buildTemplatePlan = ({
   takeHeaderLines(context);
 
   context.keptSections = sectionsToKeep(context);
+  context.pageMarks = pageMarksToDrop(context);
   const placed = placeParagraphs(context);
   const { patches, levelsByList } = numberPlacements({
     placements: placed.placements,

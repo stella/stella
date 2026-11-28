@@ -8,9 +8,10 @@
  * added, renamed or retyped fails to compile here rather than drifting.
  */
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import type { caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 type CaseLawSourceRow = typeof caseLawSources.$inferSelect;
 

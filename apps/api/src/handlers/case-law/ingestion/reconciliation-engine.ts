@@ -40,6 +40,20 @@ import {
   sql,
 } from "drizzle-orm";
 
+import type {
+  HeldRowRules,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationListingItem,
+  SourceAdapter,
+  SourceReconciliation,
+  StoredRawReparseInput,
+  StoredRawResultReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sanitizeQueryErrorText } from "@stll/errors";
 import { DAY_IN_MS } from "@stll/time";
@@ -105,20 +119,6 @@ import {
 } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type {
-  HeldRowRules,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationListingItem,
-  SourceAdapter,
-  SourceReconciliation,
-  StoredRawReparseInput,
-  StoredRawResultReader,
-} from "@/api/lib/legal-search/ingestion-types";
-import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-} from "@/api/lib/legal-search/ingestion-types";
 import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,

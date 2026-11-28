@@ -162,18 +162,18 @@ describe("aggregate mutation route coverage", () => {
 
 describe("aggregate declaration sites", () => {
   const imports =
-    'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
+    'import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
   const locked =
-    'declareAggregateMutation(async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }, {type: "aggregate", aggregates: ["workspace"]})';
+    'createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); })';
 
-  test("files that never name the helper are not parsed, and the owner is skipped", () => {
+  test("files that never name aggregateMutation are not parsed, and infra files are skipped", () => {
     const sources = fixture();
     sources.set(routes, "this is not ( valid source");
-    sources.set(owner, "export const declareAggregateMutation = () => {};");
+    sources.set(owner, "export const aggregateMutation = () => {};");
     expect(verify(sources)).toBe(0);
   });
 
-  test("every direct call is verified, wherever it sits", () => {
+  test("every handler config declaration is verified, wherever it sits", () => {
     const sources = fixture();
     sources.set(
       routes,
@@ -186,43 +186,73 @@ describe("aggregate declaration sites", () => {
     const sources = fixture();
     sources.set(
       routes,
-      `${imports} export const handler = declareAggregateMutation(definition, {type: "independent", reason: "Owns one row."});`,
+      `${imports} export const handler = createSafeHandler({aggregateMutation: {type: "independent", reason: "Owns one row."}}, async () => {});`,
     );
     expect(verify(sources)).toBe(1);
     sources.set(
       routes,
-      `${imports} export const handler = declareAggregateMutation(definition, {type: "independent", reason: ""});`,
+      `${imports} export const handler = createSafeHandler({aggregateMutation: {type: "independent", reason: ""}}, async () => {});`,
     );
     expect(() => verify(sources)).toThrow(
       "Missing mutation declaration reason",
     );
   });
 
-  test("aliases, re-exports, namespace imports and lookalike owners fail closed", () => {
+  test("local const configs with satisfies/as/parens are resolved to their handler factory", () => {
+    const sources = fixture();
+    sources.set(
+      routes,
+      `${imports} const config = { aggregateMutation: { type: "aggregate", aggregates: ["workspace"] } } satisfies HandlerConfig; export const handler = createSafeHandler(config, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); });`,
+    );
+    expect(verify(sources)).toBe(1);
+    sources.set(
+      routes,
+      `${imports} const config = { aggregateMutation: { type: "aggregate", aggregates: ["workspace"] } } satisfies HandlerConfig; export const handler = createSafeHandler(config, async () => {});`,
+    );
+    expect(() => verify(sources)).toThrow("must await withAggregateLock");
+  });
+
+  test("spread, computed, dynamic, mutated, non-const, and unattached declarations fail closed", () => {
     for (const [source, message] of pairs(
       [
-        `${imports} const alias = declareAggregateMutation; alias(handler, {type: "independent", reason: "r"});`,
-        "Call declareAggregateMutation directly",
+        `${imports} export const handler = createSafeHandler({ ...base, aggregateMutation: { type: "independent", reason: "r" } }, async () => {});`,
+        "Invalid aggregate mutation config",
       ],
       [
-        `${imports} export { declareAggregateMutation };`,
-        "Call declareAggregateMutation directly",
+        `${imports} const config = { aggregateMutation: { type: "independent", reason: "r" } }; export const handler = createSafeHandler({ ...config }, async () => {});`,
+        "Spread aggregateMutation config is not allowed",
       ],
       [
-        'import * as owner from "@/api/lib/db/aggregate-mutation-declaration"; owner.declareAggregateMutation(handler, {type: "independent", reason: "r"});',
-        "Import declareAggregateMutation by name from its owner",
-      ],
-      [
-        'import { declareAggregateMutation } from "@/api/lib/db/other"; declareAggregateMutation(handler, {type: "independent", reason: "r"});',
-        "Import declareAggregateMutation from",
-      ],
-      [
-        'const owner = await import("@/api/lib/db/aggregate-mutation-declaration"); owner.declareAggregateMutation(handler, {type: "independent", reason: "r"});',
-        "Call declareAggregateMutation directly",
-      ],
-      [
-        `${imports} declareAggregateMutation(handler, decl);`,
+        `${imports} export const handler = createSafeHandler({ aggregateMutation: { ...decl } }, async () => {});`,
         "Invalid aggregate mutation declaration",
+      ],
+      [
+        `${imports} export const handler = createSafeHandler({ ["aggregateMutation"]: { type: "independent", reason: "r" } }, async () => {});`,
+        "Invalid aggregate mutation declaration",
+      ],
+      [
+        `${imports} export const handler = createSafeHandler({ aggregateMutation: decl }, async () => {});`,
+        "Invalid aggregate mutation declaration",
+      ],
+      [
+        `${imports} const aggregateMutation = { type: "independent", reason: "r" }; export const handler = createSafeHandler({ aggregateMutation }, async () => {});`,
+        "Invalid aggregate mutation declaration",
+      ],
+      [
+        `${imports} let config = { aggregateMutation: { type: "independent", reason: "r" } }; export const handler = createSafeHandler(config, async () => {});`,
+        "Aggregate mutation config must be a const binding",
+      ],
+      [
+        `${imports} const config = { aggregateMutation: { type: "independent", reason: "r" } }; export { config };`,
+        "Aggregate mutation config must be passed to a handler factory",
+      ],
+      [
+        `${imports} const handler = createSafeHandler({}, async () => {}); handler.config.aggregateMutation = { type: "independent", reason: "r" };`,
+        "Declare aggregateMutation statically on handler config",
+      ],
+      [
+        `import { createSafeHandler } from "@/api/lib/other"; export const handler = createSafeHandler({ aggregateMutation: { type: "independent", reason: "r" } }, async () => {});`,
+        "Declare aggregateMutation directly on a handler factory config",
       ],
     )) {
       const sources = fixture();
@@ -231,11 +261,20 @@ describe("aggregate declaration sites", () => {
     }
   });
 
-  test("an aliased import is verified under its local name", () => {
+  test("defineEndpoint declarations are verified natively", () => {
     const sources = fixture();
     sources.set(
+      "apps/api/src/lib/endpoints.ts",
+      "export const defineEndpoint = { public: (config, handler) => ({ config, handler }) };",
+    );
+    sources.set(
       routes,
-      `import { declareAggregateMutation as own } from "@/api/lib/db/aggregate-mutation-declaration"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; own(async () => {}, {type: "aggregate", aggregates: ["workspace"]});`,
+      'import { defineEndpoint } from "@/api/lib/endpoints"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; export const ok = defineEndpoint.public({ aggregateMutation: { type: "aggregate", aggregates: ["workspace"] } }, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); });',
+    );
+    expect(verify(sources)).toBe(1);
+    sources.set(
+      routes,
+      'import { defineEndpoint } from "@/api/lib/endpoints"; export const bad = defineEndpoint.public({ aggregateMutation: { type: "aggregate", aggregates: ["workspace"] } }, async () => {});',
     );
     expect(() => verify(sources)).toThrow("must await withAggregateLock");
   });
@@ -277,7 +316,7 @@ describe("aggregate declaration sites", () => {
     const sources = fixture();
     sources.set(
       routes,
-      `${imports} declareAggregateMutation(handler, {type: "aggregate", aggregates: ["missing"]});`,
+      `${imports} createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["missing"]}}, async () => {});`,
     );
     expect(() => verify(sources)).toThrow("Unknown aggregate registry name");
   });
@@ -298,49 +337,32 @@ describe("aggregate declaration sites", () => {
     expect(() => verify(sources)).toThrow("must await withAggregateLock");
   });
 
-  test("inline declarations resolve named imported handlers by trusted binding", () => {
-    const sources = fixture();
-    sources.set(
-      routes,
-      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { existing } from "@/api/handlers/example/create"; export const route = declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]});`,
-    );
-    const module = "apps/api/src/handlers/example/create.ts";
-    const moduleImports =
-      'import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
-    const locking =
-      'createSafeHandler({}, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); })';
-    sources.set(module, `${moduleImports} export const existing = ${locking};`);
-    expect(verify(sources)).toBe(1);
-    sources.set(
-      module,
-      `${moduleImports} export let existing = ${locking}; existing = createSafeHandler({}, async () => {});`,
-    );
-    expect(() => verify(sources)).toThrow(
-      "Cannot resolve declared aggregate handler implementation",
-    );
-  });
-
   test.each([
     [
       "createSafeRootHandler",
-      "{}, CALLBACK, { authorize: async () => undefined }",
+      '{aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, CALLBACK, { authorize: async () => undefined }',
     ],
-    ["createSafeHandler", "{}, CALLBACK, { authorize: async () => undefined }"],
+    [
+      "createSafeHandler",
+      '{aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, CALLBACK, { authorize: async () => undefined }',
+    ],
     [
       "createSafeSessionHandler",
-      "{}, CALLBACK, { checkAccountOperation: async () => undefined }",
+      '{aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, CALLBACK, { checkAccountOperation: async () => undefined }',
     ],
-    ["createSafeTokenHandler", "{}, async () => ({}), CALLBACK"],
+    [
+      "createSafeTokenHandler",
+      '{aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async () => ({}), CALLBACK',
+    ],
   ])(
     "resolves %s implementations from the owning factory contract",
     (factory, args) => {
       const sources = fixture();
-      const declaration = `import { ${factory} as create } from "@/api/lib/api-handlers"; ${imports}`;
+      const declaration = `import { ${factory} as create } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";`;
       const body =
         'async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }';
       const endpoint = (callback: string) => `${declaration}
-      const existing = create(${args.replace("CALLBACK", () => callback)});
-      declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]});`;
+      export const existing = create(${args.replace("CALLBACK", () => callback)});`;
       sources.set(routes, endpoint(body));
       expect(verify(sources)).toBe(1);
       sources.set(routes, endpoint("async () => {}"));
@@ -371,7 +393,7 @@ describe("aggregate declaration sites", () => {
       const sources = fixture();
       sources.set(
         "apps/api/src/handlers/example/create.ts",
-        `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { ${imported} } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async ({safeDb}) => { await safeDb(async (tx) => { ${body} }); }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`,
+        `import { createSafeHandler } from "@/api/lib/api-handlers"; import { ${imported} } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async ({safeDb}) => { await safeDb(async (tx) => { ${body} }); }); export default existing;`,
       );
       expect(verify(sources)).toBe(1);
     },
@@ -489,7 +511,7 @@ describe("aggregate declaration sites", () => {
       const sources = fixture();
       sources.set(
         "apps/api/src/handlers/example/create.ts",
-        `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { ${imported} } from "${module}"; const existing = createSafeHandler({}, async ({safeDb}) => { await safeDb(async (tx) => { ${body} }); }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`,
+        `import { createSafeHandler } from "@/api/lib/api-handlers"; import { ${imported} } from "${module}"; const existing = createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async ({safeDb}) => { await safeDb(async (tx) => { ${body} }); }); export default existing;`,
       );
       expect(() => verify(sources)).toThrow("must await withAggregateLock");
     },
@@ -522,7 +544,7 @@ describe("aggregate declaration sites", () => {
       const sources = fixture();
       sources.set(
         "apps/api/src/handlers/example/create.ts",
-        `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeRootHandler } from "@/api/lib/api-handlers"; import { resultTx } from "${module}"; import { withInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock"; const existing = createSafeRootHandler({}, async function* ({safeDb}) { ${call} }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`,
+        `import { createSafeRootHandler } from "@/api/lib/api-handlers"; import { resultTx } from "${module}"; import { withInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock"; const existing = createSafeRootHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async function* ({safeDb}) { ${call} }); export default existing;`,
       );
       if (joined) {
         expect(verify(sources)).toBe(1);
@@ -535,7 +557,7 @@ describe("aggregate declaration sites", () => {
   test("a declaration through a local endpoint factory checks the factory's handler", () => {
     const sources = fixture();
     const create = (body: string) =>
-      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; export const createEndpoint = (authorize = defaultAuthorize) => createSafeHandler({}, async () => { ${body} }); const existing = createEndpoint(); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
+      `import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; export const createEndpoint = (authorize = defaultAuthorize) => createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async () => { ${body} }); const existing = createEndpoint(); export default existing;`;
     sources.set(
       "apps/api/src/handlers/example/create.ts",
       create('await withAggregateLock({aggregate: "workspace", id, tx});'),
@@ -549,7 +571,7 @@ describe("aggregate declaration sites", () => {
     const sources = fixture();
     sources.set(
       "apps/api/src/handlers/example/create.ts",
-      'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; export const foo = createSafeHandler({}, async () => {}); const bar = createSafeHandler({}, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }); declareAggregateMutation(foo, {type: "aggregate", aggregates: ["workspace"]}); export default bar;',
+      'import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; export const foo = createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async () => {}); const bar = createSafeHandler({}, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }); export default bar;',
     );
     expect(() => verify(sources)).toThrow("must await withAggregateLock");
   });
@@ -559,29 +581,30 @@ describe("declared handler locks", () => {
   test("each declared aggregate is acquired by the exact handler", () => {
     const sources = fixture();
     const prefix =
-      'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
-    const suffix =
-      'declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;';
+      'import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
+    const config =
+      '{aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}';
+    const suffix = "export default existing;";
     const acquisition =
       'await withAggregateLock({aggregate: "workspace", id, tx});';
     sources.set(
       "apps/api/src/handlers/example/create.ts",
-      `${prefix} const existing = createSafeHandler({}, async () => { ${acquisition} }); ${suffix}`,
+      `${prefix} const existing = createSafeHandler(${config}, async () => { ${acquisition} }); ${suffix}`,
     );
     expect(verify(sources)).toBe(1);
     sources.set(
       "apps/api/src/handlers/example/create.ts",
-      `${prefix} const existing = createSafeHandler({}, async () => {}); ${suffix}`,
+      `${prefix} const existing = createSafeHandler(${config}, async () => {}); ${suffix}`,
     );
     expect(() => verify(sources)).toThrow("must await withAggregateLock");
     sources.set(
       "apps/api/src/handlers/example/create.ts",
-      `${prefix} const unrelated = async () => { ${acquisition} }; const existing = createSafeHandler({}, async () => {}); ${suffix}`,
+      `${prefix} const unrelated = async () => { ${acquisition} }; const existing = createSafeHandler(${config}, async () => {}); ${suffix}`,
     );
     expect(() => verify(sources)).toThrow("must await withAggregateLock");
     sources.set(
       "apps/api/src/handlers/example/create.ts",
-      `${prefix} const existing = createSafeHandler({}, async () => { withAggregateLock({aggregate: "workspace", id, tx}); }); ${suffix}`,
+      `${prefix} const existing = createSafeHandler(${config}, async () => { withAggregateLock({aggregate: "workspace", id, tx}); }); ${suffix}`,
     );
     expect(() => verify(sources)).toThrow("must await withAggregateLock");
   });
@@ -589,8 +612,9 @@ describe("declared handler locks", () => {
   test("both registered row-lock APIs require trusted awaited acquisitions", () => {
     const module = "apps/api/src/handlers/example/create.ts";
     const setup = fixture;
-    const declaration =
-      'declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;';
+    const config =
+      '{aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}';
+    const declaration = "export default existing;";
 
     for (const api of ["withAggregateLock", "withAggregateRowQuery"]) {
       const options =
@@ -599,30 +623,30 @@ describe("declared handler locks", () => {
           : '{aggregate: "workspace", id, mode: "update", tx, select: (tx) => tx.select().from(workspaces)}';
       const acquire = `await acquireRows(${options});`;
       const imports =
-        'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers";';
+        'import { createSafeHandler } from "@/api/lib/api-handlers";';
       const sources = setup();
 
       sources.set(
         module,
-        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async () => { ${acquire} }); ${declaration}`,
+        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler(${config}, async () => { ${acquire} }); ${declaration}`,
       );
       expect(verify(sources)).toBe(1);
 
       sources.set(
         module,
-        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async () => { acquireRows(${options}); }); ${declaration}`,
+        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler(${config}, async () => { acquireRows(${options}); }); ${declaration}`,
       );
       expect(() => verify(sources)).toThrow("must await withAggregateLock");
 
       sources.set(
         module,
-        `${imports} import { ${api} as acquireRows } from "@/api/lib/fake-lock"; const existing = createSafeHandler({}, async () => { ${acquire} }); ${declaration}`,
+        `${imports} import { ${api} as acquireRows } from "@/api/lib/fake-lock"; const existing = createSafeHandler(${config}, async () => { ${acquire} }); ${declaration}`,
       );
       expect(() => verify(sources)).toThrow("must await withAggregateLock");
 
       sources.set(
         module,
-        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async () => { const acquireRows = async () => {}; await acquireRows(${options}); }); ${declaration}`,
+        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler(${config}, async () => { const acquireRows = async () => {}; await acquireRows(${options}); }); ${declaration}`,
       );
       expect(() => verify(sources)).toThrow("must await withAggregateLock");
     }
@@ -631,11 +655,10 @@ describe("declared handler locks", () => {
   test("detached callbacks cannot cover an aggregate declaration", () => {
     const sources = fixture();
     const imports =
-      'import { Result } from "better-result"; import { abortableTx } from "@/api/db/safe-db"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock, withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";';
+      'import { Result } from "better-result"; import { abortableTx } from "@/api/db/safe-db"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock, withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";';
     const acquire =
       'async (tx) => { await withAggregateLock({aggregate: "workspace", id, tx}); }';
-    const declare =
-      'declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;';
+    const declare = "export default existing;";
     const module = "apps/api/src/handlers/example/create.ts";
     for (const detached of [
       `setTimeout(${acquire}, 0);`,
@@ -650,7 +673,7 @@ describe("declared handler locks", () => {
     ]) {
       sources.set(
         module,
-        `${imports} const existing = createSafeHandler({}, async ({safeDb}) => { ${detached} }); ${declare}`,
+        `${imports} const existing = createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async ({safeDb}) => { ${detached} }); ${declare}`,
       );
       expect(() => verify(sources)).toThrow("must await withAggregateLock");
     }
@@ -661,7 +684,7 @@ describe("declared handler locks", () => {
     ]) {
       sources.set(
         module,
-        `${imports} const existing = createSafeHandler({}, async ({safeDb}) => { ${joined} }); ${declare}`,
+        `${imports} const existing = createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async ({safeDb}) => { ${joined} }); ${declare}`,
       );
       expect(verify(sources)).toBe(1);
     }
@@ -672,7 +695,7 @@ describe("declared handler locks", () => {
     ]) {
       sources.set(
         module,
-        `${imports} const existing = createSafeHandler({}, async function* ({safeDb}) { yield* Result.await(${yielded}); }); ${declare}`,
+        `${imports} const existing = createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async function* ({safeDb}) { yield* Result.await(${yielded}); }); ${declare}`,
       );
       expect(verify(sources)).toBe(1);
     }
@@ -682,7 +705,7 @@ describe("declared handler locks", () => {
     const sources = fixture();
     const module = "apps/api/src/handlers/example/create.ts";
     const handler = (transaction: string) =>
-      `import { Result } from "better-result"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeRootHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; import { withChatRunPings } from "@/api/lib/chat/chat-run-pings"; const existing = createSafeRootHandler({}, async function* ({safeDb}) { const outcome = yield* Result.await(withChatRunPings(async (pings) => await safeDb(async (tx) => { ${transaction} }))); return Result.ok(outcome); }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
+      `import { Result } from "better-result"; import { createSafeRootHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; import { withChatRunPings } from "@/api/lib/chat/chat-run-pings"; const existing = createSafeRootHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async function* ({safeDb}) { const outcome = yield* Result.await(withChatRunPings(async (pings) => await safeDb(async (tx) => { ${transaction} }))); return Result.ok(outcome); }); export default existing;`;
     sources.set(
       module,
       handler(
@@ -710,7 +733,7 @@ describe("declared handler locks", () => {
       body: string;
       declaration?: string;
     }) =>
-      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; ${imports} const existing = createSafeHandler({}, async ({safeDb}) => { ${body} }); declareAggregateMutation(existing, ${declaration}); export default existing;`;
+      `import { createSafeHandler } from "@/api/lib/api-handlers"; ${imports} const existing = createSafeHandler({aggregateMutation: ${declaration}}, async ({safeDb}) => { ${body} }); export default existing;`;
     const setup = fixture;
 
     test("a same-package callee that awaits the helper covers the route", () => {
@@ -748,7 +771,7 @@ describe("declared handler locks", () => {
     test("generator handlers reach callees that lock in inline callbacks", () => {
       const sources = setup();
       const generator = (yielded: string) =>
-        `import { Result } from "better-result"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { renewExample } from "@/api/services/example-lock"; const existing = createSafeHandler({}, async function* () { const renewed = yield* Result.await(${yielded}); return Result.ok(renewed); }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
+        `import { Result } from "better-result"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { renewExample } from "@/api/services/example-lock"; const existing = createSafeHandler({aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}, async function* () { const renewed = yield* Result.await(${yielded}); return Result.ok(renewed); }); export default existing;`;
       sources.set(
         service,
         `import { Result } from "better-result"; import { rootDb } from "@/api/db/root"; ${lockImport} export const renewExample = async () => { const outcome = await Result.tryPromise({ try: async () => await rootDb.transaction(async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
@@ -895,10 +918,10 @@ describe("declared handler locks", () => {
       }
       sources.set(
         module,
-        `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; ${lockImport} let existing = createSafeHandler({}, async ({safeDb}) => { await safeDb(async (tx) => { ${acquisition} }); }); existing = createSafeHandler({}, async () => {}); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`,
+        `import { createSafeHandler } from "@/api/lib/api-handlers"; ${lockImport} let config = {aggregateMutation: {type: "aggregate", aggregates: ["workspace"]}}; const existing = createSafeHandler(config, async ({safeDb}) => { await safeDb(async (tx) => { ${acquisition} }); }); export default existing;`,
       );
       expect(() => verify(sources)).toThrow(
-        "Cannot resolve declared aggregate handler implementation",
+        "Aggregate mutation config must be a const binding",
       );
     });
 

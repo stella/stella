@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
+import type { AdapterKey } from "@stll/case-law-ingestion-core/case-law-consts";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import { toUtcDateString } from "@/api/lib/dates";
 
 type CalendarDaySliceWalkOptions = {

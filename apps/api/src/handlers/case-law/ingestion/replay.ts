@@ -16,6 +16,25 @@ import {
 } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  storedRawResultReader,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReader,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseRejection,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  PARSER_REPARSE_FEATURES,
+  PARSER_VERSION_SCOPES,
+  storedFeaturesForParserReparseScope,
+} from "@stll/case-law-ingestion-core/parser-reparse-scopes";
+import type { ParserReparseScope } from "@stll/case-law-ingestion-core/parser-reparse-scopes";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -69,29 +88,10 @@ import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import {
-  STORED_RAW_REPARSE_REJECTION,
-  storedRawResultReader,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReader,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseRejection,
-} from "@/api/lib/legal-search/ingestion-types";
-import {
-  PARSER_REPARSE_FEATURES,
-  PARSER_VERSION_SCOPES,
-  storedFeaturesForParserReparseScope,
-} from "@/api/lib/legal-search/parser-reparse-scopes";
-import type { ParserReparseScope } from "@/api/lib/legal-search/parser-reparse-scopes";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored

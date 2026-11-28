@@ -18,7 +18,6 @@ import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
 import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
 import { renderInvoiceWithTypst } from "@/api/lib/billing/invoice-pdf/typst/render-typst";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { admitInvoiceLinkToken } from "@/api/lib/rate-limit/invoice-link-admission";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -38,6 +37,11 @@ const config = {
     ),
     file: v.picklist(INVOICE_LINK_FILES),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Reads a token-scoped invoice and records access; the first-view timestamp is a conditional idempotent update without changing invoice state.",
+  },
 } satisfies TokenHandlerConfig;
 
 const readFailed = (cause: unknown) =>
@@ -113,9 +117,4 @@ export const createDownloadInvoiceLinkFile = ({
   );
 
 const handler = createDownloadInvoiceLinkFile();
-declareAggregateMutation(handler, {
-  type: "independent",
-  reason:
-    "Reads a token-scoped invoice and records access; the first-view timestamp is a conditional idempotent update without changing invoice state.",
-});
 export default handler;

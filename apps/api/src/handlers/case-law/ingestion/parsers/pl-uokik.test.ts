@@ -11,6 +11,8 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   extractPdfBodyAndNotes,
@@ -37,8 +39,6 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { logger } from "@/api/lib/observability/logger";
 
 const parsePlUokikDocument = guardParser(uncheckedParsePlUokikDocument);

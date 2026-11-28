@@ -10,7 +10,6 @@ import { dictationVocabularyTerms } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -37,6 +36,10 @@ const config = {
     consumesServices: false,
   },
   body: dictationTermsBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["dictationVocabularyCapacity"],
+  },
 } satisfies HandlerConfig;
 
 const addDictationVocabulary = createSafeRootHandler(
@@ -101,10 +104,5 @@ const addDictationVocabulary = createSafeRootHandler(
     });
   },
 );
-
-declareAggregateMutation(addDictationVocabulary, {
-  type: "aggregate",
-  aggregates: ["dictationVocabularyCapacity"],
-});
 
 export default addDictationVocabulary;

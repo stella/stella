@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import {
   PROVISION_EXTRACTION_ADMISSION_REVISION,
@@ -33,7 +34,6 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { isRecord } from "@/api/lib/type-guards";
 import type {

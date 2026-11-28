@@ -6,7 +6,6 @@ import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   dataBoxIdSchema,
   organizationDataBoxesChangeResult,
@@ -26,6 +25,10 @@ const config = {
     consumesServices: false,
   },
   body: v.object({ boxId: dataBoxIdSchema }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["organizationDataBoxes"],
+  },
 } satisfies HandlerConfig;
 
 const addOrganizationDataBox = createSafeRootHandler(
@@ -47,10 +50,5 @@ const addOrganizationDataBox = createSafeRootHandler(
     return organizationDataBoxesChangeResult(saved);
   },
 );
-
-declareAggregateMutation(addOrganizationDataBox, {
-  type: "aggregate",
-  aggregates: ["organizationDataBoxes"],
-});
 
 export default addOrganizationDataBox;

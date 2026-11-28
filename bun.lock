@@ -93,6 +93,7 @@
         "@stll/brand": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/calculations": "workspace:*",
+        "@stll/case-law-ingestion-core": "workspace:*",
         "@stll/case-law-parsers": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/chat": "workspace:*",
@@ -393,6 +394,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api": "workspace:*",
+        "@stll/case-law-ingestion-core": "workspace:*",
         "@stll/concurrency": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
@@ -968,6 +970,31 @@
         "fast-check": "catalog:",
         "tsdown": "catalog:",
         "tsrs": "catalog:",
+      },
+    },
+    "packages/case-law-ingestion-core": {
+      "name": "@stll/case-law-ingestion-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/api-contract": "workspace:*",
+        "@stll/case-law-parsers": "workspace:*",
+        "@stll/collation": "workspace:*",
+        "@stll/concurrency": "workspace:*",
+        "@stll/errors": "workspace:*",
+        "@stll/fetch": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
+        "@stll/legal-atlas": "workspace:*",
+        "@stll/sha256": "workspace:*",
+        "better-result": "catalog:",
+        "entities": "^9.0.0",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/time": "0.4.3",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/case-law-parsers": {
@@ -3622,6 +3649,8 @@
     "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
 
     "@stll/calculations": ["@stll/calculations@workspace:packages/calculations"],
+
+    "@stll/case-law-ingestion-core": ["@stll/case-law-ingestion-core@workspace:packages/case-law-ingestion-core"],
 
     "@stll/case-law-parsers": ["@stll/case-law-parsers@workspace:packages/case-law-parsers"],
 

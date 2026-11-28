@@ -62,6 +62,10 @@ const config = {
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["mcpOAuthState"],
+  },
 } satisfies HandlerConfig;
 
 type ConnectMcpConnectorResult =

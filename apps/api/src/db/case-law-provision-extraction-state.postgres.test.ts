@@ -11,12 +11,17 @@ import type { SQL } from "bun";
  */
 import { describe, expect, test } from "bun:test";
 
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
+import type { RawIngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -25,8 +30,6 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withReservedSession } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

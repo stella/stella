@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
+import { splitCaseReference } from "./case-number";
 
 describe("splitCaseReference", () => {
   test("takes the sheet number off a Czech docket", () => {

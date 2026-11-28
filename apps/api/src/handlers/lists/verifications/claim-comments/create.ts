@@ -16,7 +16,6 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
@@ -56,6 +55,10 @@ const config = {
   },
   params: workspaceParams({}),
   body: bodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["workspace"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const createClaimComment = createSafeHandler(
@@ -115,10 +118,5 @@ const createClaimComment = createSafeHandler(
     });
   },
 );
-
-declareAggregateMutation(createClaimComment, {
-  type: "aggregate",
-  aggregates: ["workspace"],
-});
 
 export default createClaimComment;

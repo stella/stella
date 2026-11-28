@@ -2,13 +2,13 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { caseLawSources } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];

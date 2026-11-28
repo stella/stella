@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { toMetadataUrl } from "@stll/case-law-parsers/sanitize-url";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "./case-law-consts";
 import {
   absentDecisionTextFields,
   absentTextField,
@@ -26,12 +26,12 @@ import {
   storeDecisionTextFields,
   storeTextField,
   TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
+} from "./decision-text";
+import { isIngestionRecord } from "./internal-helpers";
 import {
   MAX_METADATA_URL_DIAGNOSTICS,
   META_URL_DIAGNOSTICS,
-} from "@/api/lib/legal-search/metadata-urls";
-import { isRecord } from "@/api/lib/type-guards";
+} from "./metadata-urls";
 
 test("publisher metadata cannot collide with generated URL diagnostics", () => {
   for (const value of [
@@ -93,7 +93,10 @@ test("URL metadata provenance is explicit at the checked boundary", () => {
   );
   expect(current["url"]).toBe("https://example.test/?stated=&amp;");
   const diagnostics = current[META_URL_DIAGNOSTICS];
-  if (!isRecord(diagnostics) || !Array.isArray(diagnostics["entries"])) {
+  if (
+    !isIngestionRecord(diagnostics) ||
+    !Array.isArray(diagnostics["entries"])
+  ) {
     throw new TypeError("Expected validated diagnostic sidecar");
   }
   expect(diagnostics["entries"].length).toBeLessThanOrEqual(
@@ -101,7 +104,7 @@ test("URL metadata provenance is explicit at the checked boundary", () => {
   );
   expect(
     diagnostics["entries"].some(
-      (entry) => isRecord(entry) && entry["address"] === "url",
+      (entry) => isIngestionRecord(entry) && entry["address"] === "url",
     ),
   ).toBe(false);
 });

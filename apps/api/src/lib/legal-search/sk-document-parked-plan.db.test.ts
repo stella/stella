@@ -18,12 +18,13 @@ import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import nodePath from "node:path";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   countParkedDocuments,
   parkedDocumentCountQuery,

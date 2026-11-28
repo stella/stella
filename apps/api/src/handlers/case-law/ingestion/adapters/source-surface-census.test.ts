@@ -29,14 +29,7 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  getSourceRegistration,
-  listSourceRegistrations,
-  type SourceRegistrationKey,
-} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json";
-import { readGzipJson } from "@/api/lib/gzip-json";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -44,11 +37,19 @@ import {
   LEGACY_BACKLOG_ADAPTERS,
   LEGACY_RAW_SHAPES,
   storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   LegacyRawShape,
   SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
+import {
+  getSourceRegistration,
+  listSourceRegistrations,
+  type SourceRegistrationKey,
+} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import baseline from "@/api/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json";
+import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   atFindokFixture,

@@ -60,10 +60,10 @@
 
 import { and, eq } from "drizzle-orm";
 
+import type { AdapterKey } from "@stll/case-law-ingestion-core/case-law-consts";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawDecisions } from "@/api/db/schema";
-import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   absentTextComparisonsFor,

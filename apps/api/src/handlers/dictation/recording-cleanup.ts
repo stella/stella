@@ -11,7 +11,6 @@ import {
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 import {
@@ -75,44 +74,42 @@ export const createRecordingCleanupEndpoint = ({
   generateObjectForTask,
   ...gate
 }: DictationGeneration & DesktopDictationGate = {}) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        body: desktopDictationRecordingCleanupRequestSchema,
-        response: safePublicHandlerResponseSchemasWithStatusText(
-          desktopDictationRecordingCleanupResponseSchema,
-        ),
-      },
-      async function* (ctx) {
-        return yield* runDesktopDictationModelAction({
-          ctx,
-          modelTask: "chat",
-          gate,
-          async *handler({ caller, actionSignal, modelAdmission }) {
-            const cleaned = yield* Result.await(
-              cleanUpRecordingPart({
-                caller,
-                request: ctx.body,
-                modelAdmission,
-                actionSignal,
-                ...(generateObjectForTask === undefined
-                  ? {}
-                  : { generateObjectForTask }),
-              }),
-            );
-            return Result.ok(cleaned);
-          },
-        });
-      },
-    ),
+  createSafeBoundedPublicHandler(
     {
-      type: "independent",
-      reason:
-        "Returns transient formatted text for one part of a recording and stores nothing; the action-admission lifecycle owns model usage accounting.",
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      body: desktopDictationRecordingCleanupRequestSchema,
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopDictationRecordingCleanupResponseSchema,
+      ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Returns transient formatted text for one part of a recording and stores nothing; the action-admission lifecycle owns model usage accounting.",
+      },
+    },
+    async function* (ctx) {
+      return yield* runDesktopDictationModelAction({
+        ctx,
+        modelTask: "chat",
+        gate,
+        async *handler({ caller, actionSignal, modelAdmission }) {
+          const cleaned = yield* Result.await(
+            cleanUpRecordingPart({
+              caller,
+              request: ctx.body,
+              modelAdmission,
+              actionSignal,
+              ...(generateObjectForTask === undefined
+                ? {}
+                : { generateObjectForTask }),
+            }),
+          );
+          return Result.ok(cleaned);
+        },
+      });
     },
   );
 

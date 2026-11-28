@@ -136,7 +136,7 @@ const fixture = ({
   if (entryLayout) {
     files.set(
       `${INGESTION}ingestion-constants.ts`,
-      'export { ADAPTER_KEYS, PARSER_VERSIONS } from "../../../lib/legal-search/parser-registry.gen";\n',
+      'export { ADAPTER_KEYS, PARSER_VERSIONS } from "../../../../../../packages/case-law-ingestion-core/src/parser-registry.gen";\n',
     );
     const keyEntries = ["A", "B", "C"]
       .map((key) => `${key}: "test-${key.toLowerCase()}"`)
@@ -497,7 +497,7 @@ test("output boundaries cannot lie in any output-shaping root", () => {
     "packages/legal-ast/boundary.ts",
     "packages/text-normalize/boundary.ts",
     "packages/sha256/boundary.ts",
-    "apps/api/src/lib/legal-search/ingestion-constants.ts",
+    "packages/case-law-ingestion-core/src/ingestion-constants.ts",
     PARSER_REGISTRY_OUTPUT,
     `${PARSER_ENTRY_DIRECTORY}a.json`,
   ];
