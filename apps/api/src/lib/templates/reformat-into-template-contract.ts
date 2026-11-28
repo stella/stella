@@ -61,6 +61,10 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
    *  (`REF:3,FORMCHECKBOX:2`). A form field's box or list is gone. Check
    *  them against the source. */
   "fields_as_text",
+  /** `count` links of the document to a place in itself (a bookmark, a
+   *  heading) show as plain text in the output: they no longer jump.
+   *  Check them against the document. */
+  "internal_links_as_text",
   /** A finding of the formatter this tool does not word yet; `reason`
    *  names it. */
   "other",

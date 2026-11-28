@@ -250,6 +250,9 @@ export type FormattingNoteItem =
    *  form field's box or list, a citation's link, an entry of the source's
    *  contents no longer update. */
   | { kind: "fieldsAsText"; fields: { kind: string; count: number }[] }
+  /** Links of the source to a place in itself or to a part of its own
+   *  package that the output shows as plain text: `links` of them. */
+  | { kind: "internalLinksAsText"; links: number }
   /** The template's style for a numbered level sets it apart from its
    *  sibling levels (bold, or another size). `blocks` paragraphs of the
    *  role were placed in the sibling's style instead, on their own level of
