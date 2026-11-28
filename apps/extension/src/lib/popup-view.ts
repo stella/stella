@@ -10,47 +10,64 @@ export type PopupActiveTab =
   | { kind: "controllable" }
   | { kind: "unsupported" };
 export type PopupController = Pick<BrowserController, "origin">;
-export type PopupAction = {
-  action: "adopt" | "connect" | "grant" | "grant-and-connect" | "open-stella";
-  messageKey: PopupMessageKey;
+
+/**
+ * Connecting the stella website, all in one click: website access first
+ * when Chrome has not granted it, then the stella tab in front, or else a
+ * stella tab opened or brought forward.
+ */
+export type ConnectWebsiteAction = {
+  action: "connect-website";
+  askAccess: boolean;
+  /** The stella tab in front to connect; null opens or finds one. */
+  tabId: number | null;
 };
-export type PopupSecondaryAction = {
+export type PopupAction =
+  ConnectWebsiteAction | { action: "adopt" | "disconnect" | "revoke" };
+
+/** A line's state: a button to click, or a dot and a word. */
+export type PopupLineStatus =
+  | { type: "connect" }
+  | {
+      /** The longer explanation, shown as a tooltip. */
+      detailKey?: PopupMessageKey;
+      messageKey: PopupMessageKey;
+      tone: "connected" | "idle" | "warning";
+      type: "status";
+    };
+
+/** The quiet links at the bottom of the popup. */
+export type PopupFooterAction = {
   action: "disconnect" | "revoke";
-  /** A plain button, or a quieter text link for the less common action. */
-  appearance: "button" | "link";
   messageKey: PopupMessageKey;
 };
-type PopupState =
-  | { type: "connected"; origin: string }
-  | { type: "connected-elsewhere" }
-  | { type: "not-connected" }
-  | { type: "website-access-needed" }
-  | { type: "open-stella-to-connect" }
-  | { type: "tab-handed-to-stella"; origin: string };
+
+export type PopupWebsiteView =
+  | { connect: ConnectWebsiteAction; type: "connect" }
+  | { origin: string; type: "connected" };
+
 export type PopupView = {
-  primary: PopupAction | null;
-  secondary: readonly PopupSecondaryAction[];
-  /** Whether to say what connecting does; only until stella is connected. */
-  showPurpose: boolean;
-  state: PopupState;
-  statusMessageKey: PopupMessageKey;
+  footer: readonly PopupFooterAction[];
+  /** Hand the tab in front to stella: only while connected, on a normal site. */
+  offerTab: boolean;
+  website: PopupWebsiteView;
 };
 
 const DISCONNECT = {
   action: "disconnect",
-  appearance: "button",
   messageKey: "disconnectTab",
-} as const satisfies PopupSecondaryAction;
+} as const satisfies PopupFooterAction;
 const REVOKE = {
   action: "revoke",
-  appearance: "link",
   messageKey: "revokeAccess",
-} as const satisfies PopupSecondaryAction;
+} as const satisfies PopupFooterAction;
 
 type PopupViewInput = {
   activeTab: PopupActiveTab;
   controller: PopupController | null;
   granted: boolean;
+  /** The user just handed the tab in front to stella. */
+  handedTab?: boolean;
 };
 
 /** Returns the complete popup state without reading browser or DOM state. */
@@ -58,117 +75,81 @@ export const popupView = ({
   activeTab,
   controller,
   granted,
+  handedTab = false,
 }: PopupViewInput): PopupView => {
-  if (!granted) {
+  const footer = [
+    ...(controller === null ? [] : [DISCONNECT]),
+    ...(granted ? [REVOKE] : []),
+  ];
+  // One connection covers every stella tab on its origin; a stella tab on
+  // another origin is not connected until the user connects it instead.
+  const connected =
+    granted &&
+    controller !== null &&
+    (activeTab.kind !== "stella" || activeTab.origin === controller.origin);
+  if (!connected) {
     return {
-      primary:
-        activeTab.kind === "stella"
-          ? { action: "grant-and-connect", messageKey: "allowAndConnect" }
-          : { action: "grant", messageKey: "allowWebsiteAccess" },
-      secondary: controller === null ? [] : [DISCONNECT],
-      showPurpose: true,
-      state: { type: "website-access-needed" },
-      statusMessageKey: "statusWebsiteAccessNeeded",
-    };
-  }
-  if (controller === null) {
-    if (activeTab.kind === "stella") {
-      return {
-        primary: { action: "connect", messageKey: "connectStella" },
-        secondary: [REVOKE],
-        showPurpose: true,
-        state: { type: "not-connected" },
-        statusMessageKey: "statusNotConnected",
-      };
-    }
-    return {
-      primary: { action: "open-stella", messageKey: "openStella" },
-      secondary: [REVOKE],
-      showPurpose: true,
-      state: { type: "open-stella-to-connect" },
-      statusMessageKey: "statusOpenStella",
-    };
-  }
-  // One connection covers every stella tab on its origin.
-  if (activeTab.kind === "stella" && activeTab.origin !== controller.origin) {
-    return {
-      primary: { action: "connect", messageKey: "connectStellaInstead" },
-      secondary: [DISCONNECT, REVOKE],
-      showPurpose: false,
-      state: { type: "connected-elsewhere" },
-      statusMessageKey: "statusConnectedElsewhere",
+      footer,
+      offerTab: false,
+      website: {
+        connect: {
+          action: "connect-website",
+          askAccess: !granted,
+          tabId: activeTab.kind === "stella" ? activeTab.tabId : null,
+        },
+        type: "connect",
+      },
     };
   }
   return {
-    primary:
-      activeTab.kind === "controllable"
-        ? { action: "adopt", messageKey: "adoptTab" }
-        : null,
-    secondary: [DISCONNECT, REVOKE],
-    showPurpose: false,
-    state: { origin: controller.origin, type: "connected" },
-    statusMessageKey: "statusConnected",
+    footer,
+    offerTab: activeTab.kind === "controllable" && !handedTab,
+    website: { origin: controller.origin, type: "connected" },
   };
 };
 
-/** The view right after the user hands a tab over; `origin` is stella's. */
-export const handedTabView = (origin: string): PopupView => ({
-  primary: null,
-  secondary: [DISCONNECT, REVOKE],
-  showPurpose: false,
-  state: { origin, type: "tab-handed-to-stella" },
-  statusMessageKey: "statusConnected",
-});
+const CONNECTED = {
+  messageKey: "statusConnected",
+  tone: "connected",
+  type: "status",
+} as const satisfies PopupLineStatus;
+
+/** The website line: Connected, or the Connect button. */
+export const websiteLineStatus = ({ website }: PopupView): PopupLineStatus =>
+  website.type === "connected" ? CONNECTED : { type: "connect" };
 
 /**
- * The address stella is connected at, shown as the status tooltip and read
- * out to screen readers; null while not connected here.
+ * The stella desktop app line: the Connect button that asks Chrome to let
+ * the extension talk to the app, or, once allowed, whether the app answers.
+ * Nothing is clickable once allowed: the extension connects by itself as
+ * soon as the app runs.
  */
-export const connectedOrigin = ({ state }: PopupView): string | null => {
-  switch (state.type) {
-    case "connected":
-    case "tab-handed-to-stella":
-      return state.origin;
-    case "connected-elsewhere":
-    case "not-connected":
-    case "open-stella-to-connect":
-    case "website-access-needed":
-      return null;
-    default:
-      state satisfies never;
-      return panic("Unhandled popup state");
-  }
-};
-
-/**
- * The popup's stella desktop row: a button that asks Chrome to let the
- * extension talk to stella desktop, or, once allowed, whether stella
- * desktop answers.
- */
-export type DesktopLinkView = {
-  messageKey: PopupMessageKey;
-  type: "allow" | "connected" | "connecting" | "not-running" | "update-needed";
-};
-
-export const desktopLinkView = ({
+export const desktopLineStatus = ({
   allowed,
   state,
 }: {
   allowed: boolean;
   state: DesktopLinkState;
-}): DesktopLinkView => {
+}): PopupLineStatus => {
   if (!allowed) {
-    return { messageKey: "allowDesktop", type: "allow" };
+    return { type: "connect" };
   }
   switch (state) {
     case DESKTOP_LINK_STATE.connected:
-      return { messageKey: "desktopConnected", type: "connected" };
+      return CONNECTED;
     case DESKTOP_LINK_STATE.incompatible:
-      return { messageKey: "desktopUpdateNeeded", type: "update-needed" };
+      // Either side may be the older one; the app usually is, as Chrome
+      // keeps the extension up to date.
+      return {
+        detailKey: "desktopUpdateNeeded",
+        messageKey: "lineUpdateApp",
+        tone: "warning",
+        type: "status",
+      };
     case DESKTOP_LINK_STATE.waiting:
-      return { messageKey: "desktopConnecting", type: "connecting" };
+      return { messageKey: "lineConnecting", tone: "idle", type: "status" };
     case DESKTOP_LINK_STATE.offline:
-      return { messageKey: "desktopNotRunning", type: "not-running" };
+      return { messageKey: "lineOpenApp", tone: "idle", type: "status" };
     default:
       state satisfies never;
       return panic("Unhandled desktop link state");

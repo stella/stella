@@ -12,7 +12,8 @@
   --primary-foreground: #fff;
   --status-idle: #737373;
   --status-connected: #287a45;
-  --status-access-needed: #a16207;
+  --status-warning: #a16207;
+  --border: #e5e5e5;
   --secondary: #e5e5e5;
   --secondary-foreground: #171717;
 }
@@ -33,7 +34,9 @@
     /* --success-foreground: emerald-400. */
     --status-connected: oklch(76.5% 0.177 163.223);
     /* --warning-foreground: amber-400. */
-    --status-access-needed: oklch(82.8% 0.189 84.429);
+    --status-warning: oklch(82.8% 0.189 84.429);
+    /* --border: 8% white. */
+    --border: color-mix(in srgb, #fff 8%, var(--background));
     /* --input: 10% white, as the light secondary is 10% black on white. */
     --secondary: color-mix(in srgb, #fff 10%, var(--background));
     --secondary-foreground: oklch(97% 0 0);

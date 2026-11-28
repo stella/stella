@@ -50,27 +50,6 @@
   "statusConnected": {
     "message": "Csatlakoztatva"
   },
-  "statusNotConnected": {
-    "message": "Nincs csatlakoztatva"
-  },
-  "statusWebsiteAccessNeeded": {
-    "message": "Webhely-hozzáférés szükséges"
-  },
-  "statusOpenStella": {
-    "message": "A csatlakozáshoz nyissa meg a stellát"
-  },
-  "allowAndConnect": {
-    "message": "Hozzáférés engedélyezése és csatlakozás"
-  },
-  "allowWebsiteAccess": {
-    "message": "Webhely-hozzáférés engedélyezése"
-  },
-  "connectStella": {
-    "message": "A stella csatlakoztatása"
-  },
-  "openStella": {
-    "message": "A stella megnyitása"
-  },
   "adoptTab": {
     "message": "A lap használata a stellával"
   },
@@ -80,28 +59,25 @@
   "revokeAccess": {
     "message": "Hozzáférés eltávolítása"
   },
-  "checkingAccess": {
-    "message": "Kapcsolat ellenőrzése…"
-  },
-  "statusConnectedElsewhere": {
-    "message": "Máshol csatlakoztatva"
-  },
-  "connectStellaInstead": {
-    "message": "Inkább itt csatlakoztasd a stellát"
-  },
-  "allowDesktop": {
-    "message": "Használat a stella desktoppal"
-  },
-  "desktopConnected": {
-    "message": "stella desktop csatlakoztatva"
-  },
-  "desktopNotRunning": {
-    "message": "stella desktop nem fut"
-  },
   "desktopUpdateNeeded": {
     "message": "Frissítse a stella desktopot és ezt a bővítményt"
   },
-  "desktopConnecting": {
-    "message": "Csatlakozás a stella desktop alkalmazáshoz…"
+  "lineWebsite": {
+    "message": "stella weboldal"
+  },
+  "lineDesktop": {
+    "message": "stella asztali alkalmazás"
+  },
+  "lineConnect": {
+    "message": "Csatlakozás"
+  },
+  "lineConnecting": {
+    "message": "Csatlakozás…"
+  },
+  "lineOpenApp": {
+    "message": "Nyissa meg az alkalmazást"
+  },
+  "lineUpdateApp": {
+    "message": "Frissítse az alkalmazást"
   }
 }

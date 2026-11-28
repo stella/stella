@@ -7,7 +7,8 @@ export type OpenStellaTab = Pick<
 /** The browser calls opening stella makes; tests pass a fake. */
 export type OpenStellaBrowser = {
   activateTab: (tabId: number) => Promise<unknown>;
-  createTab: (url: string) => Promise<unknown>;
+  /** Resolves to the new tab; Chrome names no id only for a tab it could not open. */
+  createTab: (url: string) => Promise<{ id?: number | undefined }>;
   focusWindow: (windowId: number) => Promise<unknown>;
   queryTabs: () => Promise<readonly OpenStellaTab[]>;
 };
@@ -21,17 +22,21 @@ type OpenStellaOptions = {
 
 export type OpenStellaResult =
   | { status: "focused"; tabId: number }
-  | { status: "opened"; url: string }
-  | { status: "no-origin" };
+  | { status: "opened"; tabId: number; url: string }
+  | { status: "no-origin" }
+  | { status: "not-opened" };
 
 /** Where a tab is going: its pending address while a navigation is under way. */
-const tabAddress = ({ pendingUrl, url }: OpenStellaTab): string =>
+export const tabAddress = ({
+  pendingUrl,
+  url,
+}: Pick<chrome.tabs.Tab, "pendingUrl" | "url">): string =>
   pendingUrl !== undefined && pendingUrl !== "" ? pendingUrl : (url ?? "");
 
 /**
  * Brings the member to stella: the most recently used tab on a trusted
  * stella origin, in front in its window, or else a new tab on the start
- * origin. Connecting stays with the popup's connect action on that tab.
+ * origin. Either way it names the tab, which the caller then connects.
  */
 export const openOrFocusStella = async (
   browser: OpenStellaBrowser,
@@ -51,6 +56,8 @@ export const openOrFocusStella = async (
     return { status: "no-origin" };
   }
   const url = new URL("/", startOrigin).href;
-  await browser.createTab(url);
-  return { status: "opened", url };
+  const created = await browser.createTab(url);
+  return created.id === undefined
+    ? { status: "not-opened" }
+    : { status: "opened", tabId: created.id, url };
 };
