@@ -31,7 +31,6 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
@@ -664,191 +663,187 @@ export const createDesktopBillingDraftEndpoint = ({
   generateObjectForTask,
   admit,
 }: BillingDraftEndpointOptions = {}) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        body: desktopBillingDraftRequestSchema,
-        response: safePublicHandlerResponseSchemasWithStatusText(
-          desktopBillingDraftReviewSchema,
-        ),
-      },
-      async function* (ctx) {
-        const { request, body } = ctx;
-        const account = yield* Result.await(
-          authorizeDesktopTimeEntries(request, authorizeAccount),
-        );
-        if (
-          !hasMemberPermission(account.memberRole, { timeEntry: ["create"] })
-        ) {
-          return Result.err(
-            new HandlerError({
-              status: 403,
-              code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.timeEntryNotPermitted,
-              message: "Time entry creation is not permitted",
-            }),
-          );
-        }
-        yield* validateEntryDates(body.entries);
-        // The organization's switch and the caller's consent stop drafting
-        // before any context is read; the model call reads them again.
-        const drafting = yield* Result.await(admitDrafting(account));
-        const context = yield* Result.await(
-          loadContext({
-            ...account,
-            body,
-            preference: drafting.gate.preference,
-          }),
-        );
-        if (body.previousResult) {
-          yield* checkPreviousResult({
-            previousResult: body.previousResult,
-            entries: body.entries,
-            context,
-          });
-        }
-        const { refs, prompt } = prepareBillingDraftPrompt({ body, context });
-        if (prompt.length > BILLING_DRAFT_CONTEXT_LIMITS.promptCharacters) {
-          return Result.err(
-            new HandlerError({
-              status: 413,
-              message: "Selected draft context is too large",
-            }),
-          );
-        }
-        const authorization = yield* Result.await(
-          authorizeHandlerUsage({
-            metering: { actionType: "chat", modelTask: "analysis" },
-            ...account,
-            orgAIConfig: context.orgAIConfig,
-            workspaceId: null,
-          }),
-        );
-        return await authorization.execute(
-          async () =>
-            await Result.gen(async function* () {
-              return yield* admitFiniteAction({
-                actionKind: "billing.activity-drafts",
-                ctx: {
-                  ...ctx,
-                  user: { id: account.userId },
-                  session: { activeOrganizationId: account.organizationId },
-                  scopedDb: account.scopedDb,
-                  actionSignal: request.signal,
-                },
-                ...(admit ? { admit } : {}),
-                async *handler({ actionSignal, modelAdmission }) {
-                  const analytics = createTanStackAIAnalyticsCallbacks({
-                    dataClass: "customer",
-                    feature: "billing.activity_drafts",
-                    modelTask: "analysis",
-                    modelTier: modelAdmission.modelTier,
-                    orgAIConfig: context.orgAIConfig,
-                    properties: {},
-                    traceId: Bun.randomUUIDv7(),
-                    usageMetering: {
-                      ...account,
-                      actionType: "chat",
-                      serviceTier: "standard",
-                      workspaceId: null,
-                    },
-                  });
-                  const generation = {
-                    dataClass: "customer" as const,
-                    admission: modelAdmission,
-                    userId: account.userId,
-                    organizationId: account.organizationId,
-                    orgAIConfig: context.orgAIConfig,
-                    managedAIResidency: context.managedAIResidency,
-                    task: "analysis" as const,
-                    serviceTier: "standard" as const,
-                    analytics,
-                    caching: resolveCaching({
-                      promptCachingEnabled: context.promptCachingEnabled,
-                      task: "analysis",
-                      scopeKey: null,
-                    }),
-                    tenantWorkspaceIds: context.matters.map(
-                      ({ matterId }) => matterId,
-                    ),
-                    abortSignal: actionSignal,
-                    deadlineMs: BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs,
-                    systemPromptOrigin: "server-built" as const,
-                    prompt,
-                    outputTokenBudget: 16_000,
-                  };
-                  // The model answers in the context's own grammar; the
-                  // server, not the model, names the mode. The gate is read
-                  // again before every provider request the call makes.
-                  const generateForMode = async (): Promise<
-                    Result<DesktopBillingDraftResponse, GatedGenerationFailure>
-                  > => {
-                    switch (context.mode) {
-                      case "plain":
-                        return (
-                          await generateAdmittedObject({
-                            admission: drafting,
-                            expectedMode: context.mode,
-                            generate: generateObjectForTask,
-                            request: {
-                              ...generation,
-                              system: PLAIN_SYSTEM_PROMPT,
-                              outputSchema:
-                                desktopBillingPlainDraftModelResponseSchema,
-                            },
-                          })
-                        ).map((output) => ({
-                          ...output,
-                          mode: "plain" as const,
-                        }));
-                      case "guided":
-                        return (
-                          await generateAdmittedObject({
-                            admission: drafting,
-                            expectedMode: context.mode,
-                            generate: generateObjectForTask,
-                            request: {
-                              ...generation,
-                              system: GUIDED_SYSTEM_PROMPT,
-                              outputSchema:
-                                desktopBillingDraftModelResponseSchema,
-                            },
-                          })
-                        ).map((output) => ({
-                          ...output,
-                          mode: "guided" as const,
-                        }));
-                      default:
-                        return panic(
-                          "Unknown billing draft mode",
-                          context satisfies never,
-                        );
-                    }
-                  };
-                  const answer = await generateForMode();
-                  const generated = yield* answer.mapError((failure) =>
-                    draftGenerationError(failure, analytics.captureError),
-                  );
-                  return acceptGeneratedDraft({
-                    generated,
-                    refs,
-                    entries: body.entries,
-                    context,
-                    captureError: analytics.captureError,
-                  });
-                },
-              });
-            }),
-        );
-      },
-    ),
+  createSafeBoundedPublicHandler(
     {
-      type: "independent",
-      reason:
-        "Returns validated review-only proposals without recording time; the existing action-admission lifecycle owns model usage accounting.",
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      body: desktopBillingDraftRequestSchema,
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopBillingDraftReviewSchema,
+      ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Returns validated review-only proposals without recording time; the existing action-admission lifecycle owns model usage accounting.",
+      },
+    },
+    async function* (ctx) {
+      const { request, body } = ctx;
+      const account = yield* Result.await(
+        authorizeDesktopTimeEntries(request, authorizeAccount),
+      );
+      if (!hasMemberPermission(account.memberRole, { timeEntry: ["create"] })) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.timeEntryNotPermitted,
+            message: "Time entry creation is not permitted",
+          }),
+        );
+      }
+      yield* validateEntryDates(body.entries);
+      // The organization's switch and the caller's consent stop drafting
+      // before any context is read; the model call reads them again.
+      const drafting = yield* Result.await(admitDrafting(account));
+      const context = yield* Result.await(
+        loadContext({
+          ...account,
+          body,
+          preference: drafting.gate.preference,
+        }),
+      );
+      if (body.previousResult) {
+        yield* checkPreviousResult({
+          previousResult: body.previousResult,
+          entries: body.entries,
+          context,
+        });
+      }
+      const { refs, prompt } = prepareBillingDraftPrompt({ body, context });
+      if (prompt.length > BILLING_DRAFT_CONTEXT_LIMITS.promptCharacters) {
+        return Result.err(
+          new HandlerError({
+            status: 413,
+            message: "Selected draft context is too large",
+          }),
+        );
+      }
+      const authorization = yield* Result.await(
+        authorizeHandlerUsage({
+          metering: { actionType: "chat", modelTask: "analysis" },
+          ...account,
+          orgAIConfig: context.orgAIConfig,
+          workspaceId: null,
+        }),
+      );
+      return await authorization.execute(
+        async () =>
+          await Result.gen(async function* () {
+            return yield* admitFiniteAction({
+              actionKind: "billing.activity-drafts",
+              ctx: {
+                ...ctx,
+                user: { id: account.userId },
+                session: { activeOrganizationId: account.organizationId },
+                scopedDb: account.scopedDb,
+                actionSignal: request.signal,
+              },
+              ...(admit ? { admit } : {}),
+              async *handler({ actionSignal, modelAdmission }) {
+                const analytics = createTanStackAIAnalyticsCallbacks({
+                  dataClass: "customer",
+                  feature: "billing.activity_drafts",
+                  modelTask: "analysis",
+                  modelTier: modelAdmission.modelTier,
+                  orgAIConfig: context.orgAIConfig,
+                  properties: {},
+                  traceId: Bun.randomUUIDv7(),
+                  usageMetering: {
+                    ...account,
+                    actionType: "chat",
+                    serviceTier: "standard",
+                    workspaceId: null,
+                  },
+                });
+                const generation = {
+                  dataClass: "customer" as const,
+                  admission: modelAdmission,
+                  userId: account.userId,
+                  organizationId: account.organizationId,
+                  orgAIConfig: context.orgAIConfig,
+                  managedAIResidency: context.managedAIResidency,
+                  task: "analysis" as const,
+                  serviceTier: "standard" as const,
+                  analytics,
+                  caching: resolveCaching({
+                    promptCachingEnabled: context.promptCachingEnabled,
+                    task: "analysis",
+                    scopeKey: null,
+                  }),
+                  tenantWorkspaceIds: context.matters.map(
+                    ({ matterId }) => matterId,
+                  ),
+                  abortSignal: actionSignal,
+                  deadlineMs: BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs,
+                  systemPromptOrigin: "server-built" as const,
+                  prompt,
+                  outputTokenBudget: 16_000,
+                };
+                // The model answers in the context's own grammar; the
+                // server, not the model, names the mode. The gate is read
+                // again before every provider request the call makes.
+                const generateForMode = async (): Promise<
+                  Result<DesktopBillingDraftResponse, GatedGenerationFailure>
+                > => {
+                  switch (context.mode) {
+                    case "plain":
+                      return (
+                        await generateAdmittedObject({
+                          admission: drafting,
+                          expectedMode: context.mode,
+                          generate: generateObjectForTask,
+                          request: {
+                            ...generation,
+                            system: PLAIN_SYSTEM_PROMPT,
+                            outputSchema:
+                              desktopBillingPlainDraftModelResponseSchema,
+                          },
+                        })
+                      ).map((output) => ({
+                        ...output,
+                        mode: "plain" as const,
+                      }));
+                    case "guided":
+                      return (
+                        await generateAdmittedObject({
+                          admission: drafting,
+                          expectedMode: context.mode,
+                          generate: generateObjectForTask,
+                          request: {
+                            ...generation,
+                            system: GUIDED_SYSTEM_PROMPT,
+                            outputSchema:
+                              desktopBillingDraftModelResponseSchema,
+                          },
+                        })
+                      ).map((output) => ({
+                        ...output,
+                        mode: "guided" as const,
+                      }));
+                    default:
+                      return panic(
+                        "Unknown billing draft mode",
+                        context satisfies never,
+                      );
+                  }
+                };
+                const answer = await generateForMode();
+                const generated = yield* answer.mapError((failure) =>
+                  draftGenerationError(failure, analytics.captureError),
+                );
+                return acceptGeneratedDraft({
+                  generated,
+                  refs,
+                  entries: body.entries,
+                  context,
+                  captureError: analytics.captureError,
+                });
+              },
+            });
+          }),
+      );
     },
   );
 

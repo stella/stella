@@ -11,7 +11,6 @@ import { changeOrganizationSlug } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { getAuth } from "@/api/lib/auth";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { consumeOrganizationSlugRateLimit } from "@/api/lib/rate-limit/organization-slug";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
@@ -40,6 +39,10 @@ const config = {
     }),
     v.strictObject({ type: v.literal("opaque") }),
   ]),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["organization"],
+  },
 } satisfies HandlerConfig;
 
 const updateOrganizationSlug = createSafeRootHandler(
@@ -80,10 +83,5 @@ const updateOrganizationSlug = createSafeRootHandler(
     return Result.ok(updated);
   },
 );
-
-declareAggregateMutation(updateOrganizationSlug, {
-  type: "aggregate",
-  aggregates: ["organization"],
-});
 
 export default updateOrganizationSlug;

@@ -35,7 +35,6 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
@@ -71,6 +70,11 @@ const config = {
     actionType: "chat",
     serviceTier: "flex",
     modelTask: "short-text",
+  },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Drafts a skill from a chat the caller owns and stores nothing; writes only its own usage rows, with no cross-row invariant.",
   },
 } satisfies HandlerConfig;
 
@@ -301,11 +305,5 @@ const draftSkillFromChat = createSafeRootHandler(
     return Result.ok({ draft, names });
   },
 );
-
-declareAggregateMutation(draftSkillFromChat, {
-  type: "independent",
-  reason:
-    "Drafts a skill from a chat the caller owns and stores nothing; writes only its own usage rows, with no cross-row invariant.",
-});
 
 export default draftSkillFromChat;

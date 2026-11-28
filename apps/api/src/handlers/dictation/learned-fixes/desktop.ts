@@ -15,7 +15,6 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   changeLearnedFixes,
   clearLearnedFixes,
@@ -105,35 +104,33 @@ export const createDesktopLearnedFixesListEndpoint = (
 const createDesktopLearnedFixesChangeEndpoint = (
   options: DesktopLearnedFixesOptions = {},
 ) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        body: dictationLearnedFixChangesSchema,
-        response,
-      },
-      async function* ({ request, body }) {
-        const { safeDb, owner } = yield* Result.await(
-          authorizeLearnedFixes(
-            request,
-            { dictationLearnedFix: ["update"] },
-            options,
-          ),
-        );
-        return Result.ok(
-          yield* Result.await(
-            safeDb(async (tx) => await changeLearnedFixes(tx, owner, body)),
-          ),
-        );
-      },
-    ),
+  createSafeBoundedPublicHandler(
     {
-      type: "independent",
-      reason:
-        "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      body: dictationLearnedFixChangesSchema,
+      response,
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+      },
+    },
+    async function* ({ request, body }) {
+      const { safeDb, owner } = yield* Result.await(
+        authorizeLearnedFixes(
+          request,
+          { dictationLearnedFix: ["update"] },
+          options,
+        ),
+      );
+      return Result.ok(
+        yield* Result.await(
+          safeDb(async (tx) => await changeLearnedFixes(tx, owner, body)),
+        ),
+      );
     },
   );
 
@@ -141,35 +138,33 @@ const createDesktopLearnedFixesChangeEndpoint = (
 const createDesktopLearnedFixesClearEndpoint = (
   options: DesktopLearnedFixesOptions = {},
 ) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        query: dictationLearnedFixesClearQuerySchema,
-        response,
-      },
-      async function* ({ request, query }) {
-        const { safeDb, owner } = yield* Result.await(
-          authorizeLearnedFixes(
-            request,
-            { dictationLearnedFix: ["delete"] },
-            options,
-          ),
-        );
-        return Result.ok(
-          yield* Result.await(
-            safeDb(async (tx) => await clearLearnedFixes(tx, owner, query)),
-          ),
-        );
-      },
-    ),
+  createSafeBoundedPublicHandler(
     {
-      type: "independent",
-      reason:
-        "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      query: dictationLearnedFixesClearQuerySchema,
+      response,
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+      },
+    },
+    async function* ({ request, query }) {
+      const { safeDb, owner } = yield* Result.await(
+        authorizeLearnedFixes(
+          request,
+          { dictationLearnedFix: ["delete"] },
+          options,
+        ),
+      );
+      return Result.ok(
+        yield* Result.await(
+          safeDb(async (tx) => await clearLearnedFixes(tx, owner, query)),
+        ),
+      );
     },
   );
 

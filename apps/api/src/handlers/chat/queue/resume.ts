@@ -10,7 +10,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { releaseChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";
 
 const config = {
@@ -22,6 +21,10 @@ const config = {
     "Resume the thread's queue, whatever held it. The next queued message " +
     "goes once the thread's turn has ended.",
   params: chatQueueThreadParams,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 const resumeChatQueue = createSafeRootHandler(
@@ -56,9 +59,5 @@ const resumeChatQueue = createSafeRootHandler(
 
 // Every queue change locks the member's thread first, the row its turns
 // lock, and writes only that thread's queue.
-declareAggregateMutation(resumeChatQueue, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default resumeChatQueue;

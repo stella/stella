@@ -9,7 +9,6 @@ import { Result } from "better-result";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { updateAnnotationBodySchema } from "@/api/lib/legal-search/reader-annotations/schema";
 import { updateReaderAnnotationRows } from "@/api/lib/legal-search/reader-annotations/update";
@@ -32,6 +31,10 @@ const config = {
     annotationId: resourceIdSchema("legalReaderAnnotation"),
   }),
   body: updateAnnotationBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["readerAnnotation"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const updateDocumentAnnotation = createSafeHandler(
@@ -68,10 +71,5 @@ const updateDocumentAnnotation = createSafeHandler(
     return Result.ok({ ok: true as const });
   },
 );
-
-declareAggregateMutation(updateDocumentAnnotation, {
-  type: "aggregate",
-  aggregates: ["readerAnnotation"],
-});
 
 export default updateDocumentAnnotation;

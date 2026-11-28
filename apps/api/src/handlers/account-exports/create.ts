@@ -9,7 +9,6 @@ import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
@@ -36,6 +35,11 @@ const requestPersonalDataExport = createSafeSessionHandler(
     },
     description:
       "Request an asynchronous export of your own personal data across current organization memberships. Organization and matter content are excluded. One active export is reused. Poll account-exports.status.get with the returned id as exportId, then call account-exports.download.get when ready. Pass nextCall to read_capability. Downloads require your authenticated account and expire after one hour.",
+    aggregateMutation: {
+      type: "independent",
+      reason:
+        "The export store serializes the request under the account and export aggregate locks in one audited transaction.",
+    },
   },
   async function* ({ user, request }) {
     const row = yield* Result.await(requestAccountExport(user.id));
@@ -61,11 +65,5 @@ const requestPersonalDataExport = createSafeSessionHandler(
     });
   },
 );
-
-declareAggregateMutation(requestPersonalDataExport, {
-  type: "independent",
-  reason:
-    "The export store serializes the request under the account and export aggregate locks in one audited transaction.",
-});
 
 export default requestPersonalDataExport;

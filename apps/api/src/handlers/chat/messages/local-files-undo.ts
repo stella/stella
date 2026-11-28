@@ -19,7 +19,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -198,6 +197,11 @@ const undoConfig = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Queues one undo of the caller's own changes in the desktop runner store, which takes the caller's runner capacity lock inside its own transaction, as the runner's other writes do; no chat aggregate is written.",
+  },
 } satisfies HandlerConfig;
 
 /** Ask the computer to undo the file changes made since the message. */
@@ -285,9 +289,3 @@ export const createUndoLocalFiles = (dependencies?: UndoDependencies) =>
 
 export const readLocalFilesUndo = createReadLocalFilesUndo();
 export const undoLocalFiles = createUndoLocalFiles();
-
-declareAggregateMutation(undoLocalFiles, {
-  type: "independent",
-  reason:
-    "Queues one undo of the caller's own changes in the desktop runner store, which takes the caller's runner capacity lock inside its own transaction, as the runner's other writes do; no chat aggregate is written.",
-});

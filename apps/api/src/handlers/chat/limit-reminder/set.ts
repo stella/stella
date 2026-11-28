@@ -20,7 +20,6 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -30,6 +29,11 @@ const config = {
   params: limitReminderParams,
   query: limitReminderQuery,
   body: v.strictObject({ onReset: v.picklist(CHAT_LIMIT_RESET_ACTIONS) }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Writes the member's one reminder row for the chat, keyed by the chat; a concurrent set meets the key and settles as a race, so no other row holds an invariant with it.",
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -156,11 +160,5 @@ const setChatLimitReminder = createSafeRootHandler(
     } satisfies ChatLimitReminderResponse);
   },
 );
-
-declareAggregateMutation(setChatLimitReminder, {
-  type: "independent",
-  reason:
-    "Writes the member's one reminder row for the chat, keyed by the chat; a concurrent set meets the key and settles as a race, so no other row holds an invariant with it.",
-});
 
 export default setChatLimitReminder;

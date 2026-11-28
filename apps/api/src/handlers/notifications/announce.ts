@@ -49,6 +49,11 @@ const config = {
     ),
     announcementKey: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Inserts idempotent announcement notification rows without mutating a shared domain aggregate.",
+  },
 } satisfies HandlerConfig;
 
 /**

@@ -10,7 +10,6 @@ import * as v from "valibot";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
@@ -47,6 +46,11 @@ const config = {
       uniqueItems((id) => id),
     ),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Writes nothing: the POST carries the list of document ids a query string would not hold.",
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const readSourceDocumentKinds = createSafeHandler(
@@ -111,11 +115,5 @@ const readSourceDocumentKinds = createSafeHandler(
     }
   },
 );
-
-declareAggregateMutation(readSourceDocumentKinds, {
-  type: "independent",
-  reason:
-    "Writes nothing: the POST carries the list of document ids a query string would not hold.",
-});
 
 export default readSourceDocumentKinds;

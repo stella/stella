@@ -20,7 +20,6 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import { VERIFICATION_MODEL_TASK } from "@/api/lib/lists/verification/model-call";
@@ -87,6 +86,11 @@ const config = {
     actionType: "doc_review",
     serviceTier: "standard",
     modelTask: VERIFICATION_MODEL_TASK,
+  },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Appends one review event per graded claim; the claims' row locks, taken in id order, serialize their events, and each claim's request key, action cap and the review its grade answered are re-read under them before the insert. No aggregate state spans claims.",
   },
 } satisfies WorkspaceHandlerConfig;
 
@@ -182,11 +186,5 @@ const createBulkClaimRechecks = createSafeHandler(
     });
   },
 );
-
-declareAggregateMutation(createBulkClaimRechecks, {
-  type: "independent",
-  reason:
-    "Appends one review event per graded claim; the claims' row locks, taken in id order, serialize their events, and each claim's request key, action cap and the review its grade answered are re-read under them before the insert. No aggregate state spans claims.",
-});
 
 export default createBulkClaimRechecks;

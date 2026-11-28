@@ -8,7 +8,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { pushSiteGrantsToRuns } from "@/api/lib/desktop-runner/site-grants";
 
 const config = {
@@ -17,6 +16,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params: v.object({ grantId: resourceIdSchema("chatBrowserSiteGrant") }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatToolGrants"],
+  },
 } satisfies HandlerConfig;
 
 /** Remove one of the user's website approvals. Idempotent. */
@@ -75,10 +78,5 @@ const deleteBrowserSiteGrant = createSafeRootHandler(
     return Result.ok({ deleted: deleted.length > 0 });
   },
 );
-
-declareAggregateMutation(deleteBrowserSiteGrant, {
-  type: "aggregate",
-  aggregates: ["chatToolGrants"],
-});
 
 export default deleteBrowserSiteGrant;

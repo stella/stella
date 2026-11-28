@@ -12,7 +12,6 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -43,6 +42,11 @@ const config = {
     type: "capability",
     reason: "personal_history",
     consumesServices: false,
+  },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Owner-serialized clear records its import cutoff and deletes the entries in one audited transaction.",
   },
 } satisfies HandlerConfig;
 
@@ -238,11 +242,5 @@ const clearSearchHistory = createSafeRootHandler(
     return Result.ok({ deleted });
   },
 );
-
-declareAggregateMutation(clearSearchHistory, {
-  type: "independent",
-  reason:
-    "Owner-serialized clear records its import cutoff and deletes the entries in one audited transaction.",
-});
 
 export default clearSearchHistory;

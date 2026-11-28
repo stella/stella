@@ -9,7 +9,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   CASE_LAW_COUNTRIES_CURSOR_MAX_LENGTH,
@@ -167,6 +166,11 @@ const searchCaseLawSection = createSafeRootHandler(
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
     body: searchCaseLawSectionBodySchema,
+    aggregateMutation: {
+      type: "independent",
+      reason:
+        "Writes nothing: a search body, posted like the other palette searches.",
+    },
   } satisfies HandlerConfig,
   async function* ({ body, request, scopedDb, session }) {
     const response = yield* Result.await(
@@ -184,11 +188,5 @@ const searchCaseLawSection = createSafeRootHandler(
     return Result.ok(response);
   },
 );
-
-declareAggregateMutation(searchCaseLawSection, {
-  type: "independent",
-  reason:
-    "Writes nothing: a search body, posted like the other palette searches.",
-});
 
 export default searchCaseLawSection;

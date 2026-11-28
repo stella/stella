@@ -15,7 +15,6 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockOwnedContactsForBulkDelete } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
@@ -50,6 +49,10 @@ const config = {
     consumesServices: false,
   },
   body: bulkDeleteContactsBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["contactCapacity"],
+  },
 } satisfies HandlerConfig;
 
 type BulkDeleteContactsOptions = {
@@ -220,10 +223,5 @@ const bulkDeleteContacts = createSafeRootHandler(
     return Result.ok({ outcomes: txResult.outcomes });
   },
 );
-
-declareAggregateMutation(bulkDeleteContacts, {
-  type: "aggregate",
-  aggregates: ["contactCapacity"],
-});
 
 export default bulkDeleteContacts;

@@ -9,7 +9,6 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
@@ -48,6 +47,11 @@ const config = {
     consumesServices: false,
   },
   body: bodySchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Upserts one row keyed by list and document; concurrent writes converge on the last kind set, and no other row is derived from it.",
+  },
 } satisfies WorkspaceHandlerConfig;
 
 const updateSourceDocumentKind = createSafeHandler(
@@ -134,11 +138,5 @@ const updateSourceDocumentKind = createSafeHandler(
     }
   },
 );
-
-declareAggregateMutation(updateSourceDocumentKind, {
-  type: "independent",
-  reason:
-    "Upserts one row keyed by list and document; concurrent writes converge on the last kind set, and no other row is derived from it.",
-});
 
 export default updateSourceDocumentKind;

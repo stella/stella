@@ -15,7 +15,6 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 
@@ -28,6 +27,11 @@ const config = {
   mcp: { type: "internal", reason: "assistant_chat" },
   // Validate privately: framework errors must not echo table contents.
   body: v.unknown(),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Plans a client-supplied table; decision logging and usage metering are owned by their append-only services, with no chat aggregate mutation.",
+  },
 } satisfies HandlerConfig;
 
 type CreateTableChartOptions = { decide: TableChartDecisionCaller };
@@ -114,10 +118,5 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
   );
 
 const tableChart = createTableChart({ decide: decideMany });
-declareAggregateMutation(tableChart, {
-  type: "independent",
-  reason:
-    "Plans a client-supplied table; decision logging and usage metering are owned by their append-only services, with no chat aggregate mutation.",
-});
 
 export default tableChart;

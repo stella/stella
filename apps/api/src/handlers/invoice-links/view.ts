@@ -25,7 +25,6 @@ import {
   requestsPayment,
 } from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { buildInvoiceTemplateData } from "@/api/lib/billing/invoice-pdf/typst/data";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { admitInvoiceLinkToken } from "@/api/lib/rate-limit/invoice-link-admission";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -46,6 +45,11 @@ const config = {
       v.check(isInvoiceLinkTokenShape),
     ),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Reads a token-scoped invoice and records access; the first-view timestamp is a conditional idempotent update without changing invoice state.",
+  },
 } satisfies TokenHandlerConfig;
 
 const readFailed = (cause: unknown) =>
@@ -200,9 +204,4 @@ const openLinkedInvoice = async (
 };
 
 const handler = createViewInvoiceLink();
-declareAggregateMutation(handler, {
-  type: "independent",
-  reason:
-    "Reads a token-scoped invoice and records access; the first-view timestamp is a conditional idempotent update without changing invoice state.",
-});
 export default handler;

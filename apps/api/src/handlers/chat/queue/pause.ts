@@ -11,7 +11,6 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { holdChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";
 
 const config = {
@@ -23,6 +22,10 @@ const config = {
     "Pause the thread's queue: nothing queued is sent until you resume it " +
     "or send a message. A thread with nothing queued has nothing to pause.",
   params: chatQueueThreadParams,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 const pauseChatQueue = createSafeRootHandler(
@@ -60,9 +63,5 @@ const pauseChatQueue = createSafeRootHandler(
 
 // Every queue change locks the member's thread first, the row its turns
 // lock, and writes only that thread's queue.
-declareAggregateMutation(pauseChatQueue, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default pauseChatQueue;

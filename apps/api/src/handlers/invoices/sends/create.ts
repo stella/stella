@@ -52,7 +52,6 @@ import {
   lockInvoiceSendDelivery,
   withAggregateLock,
 } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   isTransactionalEmailConfigured,
@@ -627,6 +626,10 @@ const config = {
   },
   params: workspaceParams({ invoiceId: resourceIdSchema("invoice") }),
   body: sendInvoiceBody,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["invoiceSendCapacity", "workspace"],
+  },
 } satisfies WorkspaceHandlerConfig;
 
 export const createSendInvoice = ({
@@ -797,9 +800,5 @@ export const createSendInvoice = ({
   );
 
 const sendInvoice = createSendInvoice();
-declareAggregateMutation(sendInvoice, {
-  type: "aggregate",
-  aggregates: ["invoiceSendCapacity", "workspace"],
-});
 
 export default sendInvoice;

@@ -9,7 +9,6 @@ import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/t
 import type { Middleware } from "@/api/http/route";
 import { mount, routes } from "@/api/http/route";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
@@ -89,28 +88,29 @@ export const createMcpRoute = ({
    * credentialed request answered with `Access-Control-Allow-Origin: *`.
    */
   const transport = (mode?: McpMode) =>
-    declareAggregateMutation(
-      defineEndpoint.public(
-        { bodyMode: "none", cors: "own" },
-        async ({ request, server }) => {
-          const options = {
-            clientIp: resolveRateLimitClientAddress({ request, server }),
-            ...(mode === undefined ? {} : { mode }),
-          };
-          if (!limitAuthenticationFailure) {
-            return await handleMcpHttpRequest(request, options);
-          }
-          return await limitAuthenticationFailure({
-            request,
-            clientIp: options.clientIp,
-            run: async () => await handleMcpHttpRequest(request, options),
-          });
-        },
-      ),
+    defineEndpoint.public(
       {
-        type: "independent",
-        reason:
-          "MCP transport dispatches to capability handlers that own their aggregate mutations; the transport itself owns no aggregate state.",
+        bodyMode: "none",
+        cors: "own",
+        aggregateMutation: {
+          type: "independent",
+          reason:
+            "MCP transport dispatches to capability handlers that own their aggregate mutations; the transport itself owns no aggregate state.",
+        },
+      },
+      async ({ request, server }) => {
+        const options = {
+          clientIp: resolveRateLimitClientAddress({ request, server }),
+          ...(mode === undefined ? {} : { mode }),
+        };
+        if (!limitAuthenticationFailure) {
+          return await handleMcpHttpRequest(request, options);
+        }
+        return await limitAuthenticationFailure({
+          request,
+          clientIp: options.clientIp,
+          run: async () => await handleMcpHttpRequest(request, options),
+        });
       },
     );
 

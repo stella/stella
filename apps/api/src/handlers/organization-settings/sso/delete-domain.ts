@@ -5,7 +5,6 @@ import { deleteOrgSsoDomain } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapSsoManagementError } from "./sso-error-map";
 
@@ -19,6 +18,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   params: paramsSchema,
+  aggregateMutation: {
+    type: "independent",
+    reason: "Single-row domain deletion scoped to active organization.",
+  },
 } satisfies HandlerConfig;
 
 const deleteOrganizationSsoDomainHandler = createSafeRootHandler(
@@ -49,10 +52,5 @@ const deleteOrganizationSsoDomainHandler = createSafeRootHandler(
     return Result.ok({ deleted: true as const, id: deleted.value.id });
   },
 );
-
-declareAggregateMutation(deleteOrganizationSsoDomainHandler, {
-  type: "independent",
-  reason: "Single-row domain deletion scoped to active organization.",
-});
 
 export default deleteOrganizationSsoDomainHandler;

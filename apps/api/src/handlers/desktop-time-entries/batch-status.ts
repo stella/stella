@@ -15,7 +15,6 @@ import {
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 
@@ -32,6 +31,10 @@ export const createDesktopTimeEntryBatchStatusEndpoint = (
       response: safePublicHandlerResponseSchemasWithStatusText(
         desktopTimeEntryBatchStatusSchema,
       ),
+      aggregateMutation: {
+        type: "aggregate",
+        aggregates: ["desktopBatch"],
+      },
     },
     async function* ({ request, body: { idempotencyKey } }) {
       const account = yield* Result.await(
@@ -95,9 +98,5 @@ const desktopTimeEntryBatchStatusEndpoint =
 
 // Status reads and cancellation fencing serialize on the same desktopBatch
 // aggregate lock as the batch submission.
-declareAggregateMutation(desktopTimeEntryBatchStatusEndpoint, {
-  type: "aggregate",
-  aggregates: ["desktopBatch"],
-});
 
 export default desktopTimeEntryBatchStatusEndpoint;

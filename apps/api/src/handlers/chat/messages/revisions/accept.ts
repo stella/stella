@@ -9,7 +9,6 @@ import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -52,6 +51,10 @@ const config = {
     }),
     edit: chatMessageAcceptedEditSchema,
   }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread", "chatMessage"],
+  },
 } satisfies HandlerConfig;
 
 export const revisionResult = (
@@ -155,10 +158,5 @@ const acceptMessageRevision = createSafeRootHandler(
     return revisionResult(result);
   },
 );
-
-declareAggregateMutation(acceptMessageRevision, {
-  type: "aggregate",
-  aggregates: ["chatThread", "chatMessage"],
-});
 
 export default acceptMessageRevision;
