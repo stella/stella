@@ -1280,7 +1280,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "dependencies": {
         "@stll/docx-core": "catalog:",
         "better-result": "catalog:",
