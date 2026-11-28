@@ -110,6 +110,27 @@ const ANNEX_LIST_INTRO =
 const CONTENTS_CAPTION =
   /^(?:obsah|contents?|table of contents?|inhalt|inhaltsverzeichnis)[ \u00A0]*:?$/iu;
 
+/** The column heads over the lines of a table of contents: `Clause⇥Page`. */
+const CONTENTS_COLUMNS =
+  /^[\p{L} .]{1,24}\t+(?:page|pages|strana|str\.|seite|s\.)[ \u00A0]*$/iu;
+
+/** Of the lines with text in front of a table of contents, the caption and
+ *  the column heads that head it, nearest first. */
+const contentsHeadsOf = (lines: readonly DocxBlock[]): DocxBlock[] => {
+  const heads: DocxBlock[] = [];
+  for (const line of lines.toReversed()) {
+    const text = line.text.trim();
+    const columns = CONTENTS_COLUMNS.test(text);
+    if (columns || CONTENTS_CAPTION.test(text)) {
+      heads.push(line);
+    }
+    if (!columns) {
+      break;
+    }
+  }
+  return heads;
+};
+
 /** Whether the block is a line of the source's table of contents. */
 const isContentsBlock = ({
   styleName,
@@ -1309,22 +1330,23 @@ export const buildLabelIndex = ({
   const entries: LabelEntry[] = [];
   const contextByBlockId = new Map<string, BlockContext>();
   const contentsBlockIds = new Set<string>();
-  /** The last paragraph with text in front of the row, while it may be the
-   *  caption of the contents that follow. */
-  let caption: DocxBlock | null = null;
+  /** The last paragraphs with text in front of the row, while they may be
+   *  the caption and the column heads of the contents that follow. */
+  let captions: DocxBlock[] = [];
   for (const row of rows) {
     const { block } = row;
     if (block.kind === "paragraph" && isContentsBlock(block)) {
       contentsBlockIds.add(block.id);
-      // The caption goes with the lines it heads: alone it heads nothing.
-      if (caption !== null && CONTENTS_CAPTION.test(caption.text.trim())) {
-        contentsBlockIds.add(caption.id);
+      // The caption and the column heads go with the lines they head:
+      // alone they head nothing.
+      for (const line of contentsHeadsOf(captions)) {
+        contentsBlockIds.add(line.id);
       }
-      caption = null;
+      captions = [];
     } else if (block.kind !== "paragraph") {
-      caption = null;
+      captions = [];
     } else if (block.text.trim() !== "") {
-      caption = block;
+      captions = [...captions.slice(-2), block];
     }
     const walk = walkOf(block);
     const entry = isLabelled(row) ? classify(walk, row) : null;

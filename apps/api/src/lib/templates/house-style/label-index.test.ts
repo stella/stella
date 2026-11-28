@@ -587,6 +587,21 @@ describe("buildLabelIndex", () => {
     expect([...contentsBlockIds]).toEqual(["p3", "p1", "p4"]);
   });
 
+  test("the column heads over the source's contents go with its caption and lines", () => {
+    const manifest = manifestOf([
+      "AGREEMENT",
+      "Contents",
+      "Clause\tPage",
+      { text: "1. Scope\t2", styleName: "toc 1" },
+      { text: "2. Price\t3", styleName: "toc 1" },
+      "Clause\tPage",
+      { ...heading("Scope"), label: "1." },
+    ]);
+    const { contentsBlockIds } = buildLabelIndex(manifest);
+    // Column heads with no lines under them head nothing.
+    expect([...contentsBlockIds].toSorted()).toEqual(["p1", "p2", "p3", "p4"]);
+  });
+
   test("an annex named in front of the first article is not the annex", () => {
     const manifest = manifestOf([
       "GUIDANCE",
