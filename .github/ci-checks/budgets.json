@@ -5,6 +5,7 @@
       "samples": 10,
       "p95Seconds": 113,
       "p99Seconds": 113,
+      "fullRangeSeconds": 122,
       "peakRssMiB": 3182
     },
     "Format": {
@@ -12,6 +13,7 @@
       "samples": 10,
       "p95Seconds": 5,
       "p99Seconds": 5,
+      "fullRangeSeconds": 7,
       "peakRssMiB": 85
     },
     "Test unsignalled skip detection": {
@@ -19,6 +21,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 116
     },
     "Ratchet guard": {
@@ -26,6 +29,7 @@
       "samples": 10,
       "p95Seconds": 264,
       "p99Seconds": 264,
+      "fullRangeSeconds": 273,
       "peakRssMiB": 2237
     },
     "Ratchet scanner invariants": {
@@ -33,6 +37,7 @@
       "samples": 10,
       "p95Seconds": 6,
       "p99Seconds": 6,
+      "fullRangeSeconds": 6,
       "peakRssMiB": 207
     },
     "Web raw JSON API census self-test": {
@@ -40,6 +45,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 50
     },
     "Web raw JSON API census": {
@@ -47,6 +53,7 @@
       "samples": 5,
       "p95Seconds": 5,
       "p99Seconds": 5,
+      "fullRangeSeconds": 4,
       "peakRssMiB": 175
     },
     "Test subject reachability census": {
@@ -54,6 +61,7 @@
       "samples": 10,
       "p95Seconds": 348,
       "p99Seconds": 348,
+      "fullRangeSeconds": 336,
       "peakRssMiB": 4602
     },
     "Deployment feature guard": {
@@ -61,6 +69,7 @@
       "samples": 10,
       "p95Seconds": 38,
       "p99Seconds": 38,
+      "fullRangeSeconds": 50,
       "peakRssMiB": 1185
     },
     "Processed-field backlog guard": {
@@ -68,6 +77,7 @@
       "samples": 10,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 41
     },
     "GitHub API command ownership": {
@@ -75,6 +85,7 @@
       "samples": 10,
       "p95Seconds": 61,
       "p99Seconds": 61,
+      "fullRangeSeconds": 61,
       "peakRssMiB": 190
     },
     "Tracked file sizes": {
@@ -82,6 +93,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 87
     },
     "CI job names": {
@@ -89,6 +101,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 56
     },
     "CI network step retries and timeouts": {
@@ -96,6 +109,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 72
     },
     "Workspace test gating ledger": {
@@ -103,6 +117,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 56
     },
     "Sparse checkout script dependencies": {
@@ -110,6 +125,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 52
     },
     "SHA-256 migration ledger": {
@@ -117,6 +133,7 @@
       "samples": 10,
       "p95Seconds": 48,
       "p99Seconds": 48,
+      "fullRangeSeconds": 49,
       "peakRssMiB": 5887
     },
     "Custom lint rule coverage": {
@@ -124,6 +141,7 @@
       "samples": 10,
       "p95Seconds": 199,
       "p99Seconds": 199,
+      "fullRangeSeconds": 212,
       "peakRssMiB": 1859
     },
     "Custom lint test timeout policy": {
@@ -131,6 +149,7 @@
       "samples": 10,
       "p95Seconds": 21,
       "p99Seconds": 21,
+      "fullRangeSeconds": 22,
       "peakRssMiB": 111
     },
     "Guard rollout scope tests": {
@@ -138,6 +157,7 @@
       "samples": 10,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 57
     },
     "Dated waiver lifecycle guards": {
@@ -145,6 +165,7 @@
       "samples": 10,
       "p95Seconds": 5,
       "p99Seconds": 5,
+      "fullRangeSeconds": 4,
       "peakRssMiB": 107
     },
     "Documentation source policy rule": {
@@ -152,6 +173,7 @@
       "samples": 10,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 222
     },
     "Instruction policy": {
@@ -159,6 +181,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 60
     },
     "Knip production dependency checks": {
@@ -166,6 +189,7 @@
       "samples": 10,
       "p95Seconds": 22,
       "p99Seconds": 22,
+      "fullRangeSeconds": 30,
       "peakRssMiB": 620
     },
     "Knip workspace dependency checks": {
@@ -173,6 +197,7 @@
       "samples": 10,
       "p95Seconds": 44,
       "p99Seconds": 44,
+      "fullRangeSeconds": 52,
       "peakRssMiB": 1356
     },
     "Knip dead-export budget (all workspaces)": {
@@ -180,6 +205,7 @@
       "samples": 10,
       "p95Seconds": 43,
       "p99Seconds": 43,
+      "fullRangeSeconds": 46,
       "peakRssMiB": 1293
     },
     "Dependabot group guard (installed packages)": {
@@ -187,6 +213,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 41
     }
   },
@@ -196,6 +223,7 @@
       "samples": 10,
       "p95Seconds": 86,
       "p99Seconds": 86,
+      "fullRangeSeconds": 100,
       "peakRssMiB": 3620
     },
     "Test capability shard merge and package parity": {
@@ -203,6 +231,7 @@
       "samples": 10,
       "p95Seconds": 172,
       "p99Seconds": 172,
+      "fullRangeSeconds": 183,
       "peakRssMiB": 1845
     },
     "Test CLI contract changeset guard over derived catalogs": {
@@ -210,13 +239,15 @@
       "samples": 10,
       "p95Seconds": 83,
       "p99Seconds": 83,
+      "fullRangeSeconds": 81,
       "peakRssMiB": 1067
     },
     "Generated files manifest guard": {
-      "minutes": 10,
+      "minutes": 24,
       "samples": 10,
       "p95Seconds": 116,
       "p99Seconds": 116,
+      "fullRangeSeconds": 702,
       "peakRssMiB": 1060
     },
     "Test oxlint plugins": {
@@ -224,6 +255,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 163
     },
     "Test release image CI gate": {
@@ -231,6 +263,7 @@
       "samples": 5,
       "p95Seconds": 280,
       "p99Seconds": 280,
+      "fullRangeSeconds": 395,
       "peakRssMiB": 529
     },
     "Test api scripts": {
@@ -238,6 +271,7 @@
       "samples": 10,
       "p95Seconds": 236,
       "p99Seconds": 236,
+      "fullRangeSeconds": 278,
       "peakRssMiB": 5704
     },
     "API test timeout guard": {
@@ -245,6 +279,7 @@
       "samples": 10,
       "p95Seconds": 10,
       "p99Seconds": 10,
+      "fullRangeSeconds": 13,
       "peakRssMiB": 148
     },
     "Test CLI runtime package parity": {
@@ -252,6 +287,7 @@
       "samples": 10,
       "p95Seconds": 329,
       "p99Seconds": 329,
+      "fullRangeSeconds": 575,
       "peakRssMiB": 1101
     },
     "Test depth repository scripts": {
@@ -264,6 +300,7 @@
       "samples": 10,
       "p95Seconds": 152,
       "p99Seconds": 152,
+      "fullRangeSeconds": 152,
       "peakRssMiB": 1660
     },
     "Playwright config scope": {
@@ -271,6 +308,7 @@
       "samples": 10,
       "p95Seconds": 41,
       "p99Seconds": 41,
+      "fullRangeSeconds": 67,
       "peakRssMiB": 807
     },
     "Workspace hygiene": {
@@ -278,6 +316,7 @@
       "samples": 10,
       "p95Seconds": 114,
       "p99Seconds": 114,
+      "fullRangeSeconds": 172,
       "peakRssMiB": 215
     },
     "Bun runtime guard": {
@@ -285,6 +324,7 @@
       "samples": 10,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 5,
       "peakRssMiB": 116
     },
     "Lockfile workspace-version guard": {
@@ -292,6 +332,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 47
     },
     "Resolution range guard": {
@@ -299,6 +340,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Quarantine-exclude guards": {
@@ -306,6 +348,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Policy evidence": {
@@ -313,6 +356,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Marketing content check": {
@@ -320,6 +364,7 @@
       "samples": 10,
       "p95Seconds": 25,
       "p99Seconds": 25,
+      "fullRangeSeconds": 24,
       "peakRssMiB": 1061
     },
     "Docker host mount guard": {
@@ -327,6 +372,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 97
     },
     "Railway template shape": {
@@ -334,6 +380,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 0,
       "peakRssMiB": 48
     },
     "Check i18n sync": {
@@ -341,6 +388,7 @@
       "samples": 5,
       "p95Seconds": 12,
       "p99Seconds": 12,
+      "fullRangeSeconds": 18,
       "peakRssMiB": 259
     },
     "Release changelog guard": {
@@ -395,6 +443,7 @@
     "Rust format": {
       "minutes": 30,
       "samples": 0,
+      "fullRangeSeconds": 6,
       "peakRssMiB": 4096
     },
     "React Compiler bailout guard": {
@@ -402,6 +451,7 @@
       "samples": 5,
       "p95Seconds": 15,
       "p99Seconds": 15,
+      "fullRangeSeconds": 23,
       "peakRssMiB": 182
     },
     "Design-system lint backlog": {
@@ -409,6 +459,7 @@
       "samples": 10,
       "p95Seconds": 14,
       "p99Seconds": 14,
+      "fullRangeSeconds": 23,
       "peakRssMiB": 2048
     },
     "Full error toast text census": {
@@ -416,6 +467,7 @@
       "samples": 10,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 4,
       "peakRssMiB": 126
     },
     "SQL performance baseline": {
@@ -423,6 +475,7 @@
       "samples": 10,
       "p95Seconds": 19,
       "p99Seconds": 19,
+      "fullRangeSeconds": 19,
       "peakRssMiB": 217
     },
     "Oxlint override union guard": {
@@ -430,6 +483,7 @@
       "samples": 5,
       "p95Seconds": 7,
       "p99Seconds": 7,
+      "fullRangeSeconds": 9,
       "peakRssMiB": 501
     },
     "Oxlint rule decisions": {
@@ -437,6 +491,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 96
     },
     "Oxlint effective config": {
@@ -444,6 +499,7 @@
       "samples": 5,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 6,
       "peakRssMiB": 211
     },
     "Result boundary enrolment": {
@@ -451,6 +507,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Generated source artifact contract": {
@@ -458,6 +515,7 @@
       "samples": 5,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 93
     },
     "Windows dry-run receipt contract": {
@@ -465,6 +523,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 49
     },
     "Test input coverage": {
@@ -472,6 +531,7 @@
       "samples": 10,
       "p95Seconds": 20,
       "p99Seconds": 20,
+      "fullRangeSeconds": 20,
       "peakRssMiB": 197
     },
     "Chat mutation targets": {
@@ -479,6 +539,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Desktop Rust inputs": {
@@ -486,6 +547,7 @@
       "samples": 5,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 106
     },
     "Test shard partition": {
@@ -493,6 +555,7 @@
       "samples": 10,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 82
     },
     "Landing deploy scope": {
@@ -500,6 +563,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 51
     },
     "Workflow cache policy": {
@@ -507,6 +571,7 @@
       "samples": 5,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 6,
       "peakRssMiB": 118
     },
     "Store cache save supervisor": {
@@ -514,6 +579,7 @@
       "samples": 5,
       "p95Seconds": 9,
       "p99Seconds": 9,
+      "fullRangeSeconds": 10,
       "peakRssMiB": 75
     },
     "Workflow lint": {
@@ -521,6 +587,7 @@
       "samples": 5,
       "p95Seconds": 8,
       "p99Seconds": 8,
+      "fullRangeSeconds": 13,
       "peakRssMiB": 126
     },
     "Action commit pins": {
@@ -528,6 +595,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Workflow YAML": {
@@ -535,6 +603,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 102
     },
     "Module ownership": {
@@ -542,6 +611,7 @@
       "samples": 10,
       "p95Seconds": 12,
       "p99Seconds": 12,
+      "fullRangeSeconds": 29,
       "peakRssMiB": 228
     },
     "Outbound transport ownership": {
@@ -549,6 +619,7 @@
       "samples": 10,
       "p95Seconds": 24,
       "p99Seconds": 24,
+      "fullRangeSeconds": 40,
       "peakRssMiB": 729
     },
     "Document identity ownership": {
@@ -556,6 +627,7 @@
       "samples": 5,
       "p95Seconds": 14,
       "p99Seconds": 14,
+      "fullRangeSeconds": 22,
       "peakRssMiB": 312
     },
     "Module ownership invariants": {
@@ -563,6 +635,7 @@
       "samples": 10,
       "p95Seconds": 12,
       "p99Seconds": 12,
+      "fullRangeSeconds": 18,
       "peakRssMiB": 175
     },
     "Generated artifact formatting invariants": {
@@ -570,6 +643,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Schema introspection invariants": {
@@ -577,6 +651,7 @@
       "samples": 10,
       "p95Seconds": 15,
       "p99Seconds": 15,
+      "fullRangeSeconds": 31,
       "peakRssMiB": 231
     },
     "Queue authority": {
@@ -584,6 +659,7 @@
       "samples": 10,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 5,
       "peakRssMiB": 161
     },
     "Design token docs": {
@@ -591,6 +667,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Icon module imports": {
@@ -598,6 +675,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 108
     },
     "Suppression waiver ledger": {
@@ -605,6 +683,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 201
     },
     "Crawl posture guard": {
@@ -612,6 +691,7 @@
       "samples": 10,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 51
     },
     "Chat fixture guard": {
@@ -619,6 +699,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 111
     },
     "Transfer timeout and fixed read guard": {
@@ -626,6 +707,7 @@
       "samples": 10,
       "p95Seconds": 10,
       "p99Seconds": 10,
+      "fullRangeSeconds": 20,
       "peakRssMiB": 237
     },
     "Offline check transport policy": {
@@ -633,6 +715,7 @@
       "samples": 10,
       "p95Seconds": 5,
       "p99Seconds": 5,
+      "fullRangeSeconds": 7,
       "peakRssMiB": 249
     },
     "Model catalog generation guard": {
@@ -640,6 +723,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Model task default evidence guard": {
@@ -647,11 +731,13 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 104
     },
     "Model catalog snapshot drift check": {
       "minutes": 30,
       "samples": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 4096
     },
     "Capability description ledger": {
@@ -659,6 +745,7 @@
       "samples": 10,
       "p95Seconds": 20,
       "p99Seconds": 20,
+      "fullRangeSeconds": 30,
       "peakRssMiB": 1080
     },
     "Capability file-transport ledger": {
@@ -666,6 +753,7 @@
       "samples": 10,
       "p95Seconds": 23,
       "p99Seconds": 23,
+      "fullRangeSeconds": 22,
       "peakRssMiB": 1071
     },
     "MCP coverage guard": {
@@ -673,6 +761,7 @@
       "samples": 10,
       "p95Seconds": 7,
       "p99Seconds": 7,
+      "fullRangeSeconds": 13,
       "peakRssMiB": 584
     },
     "MCP surface baseline self-test": {
@@ -680,6 +769,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Offline catalogue pinned-content policy": {
@@ -687,6 +777,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 226
     },
     "Catalogue pinned-content check": {
@@ -694,6 +785,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Property-test convention guard": {
@@ -701,6 +793,7 @@
       "samples": 10,
       "p95Seconds": 54,
       "p99Seconds": 54,
+      "fullRangeSeconds": 50,
       "peakRssMiB": 418
     },
     "Test marketing recording verification guard": {
@@ -708,6 +801,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 48
     },
     "Test desktop bridge CI guards": {
@@ -715,6 +809,7 @@
       "samples": 5,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 48
     },
     "Check workflow shell policy": {
@@ -722,6 +817,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 62
     },
     "Patched dependencies apply": {
@@ -729,6 +825,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test release-channel script": {
@@ -736,6 +833,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test web container platform boundary": {
@@ -743,6 +841,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test @stll resolution pin": {
@@ -750,6 +849,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test web runtime staging": {
@@ -757,6 +857,7 @@
       "samples": 5,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 4,
       "peakRssMiB": 157
     },
     "Check Docker source closure": {
@@ -764,6 +865,7 @@
       "samples": 10,
       "p95Seconds": 16,
       "p99Seconds": 16,
+      "fullRangeSeconds": 23,
       "peakRssMiB": 621
     },
     "Test published export artifact guard": {
@@ -771,6 +873,7 @@
       "samples": 5,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 4,
       "peakRssMiB": 76
     },
     "Test publish manifest transformation": {
@@ -778,6 +881,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test journey checks": {
@@ -785,6 +889,7 @@
       "samples": 5,
       "p95Seconds": 40,
       "p99Seconds": 40,
+      "fullRangeSeconds": 57,
       "peakRssMiB": 70
     },
     "Test release policy scripts": {
@@ -792,6 +897,7 @@
       "samples": 5,
       "p95Seconds": 11,
       "p99Seconds": 11,
+      "fullRangeSeconds": 12,
       "peakRssMiB": 64
     },
     "Test staging proof readiness": {
@@ -799,6 +905,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 60
     },
     "Test documentation and landing CI scope": {
@@ -806,6 +913,7 @@
       "samples": 10,
       "p95Seconds": 31,
       "p99Seconds": 31,
+      "fullRangeSeconds": 42,
       "peakRssMiB": 156
     },
     "Test main heavy workflow contracts": {
@@ -813,6 +921,7 @@
       "samples": 5,
       "p95Seconds": 8,
       "p99Seconds": 8,
+      "fullRangeSeconds": 17,
       "peakRssMiB": 97
     },
     "Test cancellation evidence": {
@@ -820,6 +929,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test thin merge queue contracts": {
@@ -827,6 +937,7 @@
       "samples": 5,
       "p95Seconds": 21,
       "p99Seconds": 21,
+      "fullRangeSeconds": 26,
       "peakRssMiB": 93
     },
     "Test service-suite dependency scope": {
@@ -834,6 +945,7 @@
       "samples": 10,
       "p95Seconds": 7,
       "p99Seconds": 7,
+      "fullRangeSeconds": 8,
       "peakRssMiB": 481
     },
     "Test nightly rehearsal and retry guards": {
@@ -841,6 +953,7 @@
       "samples": 10,
       "p95Seconds": 5,
       "p99Seconds": 5,
+      "fullRangeSeconds": 9,
       "peakRssMiB": 250
     },
     "Reject automatic test retries": {
@@ -848,6 +961,7 @@
       "samples": 10,
       "p95Seconds": 5,
       "p99Seconds": 5,
+      "fullRangeSeconds": 8,
       "peakRssMiB": 248
     },
     "Keep tests off history walks": {
@@ -855,6 +969,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 297
     },
     "Test dependency malware scanners": {
@@ -862,6 +977,7 @@
       "samples": 5,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 48
     },
     "Test maintenance release preparation": {
@@ -869,6 +985,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 68
     },
     "Test release queue history guard": {
@@ -876,6 +993,7 @@
       "samples": 5,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 73
     },
     "Test promoted release resolution": {
@@ -883,6 +1001,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test API and CLI contract invariants": {
@@ -890,6 +1009,7 @@
       "samples": 10,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 67
     },
     "Test detect-desktop-release-changes script": {
@@ -897,6 +1017,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 48
     },
     "Test route smoke change detector": {
@@ -904,6 +1025,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 73
     },
     "Test changed e2e shard selection": {
@@ -911,6 +1033,7 @@
       "samples": 10,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 69
     },
     "Test geometry shard plan": {
@@ -918,6 +1041,7 @@
       "samples": 5,
       "p95Seconds": 29,
       "p99Seconds": 29,
+      "fullRangeSeconds": 31,
       "peakRssMiB": 416
     },
     "Test e2e shard budget": {
@@ -925,6 +1049,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 113
     },
     "Validate CI service image mirror inventory": {
@@ -932,6 +1057,7 @@
       "samples": 10,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 119
     },
     "Test CI service image workflow contracts": {
@@ -939,6 +1065,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 79
     },
     "Test CI workflow invariants": {
@@ -946,6 +1073,7 @@
       "samples": 5,
       "p95Seconds": 32,
       "p99Seconds": 32,
+      "fullRangeSeconds": 55,
       "peakRssMiB": 642
     },
     "Test reusable workflow permission contracts": {
@@ -953,6 +1081,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test main network recording selection": {
@@ -960,6 +1089,7 @@
       "samples": 5,
       "p95Seconds": 5,
       "p99Seconds": 5,
+      "fullRangeSeconds": 9,
       "peakRssMiB": 48
     },
     "Test API duration workflow": {
@@ -967,6 +1097,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test autofix protected paths": {
@@ -974,6 +1105,7 @@
       "samples": 5,
       "p95Seconds": 10,
       "p99Seconds": 10,
+      "fullRangeSeconds": 22,
       "peakRssMiB": 49
     },
     "Test type-aware autofix": {
@@ -981,6 +1113,7 @@
       "samples": 5,
       "p95Seconds": 11,
       "p99Seconds": 11,
+      "fullRangeSeconds": 10,
       "peakRssMiB": 69
     },
     "Test local workflow verification": {
@@ -988,6 +1121,7 @@
       "samples": 5,
       "p95Seconds": 7,
       "p99Seconds": 7,
+      "fullRangeSeconds": 7,
       "peakRssMiB": 67
     },
     "Run fork contributor commands": {
@@ -995,6 +1129,7 @@
       "samples": 5,
       "p95Seconds": 608,
       "p99Seconds": 608,
+      "fullRangeSeconds": 744,
       "peakRssMiB": 4702
     },
     "Typecheck cache contract": {
@@ -1002,6 +1137,7 @@
       "samples": 5,
       "p95Seconds": 4,
       "p99Seconds": 4,
+      "fullRangeSeconds": 8,
       "peakRssMiB": 70
     },
     "Task result cache contract": {
@@ -1009,6 +1145,7 @@
       "samples": 5,
       "p95Seconds": 8,
       "p99Seconds": 8,
+      "fullRangeSeconds": 17,
       "peakRssMiB": 100
     },
     "Test CI check partition": {
@@ -1016,6 +1153,7 @@
       "samples": 10,
       "p95Seconds": 5,
       "p99Seconds": 5,
+      "fullRangeSeconds": 7,
       "peakRssMiB": 185
     },
     "Test install-free CI commands": {
@@ -1023,6 +1161,7 @@
       "samples": 5,
       "p95Seconds": 4,
       "p99Seconds": 4,
+      "fullRangeSeconds": 4,
       "peakRssMiB": 111
     },
     "Test pre-push secret scan ranges": {
@@ -1030,6 +1169,7 @@
       "samples": 5,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 6,
       "peakRssMiB": 48
     },
     "Test merge-base network comparison": {
@@ -1037,6 +1177,7 @@
       "samples": 5,
       "p95Seconds": 12,
       "p99Seconds": 12,
+      "fullRangeSeconds": 15,
       "peakRssMiB": 221
     },
     "Test CLI release coupling gate": {
@@ -1044,6 +1185,7 @@
       "samples": 10,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 77
     },
     "Test CLI contract changeset guard": {
@@ -1051,6 +1193,7 @@
       "samples": 5,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 5,
       "peakRssMiB": 48
     },
     "Test package scaffolder": {
@@ -1058,6 +1201,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test affected code-check planner": {
@@ -1065,6 +1209,7 @@
       "samples": 10,
       "p95Seconds": 57,
       "p99Seconds": 57,
+      "fullRangeSeconds": 94,
       "peakRssMiB": 2994
     },
     "Test changeset guard": {
@@ -1072,6 +1217,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 79
     },
     "Test environment tooling": {
@@ -1079,6 +1225,7 @@
       "samples": 10,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 4,
       "peakRssMiB": 86
     },
     "Test retry script": {
@@ -1086,6 +1233,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test CI failure digest": {
@@ -1093,6 +1241,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 92
     },
     "Test base image pull script": {
@@ -1100,6 +1249,7 @@
       "samples": 5,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 48
     },
     "Verify runner tool availability": {
@@ -1107,6 +1257,7 @@
       "samples": 10,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 77
     },
     "Test preview scope tool availability": {
@@ -1114,6 +1265,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Verify CI job event policies": {
@@ -1121,6 +1273,7 @@
       "samples": 5,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 90
     },
     "Test public document fetch": {
@@ -1128,6 +1281,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 148
     },
     "Test migration identity logic": {
@@ -1135,6 +1289,7 @@
       "samples": 10,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 5,
       "peakRssMiB": 167
     },
     "Check migration identity against the base branch": {
@@ -1142,6 +1297,7 @@
       "samples": 10,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 61
     },
     "Check grant release order against the production release": {
@@ -1149,6 +1305,7 @@
       "samples": 10,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Test dead-columns reference matching": {
@@ -1156,6 +1313,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 109
     },
     "Test projection-totality classification": {
@@ -1163,6 +1321,7 @@
       "samples": 10,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 179
     },
     "Test aggregate inventories": {
@@ -1170,6 +1329,7 @@
       "samples": 10,
       "p95Seconds": 3,
       "p99Seconds": 3,
+      "fullRangeSeconds": 6,
       "peakRssMiB": 107
     },
     "Test write contract inventories": {
@@ -1177,6 +1337,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 79
     },
     "Office fixture metadata": {
@@ -1184,6 +1345,7 @@
       "samples": 10,
       "p95Seconds": 2,
       "p99Seconds": 2,
+      "fullRangeSeconds": 3,
       "peakRssMiB": 188
     },
     "Tailwind sources cover class-shipping dependencies": {
@@ -1191,6 +1353,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     },
     "Bridge-version guard": {
@@ -1198,6 +1361,7 @@
       "samples": 5,
       "p95Seconds": 0,
       "p99Seconds": 0,
+      "fullRangeSeconds": 1,
       "peakRssMiB": 48
     }
   },
@@ -1207,6 +1371,7 @@
       "samples": 10,
       "p95Seconds": 287,
       "p99Seconds": 287,
+      "fullRangeSeconds": 306,
       "peakRssMiB": 12846
     },
     "Result consumption (web)": {
@@ -1214,6 +1379,7 @@
       "samples": 10,
       "p95Seconds": 31,
       "p99Seconds": 31,
+      "fullRangeSeconds": 132,
       "peakRssMiB": 1100
     },
     "Code quality (rest)": {
@@ -1221,6 +1387,7 @@
       "samples": 10,
       "p95Seconds": 494,
       "p99Seconds": 494,
+      "fullRangeSeconds": 597,
       "peakRssMiB": 6126
     },
     "Query cache types": {
@@ -1228,6 +1395,7 @@
       "samples": 10,
       "p95Seconds": 16,
       "p99Seconds": 16,
+      "fullRangeSeconds": 17,
       "peakRssMiB": 1205
     },
     "Dead columns": {
@@ -1235,6 +1403,7 @@
       "samples": 10,
       "p95Seconds": 45,
       "p99Seconds": 45,
+      "fullRangeSeconds": 40,
       "peakRssMiB": 403
     },
     "Projection totality": {
@@ -1242,6 +1411,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 176
     },
     "Aggregate ownership": {
@@ -1249,6 +1419,7 @@
       "samples": 10,
       "p95Seconds": 54,
       "p99Seconds": 54,
+      "fullRangeSeconds": 53,
       "peakRssMiB": 679
     },
     "Split-button census": {
@@ -1256,6 +1427,7 @@
       "samples": 10,
       "p95Seconds": 1,
       "p99Seconds": 1,
+      "fullRangeSeconds": 2,
       "peakRssMiB": 87
     },
     "Database awaits in loops": {
@@ -1263,6 +1435,7 @@
       "samples": 10,
       "p95Seconds": 83,
       "p99Seconds": 83,
+      "fullRangeSeconds": 103,
       "peakRssMiB": 2600
     },
     "Online unique index dependency guard": {
@@ -1270,6 +1443,7 @@
       "samples": 10,
       "p95Seconds": 29,
       "p99Seconds": 29,
+      "fullRangeSeconds": 24,
       "peakRssMiB": 401
     },
     "API timeout mutation guard": {
@@ -1277,13 +1451,15 @@
       "samples": 10,
       "p95Seconds": 28,
       "p99Seconds": 28,
+      "fullRangeSeconds": 38,
       "peakRssMiB": 253
     },
     "Result consumption (rest)": {
-      "minutes": 5,
+      "minutes": 8,
       "samples": 10,
       "p95Seconds": 27,
       "p99Seconds": 27,
+      "fullRangeSeconds": 229,
       "peakRssMiB": 1703
     }
   }

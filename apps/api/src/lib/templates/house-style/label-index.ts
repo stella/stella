@@ -232,10 +232,59 @@ export const isRunningText = (text: string): boolean => {
   const trimmed = text.replace(/^[\s:–—.-]+/u, "").trim();
   return (
     trimmed.length > HEADING_TITLE_MAX ||
-    (SENTENCE_END.test(trimmed) &&
+    (SENTENCE_END.test(sentenceOf(trimmed)) &&
       trimmed.split(/\s+/u).length >= RUNNING_WORDS_MIN)
   );
 };
+
+/** `text` without the characters at its end that `strip` accepts. */
+const trimEndWhile = (
+  text: string,
+  strip: (char: string) => boolean,
+): string => {
+  let end = text.length;
+  while (end > 0 && strip(text.charAt(end - 1))) {
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
+
+/** The longest a bracketed choice behind a sentence runs (`[and/or]`). */
+const CHOICE_MAX = 40;
+const CHOICE_BREAK = /[[\].;:]/u;
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+/** Brackets and quotes that close behind a sentence's last mark. */
+const CLOSING_MARKS = new Set(["]", ")", '"', "”", "’"]);
+
+/** `text` without the short bracketed choices a model sets behind its
+ *  sentence (`[and/or]`). */
+const withoutTrailingChoices = (text: string): string => {
+  let rest = text;
+  while (rest.endsWith("]")) {
+    const open = rest.lastIndexOf("[");
+    const choice = rest.slice(open + 1, -1);
+    if (
+      open === -1 ||
+      choice.length > CHOICE_MAX ||
+      CHOICE_BREAK.test(choice)
+    ) {
+      return rest;
+    }
+    rest = trimEndWhile(
+      rest.slice(0, open),
+      (char) => char === " " || char === "\u00A0",
+    );
+  }
+  return rest;
+};
+
+/**
+ * A text as far as its sentence goes: without the short bracketed choices
+ * a model sets behind it, and without the brackets and quotes that close
+ * behind its last mark (`… attached to this letter.] [and/or]`).
+ */
+const sentenceOf = (text: string): string =>
+  trimEndWhile(withoutTrailingChoices(text), (char) => CLOSING_MARKS.has(char));
 
 type LabelOrigin = "auto" | "manual" | "field";
 
@@ -252,13 +301,57 @@ type RawLabel = {
 
 const hasDesignator = (label: string): boolean => /[\p{L}\p{N}]/u.test(label);
 
+/**
+ * The part of an automatic label its own level prints, where the level's
+ * text puts the counters of the levels above in front of its own (`I. 1) a)`
+ * from `%1. %2) %4)` is `a)`): the own counter with the bracket in front of
+ * it and what follows it. Null when the level's text is unknown, names no
+ * other level, or the label does not end as the text does.
+ */
+export const ownLabelPartOf = (
+  { numbering }: DocxBlock,
+  label: string,
+): string | null => {
+  const lvlText = numbering?.lvlText;
+  if (lvlText === undefined || numbering === null) {
+    return null;
+  }
+  const own = `%${String(numbering.ilvl + 1)}`;
+  const at = lvlText.lastIndexOf(own);
+  const after = lvlText.slice(at + own.length);
+  const before = lvlText.slice(0, at);
+  if (at === -1 || /%\d/u.test(after) || !/%\d/u.test(before)) {
+    return null;
+  }
+  const open = before.endsWith("(") ? "(" : "";
+  if (!label.endsWith(after)) {
+    return null;
+  }
+  const head = label.slice(0, label.length - after.length);
+  const counter = head.slice(
+    trimEndWhile(head, (char) => LETTER_OR_DIGIT.test(char)).length,
+  );
+  if (counter === "") {
+    return null;
+  }
+  const part = `${open}${counter}${after}`;
+  return label.endsWith(part) ? part : null;
+};
+
 const readAutoLabel = (block: DocxBlock, label: string): RawLabel | null => {
   const trimmed = label.trim();
   if (!hasDesignator(trimmed)) {
     return null;
   }
-  const shape = parseLabelShape(trimmed);
-  if (shape === null || shape.length !== trimmed.length) {
+  const whole = parseLabelShape(trimmed);
+  // A label that shows the counters above its own (`I. 1) a)`) is read by
+  // the part its own level prints.
+  const own =
+    whole !== null && whole.length === trimmed.length
+      ? null
+      : ownLabelPartOf(block, trimmed);
+  const shape = own === null ? whole : parseLabelShape(own);
+  if (shape === null || shape.length !== (own ?? trimmed).length) {
     return null;
   }
   return {

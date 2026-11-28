@@ -54,14 +54,18 @@ import type {
 } from "@/api/lib/templates/house-style/label-index";
 import { readLetterHead } from "@/api/lib/templates/house-style/letter-head";
 import {
+  labelOrdinalOf,
+  levelOfPlaceholder,
   levelsInLanguage,
   numberPlacements,
   ordinalOf,
+  OWN_COUNTER,
   patternOf,
   plannedLabelOf,
 } from "@/api/lib/templates/house-style/plan-numbering";
 import type {
   LabelKeptReason,
+  LabelPattern,
   ListLevelFormat,
   NumberingMode,
   OutlineLevels,
@@ -176,6 +180,18 @@ export type FormattingNoteItem =
       citedBlockId: string;
       suggestedBlockId: string;
       confidence: number;
+    }
+  /** A number field of the source shows another number than the
+   *  paragraph it points at has: its text was written before that paragraph
+   *  was renumbered and the field was not updated. */
+  | {
+      kind: "referenceStale";
+      blockId: string;
+      start: number;
+      end: number;
+      targetBlockId: string;
+      shown: string;
+      current: string;
     }
   /** A typed label stays text; the paragraph joins no list. */
   | { kind: "labelKeptAsText"; blockId: string; reason: LabelKeptReason }
@@ -505,6 +521,19 @@ type Context = {
   rejectedNumbers: ReadonlyMap<string, string> | null;
   /** The table a cell paragraph sits in. */
   tableOf: ReadonlyMap<string, string>;
+  /** The source's list definitions the output keeps as the source's own
+   *  lists, once the paragraphs are numbered. */
+  sourceLists: ReadonlySet<number>;
+  /** By source list definition and level: the template level the paragraph
+   *  placed last at that level is numbered on, as placed. */
+  sourceLevels: Map<number, Map<number, ProfileListLevel | null>>;
+  /** The levels the paragraphs of each source level ended up on in an
+   *  earlier build, spare levels included, and the paragraphs that read
+   *  them in place of `sourceLevels`. */
+  levelHints: {
+    levels: ReadonlyMap<number, ReadonlyMap<number, ProfileListLevel>>;
+    blockIds: ReadonlySet<string>;
+  } | null;
   topLevel: readonly DocxBlock[];
   /** The source's sections; empty when the manifest does not report them. */
   sections: readonly DocxSection[];
@@ -734,7 +763,167 @@ const targetsOf = (
   };
 };
 
+/**
+ * A clause's pattern that prints its article's counter in arabic numerals
+ * where the source's level does so (legal numbering: `1.1` under article
+ * `I.`): the level the clause is counted on does the same.
+ */
+const legalOf = (
+  pattern: LabelPattern | null,
+  entry: LabelEntry,
+  block: DocxBlock,
+  { blockById }: Context,
+): LabelPattern | null => {
+  // Only where it shows: under an article that prints a numeral of its own
+  // (`I.`); under `1.` the level reads the same either way.
+  const article =
+    entry.articleBlockId === null
+      ? undefined
+      : blockById.get(entry.articleBlockId);
+  const romanArticle = !/\d/u.test(article?.label ?? "1");
+  return pattern !== null &&
+    entry.origin === "auto" &&
+    block.numbering?.legal === true &&
+    pattern.numFmt === "decimal" &&
+    romanArticle
+    ? { ...pattern, legal: true }
+    : pattern;
+};
+
+/**
+ * The pattern of an automatic label whose level's text prints the counters
+ * of the levels above its own (`%1. %2) %4)` printing `I. 1) a)`): each of
+ * those counters is the one of the template level the paragraph above at
+ * that source level is placed on, and its own counter is the level it is
+ * counted on. Null when one of them is placed on no level or on another
+ * list than the paragraph's own level.
+ */
+const levelTextPatternOf = (
+  { sourceLevels, levelHints }: Context,
+  block: DocxBlock,
+  ownLevel: ProfileListLevel | null,
+): LabelPattern | null => {
+  const numbering = block.numbering;
+  const lvlText = numbering?.lvlText;
+  const numFmt = numbering?.numFmt;
+  if (
+    numbering === null ||
+    lvlText === undefined ||
+    numFmt === undefined ||
+    (ownLevel === null && levelHints?.blockIds.has(block.id) !== true) ||
+    lvlText.includes(OWN_COUNTER)
+  ) {
+    return null;
+  }
+  const hints = levelHints?.blockIds.has(block.id) === true ? levelHints : null;
+  const above =
+    hints === null
+      ? sourceLevels.get(numbering.abstractNumId)
+      : hints.levels.get(numbering.abstractNumId);
+  // With the settled levels of an earlier build, a paragraph without a
+  // level of its own counts on a spare level of its parents' list.
+  let list = ownLevel?.abstractNumId ?? null;
+  let text = "";
+  let copied = 0;
+  for (const match of lvlText.matchAll(/%(\d)/gu)) {
+    text += lvlText.slice(copied, match.index);
+    copied = match.index + match[0].length;
+    const sourceIlvl = levelOfPlaceholder(match[1]);
+    if (sourceIlvl === numbering.ilvl) {
+      text += OWN_COUNTER;
+      continue;
+    }
+    const level = above?.get(sourceIlvl) ?? null;
+    list ??= level?.abstractNumId ?? null;
+    if (level === null || level.abstractNumId !== list) {
+      return null;
+    }
+    text += `%${String(level.ilvl + 1)}`;
+  }
+  text += lvlText.slice(copied);
+  if (!text.includes(OWN_COUNTER)) {
+    return null;
+  }
+  return {
+    numFmt,
+    lvlText: text,
+    ...(numbering.legal === true ? { legal: true } : {}),
+  };
+};
+
+/** A level text with its counters left out: the words and marks it prints. */
+const wordsOf = ({ lvlText }: LabelPattern): string =>
+  lvlText.replaceAll(/%\d/gu, "").replaceAll(OWN_COUNTER, "");
+
+/**
+ * The pattern read off the label, unless the level's text says the same
+ * words over the counters of other levels than the reader assumed (a
+ * clause `I.1.` whose `I.` heads a part on a level of its own): the paragraph
+ * above names the level it is placed on.
+ */
+const chosenPattern = (
+  read: LabelPattern | null,
+  stated: LabelPattern | null,
+): LabelPattern | null => {
+  if (read === null || stated === null) {
+    return read ?? stated;
+  }
+  return read.numFmt === stated.numFmt &&
+    read.lvlText !== stated.lvlText &&
+    wordsOf(read) === wordsOf(stated)
+    ? stated
+    : read;
+};
+
+/**
+ * Numbers an automatic label the index does not read (a second run of
+ * `1.`, `2.` in notes behind the text) where the paragraphs at its level of
+ * its list sit on a level of the template: on that level, through its
+ * level's text.
+ */
+const countWithSiblings = (
+  context: Context,
+  placement: Placement,
+  mark: string,
+): void => {
+  const { numbering } = placement.block;
+  const level =
+    numbering === null
+      ? null
+      : (context.sourceLevels
+          .get(numbering.abstractNumId)
+          ?.get(numbering.ilvl) ?? null);
+  const pattern = levelTextPatternOf(context, placement.block, level);
+  const ordinal =
+    pattern === null ? null : labelOrdinalOf(mark, pattern.numFmt);
+  if (level === null || pattern === null || ordinal === null || mark === "") {
+    return;
+  }
+  placement.level = level;
+  placement.pattern = pattern;
+  placement.ordinal = ordinal;
+  placement.sourceLabel = mark;
+  placement.numbered = true;
+};
+
 const placementOf = (
+  context: Context,
+  block: DocxBlock,
+  role: HouseStyleRole,
+): Placement => {
+  const placement = placementAt(context, block, role);
+  const numbering = block.numbering;
+  if (numbering !== null && (block.label ?? "").trim() !== "") {
+    const levels =
+      context.sourceLevels.get(numbering.abstractNumId) ??
+      new Map<number, ProfileListLevel | null>();
+    levels.set(numbering.ilvl, placement.numbered ? placement.level : null);
+    context.sourceLevels.set(numbering.abstractNumId, levels);
+  }
+  return placement;
+};
+
+const placementAt = (
   context: Context,
   block: DocxBlock,
   role: HouseStyleRole,
@@ -765,6 +954,7 @@ const placementOf = (
     group: null,
     counters: [],
     keptReason: null,
+    sourceList: null,
   };
   if (exclusions.numbering.has(block.id)) {
     placement.keptReason =
@@ -778,6 +968,8 @@ const placementOf = (
       placement.sourceLabel = mark;
       placement.pattern = bulletPatternOf(block, mark);
       placement.numbered = true;
+    } else {
+      countWithSiblings(context, placement, mark);
     }
     return placement;
   }
@@ -800,7 +992,27 @@ const placementOf = (
     placement.keptReason = typedKept;
     return placement;
   }
-  placement.pattern = patternOf(entry, sourceLabel, outline);
+  // An automatic label the reader cannot restate (`I. 1) a)`) is printed
+  // by its level's text: read through it, the counters above its own are
+  // those of the levels the paragraphs above it are placed on.
+  placement.pattern = chosenPattern(
+    legalOf(patternOf(entry, sourceLabel, outline), entry, block, context),
+    entry.origin === "auto"
+      ? levelTextPatternOf(context, block, ownLevel)
+      : null,
+  );
+  // A pattern that names the paragraph's own level as one above it (a
+  // clause deeper than the template's levels, under a parent on that
+  // level) needs a level of its own: a spare one, at its role's indent.
+  if (
+    placement.level !== null &&
+    placement.pattern?.lvlText.includes(
+      `%${String(placement.level.ilvl + 1)}`,
+    ) === true
+  ) {
+    placement.borrowedLevel = placement.level;
+    placement.level = null;
+  }
   placement.ordinal =
     placement.pattern === null
       ? null
@@ -1446,11 +1658,16 @@ const textStartOf = (context: Context, placement: Placement): number => {
   const { profile } = context;
   const { entry, level, borrowedLevel, role, pattern } = placement;
   const numberedAt = level ?? borrowedLevel;
-  // A bullet has no entry of its own: its text starts where its level's.
-  if ((entry !== null || pattern?.numFmt === "bullet") && numberedAt !== null) {
+  // A bullet has no entry of its own: its text starts where its level's;
+  // so does a label counted with its siblings.
+  if (
+    (entry !== null || pattern?.numFmt === "bullet" || placement.numbered) &&
+    numberedAt !== null
+  ) {
     return numberedAt.indent.left ?? 0;
   }
-  // A number written as text hangs as a list's would.
+  // A number written as text, or counted by the source's own list,
+  // hangs as a list of the template would.
   const hang = hangOf(context, placement);
   if (hang?.left !== undefined) {
     return hang.left;
@@ -1727,8 +1944,19 @@ const showsLabel = ({ entry, block, numbered }: Placement): boolean =>
   (entry !== null && numbered) || shownLabelOf(block) !== null;
 
 /** Whether a line can have others set under its text. */
-const leadsLines = ({ role, pattern }: Placement): boolean =>
-  ITEM_ROLES.has(role) || pattern?.numFmt === "bullet";
+const leadsLines = ({
+  role,
+  pattern,
+  block,
+  entry,
+  numbered,
+}: Placement): boolean =>
+  ITEM_ROLES.has(role) ||
+  pattern?.numFmt === "bullet" ||
+  // A label the index does not read, counted with its siblings.
+  (entry === null && numbered) ||
+  // Running text numbered like an article reads as the clause it is.
+  (role === "articleHeading" && runsOn(block, entry));
 
 /**
  * Whether the source sets an unnumbered line under the text of the item in
@@ -1842,7 +2070,11 @@ const underItemIndent = (
  * the text it belongs to. A table, a heading and a paragraph the source
  * sets further out end the item.
  */
-const indentContinuations = (context: Context, placed: Placed): void => {
+const indentContinuations = (
+  context: Context,
+  placed: Placed,
+  { settled = false }: { settled?: boolean } = {},
+): void => {
   let item: Placement | null = null;
   for (const block of context.topLevel) {
     const placement =
@@ -1860,15 +2092,23 @@ const indentContinuations = (context: Context, placed: Placed): void => {
       UNNUMBERED_ROLES.has(placement.role) &&
       standsUnder(placement, item)
     ) {
-      // An item hung in from its parent has its text where it hangs.
-      placed.itemIndents.set(
-        block.id,
-        underItemIndent(
-          placed.nestedIndents.get(item.block.id)?.left ??
-            textStartOf(context, item),
-          placement,
-        ),
-      );
+      // Once the lists are settled, only the lines still set under an item
+      // the source's own list numbers move: that list sets its text where
+      // the source does. An item hung in from its parent has its text where
+      // it hangs.
+      if (
+        !settled ||
+        (item.sourceList !== null && placed.itemIndents.has(block.id))
+      ) {
+        placed.itemIndents.set(
+          block.id,
+          underItemIndent(
+            placed.nestedIndents.get(item.block.id)?.left ??
+              textStartOf(context, item),
+            placement,
+          ),
+        );
+      }
     } else {
       item = null;
     }
@@ -2618,8 +2858,16 @@ const numberingOf = ({
   level,
   restartFrom,
   group,
-}: Placement): TemplatePlanNumbering | null =>
-  numbered && level !== null
+  sourceList,
+}: Placement): TemplatePlanNumbering | null => {
+  if (numbered && sourceList !== null) {
+    return {
+      numId: "new",
+      ilvl: sourceList.ilvl,
+      sourceNumId: sourceList.numId,
+    };
+  }
+  return numbered && level !== null
     ? {
         numId: level.numId,
         ilvl: level.ilvl,
@@ -2627,6 +2875,7 @@ const numberingOf = ({
         ...(group === null ? {} : { group }),
       }
     : null;
+};
 
 /** The automatic label a block shows, or null when it shows none. */
 const shownLabelOf = ({ label }: DocxBlock): string | null => {
@@ -3069,12 +3318,35 @@ const CELL_TEXT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
  * template; a number it shows goes with it as text. Undefined when it needs
  * nothing of its own.
  */
+/** The cell paragraphs placed with their tables only, read as no role. */
+const looseCellsOf = (
+  context: Context,
+  { placementById }: Placed,
+): DocxBlock[] =>
+  context.topLevel
+    .filter(({ kind }) => kind === "table")
+    .flatMap((table) => insideOf(table, context.blockById))
+    .filter(
+      (inner) => inner.kind === "paragraph" && !placementById.has(inner.id),
+    );
+
+/** The numbering of a cell paragraph read as no role whose list the output
+ *  keeps as the source's own; null for any other. */
+const looseNumberingOf = (
+  { sourceLists }: Context,
+  { numbering }: DocxBlock,
+): TemplatePlanNumbering | null =>
+  numbering !== null && sourceLists.has(numbering.abstractNumId)
+    ? { numId: "new", ilvl: numbering.ilvl, sourceNumId: numbering.numId }
+    : null;
+
 const looseCellOf = (
   context: Context,
   inner: DocxBlock,
 ): TemplatePlanNestedParagraph | undefined => {
   const styleId = context.profile.tableText?.styleId;
-  const labelled = shownLabelOf(inner) !== null;
+  const kept = looseNumberingOf(context, inner);
+  const labelled = kept === null && shownLabelOf(inner) !== null;
   // Where its text stands in the cell is the table's own layout: a centred
   // row that heads a group, an amount at the right.
   const alignment =
@@ -3100,6 +3372,7 @@ const looseCellOf = (
   if (
     styleId === undefined &&
     !labelled &&
+    kept === null &&
     alignment === undefined &&
     spacing === undefined &&
     indent === undefined &&
@@ -3111,6 +3384,7 @@ const looseCellOf = (
     blockId: inner.id,
     ...(styleId === undefined ? {} : { styleId }),
     ...(labelled ? { numbering: null, labelAsText: true } : {}),
+    ...(kept === null ? {} : { numbering: kept }),
     ...(alignment === undefined ? {} : { alignment }),
     ...(indent === undefined ? {} : { indent }),
     ...(spacing === undefined ? {} : { spacing }),
@@ -3274,10 +3548,14 @@ const paragraphItems = ({
     mergeNext = allLabel ? "none" : "space";
   }
   const numbering = numberingOf(placement);
-  // A number no list prints is text in front of the paragraph; one a list
-  // prints left of the item it belongs to hangs in from that item.
+  // A number no list of the template prints (text in front of the
+  // paragraph, or the source's own list) hangs as the template's would;
+  // one a list prints left of the item it belongs to hangs in from that
+  // item.
   const hang =
-    numbering === null ? hangOf(context, placement) : (nestedIndent ?? null);
+    numbering === null || placement.sourceList !== null
+      ? hangOf(context, placement)
+      : (nestedIndent ?? null);
   const under = itemIndent ?? null;
   const item: TemplatePlanSourceItem = {
     kind: "source",
@@ -3812,6 +4090,57 @@ const labelFieldOf = (
     : "punctuatedLevelWords";
 };
 
+/** `text` without the periods it ends in. */
+const withoutTrailingDots = (text: string): string => {
+  let end = text.length;
+  while (end > 0 && text.charAt(end - 1) === ".") {
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
+
+/**
+ * The label a target counted by the source's own list prints (a placed
+ * paragraph on a kept list, or a cell paragraph placed with its table whose
+ * list is kept); null for any other target.
+ */
+const keptListLabelOf = (
+  { sourceLists, tableOf, blockById }: Context,
+  target: Placement | undefined,
+  targetBlockId: string,
+): string | null => {
+  if (target !== undefined) {
+    return target.numbered && target.sourceList !== null
+      ? (target.block.label?.trim() ?? null)
+      : null;
+  }
+  const block = blockById.get(targetBlockId);
+  const numbering = block?.numbering ?? null;
+  return tableOf.has(targetBlockId) &&
+    numbering !== null &&
+    sourceLists.has(numbering.abstractNumId)
+    ? (block?.label?.trim() ?? null)
+    : null;
+};
+
+/**
+ * The field for a citation of a target on a kept source list: the list
+ * prints what the source prints, so `\n` shows the label without its
+ * trailing periods, where that is what the sentence cites.
+ */
+const keptListFieldOf = (
+  { text, start, end }: Citation,
+  label: string | null,
+): Field | UnlinkedReason => {
+  const number = withoutTrailingDots(label ?? "");
+  if (number === "") {
+    return "targetNotNumbered";
+  }
+  return text.slice(start, end) === number
+    ? { instruction: "\\n \\h", expectedText: number }
+    : "designatorMismatch";
+};
+
 /** A `REF` switch that shows the target paragraph's number, not its text. */
 const SHOWS_NUMBER = /\\[nrw]\b/u;
 
@@ -4123,6 +4452,108 @@ const carryCrossReferences = ({
   return { references, spans };
 };
 
+/** A number as a field shows it: without its trailing periods. */
+const fieldNumberOf = (label: string): string =>
+  withoutTrailingDots(label.trim());
+
+/**
+ * Notes the number fields of the source whose text is not the number of
+ * the paragraph they point at, as `\n` (the paragraph's own number) or `\w`
+ * (in full context: the numbers of the levels above that its own does not
+ * print, in front) would show it. Only plain numbers are judged: a label
+ * with words in it (`Článek 3`) or a field's text with blanks is left alone.
+ */
+const noteStaleReferences = ({ blocks, blockById, items }: Context): void => {
+  const context = fullContextsOf(blocks);
+  for (const block of blocks) {
+    for (const reference of block.crossReferences ?? NO_CROSS_REFERENCES) {
+      const stale = staleReferenceOf(block, reference, blockById, context);
+      if (stale !== null) {
+        items.push(stale);
+      }
+    }
+  }
+};
+
+/** The number in full context of each numbered paragraph, by block id. */
+const fullContextsOf = (blocks: readonly DocxBlock[]): Map<string, string> => {
+  const context = new Map<string, string>();
+  const last = new Map<string, DocxBlock>();
+  for (const block of blocks) {
+    const { numbering } = block;
+    const label = (block.label ?? "").trim();
+    if (numbering === null || label === "" || numbering.bullet === true) {
+      continue;
+    }
+    const parent =
+      numbering.ilvl > 0
+        ? last.get(
+            `${String(numbering.abstractNumId)}:${String(numbering.ilvl - 1)}`,
+          )
+        : undefined;
+    const printsParent =
+      numbering.lvlText?.includes(`%${String(numbering.ilvl)}`) === true;
+    const above =
+      parent === undefined || printsParent
+        ? ""
+        : (context.get(parent.id) ?? "");
+    context.set(block.id, `${above}${fieldNumberOf(label)}`);
+    last.set(
+      `${String(numbering.abstractNumId)}:${String(numbering.ilvl)}`,
+      block,
+    );
+  }
+  return context;
+};
+
+/** The note for one field of the source whose number is stale, or null. */
+const staleReferenceOf = (
+  block: DocxBlock,
+  { start, end, instruction, targetBlockId }: CrossReference,
+  blockById: ReadonlyMap<string, DocxBlock>,
+  context: ReadonlyMap<string, string>,
+): Extract<FormattingNoteItem, { kind: "referenceStale" }> | null => {
+  const target =
+    targetBlockId === null ? undefined : blockById.get(targetBlockId);
+  const label = (target?.label ?? "").trim();
+  // Direction marks and the like show nothing.
+  const shown = block.text
+    .slice(start, end)
+    .replaceAll(/\p{Cf}/gu, "")
+    .trim();
+  if (
+    target === undefined ||
+    targetBlockId === null ||
+    !/\\[nw]\b/u.test(instruction) ||
+    label === "" ||
+    /\s/u.test(label) ||
+    shown === "" ||
+    /\s/u.test(shown)
+  ) {
+    return null;
+  }
+  const own = fieldNumberOf(label);
+  const full = context.get(target.id) ?? own;
+  // A field that shows the paragraph's own number behind others may show a
+  // context this reading does not know (a list that counts across parts):
+  // only another own number is judged.
+  const endsWithOwn =
+    shown.endsWith(own) &&
+    (!/^[\p{L}\p{N}]/u.test(own) ||
+      !/[\p{L}\p{N}]/u.test(shown.at(-own.length - 1) ?? ""));
+  return shown === own || shown === full || endsWithOwn
+    ? null
+    : {
+        kind: "referenceStale",
+        blockId: block.id,
+        start,
+        end,
+        targetBlockId,
+        shown,
+        current: /\\w\b/u.test(instruction) ? full : own,
+      };
+};
+
 /** References as fields where a field shows what the source prints, and
  *  highlights where an internal reference has no target. */
 const markReferences = ({
@@ -4243,9 +4674,9 @@ const markReferences = ({
   ): UnlinkedReason | TemplatePlanReference => {
     const { start, end } = designator;
     const target = placementById.get(targetBlockId);
+    const keptList = keptListLabelOf(context, target, targetBlockId);
     if (
-      target === undefined ||
-      !target.numbered ||
+      (keptList === null && (target === undefined || !target.numbered)) ||
       exclusions.targets.has(targetBlockId)
     ) {
       return typedAnnex(target) ? "annexTyped" : "targetNotNumbered";
@@ -4254,7 +4685,10 @@ const markReferences = ({
     if (text === undefined) {
       return "notPlaceable";
     }
-    const field = fieldOf(context, levelsByList, { text, start, end }, target);
+    const field =
+      keptList !== null || target === undefined
+        ? keptListFieldOf({ text, start, end }, keptList)
+        : fieldOf(context, levelsByList, { text, start, end }, target);
     if (typeof field === "string") {
       return field;
     }
@@ -4471,10 +4905,15 @@ const checkLabels = ({
       continue;
     }
     const placement = placed.placementById.get(blockId);
-    const planned =
-      request.numbered && placement !== undefined
-        ? plannedLabelOf(placement, levelsByList)
-        : null;
+    // A cell paragraph without a placement is numbered only by the
+    // source's own list, which prints what the source shows.
+    let planned: string | null = null;
+    if (request.numbered) {
+      planned =
+        placement === undefined
+          ? shown
+          : plannedLabelOf(placement, levelsByList);
+    }
     if (!request.numbered) {
       if (shown === null || !request.labelAsText) {
         issues.push({ blockId, kind: "lost" });
@@ -4619,21 +5058,90 @@ const noteParagraphOptions = (
   }
 };
 
-export const buildTemplatePlan = ({
-  manifest,
-  profile,
-  references,
-  roles,
-  mode,
-  index = buildLabelIndex(manifest),
-  decisions = new Map<string, string>(),
-  suspicions = [],
-  exclusions = NO_EXCLUSIONS,
-  sourceHighlightColors,
-  trackedChangesStated = false,
-  rejectedView,
-  languages,
-}: BuildOptions): BuiltPlan => {
+/**
+ * Builds the plan; where a label stays text whose level's text names
+ * levels that end up elsewhere than they were placed (a clause deeper than
+ * the template's levels under a parent moved to a spare level), builds it
+ * once more with the levels the first build settled on, and keeps that
+ * build where it writes fewer labels as text.
+ */
+export const buildTemplatePlan = (options: BuildOptions): BuiltPlan => {
+  const first = buildOnce(options, null);
+  if (options.mode !== "keepSource") {
+    return first.built;
+  }
+  const unsettled = new Set(
+    first.placements
+      .filter(
+        ({ numbered, keptReason, block }) =>
+          !numbered &&
+          keptReason !== null &&
+          SETTLED_RETRY_REASONS.has(keptReason) &&
+          block.numbering?.lvlText !== undefined,
+      )
+      .map(({ block }) => block.id),
+  );
+  if (unsettled.size === 0) {
+    return first.built;
+  }
+  // One more build in which the labels the first left as text read their
+  // level's text through the levels their parents ended up on (a spare
+  // level a parent was moved to); every other paragraph reads as before.
+  const second = buildOnce(options, {
+    levels: settledLevelsOf(first.placements),
+    blockIds: unsettled,
+  });
+  return second.built.labelsNotKept.length === 0 &&
+    second.built.note.counts.labelsConvertedToText <=
+      first.built.note.counts.labelsConvertedToText
+    ? second.built
+    : first.built;
+};
+
+/** Labels kept as text that the levels a build settled on may answer. */
+const SETTLED_RETRY_REASONS: ReadonlySet<LabelKeptReason> = new Set([
+  "unreadable",
+  "formatConflict",
+]);
+
+/** By source list definition and level: the level its numbered paragraphs
+ *  ended up on, the last one's. */
+const settledLevelsOf = (
+  placements: readonly Placement[],
+): Map<number, Map<number, ProfileListLevel>> => {
+  const settled = new Map<number, Map<number, ProfileListLevel>>();
+  for (const { block, numbered, level } of placements) {
+    const { numbering } = block;
+    if (numbering === null || !numbered || level === null) {
+      continue;
+    }
+    const levels =
+      settled.get(numbering.abstractNumId) ??
+      new Map<number, ProfileListLevel>();
+    levels.set(numbering.ilvl, level);
+    settled.set(numbering.abstractNumId, levels);
+  }
+  return settled;
+};
+
+const buildOnce = (
+  {
+    manifest,
+    profile,
+    references,
+    roles,
+    mode,
+    index = buildLabelIndex(manifest),
+    decisions = new Map<string, string>(),
+    suspicions = [],
+    exclusions = NO_EXCLUSIONS,
+    sourceHighlightColors,
+    trackedChangesStated = false,
+    rejectedView,
+    languages,
+  }: BuildOptions,
+  levelHints: Context["levelHints"],
+): { built: BuiltPlan; placements: readonly Placement[] } => {
   const { blocks } = manifest;
   const tableOf = new Map<string, string>();
   for (const block of blocks) {
@@ -4663,18 +5171,27 @@ export const buildTemplatePlan = ({
     items: [],
     headerFill: null,
     rejectedNumbers: rejectedNumbersOf(manifest, rejectedView),
+    sourceLists: new Set(),
+    sourceLevels: new Map(),
+    levelHints,
   };
   takeHeaderLines(context);
 
   context.keptSections = sectionsToKeep(context);
   context.pageMarks = pageMarksToDrop(context);
   const placed = placeParagraphs(context);
-  const { patches, levelsByList } = numberPlacements({
+  const { patches, levelsByList, sourceLists } = numberPlacements({
     placements: placed.placements,
     mode,
     spareLevels: profile.spareLevels,
     markLevels: profile.markLevels,
+    loose: looseCellsOf(context, placed),
+    excluded: exclusions.numbering,
   });
+  context.sourceLists = sourceLists;
+  if (sourceLists.size > 0) {
+    indentContinuations(context, placed, { settled: true });
+  }
   noteLanguages(context, languages, { patches, levelsByList });
   const breaks = breaksHeadings(profile, placed);
   settleBrokenHeadings(context, placed, patches, breaks);
@@ -4701,6 +5218,7 @@ export const buildTemplatePlan = ({
     labelRequests(context, body),
   );
   noteReadings(context, placed, references, suspicions);
+  noteStaleReferences(context);
   noteTrackedChanges(context, placed, manifest, trackedChangesStated);
 
   const health = profile.health ?? NO_HEALTH;
@@ -4777,7 +5295,7 @@ export const buildTemplatePlan = ({
     // A red note or a grey placeholder keeps its colour.
     textColors: "keep",
   };
-  return {
+  const built: BuiltPlan = {
     plan,
     note: {
       mode,
@@ -4801,4 +5319,5 @@ export const buildTemplatePlan = ({
     },
     labelsNotKept: checkLabels({ context, placed, levelsByList, body }),
   };
+  return { built, placements: placed.placements };
 };
