@@ -10,6 +10,7 @@
 
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation";
 
 import {
@@ -44,11 +45,13 @@ export type LabelKeptReason =
    *  stays as it is written, change and all. */
   | "trackedChange";
 
-type LevelFormat = { numFmt: string; lvlText: string };
+/** `legal`: the level prints every counter in arabic numerals (Word's
+ *  legal numbering, `w:isLgl`): `1.1` under article `I.`. */
+type LevelFormat = { numFmt: string; lvlText: string; legal?: true };
 
 /** A label restated as a level text, its own counter still unplaced.
  *  `font`: the text face a bullet's mark is a character of. */
-type LabelPattern = LevelFormat & { font?: string };
+export type LabelPattern = LevelFormat & { font?: string };
 
 export type ListLevelFormat = LevelFormat & { ilvl: number; start: number };
 
@@ -76,6 +79,9 @@ export type Placement = {
   /** The list's counters once the block is counted, down to its level. */
   counters: number[];
   keptReason: LabelKeptReason | null;
+  /** The source's own list the block keeps, where no level of the
+   *  template can print its list: the output carries a copy of it. */
+  sourceList: { numId: number; ilvl: number } | null;
 };
 
 export type OutlineLevels = {
@@ -87,22 +93,23 @@ const LEVEL_PLACEHOLDER = /(%\d)/u;
 
 /** Stands for the paragraph's own counter in a label pattern, until the
  *  level it is counted on is known. */
-const OWN_COUNTER = "\u0001";
+export const OWN_COUNTER = "\u0001";
 
 const levelKey = ({ abstractNumId, ilvl }: ProfileListLevel): string =>
   `${String(abstractNumId)}:${String(ilvl)}`;
 
-const formatKey = ({ numFmt, lvlText }: LevelFormat): string =>
-  `${numFmt}\u0000${lvlText}`;
+const formatKey = ({ numFmt, lvlText, legal }: LevelFormat): string =>
+  `${numFmt}\u0000${lvlText}${legal === true ? "\u0000legal" : ""}`;
 
 const placeholder = (ilvl: number): string => `%${String(ilvl + 1)}`;
 
 const formatAt = (
-  { numFmt, lvlText }: LabelPattern,
+  { numFmt, lvlText, legal }: LabelPattern,
   ilvl: number,
 ): LevelFormat => ({
   numFmt,
   lvlText: lvlText.replace(OWN_COUNTER, () => placeholder(ilvl)),
+  ...(legal === true ? { legal } : {}),
 });
 
 const NUMERAL_FORMAT = {
@@ -142,6 +149,40 @@ const numFmtOf = ({ level, shape: { numeral } }: LabelEntry): string | null => {
       return panic("Unhandled level");
     }
   }
+};
+
+/**
+ * The ordinal an automatic label's own counter shows: its last letters or
+ * digits, read in the level's format. Null for a format this reader does
+ * not count in.
+ */
+export const labelOrdinalOf = (
+  label: string,
+  numFmt: string,
+): number | null => {
+  const isCounterChar = (char: string) => /[\p{L}\p{N}]/u.test(char);
+  let end = label.length;
+  while (end > 0 && !isCounterChar(label.charAt(end - 1))) {
+    end -= 1;
+  }
+  let start = end;
+  while (start > 0 && isCounterChar(label.charAt(start - 1))) {
+    start -= 1;
+  }
+  const counter = label.slice(start, end);
+  if (counter === "") {
+    return null;
+  }
+  if (numFmt === "decimal" || numFmt === "decimalZero") {
+    return parseIntegerToken(counter, { sign: "unsigned" }).unwrapOr(null);
+  }
+  if (numFmt === "lowerLetter" || numFmt === "upperLetter") {
+    return letterOrdinal(counter.toLowerCase());
+  }
+  if (numFmt === "lowerRoman" || numFmt === "upperRoman") {
+    return parseRomanNumeral(counter.toUpperCase());
+  }
+  return null;
 };
 
 /** The ordinal a level must show to print the entry's designator. */
@@ -220,6 +261,7 @@ const renderLabel = (
   lvlText: string,
   counters: readonly number[],
   levels: readonly ListLevelFormat[],
+  legal = false,
 ): string | null => {
   let rendered = "";
   for (const part of lvlText.split(LEVEL_PLACEHOLDER)) {
@@ -228,7 +270,9 @@ const renderLabel = (
       continue;
     }
     const ilvl = (digitsValue(part.slice(1)) ?? 0) - 1;
-    const numFmt = levels.find((level) => level.ilvl === ilvl)?.numFmt;
+    const numFmt = legal
+      ? "decimal"
+      : levels.find((level) => level.ilvl === ilvl)?.numFmt;
     const numeral = formatNumeral(counters[ilvl] ?? 1, numFmt ?? "decimal");
     if (numeral === null) {
       return null;
@@ -243,20 +287,229 @@ const keepLabel = (placement: Placement, reason: LabelKeptReason): void => {
   placement.keptReason = reason;
 };
 
+/** Why a label stays text that the source's own list answers: no level of
+ *  the template is left to print it, or its label is not one a level text
+ *  restates. */
+const SOURCE_LIST_REASONS: ReadonlySet<LabelKeptReason> = new Set([
+  "noListLevel",
+  "formatConflict",
+  "unreadable",
+]);
+
+/**
+ * Keeps the source's own list for every paragraph of a list definition
+ * whose automatic labels no level of the template prints, rather than
+ * writing those labels as text: the output carries a copy of the list, so
+ * the labels stay counted (and stay targets of the source's fields). Only
+ * a whole definition moves: one paragraph of it on the template's list
+ * would leave the copy counting without it. Bullets keep their marks on
+ * the template's levels.
+ */
+const keepSourceLists = (
+  placements: readonly Placement[],
+  { loose, excluded }: SourceListOptions,
+): Set<number> => {
+  const definitionOf = ({ numbering, label }: DocxBlock): number | null =>
+    numbering === null ||
+    numbering.bullet === true ||
+    (label ?? "").trim() === ""
+      ? null
+      : numbering.abstractNumId;
+  const byDefinition = new Map<number, Placement[]>();
+  /** Definitions a paragraph of which must stay as it is planned. */
+  const held = new Set<number>();
+  /** By definition: its paragraphs a level of the template numbers, and
+   *  those whose labels would be text. */
+  const numberedOf = new Map<number, number>();
+  const textOf = new Map<number, number>();
+  for (const placement of placements) {
+    const definition = definitionOf(placement.block);
+    if (definition === null) {
+      continue;
+    }
+    const { numbered, keptReason, entry } = placement;
+    // A label the index could not read at all is written as text too.
+    const unread = keptReason === null && entry === null;
+    if (numbered) {
+      numberedOf.set(definition, (numberedOf.get(definition) ?? 0) + 1);
+    } else if (
+      !(
+        unread ||
+        (keptReason !== null && SOURCE_LIST_REASONS.has(keptReason))
+      ) ||
+      excluded.has(placement.block.id)
+    ) {
+      held.add(definition);
+    } else {
+      textOf.set(definition, (textOf.get(definition) ?? 0) + 1);
+    }
+    const group = byDefinition.get(definition);
+    if (group === undefined) {
+      byDefinition.set(definition, [placement]);
+    } else {
+      group.push(placement);
+    }
+  }
+  const kept = new Set<number>();
+  // A cell paragraph read as no role is placed with its table, its label
+  // written as text: it counts in its list all the same.
+  for (const block of loose) {
+    const definition = definitionOf(block);
+    if (definition === null) {
+      continue;
+    }
+    if (excluded.has(block.id)) {
+      held.add(definition);
+    }
+    kept.add(definition);
+  }
+  for (const definition of byDefinition.keys()) {
+    kept.add(definition);
+  }
+  for (const definition of held) {
+    kept.delete(definition);
+  }
+  // A definition the template's levels number in part moves whole only
+  // where most of its labels would be text: its numbered paragraphs (an
+  // article on a spare level) then count with the rest in its own list.
+  for (const definition of kept) {
+    const numbered = numberedOf.get(definition) ?? 0;
+    if (numbered > 0 && (textOf.get(definition) ?? 0) <= numbered) {
+      kept.delete(definition);
+    }
+  }
+  for (const [definition, group] of byDefinition) {
+    if (!kept.has(definition)) {
+      continue;
+    }
+    for (const placement of group) {
+      const { numbering } = placement.block;
+      if (numbering === null) {
+        continue;
+      }
+      placement.sourceList = { numId: numbering.numId, ilvl: numbering.ilvl };
+      placement.numbered = true;
+      placement.level = null;
+      placement.keptReason = null;
+    }
+  }
+  return kept;
+};
+
+type PatchOptions = {
+  usedLevels: ReadonlyMap<string, ProfileListLevel>;
+  levelsByList: ReadonlyMap<number, readonly ListLevelFormat[]>;
+  placements: readonly Placement[];
+  standsFor: ReadonlyMap<string, ProfileListLevel>;
+};
+
+/** The patches that make each used level of the template print what its
+ *  paragraphs need. */
+const levelPatchesOf = ({
+  usedLevels,
+  levelsByList,
+  placements,
+  standsFor,
+}: PatchOptions): TemplatePlanNumberingPatch[] => {
+  const patches: TemplatePlanNumberingPatch[] = [];
+  for (const [key, level] of usedLevels) {
+    const format = levelsByList
+      .get(level.abstractNumId)
+      ?.find(({ ilvl }) => ilvl === level.ilvl);
+    const onLevel = placements.filter(
+      (placement) =>
+        placement.numbered &&
+        placement.level !== null &&
+        levelKey(placement.level) === key,
+    );
+    // A mark that is a character of a text face is that shape only in
+    // that face: a level made to print it is set in it.
+    const face = onLevel.find(
+      (placement) => placement.pattern?.font !== undefined,
+    )?.pattern?.font;
+    const indent = takenIndent(standsFor.get(key)?.indent, level.indent);
+    const stated = indent !== null && Object.keys(indent).length > 0;
+    // A level whose own paragraphs all kept their typed label is patched
+    // too: the levels below it print its counter in the format counted
+    // with here.
+    if (
+      format !== undefined &&
+      (format.numFmt !== level.numFmt ||
+        format.lvlText !== level.lvlText ||
+        format.legal === true ||
+        (onLevel.length > 0 && stated))
+    ) {
+      patches.push({
+        abstractNumId: level.abstractNumId,
+        ilvl: level.ilvl,
+        ...(format.numFmt === level.numFmt ? {} : { numFmt: format.numFmt }),
+        ...(format.lvlText === level.lvlText
+          ? {}
+          : { lvlText: format.lvlText }),
+        ...(face === undefined || format.lvlText === level.lvlText
+          ? {}
+          : { font: face }),
+        ...(stated ? { indent } : {}),
+        ...(format.legal === true ? { isLgl: true } : {}),
+      });
+    }
+  }
+  return patches;
+};
+
+/** The source lists kept: only when the source's numbering is kept. */
+const sourceListsOf = (
+  mode: NumberingMode,
+  placements: readonly Placement[],
+  { loose = [], excluded = new Set<string>() }: Partial<SourceListOptions>,
+): Set<number> =>
+  mode === "keepSource"
+    ? keepSourceLists(placements, { loose, excluded })
+    : new Set<number>();
+
+type SourceListOptions = {
+  /** Labelled paragraphs the plan places without a placement of their own
+   *  (cell paragraphs read as no role). */
+  loose: readonly DocxBlock[];
+  /** Paragraphs an earlier attempt showed the engine will not number. */
+  excluded: ReadonlySet<string>;
+};
+
 type Vote = { pattern: LabelPattern; n: number };
+
+/** Whether a pattern prints the counter of a level above its own. */
+const namesLevelAbove = ({ lvlText }: LabelPattern): boolean => {
+  const own = lvlText.indexOf(OWN_COUNTER);
+  return own !== -1 && /%\d/u.test(lvlText.slice(0, own));
+};
 
 /** The format each role level prints: the one most of its paragraphs need. */
 const voteLevelPatterns = (
   candidates: readonly Placement[],
 ): Map<string, LabelPattern> => {
+  // A heading whose counter the labels under it print (`I.` of `I.1.`)
+  // carries their votes too: given up to another format, it would take
+  // them along.
+  const dependents = new Map<string, number>();
+  for (const { entry, pattern } of candidates) {
+    const article = entry?.articleBlockId ?? null;
+    if (
+      article !== null &&
+      article !== entry?.blockId &&
+      pattern !== null &&
+      namesLevelAbove(pattern)
+    ) {
+      dependents.set(article, (dependents.get(article) ?? 0) + 1);
+    }
+  }
   const votes = new Map<string, Map<string, Vote>>();
-  for (const { level, pattern } of candidates) {
+  for (const { level, pattern, block } of candidates) {
     if (level === null || pattern === null) {
       continue;
     }
     const ofLevel = votes.get(levelKey(level)) ?? new Map<string, Vote>();
     const vote = ofLevel.get(formatKey(pattern)) ?? { pattern, n: 0 };
-    vote.n += 1;
+    vote.n += 1 + (dependents.get(block.id) ?? 0);
     ofLevel.set(formatKey(pattern), vote);
     votes.set(levelKey(level), ofLevel);
   }
@@ -278,6 +531,48 @@ const voteLevelPatterns = (
  * outline, patched to print it: the format most paragraphs need first, while
  * spare levels last.
  */
+/** The level (from 0) a placeholder of a level's text names: `%1` names
+ *  level 0; -1 for no digit. */
+export const levelOfPlaceholder = (digit: string | undefined): number =>
+  parseIntegerToken(digit, { sign: "unsigned" }).unwrapOr(0) - 1;
+
+/** The deepest level a pattern prints the counter of besides its own; -1
+ *  for none. */
+const deepestNamedLevel = ({ lvlText }: LabelPattern): number =>
+  Math.max(
+    -1,
+    ...[...lvlText.matchAll(/%(\d)/gu)].map((match) =>
+      levelOfPlaceholder(match[1]),
+    ),
+  );
+
+/**
+ * The level a group of displaced paragraphs takes. A bullet counts nothing:
+ * it takes a level outside the outline list while there is one, and leaves
+ * the outline's to formats that count. A level that prints the counter of
+ * another must stand below it: in a list a level restarts only when one
+ * above it counts.
+ */
+const freshLevelFor = (
+  pattern: LabelPattern | null,
+  spare: ProfileListLevel[],
+  marks: ProfileListLevel[],
+): ProfileListLevel | undefined => {
+  if (pattern?.numFmt === "bullet") {
+    return marks.shift() ?? spare.shift();
+  }
+  return takeBelow(spare, pattern === null ? -1 : deepestNamedLevel(pattern));
+};
+
+/** Takes the first spare level below `above` out of `spare`. */
+const takeBelow = (
+  spare: ProfileListLevel[],
+  above: number,
+): ProfileListLevel | undefined => {
+  const at = spare.findIndex(({ ilvl }) => ilvl > above);
+  return at === -1 ? undefined : spare.splice(at, 1)[0];
+};
+
 const assignSpareLevels = (
   candidates: readonly Placement[],
   chosen: Map<string, LabelPattern>,
@@ -321,12 +616,7 @@ const assignSpareLevels = (
     const first = group.at(0);
     const pattern = first?.pattern ?? null;
     const format = pattern === null ? "" : formatKey(pattern);
-    // A bullet counts nothing: it takes a level outside the outline list
-    // while there is one, and leaves the outline's to formats that count.
-    const fresh =
-      pattern?.numFmt === "bullet"
-        ? (marks.shift() ?? spare.shift())
-        : spare.shift();
+    const fresh = freshLevelFor(pattern, spare, marks);
     const level = fresh ?? levelByFormat.get(format);
     if (fresh !== undefined) {
       levelByFormat.set(format, fresh);
@@ -440,7 +730,7 @@ const countLists = ({
       mode === "keepSource" &&
       (format === undefined ||
         // A number typed with blanks between its parts is printed closed up.
-        renderLabel(format.lvlText, next, levels) !==
+        renderLabel(format.lvlText, next, levels, format.legal === true) !==
           (placement.sourceLabel === null
             ? null
             : closeNumberParts(placement.sourceLabel)))
@@ -487,9 +777,13 @@ const takenIndent = (
 /** The label the plan's list prints for a paragraph; null when the
  *  paragraph joins no list. */
 export const plannedLabelOf = (
-  { numbered, level, counters }: Placement,
+  { numbered, level, counters, sourceList, block }: Placement,
   levelsByList: ReadonlyMap<number, readonly ListLevelFormat[]>,
 ): string | null => {
+  // The source's own list prints what it prints in the source.
+  if (numbered && sourceList !== null) {
+    return block.label?.trim() ?? null;
+  }
   const levels =
     numbered && level !== null
       ? levelsByList.get(level.abstractNumId)
@@ -497,7 +791,7 @@ export const plannedLabelOf = (
   const format = levels?.find(({ ilvl }) => ilvl === level?.ilvl);
   return levels === undefined || format === undefined
     ? null
-    : renderLabel(format.lvlText, counters, levels);
+    : renderLabel(format.lvlText, counters, levels, format.legal === true);
 };
 
 type Numbered = {
@@ -505,6 +799,9 @@ type Numbered = {
   /** The levels each list counts with, patches applied, by list
    *  definition. */
   levelsByList: Map<number, ListLevelFormat[]>;
+  /** The source's list definitions the output keeps, each paragraph of
+   *  them counted in a copy of its own list. */
+  sourceLists: ReadonlySet<number>;
 };
 
 type NumberOptions = {
@@ -513,7 +810,7 @@ type NumberOptions = {
   spareLevels: readonly ProfileListLevel[];
   /** Levels outside the outline list, for marks that count nothing. */
   markLevels?: readonly ProfileListLevel[] | undefined;
-};
+} & Partial<SourceListOptions>;
 
 /**
  * Decides which of the placements that ask for a number get one, on which
@@ -525,6 +822,7 @@ export const numberPlacements = ({
   mode,
   spareLevels,
   markLevels = [],
+  ...sourceOptions
 }: NumberOptions): Numbered => {
   const candidates = placements.filter(({ numbered }) => numbered);
   const chosen =
@@ -559,9 +857,15 @@ export const numberPlacements = ({
   const levelsByList = new Map<number, ListLevelFormat[]>();
   for (const [key, level] of usedLevels) {
     const pattern = chosen.get(key);
-    const { numFmt, lvlText } =
+    const { numFmt, lvlText, legal }: LevelFormat =
       pattern === undefined ? level : formatAt(pattern, level.ilvl);
-    const format = { ilvl: level.ilvl, start: level.start, numFmt, lvlText };
+    const format = {
+      ilvl: level.ilvl,
+      start: level.start,
+      numFmt,
+      lvlText,
+      ...(legal === true ? { legal } : {}),
+    };
     const levels = levelsByList.get(level.abstractNumId);
     if (levels === undefined) {
       levelsByList.set(level.abstractNumId, [format]);
@@ -577,52 +881,15 @@ export const numberPlacements = ({
     mismatch = countLists({ placements, levelsByList, mode });
   }
 
-  const patches: TemplatePlanNumberingPatch[] = [];
-  for (const [key, level] of usedLevels) {
-    const format = levelsByList
-      .get(level.abstractNumId)
-      ?.find(({ ilvl }) => ilvl === level.ilvl);
-    const used = placements.some(
-      (placement) =>
-        placement.numbered &&
-        placement.level !== null &&
-        levelKey(placement.level) === key,
-    );
-    // A mark that is a character of a text face is that shape only in
-    // that face: a level made to print it is set in it.
-    const face = placements.find(
-      (placement) =>
-        placement.numbered &&
-        placement.level !== null &&
-        levelKey(placement.level) === key &&
-        placement.pattern?.font !== undefined,
-    )?.pattern?.font;
-    const indent = takenIndent(standsFor.get(key)?.indent, level.indent);
-    const stated = indent !== null && Object.keys(indent).length > 0;
-    // A level whose own paragraphs all kept their typed label is patched
-    // too: the levels below it print its counter in the format counted
-    // with here.
-    if (
-      format !== undefined &&
-      (format.numFmt !== level.numFmt ||
-        format.lvlText !== level.lvlText ||
-        (used && stated))
-    ) {
-      patches.push({
-        abstractNumId: level.abstractNumId,
-        ilvl: level.ilvl,
-        ...(format.numFmt === level.numFmt ? {} : { numFmt: format.numFmt }),
-        ...(format.lvlText === level.lvlText
-          ? {}
-          : { lvlText: format.lvlText }),
-        ...(face === undefined || format.lvlText === level.lvlText
-          ? {}
-          : { font: face }),
-        ...(stated ? { indent } : {}),
-      });
-    }
-  }
-  return { patches, levelsByList };
+  const sourceLists = sourceListsOf(mode, placements, sourceOptions);
+
+  const patches = levelPatchesOf({
+    usedLevels,
+    levelsByList,
+    placements,
+    standsFor,
+  });
+  return { patches, levelsByList, sourceLists };
 };
 
 /** The languages of a document and of the template it is formatted onto,

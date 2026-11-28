@@ -34,6 +34,14 @@ export type DocxBlock = {
     abstractNumId: number;
     bullet?: true;
     bulletFont?: string;
+    /** The level's text (`%1.%2`); absent from older manifests and for a
+     *  bullet. */
+    lvlText?: string;
+    /** The format the level counts in (`w:numFmt`, `decimal` under legal
+     *  numbering); stated with `lvlText`. */
+    numFmt?: string;
+    /** The level prints its counters in arabic numerals (`w:isLgl`). */
+    legal?: true;
   } | null;
   styleId: string | null;
   styleName: string | null;
@@ -302,11 +310,14 @@ type TemplateInvisibleEffect = {
  *  template. Items that share a `group` are counted in one instance of that
  *  list, which the first of them starts; `restartFrom` is the number the
  *  instance begins the item's level with. */
+/** `sourceNumId` (with `numId: "new"`) keeps the source's own list: the
+ *  output carries a copy of it and the paragraph counts in that copy. */
 export type TemplatePlanNumbering = {
-  numId: number;
+  numId: number | "new";
   ilvl: number;
   restartFrom?: number;
   group?: string;
+  sourceNumId?: number;
 };
 
 type TemplatePlanMerge = "lineBreak" | "space" | "none";
@@ -462,6 +473,9 @@ export type TemplatePlanNumberingPatch = {
   lvlText?: string;
   /** What follows the label. */
   suff?: "tab" | "space" | "nothing";
+  /** Legal numbering: every counter of the level's text in arabic
+   *  numerals (`w:isLgl`). */
+  isLgl?: boolean;
   /** The face the level's label is set in: for a bullet whose mark is a
    *  character of a text face. */
   font?: string;

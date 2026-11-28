@@ -193,6 +193,7 @@ type NoteSource = FormattingNoteItem;
 const KNOWN_NOTE_KINDS = [
   "referenceUnlinked",
   "referenceSuspected",
+  "referenceStale",
   "labelKeptAsText",
   "labelConvertedToText",
   "roleWithoutStyle",
@@ -292,6 +293,14 @@ const noteItemOf = (
         blockId: item.blockId,
         targetBlockId: item.suggestedBlockId,
         ...textOf(item.blockId, item.start, item.end),
+      };
+    case "referenceStale":
+      return {
+        kind: "reference_stale",
+        blockId: item.blockId,
+        targetBlockId: item.targetBlockId,
+        text: item.shown,
+        reason: item.current,
       };
     case "labelKeptAsText":
       return {

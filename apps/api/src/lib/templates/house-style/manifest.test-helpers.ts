@@ -17,6 +17,8 @@ type BlockDetail = {
   numId?: number;
   styleName?: string;
   outlineLevel?: number;
+  /** The list level the label is printed by, as the engine reports it. */
+  level?: { ilvl: number; lvlText?: string; numFmt?: string; legal?: true };
 };
 
 /** A plain paragraph by its text, or a paragraph with its details. */
@@ -32,6 +34,15 @@ export const numbered = (
   label,
   numId,
 });
+
+/** An auto-numbered paragraph on a level of a list, with what the level
+ *  prints. */
+export const leveled = (
+  label: string,
+  text: string,
+  level: NonNullable<BlockDetail["level"]>,
+  numId = 1,
+): BlockDetail => ({ text, label, numId, level });
 
 export const heading = (text: string): BlockDetail => ({
   text,
@@ -50,6 +61,7 @@ export const manifestOf = (specs: readonly BlockSpec[]): DocxBlockManifest => ({
       numId = 1,
       styleName = null,
       outlineLevel = null,
+      level = { ilvl: 0 },
     } = detail;
     return {
       id: `p${String(index)}`,
@@ -58,7 +70,7 @@ export const manifestOf = (specs: readonly BlockSpec[]): DocxBlockManifest => ({
       text,
       label,
       numbering:
-        label === null ? null : { numId, ilvl: 0, abstractNumId: numId },
+        label === null ? null : { numId, abstractNumId: numId, ...level },
       styleId: styleName === null ? null : styleName.replaceAll(" ", ""),
       styleName,
       outlineLevel,
