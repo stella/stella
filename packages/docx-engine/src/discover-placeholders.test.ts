@@ -1,13 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 
 import { discoverPlaceholders } from "./discover-placeholders";
-
-const SPA_FIXTURE = fileURLToPath(
-  new URL("fixtures/spa-template-with-placeholders.docx", import.meta.url),
-);
 
 /** Build a minimal DOCX buffer with the given document.xml. */
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
@@ -97,9 +92,16 @@ describe("discoverPlaceholders", () => {
     expect(result.map((p) => p.name)).toEqual(["alpha", "mid", "zebra"]);
   });
 
-  test("works on the SPA fixture", async () => {
-    const file = Bun.file(SPA_FIXTURE);
-    const buf = Buffer.from(await file.arrayBuffer());
+  test("discovers placeholders across a multi-clause agreement document", async () => {
+    const buf = await makeDocx(
+      WRAP(
+        `<w:p><w:r><w:t>SHARE PURCHASE AGREEMENT dated {{contract_date}}</w:t></w:r></w:p>` +
+          `<w:p><w:r><w:t>Buyer: {{buyer_name}} ({{buyer_reg_no}}), address {{buyer_address}}</w:t></w:r></w:p>` +
+          `<w:p><w:r><w:t>Seller 1: {{seller_1_name}}: Share Price: {{price_share_1}}</w:t></w:r></w:p>` +
+          `<w:p><w:r><w:t>Seller 2: {{seller_2_name}}: Share Price: {{price_share_2}}</w:t></w:r></w:p>` +
+          `<w:p><w:r><w:t>Closing Date: {{closing_date}} in {{governing_law}}</w:t></w:r></w:p>`,
+      ),
+    );
     const result = await discoverPlaceholders(buf);
 
     const names = result.map((p) => p.name);

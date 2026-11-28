@@ -1237,7 +1237,6 @@
         "@stll/concurrency": "workspace:*",
         "@stll/docx-core": "catalog:",
         "@stll/docx-utils": "workspace:*",
-        "@stll/folio-core": "catalog:",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",

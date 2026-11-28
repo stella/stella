@@ -15,7 +15,7 @@
 
 import { resolvePath } from "@stll/template-conditions";
 
-import { arrayOrEmpty, isRecord } from "./internal-helpers";
+import { isDocxRecord, toDocxArray } from "./internal-helpers";
 import { mapRepeatablePath, readRowSubPath } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 
@@ -51,7 +51,7 @@ const collectAt = (
     }
     return;
   }
-  if (!isRecord(current)) {
+  if (!isDocxRecord(current)) {
     return;
   }
   collectAt(current[head], segments.slice(1), out);
@@ -141,7 +141,7 @@ export const validateDependentFields = ({
     }
 
     const sourceValues = collectSourceValues(source, values);
-    const fallbackOptions = arrayOrEmpty(field.options);
+    const fallbackOptions = toDocxArray(field.options);
     const allowed = sourceValues.length > 0 ? sourceValues : fallbackOptions;
 
     const repeatable = mapRepeatablePath(

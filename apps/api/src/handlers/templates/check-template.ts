@@ -6,6 +6,7 @@
  * bounded list of typed findings before anyone hits them at fill time.
  */
 
+import type { ClauseSlot } from "@stll/docx-engine/clause-slots";
 import { manifestNamedConditions } from "@stll/docx-engine/manifest-conditions";
 import type {
   DiscoveredTemplate,
@@ -15,7 +16,6 @@ import type { NamedCondition } from "@stll/template-conditions";
 import { scanInvalidMarkers } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import type { ClauseSlot } from "@/api/lib/docx/discover-clause-slots";
 
 // ── Findings ─────────────────────────────────────────────
 

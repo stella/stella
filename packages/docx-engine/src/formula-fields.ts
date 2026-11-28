@@ -23,7 +23,7 @@
 
 import { evaluateNumericExpression } from "@stll/template-conditions";
 
-import { isRecord } from "./internal-helpers";
+import { isDocxRecord } from "./internal-helpers";
 import { mapRepeatablePath, writeRowSubPath } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 
@@ -41,7 +41,7 @@ const deleteSubmittedValue = (
   let current: Record<string, unknown> = values;
   for (const segment of segments.slice(0, -1)) {
     const next = Object.hasOwn(current, segment) ? current[segment] : undefined;
-    if (!isRecord(next)) {
+    if (!isDocxRecord(next)) {
       return;
     }
     current = next;

@@ -83,7 +83,7 @@ import {
   rewriteEachPlaceholdersInText,
   scopeIterationNumberingInText,
 } from "./block-directives";
-import { isRecord } from "./internal-helpers";
+import { isDocxRecord } from "./internal-helpers";
 import { W_NS } from "./ooxml";
 import {
   expandInlineEachRuns,
@@ -503,7 +503,7 @@ const applyInlineEach = ({
         }
         const originalKey = clauseSlotKey(meta.name, meta.version);
         const inherited = processingContext.inlineClauseScopes.get(originalKey);
-        const row = isRecord(item) ? item : { value: item };
+        const row = isDocxRecord(item) ? item : { value: item };
         const values = {
           ...data,
           ...inherited?.values,
@@ -527,7 +527,7 @@ const applyInlineEach = ({
       processingContext.scopeInlineText?.({
         text: scopedText,
         values: data,
-        row: isRecord(item) ? item : { value: item },
+        row: isDocxRecord(item) ? item : { value: item },
         alias: group.alias,
         arrayPath: group.arrayPath,
         loop: loopContext(itemIdx, items.length),

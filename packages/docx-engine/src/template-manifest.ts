@@ -10,7 +10,7 @@
  * is the only caller that should assemble a manifest from these.
  */
 
-import { arrayOrEmpty } from "./internal-helpers";
+import { toDocxArray } from "./internal-helpers";
 import type {
   DiscoveredField,
   DiscoveredTemplate,
@@ -32,7 +32,7 @@ export const lookupFormatMarkerPaths = (
 ): Set<string> => {
   const markers = new Set<string>();
   for (const field of fields) {
-    for (const format of arrayOrEmpty(field.lookup?.formats)) {
+    for (const format of toDocxArray(field.lookup?.formats)) {
       markers.add(`${field.path}.${format.key}`);
     }
   }
@@ -93,9 +93,9 @@ export const manifestFieldsFromMerge = (
   const arrayRoots = new Set(
     resolved.filter((field) => field.kind === "array").map(({ path }) => path),
   );
-  const formatMarkers = lookupFormatMarkerPaths(arrayOrEmpty(manifest?.fields));
+  const formatMarkers = lookupFormatMarkerPaths(toDocxArray(manifest?.fields));
   const claimed = new Set(fields.map(({ path }) => path));
-  for (const field of arrayOrEmpty(manifest?.fields)) {
+  for (const field of toDocxArray(manifest?.fields)) {
     const root = field.path.split(".").at(0);
     if (
       claimed.has(field.path) ||
@@ -124,7 +124,7 @@ export const mergeManifestWithDiscovery = (
   // Index manifest fields by path
   const metaByPath = new Map<string, FieldMeta>();
   const lookupFormatMarkers = lookupFormatMarkerPaths(
-    arrayOrEmpty(manifest?.fields),
+    toDocxArray(manifest?.fields),
   );
   if (manifest) {
     for (const f of manifest.fields) {
