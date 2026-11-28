@@ -2,7 +2,6 @@
 
 import { useId, useRef, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import type { CustomRenderer, CustomRendererProps } from "streamdown";
 import { useTranslations } from "use-intl";
@@ -25,6 +24,7 @@ import {
 import type { DiagramRender } from "@/components/ai-elements/mermaid-diagram";
 import { CopyControl } from "@/components/copy-control";
 import { detached } from "@/lib/detached";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 
 /**
  * What a fenced Mermaid block shows. Until a finished fence has rendered, the
@@ -167,8 +167,9 @@ const downloadSvg = (svg: string) => {
 
 const MermaidDiagramBlock = ({ code, isIncomplete }: CustomRendererProps) => {
   const idPrefix = `diagram-${useId().replaceAll(/[^a-zA-Z0-9]/gu, "")}`;
-  const diagram = useQuery({
+  const diagram = useResourceQuery({
     queryKey: ["chat-diagram", idPrefix, code],
+    resourceReads: { type: "independent" },
     queryFn: async () =>
       renderDiagram({
         id: idPrefix,

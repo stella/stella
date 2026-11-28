@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -24,6 +23,7 @@ import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-too
 import { SecretInput } from "@/components/secret-input";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 
 type RequestSecretPart = Extract<
   RegisteredChatUIToolCallPart,
@@ -310,8 +310,9 @@ export const RequestSecretCard = ({
   const shownOutput = output ?? heldReceipt;
   const isPending = isAwaitingUser && output === undefined;
   const connectorSlug = input?.target.connectorSlug;
-  const savedSecretQuery = useQuery({
+  const savedSecretQuery = useResourceQuery({
     queryKey: ["chat-saved-secret", secretAvailabilityKey, connectorSlug],
+    resourceReads: { type: "independent" },
     enabled: isPending && connectorSlug !== undefined,
     queryFn: async ({ signal }) => {
       if (connectorSlug === undefined) {
