@@ -3,10 +3,9 @@
 // UUID generation belongs behind the runtime's UUIDv7 owner so generated
 // identifiers are time ordered and callers do not choose their own primitive.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { type Context, eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  type AstNode,
   type FilenameContext,
   getImportedName,
   isAstNode,
@@ -14,7 +13,6 @@ import {
   isUnshadowedGlobalIdentifier,
   memberPropertyName,
   repoRelativeFilename,
-  type ScopeContext,
 } from "./utils.ts";
 
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
@@ -31,10 +29,11 @@ const isBunApiRuntimeFile = (context: FilenameContext): boolean => {
 };
 
 const isAmbientCryptoRandomUuidCall = (
-  context: ScopeContext,
-  node: AstNode,
+  context: Context,
+  node: unknown,
 ): boolean => {
   if (
+    !isAstNode(node) ||
     node.optional === true ||
     !Array.isArray(node.arguments) ||
     node.arguments.length !== 0
@@ -77,8 +76,7 @@ export default eslintCompatPlugin({
         fixable: "code",
         messages: {
           noCryptoRandomUuid:
-            "Do not use crypto.randomUUID() directly. " +
-            "Use the runtime's UUIDv7 owner instead.",
+            "Do not use crypto.randomUUID() directly. Use the runtime's UUIDv7 owner instead.",
           noCryptoRandomUuidImport:
             "Do not import randomUUID from '{{module}}'. " +
             "Use the UUID owner for this runtime instead.",
