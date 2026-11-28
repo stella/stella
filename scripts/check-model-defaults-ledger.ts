@@ -13,6 +13,7 @@ import {
   type ModelDefaultQuality,
   type ModelTask,
 } from "../packages/ai-catalog/src/model-defaults-ledger";
+import { failCheck } from "../packages/scripts/src/check-failure";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
   type ImportSpecifier,
@@ -358,11 +359,17 @@ if (import.meta.main) {
     exceptions,
   });
   errors.push(...checkRepositoryModelDefaultsSources());
-  for (const error of errors) {
-    console.error(error);
-  }
   if (errors.length > 0) {
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-model-defaults-ledger",
+        summary: `${errors.length} model defaults ledger violation(s) found`,
+        details: errors,
+        remediation:
+          "Update packages/ai-catalog/src/model-defaults-ledger.ts and repository model default references so every default has valid evidence or a matching reasoned exemption in scripts/model-defaults-exceptions.json.",
+        rerunCommand: "bun scripts/check-model-defaults-ledger.ts",
+      }),
+    );
   }
   process.exit(
     runLedgerMembershipGuard({

@@ -7,6 +7,8 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 
+import { failCheck } from "../packages/scripts/src/check-failure";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CHILD_MAX_BUFFER = 16 * 1024 * 1024;
 
@@ -210,7 +212,11 @@ if (import.meta.main) {
     process.exit(0);
   }
 
-  let failed = 0;
+  const failedGuards: {
+    readonly label: string;
+    readonly elapsed: string;
+    readonly fixHint: string;
+  }[] = [];
   for (const guard of guards) {
     const start = performance.now();
     const [bin, ...args] = guard.command;
@@ -225,7 +231,11 @@ if (import.meta.main) {
     });
     const elapsed = ((performance.now() - start) / 1000).toFixed(1);
     if (result.status !== 0) {
-      failed++;
+      failedGuards.push({
+        label: guard.label,
+        elapsed,
+        fixHint: guard.fixHint,
+      });
       console.error(
         `\n[FAIL] ${guard.label} (${elapsed}s)\n  fix: ${guard.fixHint}\n`,
       );
@@ -234,11 +244,19 @@ if (import.meta.main) {
     }
   }
 
-  if (failed > 0) {
-    console.error(
-      `check-pr-guards: ${failed}/${guards.length} guard(s) failed.`,
+  if (failedGuards.length > 0) {
+    process.exit(
+      failCheck({
+        check: "check-pr-guards",
+        summary: `${failedGuards.length}/${guards.length} scoped policy guard(s) failed`,
+        details: failedGuards.map(
+          (guard) => `${guard.label} (${guard.elapsed}s): ${guard.fixHint}`,
+        ),
+        remediation:
+          "Follow the fix hint for each failing guard above before pushing.",
+        rerunCommand: "bun run check:pr-guards",
+      }),
     );
-    process.exit(1);
   }
   console.log(`check-pr-guards: all ${guards.length} guard(s) passed.`);
 }
