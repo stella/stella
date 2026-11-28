@@ -1907,7 +1907,7 @@ const settledContentsHolder = (
 
 /** An automatic bullet: a mark of a font, which no engine writes as text. */
 const isListBullet = (block: DocxBlock): boolean =>
-  block.numbering?.bullet === true && shownLabelOf(block) !== null;
+  isBulleted(block) && shownLabelOf(block) !== null;
 
 /** The placements of a table's cell paragraphs that have a reading; one
  *  without is placed with its table. A bullet without one keeps its mark
