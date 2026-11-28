@@ -484,13 +484,23 @@ const lintShared = (
   return { outcome };
 };
 
-const recordCoverage = (ruleId: string, lines: readonly number[]) => {
+const recordCoverage = (
+  ruleId: string,
+  lines: readonly number[],
+  fixed = false,
+) => {
   const { OXLINT_RULE_COVERAGE_PATH: coveragePath } = process.env;
   if (coveragePath !== undefined) {
     appendFileSync(
       coveragePath,
       `${JSON.stringify({ ruleId, outcome: lines.length === 0 ? "clean" : "report" })}\n`,
     );
+    if (fixed) {
+      appendFileSync(
+        coveragePath,
+        `${JSON.stringify({ ruleId, outcome: "fix" })}\n`,
+      );
+    }
   }
 };
 
@@ -660,7 +670,11 @@ export const runSingleRule = async (
       `oxlint failed without reporting the requested rule:\n${output}`,
     );
   }
-  recordCoverage(`${plugin}/${ruleName}`, lines);
+  recordCoverage(
+    `${plugin}/${ruleName}`,
+    lines,
+    fix && lintResult.value.alone.source !== source,
+  );
   return { lines, source: lintResult.value.alone.source };
 };
 

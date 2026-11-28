@@ -18,7 +18,7 @@ import {
 
 export type CoverageProblem = {
   ruleId: string;
-  category: "unwired" | "empty-scope" | "untested";
+  category: "unwired" | "empty-scope" | "untested" | "untested-fix";
 };
 
 export const exportedRuleIds = (plugin: unknown): string[] => {
@@ -34,6 +34,27 @@ export const exportedRuleIds = (plugin: unknown): string[] => {
   return Object.keys(plugin["rules"]).map((rule) => `${pluginName}/${rule}`);
 };
 
+export const fixableRuleIds = (plugin: unknown): string[] => {
+  if (
+    !isRecord(plugin) ||
+    !isRecord(plugin["meta"]) ||
+    typeof plugin["meta"]["name"] !== "string" ||
+    !isRecord(plugin["rules"])
+  ) {
+    return panic("Custom plugin must export meta.name and rules");
+  }
+  const pluginName = plugin["meta"]["name"];
+  return Object.entries(plugin["rules"])
+    .filter(([, rule]) => {
+      if (!isRecord(rule) || !isRecord(rule["meta"])) {
+        return false;
+      }
+      const fixable = rule["meta"]["fixable"];
+      return fixable === "code" || fixable === "whitespace";
+    })
+    .map(([ruleName]) => `${pluginName}/${ruleName}`);
+};
+
 export const readCoverage = (text: string): Map<string, Set<string>> => {
   const coverage = new Map<string, Set<string>>();
   for (const line of text.split("\n").filter(Boolean)) {
@@ -41,7 +62,9 @@ export const readCoverage = (text: string): Map<string, Set<string>> => {
     if (
       !isRecord(entry) ||
       typeof entry["ruleId"] !== "string" ||
-      (entry["outcome"] !== "clean" && entry["outcome"] !== "report")
+      (entry["outcome"] !== "clean" &&
+        entry["outcome"] !== "report" &&
+        entry["outcome"] !== "fix")
     ) {
       return panic("Invalid executed rule coverage record");
     }
@@ -55,6 +78,7 @@ export const readCoverage = (text: string): Map<string, Set<string>> => {
 type CoverageProblemsOptions = {
   ruleIds: readonly string[];
   registeredRuleIds: ReadonlySet<string>;
+  fixableRuleIds?: ReadonlySet<string>;
   lintConfig: unknown;
   trackedFiles: readonly string[];
   coverage: ReadonlyMap<string, ReadonlySet<string>>;
@@ -63,6 +87,7 @@ type CoverageProblemsOptions = {
 export const coverageProblems = ({
   ruleIds,
   registeredRuleIds,
+  fixableRuleIds: fixable = new Set(),
   lintConfig,
   trackedFiles,
   coverage,
@@ -116,6 +141,9 @@ export const coverageProblems = ({
     if (!outcomes?.has("report") || !outcomes.has("clean")) {
       problems.push({ ruleId, category: "untested" });
     }
+    if (fixable.has(ruleId) && !outcomes?.has("fix")) {
+      problems.push({ ruleId, category: "untested-fix" });
+    }
   }
   return problems;
 };
@@ -127,6 +155,8 @@ const REMEDIATION: Record<CoverageProblem["category"], string> = {
   unwired: "register the plugin and configure the rule",
   "empty-scope": "give the rule at least one linted file",
   untested: "add reporting and clean test cases",
+  "untested-fix":
+    "add an autofix test case (runSingleRule with fix: true) in .oxlint-plugins/__tests__/",
 };
 
 /** Every custom rule must be wired, scoped and tested; there is no allowance. */
@@ -142,6 +172,7 @@ export const repositoryRules = async () => {
   // Enumerate all tracked top-level modules, including plugins absent from config.
   const ruleIds: string[] = [];
   const registeredRuleIds = new Set<string>();
+  const fixable = new Set<string>();
   const registeredModules = new Set(
     stringArray(config.jsPlugins).map((file) => path.resolve(repoRoot, file)),
   );
@@ -154,6 +185,9 @@ export const repositoryRules = async () => {
     }
     const exported = exportedRuleIds(module.default);
     ruleIds.push(...exported);
+    for (const ruleId of fixableRuleIds(module.default)) {
+      fixable.add(ruleId);
+    }
     if (registeredModules.has(path.join(repoRoot, file))) {
       for (const ruleId of exported) {
         registeredRuleIds.add(ruleId);
@@ -163,7 +197,11 @@ export const repositoryRules = async () => {
   if (ruleIds.length === 0 || new Set(ruleIds).size !== ruleIds.length) {
     return panic("Custom rule census is empty or contains duplicate IDs");
   }
-  return { ruleIds: ruleIds.toSorted(), registeredRuleIds };
+  return {
+    ruleIds: ruleIds.toSorted(),
+    registeredRuleIds,
+    fixableRuleIds: fixable,
+  };
 };
 
 type SpawnTests = (
