@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import { stemLegalTerm } from "@stll/legal-morphology/stem";
+
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -14,7 +16,6 @@ import {
   rankedDecisionQuery,
   type RankedDecisionWord,
 } from "@/api/lib/legal-search/corpus-ranked-decision-query";
-import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
 
 /**
  * The ranked decision query against the pinned engine.

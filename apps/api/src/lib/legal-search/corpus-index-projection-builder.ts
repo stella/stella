@@ -2,6 +2,13 @@ import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import {
+  type CaseLawDocumentLanguageUndeclaredError,
+  caseLawDocumentStemLanguage,
+} from "@stll/legal-morphology/corpus-language";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import type { MorphologyLanguage } from "@stll/legal-morphology/stem";
+import { stemCorpusText } from "@stll/legal-morphology/stem-text";
 import { normalizeNumericIndices } from "@stll/text-normalize";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -51,13 +58,6 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import {
-  type CaseLawDocumentLanguageUndeclaredError,
-  caseLawDocumentStemLanguage,
-} from "@/api/lib/legal-search/morphology/corpus-language";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
-import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 import { LIMITS } from "@/api/lib/limits";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;

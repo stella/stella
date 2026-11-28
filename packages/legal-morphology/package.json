@@ -1,0 +1,63 @@
+{
+  "name": "@stll/legal-morphology",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Legal search morphology: Snowball stemmers, Czech/Slovak stemming, function words, expansion dictionary, and corpus tokenization",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./corpus-language": {
+      "types": "./src/corpus-language.ts",
+      "import": "./src/corpus-language.ts"
+    },
+    "./corpus-tokens": {
+      "types": "./src/corpus-tokens.ts",
+      "import": "./src/corpus-tokens.ts"
+    },
+    "./dictionary": {
+      "types": "./src/dictionary.ts",
+      "import": "./src/dictionary.ts"
+    },
+    "./function-words": {
+      "types": "./src/function-words.ts",
+      "import": "./src/function-words.ts"
+    },
+    "./slovak": {
+      "types": "./src/slovak.ts",
+      "import": "./src/slovak.ts"
+    },
+    "./stem": {
+      "types": "./src/stem.ts",
+      "import": "./src/stem.ts"
+    },
+    "./stem-text": {
+      "types": "./src/stem-text.ts",
+      "import": "./src/stem-text.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\\\.assert|assertProperty' src --include='*.test.ts')",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/legal-morphology",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/legal-morphology"
+  },
+  "dependencies": {
+    "@stll/api-contract": "workspace:*",
+    "@stll/concurrency": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/property-testing": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
+  }
+}

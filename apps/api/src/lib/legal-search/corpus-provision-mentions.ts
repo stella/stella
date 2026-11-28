@@ -2,10 +2,10 @@ import type {
   JurisdictionProfile,
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
 import { foldToAscii } from "@stll/text-normalize";
 
 import type { CorpusQueryToken } from "@/api/lib/legal-search/corpus-query";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 
 export type CorpusProvisionMention = {
   sectionIndex: number;

@@ -609,7 +609,7 @@
     "apps/api/src/lib/docx/lookup-fields.ts": 1,
     "apps/api/src/lib/entities/query-entities.ts": 1,
     "apps/api/src/lib/entity-versions/write-file-version.ts": 1,
-    "apps/api/src/lib/legal-search/morphology/slovak.ts": 1,
+    "packages/legal-morphology/src/slovak.ts": 1,
     "apps/api/src/lib/observability/failure-evidence.ts": 1,
     "apps/api/src/lib/safe-outbound-fetch.ts": 1,
     "apps/api/src/lib/search/index-global.ts": 1,

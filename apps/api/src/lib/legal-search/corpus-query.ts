@@ -6,6 +6,10 @@ import type {
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import { functionWordKey } from "@stll/legal-morphology/function-words";
+import type { MorphologyLanguage } from "@stll/legal-morphology/stem";
+import { stemCorpusText } from "@stll/legal-morphology/stem-text";
 import {
   foldToAscii,
   normalizeNumericIndices,
@@ -27,10 +31,6 @@ import {
   CORPUS_QUERY_VARIANT_POLICY,
   type CorpusIndexQueryVariant,
 } from "@/api/lib/legal-search/corpus-query-variant-policy";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
-import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 
 /**
  * Quote a trusted-shape filter value for a corpus-index field clause.
