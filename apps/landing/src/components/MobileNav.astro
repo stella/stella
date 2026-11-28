@@ -16,8 +16,8 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 
-const resources = resolveNavLinks(resourceLinks, t);
-const connect = resolveNavLinks(connectLinks, t);
+const resources = resolveNavLinks(resourceLinks, t, locale);
+const connect = resolveNavLinks(connectLinks, t, locale);
 ---
 
 <details class="mobile-nav relative md:hidden" data-mobile-nav>

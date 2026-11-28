@@ -1,0 +1,18 @@
+---
+// A plan's price for one billing period: the amount, its unit ("per month",
+// "per seat per month"; absent on the free plan), and the billing note.
+type Props = { amount: string; unit?: string; note: string };
+const { amount, unit, note } = Astro.props;
+---
+
+<p class="flex flex-wrap items-baseline gap-x-2">
+  <span class="font-display text-4xl font-medium tracking-tight tabular-nums">
+    {amount}
+  </span>
+  {unit && (
+    <span class="text-sm" style="color: var(--muted-foreground)">{unit}</span>
+  )}
+</p>
+<p class="mt-1 text-sm tabular-nums" style="color: var(--muted-foreground)">
+  {note}
+</p>
