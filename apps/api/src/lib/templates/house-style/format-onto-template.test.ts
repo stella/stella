@@ -207,12 +207,9 @@ describe("formatOntoTemplate", () => {
       kind: "internalLinksAsText",
       links: 3,
     });
-    const quiet = await format(fakeEngine(manifest, [{}]));
+    const quiet = (await format(fakeEngine(manifest, [{}]))).unwrap();
     expect(
-      quiet.isOk() &&
-        quiet.value.note.items.some(
-          ({ kind }) => kind === "internalLinksAsText",
-        ),
+      quiet.note.items.some(({ kind }) => kind === "internalLinksAsText"),
     ).toBe(false);
   });
 
