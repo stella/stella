@@ -10,18 +10,18 @@ import {
 } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { CONTACT_FIELDS } from "@stll/docx-engine/binding-sources";
+import type { TemplateStructureError } from "@stll/docx-engine/types";
 
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
-import type { TemplateStructureError } from "@/api/lib/docx/types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
-import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";

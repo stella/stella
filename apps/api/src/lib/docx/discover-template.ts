@@ -16,6 +16,49 @@ import * as slimdom from "slimdom";
 import { compareCodeUnit } from "@stll/collation";
 import type { ZipArchive } from "@stll/docx-core/zip";
 import {
+  parseBlockTree,
+  scanBlockDirectives,
+} from "@stll/docx-engine/block-directives";
+import { collectClauseSlots } from "@stll/docx-engine/clause-slots";
+import type { ClauseSlot } from "@stll/docx-engine/clause-slots";
+import { scanPlaceholders } from "@stll/docx-engine/discover-placeholders";
+import {
+  arrayFieldFromFilters,
+  fieldMetaFromFilters,
+  filterChainSignature,
+  foldItemCountConstraints,
+} from "@stll/docx-engine/field-filters";
+import { parseInlineConditions } from "@stll/docx-engine/inline-conditions";
+import type { InlineGroup } from "@stll/docx-engine/inline-conditions";
+import {
+  MAIN_DOCUMENT_PART_PATH,
+  paragraphOwnText,
+  templateContentPartPaths,
+  W_NS,
+} from "@stll/docx-engine/ooxml";
+import {
+  authoredParagraphIndices,
+  misplacedRowBlocks,
+  normalizeRowBlockMarkers,
+} from "@stll/docx-engine/row-block-markers";
+import {
+  boundTemplateWarnings,
+  collectParagraphWarnings,
+  rowBlockAcrossRowsWarning,
+  type TemplateWarning,
+} from "@stll/docx-engine/template-warnings";
+import { isLookupFormatKey } from "@stll/docx-engine/types";
+import type {
+  ClauseProvenance,
+  DiscoveredField,
+  DiscoveredPlaceholder,
+  DiscoveredTemplate,
+  EnclosingScope,
+  FieldMeta,
+  TemplateFieldKind,
+  TemplateStructureError,
+} from "@stll/docx-engine/types";
+import {
   type ConditionNode,
   type FilterCall,
   parseCondition,
@@ -29,48 +72,7 @@ import {
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { loadDocx } from "@/api/lib/docx-archive";
-import { isLookupFormatKey } from "@/api/lib/docx/types";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-
-import { parseBlockTree, scanBlockDirectives } from "./block-directives";
-import { collectClauseSlots } from "./discover-clause-slots";
-import type { ClauseSlot } from "./discover-clause-slots";
-import { scanPlaceholders } from "./discover-placeholders";
-import {
-  arrayFieldFromFilters,
-  fieldMetaFromFilters,
-  filterChainSignature,
-  foldItemCountConstraints,
-} from "./field-filters";
-import { parseInlineConditions } from "./inline-conditions";
-import type { InlineGroup } from "./inline-conditions";
-import {
-  MAIN_DOCUMENT_PART_PATH,
-  paragraphOwnText,
-  templateContentPartPaths,
-  W_NS,
-} from "./ooxml";
-import {
-  authoredParagraphIndices,
-  misplacedRowBlocks,
-  normalizeRowBlockMarkers,
-} from "./row-block-markers";
-import {
-  boundTemplateWarnings,
-  collectParagraphWarnings,
-  rowBlockAcrossRowsWarning,
-  type TemplateWarning,
-} from "./template-warnings";
-import type {
-  ClauseProvenance,
-  DiscoveredField,
-  DiscoveredPlaceholder,
-  DiscoveredTemplate,
-  EnclosingScope,
-  FieldMeta,
-  TemplateFieldKind,
-  TemplateStructureError,
-} from "./types";
 
 // ── Field inference ──────────────────────────────────────
 

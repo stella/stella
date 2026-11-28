@@ -35,6 +35,7 @@ import {
   ENTITY_CHECK_SUBJECT_TYPES,
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
+import { TEMPLATE_WARNING_CODES } from "@stll/docx-engine/template-warnings";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { READER_TEXT_QUOTE_ORPHAN_REASONS } from "@stll/legal-ast/reader-text-quote";
 
@@ -61,7 +62,6 @@ import {
   DOCUMENT_PROCESSING_KIND,
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
-import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
 import { legislationAmendmentEffectSchema } from "@/api/lib/legal-search/legislation-amendment-effect";
 import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
 import type { LegislationAmendmentCoverage } from "@/api/lib/legal-search/legislation-ingestion-types";

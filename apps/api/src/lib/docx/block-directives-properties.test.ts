@@ -12,22 +12,22 @@ import fc from "fast-check";
 import * as slimdom from "slimdom";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import {
+  evaluateCondition,
+  flattenTemplateData,
+  processBlockDirectives,
+  resolvePath,
+} from "@stll/docx-engine/block-directives";
+import { paragraphText, W_NS } from "@stll/docx-engine/ooxml";
+import type { TemplateDataValue } from "@stll/docx-engine/types";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { CONDITION_RESERVED_WORDS } from "@stll/template-conditions";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
-import {
-  evaluateCondition,
-  flattenTemplateData,
-  processBlockDirectives,
-  resolvePath,
-} from "./block-directives";
 import { discoverTemplate } from "./discover-template";
-import { paragraphText, W_NS } from "./ooxml";
 import { fillTemplate } from "./patch-template";
-import type { TemplateDataValue } from "./types";
 
 setDefaultTimeout(propertyTestTimeout(30_000));
 

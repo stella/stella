@@ -3,13 +3,13 @@ import { describe, expect, spyOn, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import * as tanstackModels from "@/api/lib/tanstack-ai-models";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";

@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import type { FieldMeta } from "@stll/docx-engine/types";
 import type { Fetcher } from "@stll/fetch";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { FieldMeta } from "@/api/lib/docx/types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import {

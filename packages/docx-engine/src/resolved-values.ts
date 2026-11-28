@@ -7,8 +7,7 @@
  * step cannot invent a second key for the same path.
  */
 
-import { isRecord } from "@/api/lib/type-guards";
-
+import { isDocxRecord } from "./internal-helpers";
 import type { RichPatchValue } from "./types";
 
 /** Replace the value at `path` where `resolvePath` found it: the exact flat
@@ -31,7 +30,7 @@ export const replaceResolvedValue = (
   let current: Record<string, unknown> = values;
   for (const segment of segments.slice(0, -1)) {
     const next = Object.hasOwn(current, segment) ? current[segment] : undefined;
-    if (!isRecord(next)) {
+    if (!isDocxRecord(next)) {
       return;
     }
     current = next;

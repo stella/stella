@@ -1,4 +1,13 @@
 import {
+  ATTORNEY_REFS,
+  CONTACT_FIELDS,
+  FIRM_FIELDS,
+  MATTER_FIELDS,
+  USER_FIELDS,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/docx-engine/binding-sources";
+import { INPUT_TYPES, LOOKUP_REGISTRIES } from "@stll/docx-engine/types";
+import {
   DATE_FORMAT_STYLES,
   DIRECTIVE_KINDS,
   type DirectiveKind,
@@ -6,16 +15,6 @@ import {
   type FilterName,
   LOOP_PROPERTIES,
 } from "@stll/template-conditions";
-
-import { INPUT_TYPES, LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
-import {
-  ATTORNEY_REFS,
-  CONTACT_FIELDS,
-  FIRM_FIELDS,
-  MATTER_FIELDS,
-  USER_FIELDS,
-  WORKSPACE_CONTACT_ROLES,
-} from "@/api/lib/template-binding/binding-sources";
 
 /**
  * Human-readable grammar reference for the docxtpl dialect of Jinja a DOCX

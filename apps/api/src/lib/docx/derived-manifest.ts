@@ -12,14 +12,18 @@
  * of object storage on every request.
  */
 
-import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-
-import { discoverTemplate } from "./discover-template";
 import {
   manifestFieldsFromMerge,
   mergeManifestWithDiscovery,
-} from "./template-manifest";
-import type { DiscoveredTemplate, TemplateManifest } from "./types";
+} from "@stll/docx-engine/template-manifest";
+import type {
+  DiscoveredTemplate,
+  TemplateManifest,
+} from "@stll/docx-engine/types";
+
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+
+import { discoverTemplate } from "./discover-template";
 
 /** The manifest shape this build derives. One number, because a derived cache
  *  has no history to migrate: an older one is recomputed, not upgraded. */

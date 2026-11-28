@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import * as slimdom from "slimdom";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta, TemplateData } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -10,7 +11,6 @@ import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { fillTemplate } from "./patch-template";
-import type { FieldMeta, TemplateData } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
 /**

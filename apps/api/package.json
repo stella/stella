@@ -155,6 +155,7 @@
     "@stll/decision-reader": "workspace:*",
     "@stll/docx-authoring": "workspace:*",
     "@stll/docx-core": "catalog:",
+    "@stll/docx-engine": "workspace:*",
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/fetch": "workspace:*",

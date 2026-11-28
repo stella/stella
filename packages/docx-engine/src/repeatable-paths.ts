@@ -24,7 +24,7 @@
 
 import { resolvePath } from "@stll/template-conditions";
 
-import { isRecord } from "@/api/lib/type-guards";
+import { isDocxRecord } from "./internal-helpers";
 
 /** Outcome of {@link mapRepeatablePath}: whether the path was a repeatable
  *  (array-container) path and was iterated. `false` means the caller should
@@ -106,7 +106,7 @@ export const mapRepeatablePath = (
   }
   const { containerPath, subPath, rows } = found;
   for (const [index, row] of rows.entries()) {
-    if (!isRecord(row)) {
+    if (!isDocxRecord(row)) {
       continue;
     }
     mapRow({ row, subPath, index, containerPath });
@@ -144,7 +144,7 @@ export const writeRowSubPath = (
   let current: Record<string, unknown> = row;
   for (const segment of segments.slice(0, -1)) {
     const next = Object.hasOwn(current, segment) ? current[segment] : undefined;
-    if (!isRecord(next)) {
+    if (!isDocxRecord(next)) {
       return;
     }
     current = next;

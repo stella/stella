@@ -1,13 +1,14 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import type { LookupRegistry } from "@stll/docx-engine/types";
+
 import {
   templateLookupFormats,
   templateLookupFormatUserDefaults,
 } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { LookupRegistry } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type SetLookupFormatUserDefaultArgs = {

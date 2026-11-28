@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Seed templates & clauses (Knowledge section).
@@ -38,7 +39,6 @@ import type { ClauseBody, ClauseParagraph } from "@/api/lib/clauses/types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
-import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";

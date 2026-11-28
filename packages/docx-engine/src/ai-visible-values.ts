@@ -1,7 +1,6 @@
 import { isSafeFieldPath } from "@stll/template-conditions";
 
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-
+import { isDocxArray, isDocxRecord } from "./internal-helpers";
 import type { FieldMeta } from "./types";
 
 type OmitSourceBoundValuesOptions = {
@@ -61,15 +60,15 @@ const deleteNestedPath = (
   }
 
   const next = values[segment];
-  if (isUnknownArray(next)) {
+  if (isDocxArray(next)) {
     return {
       ...values,
       [segment]: next.map((item) =>
-        isRecord(item) ? deleteNestedPath(item, segments, index + 1) : item,
+        isDocxRecord(item) ? deleteNestedPath(item, segments, index + 1) : item,
       ),
     };
   }
-  if (isRecord(next)) {
+  if (isDocxRecord(next)) {
     return {
       ...values,
       [segment]: deleteNestedPath(next, segments, index + 1),

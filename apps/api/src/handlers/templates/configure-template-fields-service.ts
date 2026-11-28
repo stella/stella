@@ -14,11 +14,12 @@
 
 import { Result } from "better-result";
 
+import type { FieldMeta, TemplateManifest } from "@stll/docx-engine/types";
+
 import type { SafeDb } from "@/api/db/safe-db-types";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import type { FieldConfigurationIssue } from "@/api/lib/templates/configure-field-input";
 import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import { readStoredTemplateFile } from "@/api/lib/templates/stored-template-file";

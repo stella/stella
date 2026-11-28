@@ -4,9 +4,9 @@ import {
   DOCUMENT_TRANSLATION_SOURCE_LANGUAGES,
   type DocumentTranslationSourceLanguageCode,
 } from "@stll/api-contract/document-translation";
+import { W_NS } from "@stll/docx-engine/ooxml";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
-import { W_NS } from "@/api/lib/docx/ooxml";
 
 const STYLES_PART = "word/styles.xml";
 const SETTINGS_PART = "word/settings.xml";

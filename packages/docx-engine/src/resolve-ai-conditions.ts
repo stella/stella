@@ -21,9 +21,8 @@ import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-pro
 import { mapWithConcurrency } from "@stll/concurrency";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
-import { isRecord } from "@/api/lib/type-guards";
-
 import { omitSourceBoundValues } from "./ai-visible-values";
+import { isDocxRecord } from "./internal-helpers";
 import { findRepeatableContainer } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 
@@ -128,7 +127,7 @@ export const resolveAiConditions = async ({
         items: [...repeatable.rows.entries()],
         limit: AI_CONDITION_ITEM_CONCURRENCY,
         operation: async ([index, row]) => {
-          if (!isRecord(row)) {
+          if (!isDocxRecord(row)) {
             return [];
           }
           const result = await resolveAiConditions({

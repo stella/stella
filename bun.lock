@@ -106,6 +106,7 @@
         "@stll/decision-reader": "workspace:*",
         "@stll/docx-authoring": "workspace:*",
         "@stll/docx-core": "catalog:",
+        "@stll/docx-engine": "workspace:*",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
@@ -1224,6 +1225,30 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+      },
+    },
+    "packages/docx-engine": {
+      "name": "@stll/docx-engine",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/agent-input": "workspace:*",
+        "@stll/api-contract": "workspace:*",
+        "@stll/collation": "workspace:*",
+        "@stll/concurrency": "workspace:*",
+        "@stll/docx-core": "catalog:",
+        "@stll/docx-utils": "workspace:*",
+        "@stll/template-conditions": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
+        "diff": "catalog:",
+        "slimdom": "^4.3.5",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/docx-utils": {
@@ -3631,6 +3656,8 @@
     "@stll/docx-authoring": ["@stll/docx-authoring@workspace:packages/docx-authoring"],
 
     "@stll/docx-core": ["@stll/docx-core@0.48.1", "", { "dependencies": { "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "marked": "^18.2.0" } }, "sha512-f4ql3eqkdrVZwf9RQ6Y/k0GVDYZu/yi3DbZnllwLBVwE32KZbI9oax9FAIgXvlTbsr03vFKs445dXkBQdlVejQ=="],
+
+    "@stll/docx-engine": ["@stll/docx-engine@workspace:packages/docx-engine"],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 

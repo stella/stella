@@ -4,7 +4,6 @@ import * as v from "valibot";
 
 import { isPlausibleLocale } from "@stll/agent-input";
 import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
-import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   type BlockDirectiveKind,
   type ConditionNode,
@@ -16,16 +15,15 @@ import {
   type RowScope,
 } from "@stll/template-conditions";
 
-import type { ClauseSlot } from "@/api/lib/docx/discover-clause-slots";
-import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
-import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   type FieldSource,
   fieldSourceSchema,
   fieldSourceToolInputSchema,
-} from "@/api/lib/template-binding/binding-sources";
+} from "./binding-sources";
+import type { ClauseSlot } from "./clause-slots";
+import type { TemplateWarning } from "./template-warnings";
 
-export type { FieldSource } from "@/api/lib/template-binding/binding-sources";
+export type { FieldSource } from "./binding-sources";
 export { DATE_FORMAT_STYLES };
 export type { FieldDateFormat };
 
@@ -50,13 +48,6 @@ export type RichRun = {
 };
 
 export type RichPatchValue = string | { paragraphs: { runs: RichRun[] }[] };
-
-export type FillTemplateResult = {
-  file: ScannedFile;
-  unmatchedPlaceholders: string[];
-  unusedValues: string[];
-  structureErrors: TemplateStructureError[];
-};
 
 // ── Mode (c): Tracked-changes editing ─────────────────────
 
@@ -102,11 +93,41 @@ export type ParagraphRewrite = {
   newText: string;
 };
 
-export type ParagraphSource = ExtractedDocxParagraph["source"];
+export type ParagraphSource = "header" | "body" | "footer";
 
-export type ExtractedParagraph = Omit<ExtractedDocxParagraph, "source"> & {
+type ExtractedTableCellParagraph = {
+  text: string;
+  style?: string;
+  bold?: boolean;
+  fontSize?: number;
+  alignment?: "left" | "center" | "right" | "both";
+};
+
+type ExtractedTableCell = {
+  paragraphs: readonly ExtractedTableCellParagraph[];
+};
+
+type ExtractedTableRowPosition =
+  | {
+      table: number;
+      kind: "cells";
+      cells: readonly ExtractedTableCell[];
+    }
+  | {
+      table: number;
+      kind: "syntheticHeader" | "delimiter";
+    };
+
+export type ExtractedParagraph = {
+  index: number;
+  text: string;
   /** Which part of the document this paragraph came from. */
   source?: ParagraphSource | undefined;
+  style?: string;
+  bold?: boolean;
+  fontSize?: number;
+  alignment?: "left" | "center" | "right" | "both";
+  tableRow?: ExtractedTableRowPosition;
   /** True when the paragraph is a block directive. */
   isDirective?: boolean | undefined;
   /** Which directive this paragraph represents. */

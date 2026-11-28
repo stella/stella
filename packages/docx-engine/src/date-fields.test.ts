@@ -7,8 +7,8 @@ import {
   DATE_FORMAT_EXAMPLE_ISO,
   formatDateExample,
   resolveDateFields,
-} from "@/api/lib/docx/date-fields";
-import type { FieldMeta } from "@/api/lib/docx/types";
+} from "./date-fields";
+import type { FieldMeta } from "./types";
 
 /** The error a field-named ask renders: the normalizer owns the wording, so
  *  the test states the shape rather than a second copy of the sentence. */

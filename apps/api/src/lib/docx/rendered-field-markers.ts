@@ -13,14 +13,17 @@ import { panic, Result } from "better-result";
 import type * as slimdom from "slimdom";
 
 import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
+import type { InlineIterationTextOptions } from "@stll/docx-engine/block-directives";
+import { scanPlaceholders } from "@stll/docx-engine/discover-placeholders";
+import { paragraphOwnText, W_NS } from "@stll/docx-engine/ooxml";
+import {
+  paragraphSpanText,
+  replaceParagraphTextRanges,
+} from "@stll/docx-engine/rich-patch";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-import type { InlineIterationTextOptions } from "./block-directives";
-import { scanPlaceholders } from "./discover-placeholders";
 import type { LocatedFieldMarker } from "./discover-template";
-import { paragraphOwnText, W_NS } from "./ooxml";
-import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 
 /** One value marker the pass kept, with the values in scope where it sits. */
 export type RenderedFieldOccurrence = {
