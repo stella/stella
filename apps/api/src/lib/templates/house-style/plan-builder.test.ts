@@ -2476,6 +2476,47 @@ describe("buildTemplatePlan, tables and omissions", () => {
     expect(kept(undefined)).toMatchObject({ contents: 1, notes: [] });
   });
 
+  test("a heading the source's contents list deeper than the kept contents collect gets the outline level of its entry", () => {
+    const profile = {
+      ...inferTemplateProfile(contractTemplate({ contents: "empty" })),
+      contentsStyles: ["Article"],
+      contentsDepth: 3,
+    };
+    const longClause = `Dodavatel dodá zboží ${"v dohodnuté kvalitě a v dohodnutém množství ".repeat(4)}`;
+    const manifest = manifestOf([
+      "SMLOUVA O DODÁVCE",
+      "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "a",
+      "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+      { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+      { text: "1.1 Dodávka\t2", styleName: "toc 2" },
+      { text: `1.2 ${longClause.trim()}\t2`, styleName: "toc 2" },
+      "Článek I.\nPředmět",
+      numbered("1.1", "Dodávka", 10),
+      numbered("1.2", longClause.trim(), 10),
+      numbered("1.3", "Dodavatel zboží předá v sídle objednatele.", 10),
+    ]);
+    const { plan } = build(manifest, "keepSource", { profile });
+    const levels = plan.body.flatMap((item) =>
+      item.kind === "source" && item.outlineLevel !== undefined
+        ? [[item.blockId, item.outlineLevel]]
+        : [],
+    );
+    // The titled line the contents listed at their second level, and no
+    // clause's text.
+    expect(levels).toEqual([[blockIdOf(manifest, "Dodávka"), 1]]);
+    expect(plan.fields?.contentsOutlineLevels).toBe(true);
+    // A field that takes no outline levels: nothing to give.
+    const { contentsDepth: _depth, ...withoutDepth } = profile;
+    const flat = build(manifest, "keepSource", { profile: withoutDepth }).plan;
+    expect(
+      flat.body.some(
+        (item) => item.kind === "source" && item.outlineLevel !== undefined,
+      ),
+    ).toBe(false);
+    expect(flat.fields?.contentsOutlineLevels).toBeUndefined();
+  });
+
   test("the page the source starts in front of its own contents starts in front of the kept ones", () => {
     // A template whose sample starts a page in front of its first article:
     // the document's own page start there is kept.

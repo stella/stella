@@ -404,6 +404,10 @@ export type TemplatePlanSourceItem = {
   /** The paragraph's own alignment, over its style's. As `keepNext`, left
    *  out by an engine that does not know it. */
   alignment?: TemplatePlanAlignment;
+  /** The paragraph's own outline level (0 for level 1), which the kept
+   *  contents list it by with `fields.contentsOutlineLevels`. An engine
+   *  that does not know it leaves it out. */
+  outlineLevel?: number;
   /** Table only: the paragraph style of its cells. */
   cellStyleId?: string;
   /** Table only: placement of single paragraphs inside it. */
@@ -468,7 +472,14 @@ export type TemplatePlan = {
   numberingPatches?: TemplatePlanNumberingPatch[];
   references?: TemplatePlanReference[];
   highlights?: TemplatePlanHighlight[];
-  fields?: { freezeKinds?: string[]; updateOnOpen?: boolean };
+  fields?: {
+    freezeKinds?: string[];
+    updateOnOpen?: boolean;
+    /** The kept contents also list paragraphs by their own outline level
+     *  (the field's `\u` switch). An engine that does not know it leaves
+     *  the field's code as it is. */
+    contentsOutlineLevels?: boolean;
+  };
   /** Compatibility settings switched on in the output's settings, which
    *  are otherwise the template's. */
   compat?: { doNotExpandShiftReturn?: boolean };

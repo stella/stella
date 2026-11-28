@@ -171,6 +171,12 @@ export type TemplateProfile = {
    *  fill empty. Absent when the template keeps no contents or its field's
    *  code is not known, and from a profile made before this was read. */
   contentsStyles?: string[];
+  /** The deepest level the kept contents field takes by outline level
+   *  (`\o "1-3"` gives 3): a paragraph given an outline level up to it is
+   *  listed once the field also takes paragraphs' own levels. Absent when
+   *  the field takes no levels, and from a profile made before this was
+   *  read. */
+  contentsDepth?: number;
   /** The style the template writes the text of its tables in. Absent when
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
@@ -1117,11 +1123,12 @@ const inferRegions = ({
   roles,
 }: RegionOptions): Pick<
   TemplateProfile,
-  "regions" | "slots" | "contentsStyles"
+  "regions" | "slots" | "contentsStyles" | "contentsDepth"
 > => {
   const order = topLevel.map(({ id }) => id);
   const contents: string[] = [];
   let contentsStyles: string[] | undefined;
+  let contentsDepth: number | undefined;
   const contentsField = fields.find(
     ({ kind, blockId }) => kind === CONTENTS_FIELD && blockId !== undefined,
   );
@@ -1153,6 +1160,10 @@ const inferRegions = ({
       const endsInHeading = to > from && endsInNextHeading(topLevel[to], roles);
       contents.push(...order.slice(from, endsInHeading ? to : to + 1));
       contentsStyles = collectedStyles(contentsField.instruction, styles);
+      const headings = CONTENTS_HEADINGS.exec(contentsField.instruction ?? "");
+      if (headings !== null) {
+        contentsDepth = Number(headings.groups?.["high"] ?? "9");
+      }
     }
   }
   const inContents = new Set(contents);
@@ -1270,6 +1281,7 @@ const inferRegions = ({
         signatureBlocks.length === 0 ? null : { blockIds: signatureBlocks },
     },
     ...(contentsStyles === undefined ? {} : { contentsStyles }),
+    ...(contentsDepth === undefined ? {} : { contentsDepth }),
   };
 };
 
@@ -2115,6 +2127,9 @@ const profileSchema = v.strictObject({
   frontMatterEndsPage: v.exactOptional(v.boolean()),
   contentsStyles: v.exactOptional(
     v.pipe(v.array(idSchema), v.maxLength(BLOCKS_MAX)),
+  ),
+  contentsDepth: v.exactOptional(
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(9)),
   ),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
   header: v.exactOptional(

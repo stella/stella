@@ -822,6 +822,9 @@ type Placed = {
   /** The indent of a numbered item the template's levels would set left
    *  of the item it belongs to. */
   nestedIndents: Map<string, TemplatePlanIndent>;
+  /** The outline level (0 for level 1) of a paragraph the source's own
+   *  contents list and the template's contents would not. */
+  outlineLevels: Map<string, number>;
 };
 
 const roleOf = (
@@ -2162,6 +2165,7 @@ const placeParagraphs = (context: Context): Placed => {
     itemIndents: new Map(),
     alignments: new Map(),
     nestedIndents: new Map(),
+    outlineLevels: new Map(),
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
@@ -2238,7 +2242,91 @@ const placeParagraphs = (context: Context): Placed => {
   indentContinuations(context, placed);
   setMarginLines(context, placed);
   alignFrontLines(context, placed);
+  listSourceContentsEntries(context, placed);
   return placed;
+};
+
+/** The longest paragraph a source contents entry may point to and still be
+ *  listed: a heading's title, never a clause's text. */
+const CONTENTS_ENTRY_MAX = 120;
+/** The level a contents line's style names (`toc 2`, `Obsah 3`). */
+const CONTENTS_LEVEL = /(?<level>[1-9])\s*$/u;
+/** The page number behind a contents line's leader tab. */
+const CONTENTS_PAGE = /\t[ \u00A0]*[0-9ivxlcIVXLC]{1,6}[ \u00A0]*$/u;
+const BLANKS = /[\s\u00A0]+/gu;
+const TRAILING_STOPS = /[.:]+$/u;
+
+/** A line's text as a contents entry and its heading compare: blanks one
+ *  space, no page number, case and closing stops ignored. */
+const contentsKey = (text: string): string =>
+  text
+    .replace(CONTENTS_PAGE, "")
+    .replace(BLANKS, " ")
+    .trim()
+    .replace(TRAILING_STOPS, "")
+    .toLowerCase();
+
+/**
+ * Keeps the depth of the source's own contents. The template's contents
+ * collect the styles their field names (articles, in a law firm's
+ * template); a heading the source's contents list deeper (`I.1 Subject
+ * matter`) is placed in a clause or body style the field does not take
+ * and would drop out. Such a paragraph gets the outline level its entry
+ * had, at most the deepest the field takes, and the field then takes
+ * paragraphs' own levels too. Only a paragraph an entry names, short
+ * enough to be a title and placed at the top level, gets one: no clause's
+ * text enters the contents.
+ */
+const listSourceContentsEntries = (context: Context, placed: Placed): void => {
+  const { profile, index, blockById, tableOf } = context;
+  const depth = profile.contentsDepth;
+  const collected = profile.contentsStyles;
+  if (
+    depth === undefined ||
+    collected === undefined ||
+    !keepsContents(context, placed)
+  ) {
+    return;
+  }
+  const entries = new Map<string, number>();
+  for (const id of index.contentsBlockIds) {
+    const block = blockById.get(id);
+    const level = Number(
+      CONTENTS_LEVEL.exec(block?.styleName ?? "")?.groups?.["level"] ?? "0",
+    );
+    const key = block === undefined ? "" : contentsKey(block.text);
+    if (level > 0 && key !== "" && !entries.has(key)) {
+      entries.set(key, level);
+    }
+  }
+  if (entries.size === 0) {
+    return;
+  }
+  for (const { block, styleId, entry } of placed.placements) {
+    const text = block.text.trim();
+    if (
+      index.contentsBlockIds.has(block.id) ||
+      tableOf.has(block.id) ||
+      (styleId !== null && collected.includes(styleId)) ||
+      text === "" ||
+      text.length > CONTENTS_ENTRY_MAX
+    ) {
+      continue;
+    }
+    const label = shownLabelOf(block);
+    const keys = [
+      contentsKey(text),
+      ...(label === null ? [] : [contentsKey(`${label} ${text}`)]),
+      ...(entry === null ? [] : [contentsKey(text.slice(entry.manualLength))]),
+    ];
+    const key = keys.find((candidate) => entries.has(candidate));
+    const level = key === undefined ? undefined : entries.get(key);
+    if (key === undefined || level === undefined) {
+      continue;
+    }
+    entries.delete(key);
+    placed.outlineLevels.set(block.id, Math.min(level, depth) - 1);
+  }
 };
 
 const numberingOf = ({
@@ -2761,6 +2849,8 @@ type ParagraphItemOptions = {
   alignment: TemplatePlanAlignment | undefined;
   /** The indent that keeps a numbered item deeper than its parent. */
   nestedIndent: TemplatePlanIndent | undefined;
+  /** The outline level that lists the paragraph in the contents. */
+  outlineLevel: number | undefined;
   /** The section the paragraph is the last of, when it stays a section. */
   endsSection: TemplatePlanSection | undefined;
 };
@@ -2778,6 +2868,7 @@ const paragraphItems = ({
   alignment,
   endsSection,
   nestedIndent,
+  outlineLevel,
 }: ParagraphItemOptions): TemplatePlanSourceItem[] => {
   const { profile } = context;
   const { block } = placement;
@@ -2817,6 +2908,7 @@ const paragraphItems = ({
     ...(hang === null && under !== null ? { indent: under } : {}),
     ...(tabStops === undefined ? {} : { tabStops: [...tabStops] }),
     ...(alignment === undefined ? {} : { alignment }),
+    ...(outlineLevel === undefined ? {} : { outlineLevel }),
   };
   return title === undefined
     ? [item]
@@ -2956,6 +3048,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       alignment: placed.alignments.get(block.id),
       endsSection: context.keptSections.ends.get(block.id),
       nestedIndent: placed.nestedIndents.get(block.id),
+      outlineLevel: placed.outlineLevels.get(block.id),
     });
     placedCount += paragraph.length;
     body.push(...paragraph);
@@ -4161,6 +4254,11 @@ export const buildTemplatePlan = ({
       // Word fills a field's result when it opens the file; without that a
       // kept table of contents would show the template's sample entries.
       updateOnOpen: marks.references.length > 0 || contentsKept,
+      // Headings the source's contents list deeper than the template's
+      // field collects are listed by the outline level they were given.
+      ...(contentsKept && placed.outlineLevels.size > 0
+        ? { contentsOutlineLevels: true }
+        : {}),
     },
     ...(lineBreakSpacing ? { compat: { doNotExpandShiftReturn: true } } : {}),
     ...(context.keptSections.last === undefined
