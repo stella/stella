@@ -650,6 +650,11 @@ const readUnlabelled = (
   zones: Zones,
   index: LabelIndex,
 ): Reading => {
+  // A part of the document is headed, whatever its heading's words: its
+  // number stays what the source shows.
+  if (index.partHeadingBlockIds.has(block.id)) {
+    return sectionHeading();
+  }
   if (isTypedArticleHeading(block)) {
     return reading("articleHeading", CONFIDENCE.titleByPosition, {
       role: "body",
