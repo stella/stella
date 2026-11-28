@@ -12,9 +12,11 @@ import path from "node:path";
 
 import { dependencyScope } from "./ci-dependency-scope";
 import {
+  isReaderSource,
   markdownChecks,
   markdownReaderInputNames,
   markdownReaders,
+  readerCandidateFiles,
   requiresDesktopBrowser,
   requiresLandingBuild,
   requiresPackageChecks,
@@ -411,7 +413,76 @@ test("a planted markdown reader joins isolated checks, including deleted input f
   });
 });
 
-// Measured p95: 11.3 s; this must derive readers from the real repository graph.
+test("tracked reader candidates yield the same census as reading every source", () => {
+  repository((root, write) => {
+    const readers = {
+      "scripts/read.test.ts":
+        'import { readFileSync } from "node:fs"; readFileSync("README.md");',
+      "scripts/bun-file.test.ts": 'const source = Bun.file("docs/guide.md");',
+      "scripts/import-reader.ts":
+        'import text from "../docs/imported.md" with { type: "text" };',
+      "apps/example/src/content.config.mts":
+        'import { glob } from "astro/loaders"; glob({ pattern: "**/*.md", base: "./src/content/blog" });',
+      "packages/example/check-docs.ts": `import { readFileSync } from "node:fs";
+      export const CI_MARKDOWN_READER_INPUTS = ["apps/**/*.md"];
+      export const CI_MARKDOWN_READER_COMMAND = "bun packages/example/check-docs.ts";
+      function check(name) { return readFileSync(name); }
+      check(process.argv[2]);`,
+    };
+    // Every shape the census parses, held in comments so none declares a reader.
+    const shapes = [
+      "readFileSync(name)",
+      "readFile(name)",
+      "file.readText()",
+      "readdirSync(directory)",
+      "readdir(directory)",
+      'spawnSync("git", ["ls-files"])',
+      "Bun.file(name)",
+      'new Bun.Glob("*")',
+      'import { glob } from "astro/loaders"',
+      "const CI_MARKDOWN_READER_INPUTS_EXTRA = []",
+      'import text from "./notes.md"',
+      "import text from './notes.mdx'",
+    ];
+    const candidates = [
+      ...Object.keys(readers),
+      ...shapes.map((_, index) => `.claude/hooks/shape-${index}.cjs`),
+    ];
+    for (const [file, text] of Object.entries(readers)) {
+      write(file, text);
+    }
+    for (const [index, shape] of shapes.entries()) {
+      const text = `// ${shape}\nexport const shape = ${index};`;
+      expect(isReaderSource(text), shape).toBe(true);
+      write(`.claude/hooks/shape-${index}.cjs`, text);
+    }
+    write("scripts/unrelated.ts", 'export const value = "notes.txt";');
+    write("packages/example/unrelated.tsx", "export const Notes = () => null;");
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["add", "."], { cwd: root });
+    const tracked = execFileSync("git", ["ls-files", "-z"], {
+      cwd: root,
+      encoding: "utf-8",
+    })
+      .split("\0")
+      .filter((file) =>
+        /^(?:scripts|apps|packages|\.oxlint-plugins|\.claude)\/.+\.[cm]?[jt]sx?$/u.test(
+          file,
+        ),
+      );
+    expect(readerCandidateFiles(root).toSorted()).toEqual(
+      candidates.toSorted(),
+    );
+    const census = markdownReaders(root);
+    expect(census.map(({ file }) => file)).toEqual(
+      expect.arrayContaining(Object.keys(readers)),
+    );
+    expect(census).toEqual(markdownReaders(root, tracked));
+  });
+});
+
+// Measured locally: 3.0-3.5 s (10 s before the candidate search); this must
+// derive readers from the real repository graph.
 test("the exact README change derives its genuine readers without package jobs", () => {
   const changed = ["README.md", "apps/desktop/README.md"];
   expect(requiresPackageChecks({ changed })).toBe(false);
@@ -1674,11 +1745,23 @@ test("named Markdown checks cannot hide a different owner or computed command", 
 
 test("every tracked named Markdown input declaration enters the reader census", () => {
   const root = path.resolve(import.meta.dir, "..");
-  const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  // A declaration name survives masking verbatim, so only tracked files that
+  // contain it can declare one; the rest need not be read and masked.
+  const tracked = Bun.spawnSync(
+    [
+      "git",
+      "grep",
+      "-l",
+      "-z",
+      "-F",
+      "CI_MARKDOWN_READER_INPUTS",
+      "--",
+      "scripts",
+      "apps",
+      "packages",
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
   expect(tracked.exitCode).toBe(0);
   const files = tracked.stdout
     .toString()
