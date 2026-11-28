@@ -295,6 +295,60 @@ describe("inferTemplateProfile", () => {
     expect(withHeading.regions.filler).toContain("t95");
   });
 
+  test("a template that shows no heading or clause style in use says so in its health", () => {
+    const template = contractTemplate();
+    // A filled document: its styles carry no list, its numbers are typed.
+    const filled = {
+      ...template,
+      styles: template.styles.map((style) => ({ ...style, numPr: null })),
+      blocks: template.blocks.map((block) => ({
+        ...block,
+        label: null,
+        numbering: null,
+      })),
+    };
+    const profile = inferTemplateProfile(filled);
+    expect(profile.health?.at(0)).toEqual({
+      kind: "rolesNotRead",
+      roles: ["articleHeading", "clause1"],
+    });
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    expect(
+      inferTemplateProfile(template).health?.some(
+        ({ kind }) => kind === "rolesNotRead",
+      ),
+    ).toBe(false);
+  });
+
+  test("a template that ends with sections after its body's says so in its health", () => {
+    const template = contractTemplate();
+    // The signature table and the annex stand in a section of their own.
+    const sectioned = {
+      ...template,
+      blocks: template.blocks.map((block) =>
+        ["t13", "p14", "p15", "p16"].includes(block.id)
+          ? { ...block, sectionIndex: 1 }
+          : block,
+      ),
+    };
+    const profile = inferTemplateProfile(sectioned);
+    expect(profile.health).toContainEqual({
+      kind: "lastSectionNotBody",
+      bodySection: 0,
+      lastSection: 1,
+    });
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    expect(
+      inferTemplateProfile(template).health?.some(
+        ({ kind }) => kind === "lastSectionNotBody",
+      ),
+    ).toBe(false);
+  });
+
   test("fields that prompt or change on open are frozen, the rest stay live", () => {
     const { fields, fillerStrings } = inferTemplateProfile(contractTemplate());
     expect(fields.freezeKinds).toEqual(["FILLIN", "TIME"]);

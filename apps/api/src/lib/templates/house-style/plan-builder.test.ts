@@ -833,6 +833,57 @@ describe("buildTemplatePlan, list instances", () => {
     expect(levelOf("druhá odrážka")).toBe(levelOf("odrážka pod odstavcem"));
   });
 
+  test("a bullet hangs from its clause where the template's bullet level stands elsewhere", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s výčtem:", 1),
+      numbered("•", "odrážka pod odstavcem", 5),
+    ]);
+    const clauseText = PROFILE.roles.clause1?.numbering?.indent.left ?? 0;
+    const bulletRole = (left: number) => ({
+      styleId: "Body",
+      alignment: null,
+      numbering: {
+        numId: 9,
+        ilvl: 0,
+        abstractNumId: 9,
+        numFmt: "bullet",
+        lvlText: "•",
+        start: 1,
+        indent: { left, hanging: 360, firstLine: null },
+      },
+      confidence: 0.7,
+      evidence: ["listLevel" as const],
+    });
+    // A level whose mark stands far right of the clause's text.
+    const far = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, bullet: bulletRole(clauseText + 1211) },
+      },
+    }).plan;
+    const farItem = itemOf(far, manifest, "odrážka");
+    expect(farItem?.numbering).not.toMatchObject({ numId: 9 });
+    expect(
+      far.numberingPatches?.find(
+        ({ ilvl, abstractNumId }) =>
+          abstractNumId !== 9 && ilvl === farItem?.numbering?.ilvl,
+      )?.indent,
+    ).toEqual({ left: clauseText + 360, hanging: 360 });
+    // A level whose mark stands at the clause's text stays as it is.
+    const near = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, bullet: bulletRole(clauseText + 360) },
+      },
+    }).plan;
+    expect(itemOf(near, manifest, "odrážka")?.numbering).toMatchObject({
+      numId: 9,
+      ilvl: 0,
+    });
+  });
+
   test("a bullet takes a level outside the outline list where the template has one", () => {
     const manifest = manifestOf([
       "SMLOUVA",

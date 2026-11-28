@@ -1382,6 +1382,25 @@ const hangBullet = (
   bullet: Placement,
   lead: Placement | null,
 ): void => {
+  // The template's own bullet level sets its mark for one place on the
+  // page. Under a paragraph whose text starts elsewhere (a clause of a
+  // template whose bullet style was made for another column or another
+  // depth) the mark would stand far from that text: the bullet then hangs
+  // from its paragraph as a bullet without a level of its own does.
+  const own = bullet.level;
+  if (own !== null && bullet.pattern?.numFmt === "bullet" && lead !== null) {
+    const step = own.indent.hanging ?? 0;
+    const mark = (own.indent.left ?? 0) - step;
+    if (
+      step > 0 &&
+      Math.abs(mark - textStartOf(context, lead)) > BULLET_DRIFT
+    ) {
+      bullet.level = null;
+      bullet.borrowedLevel = own;
+    } else {
+      return;
+    }
+  }
   const beside = bullet.borrowedLevel;
   if (beside === null || bullet.pattern?.numFmt !== "bullet" || lead === null) {
     return;
@@ -1401,6 +1420,9 @@ const hangBullet = (
 };
 
 const HEADING_TEXT_MAX = 160;
+/** How far, in twentieths of a point, a bullet's mark may stand from the
+ *  text of the paragraph its list belongs to (15 pt). */
+const BULLET_DRIFT = 300;
 
 /**
  * Whether a paragraph read as an article's heading is one on the page: a
