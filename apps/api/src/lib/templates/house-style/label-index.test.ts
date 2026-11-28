@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { DocxBlockManifest } from "@/api/lib/templates/house-style/folio-contract";
-import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
+import {
+  buildLabelIndex,
+  isRunningText,
+  ownLabelPartOf,
+} from "@/api/lib/templates/house-style/label-index";
 import {
   blockIdOf,
   czechContract,
@@ -9,6 +13,7 @@ import {
   germanContract,
   heading,
   inColumns,
+  leveled,
   manifestOf,
   numbered,
   partsContract,
@@ -765,4 +770,41 @@ describe("buildLabelIndex", () => {
       "clause II/2",
     ]);
   });
+});
+
+describe("labels that print the counters above their own", () => {
+  const block = (lvlText: string, ilvl: number) =>
+    manifestOf([leveled("x", "text", { ilvl, lvlText })]).blocks[0]!;
+
+  test("read by the part their own level prints", () => {
+    expect(ownLabelPartOf(block("%1. %2) %4)", 3), "I. 1) a)")).toBe("a)");
+    expect(ownLabelPartOf(block("%1. %2)", 1), "IV. 12)")).toBe("12)");
+    expect(ownLabelPartOf(block("%1.(%2)", 1), "3.(b)")).toBe("(b)");
+    // A level that prints no other counter, or a label that does not end
+    // as its text does, is not split.
+    expect(ownLabelPartOf(block("%2)", 1), "1)")).toBeNull();
+    expect(ownLabelPartOf(block("%1. %2)", 1), "I. 1.")).toBeNull();
+  });
+
+  test("index the paragraph by that part", () => {
+    const manifest = manifestOf([
+      leveled("I.", "Definice", { ilvl: 0, lvlText: "%1." }),
+      leveled("I. 1)", "Pro účely této smlouvy mají pojmy tento význam:", {
+        ilvl: 1,
+        lvlText: "%1. %2)",
+      }),
+    ]);
+    const entry = buildLabelIndex(manifest).entryByBlockId.get("p1");
+    expect(entry?.origin).toBe("auto");
+    expect(entry?.core).toBe("1");
+  });
+});
+
+test("a sentence followed by bracketed choices runs on", () => {
+  expect(
+    isRunningText(
+      "[The Company occupies the [whole of the Property][part of the Property shown on the plan.] [and/or]",
+    ),
+  ).toBe(true);
+  expect(isRunningText("Definitions and interpretation")).toBe(false);
 });

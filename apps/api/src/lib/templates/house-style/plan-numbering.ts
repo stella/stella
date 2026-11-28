@@ -44,11 +44,13 @@ export type LabelKeptReason =
    *  stays as it is written, change and all. */
   | "trackedChange";
 
-type LevelFormat = { numFmt: string; lvlText: string };
+/** `legal`: the level prints every counter in arabic numerals (Word's
+ *  legal numbering, `w:isLgl`): `1.1` under article `I.`. */
+type LevelFormat = { numFmt: string; lvlText: string; legal?: true };
 
 /** A label restated as a level text, its own counter still unplaced.
  *  `font`: the text face a bullet's mark is a character of. */
-type LabelPattern = LevelFormat & { font?: string };
+export type LabelPattern = LevelFormat & { font?: string };
 
 export type ListLevelFormat = LevelFormat & { ilvl: number; start: number };
 
@@ -90,22 +92,23 @@ const LEVEL_PLACEHOLDER = /(%\d)/u;
 
 /** Stands for the paragraph's own counter in a label pattern, until the
  *  level it is counted on is known. */
-const OWN_COUNTER = "\u0001";
+export const OWN_COUNTER = "\u0001";
 
 const levelKey = ({ abstractNumId, ilvl }: ProfileListLevel): string =>
   `${String(abstractNumId)}:${String(ilvl)}`;
 
-const formatKey = ({ numFmt, lvlText }: LevelFormat): string =>
-  `${numFmt}\u0000${lvlText}`;
+const formatKey = ({ numFmt, lvlText, legal }: LevelFormat): string =>
+  `${numFmt}\u0000${lvlText}${legal === true ? "\u0000legal" : ""}`;
 
 const placeholder = (ilvl: number): string => `%${String(ilvl + 1)}`;
 
 const formatAt = (
-  { numFmt, lvlText }: LabelPattern,
+  { numFmt, lvlText, legal }: LabelPattern,
   ilvl: number,
 ): LevelFormat => ({
   numFmt,
   lvlText: lvlText.replace(OWN_COUNTER, () => placeholder(ilvl)),
+  ...(legal === true ? { legal } : {}),
 });
 
 const NUMERAL_FORMAT = {
@@ -223,6 +226,7 @@ const renderLabel = (
   lvlText: string,
   counters: readonly number[],
   levels: readonly ListLevelFormat[],
+  legal = false,
 ): string | null => {
   let rendered = "";
   for (const part of lvlText.split(LEVEL_PLACEHOLDER)) {
@@ -231,7 +235,9 @@ const renderLabel = (
       continue;
     }
     const ilvl = (digitsValue(part.slice(1)) ?? 0) - 1;
-    const numFmt = levels.find((level) => level.ilvl === ilvl)?.numFmt;
+    const numFmt = legal
+      ? "decimal"
+      : levels.find((level) => level.ilvl === ilvl)?.numFmt;
     const numeral = formatNumeral(counters[ilvl] ?? 1, numFmt ?? "decimal");
     if (numeral === null) {
       return null;
@@ -337,6 +343,67 @@ const keepSourceLists = (
     }
   }
   return kept;
+};
+
+type PatchOptions = {
+  usedLevels: ReadonlyMap<string, ProfileListLevel>;
+  levelsByList: ReadonlyMap<number, readonly ListLevelFormat[]>;
+  placements: readonly Placement[];
+  standsFor: ReadonlyMap<string, ProfileListLevel>;
+};
+
+/** The patches that make each used level of the template print what its
+ *  paragraphs need. */
+const levelPatchesOf = ({
+  usedLevels,
+  levelsByList,
+  placements,
+  standsFor,
+}: PatchOptions): TemplatePlanNumberingPatch[] => {
+  const patches: TemplatePlanNumberingPatch[] = [];
+  for (const [key, level] of usedLevels) {
+    const format = levelsByList
+      .get(level.abstractNumId)
+      ?.find(({ ilvl }) => ilvl === level.ilvl);
+    const onLevel = placements.filter(
+      (placement) =>
+        placement.numbered &&
+        placement.level !== null &&
+        levelKey(placement.level) === key,
+    );
+    // A mark that is a character of a text face is that shape only in
+    // that face: a level made to print it is set in it.
+    const face = onLevel.find(
+      (placement) => placement.pattern?.font !== undefined,
+    )?.pattern?.font;
+    const indent = takenIndent(standsFor.get(key)?.indent, level.indent);
+    const stated = indent !== null && Object.keys(indent).length > 0;
+    // A level whose own paragraphs all kept their typed label is patched
+    // too: the levels below it print its counter in the format counted
+    // with here.
+    if (
+      format !== undefined &&
+      (format.numFmt !== level.numFmt ||
+        format.lvlText !== level.lvlText ||
+        format.legal === true ||
+        (onLevel.length > 0 && stated))
+    ) {
+      patches.push({
+        abstractNumId: level.abstractNumId,
+        ilvl: level.ilvl,
+        ...(format.numFmt === level.numFmt ? {} : { numFmt: format.numFmt }),
+        ...(format.lvlText === level.lvlText
+          ? {}
+          : { lvlText: format.lvlText }),
+        ...(face === undefined || format.lvlText === level.lvlText
+          ? {}
+          : { font: face }),
+        ...(stated ? { indent } : {}),
+        ...(format.legal === true ? { isLgl: true } : {}),
+      });
+    }
+  }
+  return patches;
 };
 
 /** The source lists kept: only when the source's numbering is kept. */
@@ -554,7 +621,7 @@ const countLists = ({
       mode === "keepSource" &&
       (format === undefined ||
         // A number typed with blanks between its parts is printed closed up.
-        renderLabel(format.lvlText, next, levels) !==
+        renderLabel(format.lvlText, next, levels, format.legal === true) !==
           (placement.sourceLabel === null
             ? null
             : closeNumberParts(placement.sourceLabel)))
@@ -615,7 +682,7 @@ export const plannedLabelOf = (
   const format = levels?.find(({ ilvl }) => ilvl === level?.ilvl);
   return levels === undefined || format === undefined
     ? null
-    : renderLabel(format.lvlText, counters, levels);
+    : renderLabel(format.lvlText, counters, levels, format.legal === true);
 };
 
 type Numbered = {
@@ -681,9 +748,15 @@ export const numberPlacements = ({
   const levelsByList = new Map<number, ListLevelFormat[]>();
   for (const [key, level] of usedLevels) {
     const pattern = chosen.get(key);
-    const { numFmt, lvlText } =
+    const { numFmt, lvlText, legal } =
       pattern === undefined ? level : formatAt(pattern, level.ilvl);
-    const format = { ilvl: level.ilvl, start: level.start, numFmt, lvlText };
+    const format = {
+      ilvl: level.ilvl,
+      start: level.start,
+      numFmt,
+      lvlText,
+      ...(legal === true ? { legal } : {}),
+    };
     const levels = levelsByList.get(level.abstractNumId);
     if (levels === undefined) {
       levelsByList.set(level.abstractNumId, [format]);
@@ -701,51 +774,12 @@ export const numberPlacements = ({
 
   const sourceLists = sourceListsOf(mode, placements, sourceOptions);
 
-  const patches: TemplatePlanNumberingPatch[] = [];
-  for (const [key, level] of usedLevels) {
-    const format = levelsByList
-      .get(level.abstractNumId)
-      ?.find(({ ilvl }) => ilvl === level.ilvl);
-    const used = placements.some(
-      (placement) =>
-        placement.numbered &&
-        placement.level !== null &&
-        levelKey(placement.level) === key,
-    );
-    // A mark that is a character of a text face is that shape only in
-    // that face: a level made to print it is set in it.
-    const face = placements.find(
-      (placement) =>
-        placement.numbered &&
-        placement.level !== null &&
-        levelKey(placement.level) === key &&
-        placement.pattern?.font !== undefined,
-    )?.pattern?.font;
-    const indent = takenIndent(standsFor.get(key)?.indent, level.indent);
-    const stated = indent !== null && Object.keys(indent).length > 0;
-    // A level whose own paragraphs all kept their typed label is patched
-    // too: the levels below it print its counter in the format counted
-    // with here.
-    if (
-      format !== undefined &&
-      (format.numFmt !== level.numFmt ||
-        format.lvlText !== level.lvlText ||
-        (used && stated))
-    ) {
-      patches.push({
-        abstractNumId: level.abstractNumId,
-        ilvl: level.ilvl,
-        ...(format.numFmt === level.numFmt ? {} : { numFmt: format.numFmt }),
-        ...(format.lvlText === level.lvlText
-          ? {}
-          : { lvlText: format.lvlText }),
-        ...(face === undefined || format.lvlText === level.lvlText
-          ? {}
-          : { font: face }),
-        ...(stated ? { indent } : {}),
-      });
-    }
-  }
+  const patches = levelPatchesOf({
+    usedLevels,
+    levelsByList,
+    placements,
+    standsFor,
+  });
   return { patches, levelsByList, sourceLists };
 };
 

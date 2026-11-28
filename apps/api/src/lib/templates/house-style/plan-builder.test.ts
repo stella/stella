@@ -15,6 +15,7 @@ import {
   englishAgreement,
   germanContract,
   inColumns,
+  leveled,
   manifestOf,
   numbered,
 } from "@/api/lib/templates/house-style/manifest.test-helpers";
@@ -4332,5 +4333,128 @@ describe("buildTemplatePlan, list items in a table cell", () => {
           items.some(({ id }) => id === blockId),
       ),
     ).toBe(true);
+  });
+});
+
+describe("buildTemplatePlan, labels printed by the source's level text", () => {
+  const article = (label: string, title: string) =>
+    leveled(label, title, { ilvl: 0, lvlText: "%1.", numFmt: "upperRoman" });
+
+  test("a clause in legal numbering under a roman article keeps its number on a legal level", () => {
+    const clause = (label: string, text: string) =>
+      leveled(label, text, {
+        ilvl: 1,
+        lvlText: "%1.%2",
+        numFmt: "decimal",
+        legal: true,
+      });
+    const manifest = manifestOf([
+      "SMLOUVA",
+      article("I.", "Úvodní ustanovení"),
+      clause("1.1", "Strany se dohodly na tomto znění smlouvy o dílo."),
+      clause("1.2", "Smlouva se řídí právním řádem České republiky a zákony."),
+      article("II.", "Předmět smlouvy"),
+      clause("2.1", "Zhotovitel se zavazuje provést dílo podle této smlouvy."),
+    ]);
+    const { plan, note, labelsNotKept } = build(manifest);
+    for (const start of ["Strany", "Smlouva se", "Zhotovitel"]) {
+      expect(itemOf(plan, manifest, start)?.numbering).not.toBeNull();
+    }
+    expect(plan.numberingPatches).toContainEqual(
+      expect.objectContaining({ lvlText: "%1.%2", isLgl: true }),
+    );
+    expect(note.counts.labelsConvertedToText).toBe(0);
+    expect(labelsNotKept).toEqual([]);
+  });
+
+  test("a label that prints the counters above its own is read through its level text", () => {
+    const clause = (label: string, text: string) =>
+      leveled(label, text, { ilvl: 1, lvlText: "%1. %2)", numFmt: "decimal" });
+    const letter = (label: string, text: string) =>
+      leveled(label, text, {
+        ilvl: 3,
+        lvlText: "%1. %2) %4)",
+        numFmt: "lowerLetter",
+      });
+    const manifest = manifestOf([
+      "SMLOUVA",
+      article("I.", "Definice"),
+      clause("I. 1)", "Pro účely této smlouvy mají pojmy tento význam:"),
+      letter(
+        "I. 1) a)",
+        "dílem se rozumí stavba podle projektové dokumentace;",
+      ),
+      letter("I. 1) b)", "stavbou se rozumí budova a všechny její součásti."),
+      article("II.", "Předmět smlouvy"),
+      clause(
+        "II. 1)",
+        "Příkazník se zavazuje vykonávat technický dozor stavby.",
+      ),
+    ]);
+    const { plan, note, labelsNotKept } = build(manifest);
+    for (const start of ["Pro účely", "dílem", "stavbou", "Příkazník"]) {
+      expect(itemOf(plan, manifest, start)).not.toHaveProperty("labelAsText");
+      expect(itemOf(plan, manifest, start)?.numbering).not.toBeNull();
+    }
+    const patched = (plan.numberingPatches ?? []).map(({ lvlText }) => lvlText);
+    expect(patched).toContain("%1. %2)");
+    expect(patched.some((text) => /^%1\. %\d\) %\d\)$/u.test(text ?? ""))).toBe(
+      true,
+    );
+    expect(note.counts.labelsConvertedToText).toBe(0);
+    expect(labelsNotKept).toEqual([]);
+  });
+
+  test("a number field of the source that shows another number than its target's is noted", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      article("I.", "Úvodní ustanovení"),
+      leveled("1.", "Strany se dohodly na tomto znění smlouvy o dílo.", {
+        ilvl: 1,
+        lvlText: "%2.",
+        numFmt: "decimal",
+      }),
+      leveled("2.", "Smlouva se řídí právním řádem České republiky.", {
+        ilvl: 1,
+        lvlText: "%2.",
+        numFmt: "decimal",
+      }),
+      "Podle odstavce 3 a odstavce 2 platí totéž.",
+    ]);
+    const citing = manifest.blocks.at(-1);
+    if (citing === undefined) {
+      throw new Error("fixture");
+    }
+    const at = (shown: string) => citing.text.indexOf(shown);
+    citing.crossReferences = [
+      {
+        start: at("3"),
+        end: at("3") + 1,
+        instruction: String.raw` REF _Ref2 \n \h `,
+        bookmark: "_Ref2",
+        targetBlockId: "p3",
+        targetWhole: true,
+      },
+      {
+        start: at("2 platí"),
+        end: at("2 platí") + 1,
+        instruction: String.raw` REF _Ref2 \n \h `,
+        bookmark: "_Ref2",
+        targetBlockId: "p3",
+        targetWhole: true,
+      },
+    ];
+    const { note } = build(manifest);
+    expect(note.items.filter(({ kind }) => kind === "referenceStale")).toEqual([
+      {
+        kind: "referenceStale",
+        blockId: citing.id,
+        start: at("3"),
+        end: at("3") + 1,
+        targetBlockId: "p3",
+        shown: "3",
+        current: "2",
+      },
+    ]);
   });
 });

@@ -142,10 +142,23 @@ export const isRunningText = (text: string): boolean => {
   const trimmed = text.replace(/^[\s:–—.-]+/u, "").trim();
   return (
     trimmed.length > HEADING_TITLE_MAX ||
-    (SENTENCE_END.test(trimmed) &&
+    (SENTENCE_END.test(sentenceOf(trimmed)) &&
       trimmed.split(/\s+/u).length >= RUNNING_WORDS_MIN)
   );
 };
+
+/** Short bracketed choices a model sets behind its sentence (`[and/or]`). */
+const TRAILING_CHOICES = /(?:[ \u00A0]*\[[^[\].;:]{0,40}\])+$/u;
+/** Brackets and quotes that close behind a sentence's last mark. */
+const CLOSING_MARKS = /[\])"”’]+$/u;
+
+/**
+ * A text as far as its sentence goes: without the short bracketed choices
+ * a model sets behind it, and without the brackets and quotes that close
+ * behind its last mark (`… attached to this letter.] [and/or]`).
+ */
+const sentenceOf = (text: string): string =>
+  text.replace(TRAILING_CHOICES, "").replace(CLOSING_MARKS, "");
 
 type LabelOrigin = "auto" | "manual" | "field";
 
@@ -162,13 +175,56 @@ type RawLabel = {
 
 const hasDesignator = (label: string): boolean => /[\p{L}\p{N}]/u.test(label);
 
+/**
+ * The part of an automatic label its own level prints, where the level's
+ * text puts the counters of the levels above in front of its own (`I. 1) a)`
+ * from `%1. %2) %4)` is `a)`): the own counter with the bracket in front of
+ * it and what follows it. Null when the level's text is unknown, names no
+ * other level, or the label does not end as the text does.
+ */
+export const ownLabelPartOf = (
+  { numbering }: DocxBlock,
+  label: string,
+): string | null => {
+  const lvlText = numbering?.lvlText;
+  if (lvlText === undefined || numbering === null) {
+    return null;
+  }
+  const own = `%${String(numbering.ilvl + 1)}`;
+  const at = lvlText.lastIndexOf(own);
+  const after = lvlText.slice(at + own.length);
+  const before = lvlText.slice(0, at);
+  if (at === -1 || /%\d/u.test(after) || !/%\d/u.test(before)) {
+    return null;
+  }
+  const open = before.endsWith("(") ? "(" : "";
+  if (!label.endsWith(after)) {
+    return null;
+  }
+  const counter = /[\p{L}\p{N}]+$/u.exec(
+    label.slice(0, label.length - after.length),
+  );
+  if (counter === null) {
+    return null;
+  }
+  const part = `${open}${counter[0]}${after}`;
+  return label.endsWith(part) ? part : null;
+};
+
 const readAutoLabel = (block: DocxBlock, label: string): RawLabel | null => {
   const trimmed = label.trim();
   if (!hasDesignator(trimmed)) {
     return null;
   }
-  const shape = parseLabelShape(trimmed);
-  if (shape === null || shape.length !== trimmed.length) {
+  const whole = parseLabelShape(trimmed);
+  // A label that shows the counters above its own (`I. 1) a)`) is read by
+  // the part its own level prints.
+  const own =
+    whole !== null && whole.length === trimmed.length
+      ? null
+      : ownLabelPartOf(block, trimmed);
+  const shape = own === null ? whole : parseLabelShape(own);
+  if (shape === null || shape.length !== (own ?? trimmed).length) {
     return null;
   }
   return {

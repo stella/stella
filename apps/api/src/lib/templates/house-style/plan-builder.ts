@@ -54,11 +54,13 @@ import {
   levelsInLanguage,
   numberPlacements,
   ordinalOf,
+  OWN_COUNTER,
   patternOf,
   plannedLabelOf,
 } from "@/api/lib/templates/house-style/plan-numbering";
 import type {
   LabelKeptReason,
+  LabelPattern,
   ListLevelFormat,
   NumberingMode,
   OutlineLevels,
@@ -173,6 +175,18 @@ export type FormattingNoteItem =
       citedBlockId: string;
       suggestedBlockId: string;
       confidence: number;
+    }
+  /** A number field of the source shows another number than the
+   *  paragraph it points at has: its text was written before that paragraph
+   *  was renumbered and the field was not updated. */
+  | {
+      kind: "referenceStale";
+      blockId: string;
+      start: number;
+      end: number;
+      targetBlockId: string;
+      shown: string;
+      current: string;
     }
   /** A typed label stays text; the paragraph joins no list. */
   | { kind: "labelKeptAsText"; blockId: string; reason: LabelKeptReason }
@@ -502,6 +516,9 @@ type Context = {
   /** The source's list definitions the output keeps as the source's own
    *  lists, once the paragraphs are numbered. */
   sourceLists: ReadonlySet<number>;
+  /** By source list definition and level: the template level the paragraph
+   *  placed last at that level is numbered on, as placed. */
+  sourceLevels: Map<number, Map<number, ProfileListLevel | null>>;
   topLevel: readonly DocxBlock[];
   /** The source's sections; empty when the manifest does not report them. */
   sections: readonly DocxSection[];
@@ -731,7 +748,123 @@ const targetsOf = (
   };
 };
 
+/**
+ * A clause's pattern that prints its article's counter in arabic numerals
+ * where the source's level does so (legal numbering: `1.1` under article
+ * `I.`): the level the clause is counted on does the same.
+ */
+const legalOf = (
+  pattern: LabelPattern | null,
+  entry: LabelEntry,
+  block: DocxBlock,
+  { blockById }: Context,
+): LabelPattern | null => {
+  // Only where it shows: under an article that prints a numeral of its own
+  // (`I.`); under `1.` the level reads the same either way.
+  const article =
+    entry.articleBlockId === null
+      ? undefined
+      : blockById.get(entry.articleBlockId);
+  const romanArticle = !/\d/u.test(article?.label ?? "1");
+  return pattern !== null &&
+    entry.origin === "auto" &&
+    block.numbering?.legal === true &&
+    pattern.numFmt === "decimal" &&
+    romanArticle
+    ? { ...pattern, legal: true }
+    : pattern;
+};
+
+/**
+ * The pattern of an automatic label whose level's text prints the counters
+ * of the levels above its own (`%1. %2) %4)` printing `I. 1) a)`): each of
+ * those counters is the one of the template level the paragraph above at
+ * that source level is placed on, and its own counter is the level it is
+ * counted on. Null when one of them is placed on no level or on another
+ * list than the paragraph's own level.
+ */
+const levelTextPatternOf = (
+  { sourceLevels }: Context,
+  block: DocxBlock,
+  ownLevel: ProfileListLevel | null,
+): LabelPattern | null => {
+  const numbering = block.numbering;
+  const lvlText = numbering?.lvlText;
+  const numFmt = numbering?.numFmt;
+  if (
+    numbering === null ||
+    lvlText === undefined ||
+    numFmt === undefined ||
+    ownLevel === null ||
+    lvlText.includes(OWN_COUNTER)
+  ) {
+    return null;
+  }
+  const above = sourceLevels.get(numbering.abstractNumId);
+  let failed = false;
+  const text = lvlText.replace(/%(\d)/gu, (_whole, digit: string) => {
+    const sourceIlvl = Number(digit) - 1;
+    if (sourceIlvl === numbering.ilvl) {
+      return OWN_COUNTER;
+    }
+    const level = above?.get(sourceIlvl) ?? null;
+    if (level === null || level.abstractNumId !== ownLevel.abstractNumId) {
+      failed = true;
+      return "";
+    }
+    return `%${String(level.ilvl + 1)}`;
+  });
+  if (failed || !text.includes(OWN_COUNTER)) {
+    return null;
+  }
+  return {
+    numFmt,
+    lvlText: text,
+    ...(numbering.legal === true ? { legal: true } : {}),
+  };
+};
+
+/** A level text with its counters left out: the words and marks it prints. */
+const wordsOf = ({ lvlText }: LabelPattern): string =>
+  lvlText.replaceAll(/%\d/gu, "").replaceAll(OWN_COUNTER, "");
+
+/**
+ * The pattern read off the label, unless the level's text says the same
+ * words over the counters of other levels than the reader assumed (a
+ * clause `I.1.` whose `I.` heads a part on a level of its own): the paragraph
+ * above names the level it is placed on.
+ */
+const chosenPattern = (
+  read: LabelPattern | null,
+  stated: LabelPattern | null,
+): LabelPattern | null => {
+  if (read === null || stated === null) {
+    return read ?? stated;
+  }
+  return read.numFmt === stated.numFmt &&
+    read.lvlText !== stated.lvlText &&
+    wordsOf(read) === wordsOf(stated)
+    ? stated
+    : read;
+};
+
 const placementOf = (
+  context: Context,
+  block: DocxBlock,
+  role: HouseStyleRole,
+): Placement => {
+  const placement = placementAt(context, block, role);
+  const numbering = block.numbering;
+  if (numbering !== null && (block.label ?? "").trim() !== "") {
+    const levels =
+      context.sourceLevels.get(numbering.abstractNumId) ?? new Map();
+    levels.set(numbering.ilvl, placement.numbered ? placement.level : null);
+    context.sourceLevels.set(numbering.abstractNumId, levels);
+  }
+  return placement;
+};
+
+const placementAt = (
   context: Context,
   block: DocxBlock,
   role: HouseStyleRole,
@@ -798,7 +931,15 @@ const placementOf = (
     placement.keptReason = typedKept;
     return placement;
   }
-  placement.pattern = patternOf(entry, sourceLabel, outline);
+  // An automatic label the reader cannot restate (`I. 1) a)`) is printed
+  // by its level's text: read through it, the counters above its own are
+  // those of the levels the paragraphs above it are placed on.
+  placement.pattern = chosenPattern(
+    legalOf(patternOf(entry, sourceLabel, outline), entry, block, context),
+    entry.origin === "auto"
+      ? levelTextPatternOf(context, block, ownLevel)
+      : null,
+  );
   placement.ordinal =
     placement.pattern === null
       ? null
@@ -1670,8 +1811,11 @@ const showsLabel = ({ entry, block, numbered }: Placement): boolean =>
   (entry !== null && numbered) || shownLabelOf(block) !== null;
 
 /** Whether a line can have others set under its text. */
-const leadsLines = ({ role, pattern }: Placement): boolean =>
-  ITEM_ROLES.has(role) || pattern?.numFmt === "bullet";
+const leadsLines = ({ role, pattern, block, entry }: Placement): boolean =>
+  ITEM_ROLES.has(role) ||
+  pattern?.numFmt === "bullet" ||
+  // Running text numbered like an article reads as the clause it is.
+  (role === "articleHeading" && runsOn(block, entry));
 
 /**
  * Whether the source sets an unnumbered line under the text of the item in
@@ -3784,6 +3928,108 @@ const carryCrossReferences = ({
   return { references, spans };
 };
 
+/** A number as a field shows it: without its trailing periods. */
+const fieldNumberOf = (label: string): string =>
+  label.trim().replace(/\.+$/u, "");
+
+/**
+ * Notes the number fields of the source whose text is not the number of
+ * the paragraph they point at, as `\n` (the paragraph's own number) or `\w`
+ * (in full context: the numbers of the levels above that its own does not
+ * print, in front) would show it. Only plain numbers are judged: a label
+ * with words in it (`Článek 3`) or a field's text with blanks is left alone.
+ */
+const noteStaleReferences = ({ blocks, blockById, items }: Context): void => {
+  const context = fullContextsOf(blocks);
+  for (const block of blocks) {
+    for (const reference of block.crossReferences ?? []) {
+      const stale = staleReferenceOf(block, reference, blockById, context);
+      if (stale !== null) {
+        items.push(stale);
+      }
+    }
+  }
+};
+
+/** The number in full context of each numbered paragraph, by block id. */
+const fullContextsOf = (blocks: readonly DocxBlock[]): Map<string, string> => {
+  const context = new Map<string, string>();
+  const last = new Map<string, DocxBlock>();
+  for (const block of blocks) {
+    const { numbering } = block;
+    const label = (block.label ?? "").trim();
+    if (numbering === null || label === "" || numbering.bullet === true) {
+      continue;
+    }
+    const parent =
+      numbering.ilvl > 0
+        ? last.get(
+            `${String(numbering.abstractNumId)}:${String(numbering.ilvl - 1)}`,
+          )
+        : undefined;
+    const printsParent =
+      numbering.lvlText?.includes(`%${String(numbering.ilvl)}`) === true;
+    const above =
+      parent === undefined || printsParent
+        ? ""
+        : (context.get(parent.id) ?? "");
+    context.set(block.id, `${above}${fieldNumberOf(label)}`);
+    last.set(
+      `${String(numbering.abstractNumId)}:${String(numbering.ilvl)}`,
+      block,
+    );
+  }
+  return context;
+};
+
+/** The note for one field of the source whose number is stale, or null. */
+const staleReferenceOf = (
+  block: DocxBlock,
+  { start, end, instruction, targetBlockId }: CrossReference,
+  blockById: ReadonlyMap<string, DocxBlock>,
+  context: ReadonlyMap<string, string>,
+): Extract<FormattingNoteItem, { kind: "referenceStale" }> | null => {
+  const target =
+    targetBlockId === null ? undefined : blockById.get(targetBlockId);
+  const label = (target?.label ?? "").trim();
+  // Direction marks and the like show nothing.
+  const shown = block.text
+    .slice(start, end)
+    .replaceAll(/\p{Cf}/gu, "")
+    .trim();
+  if (
+    target === undefined ||
+    targetBlockId === null ||
+    !/\\[nw]\b/u.test(instruction) ||
+    label === "" ||
+    /\s/u.test(label) ||
+    shown === "" ||
+    /\s/u.test(shown)
+  ) {
+    return null;
+  }
+  const own = fieldNumberOf(label);
+  const full = context.get(target.id) ?? own;
+  // A field that shows the paragraph's own number behind others may show a
+  // context this reading does not know (a list that counts across parts):
+  // only another own number is judged.
+  const endsWithOwn =
+    shown.endsWith(own) &&
+    (!/^[\p{L}\p{N}]/u.test(own) ||
+      !/[\p{L}\p{N}]/u.test(shown.at(-own.length - 1) ?? ""));
+  return shown === own || shown === full || endsWithOwn
+    ? null
+    : {
+        kind: "referenceStale",
+        blockId: block.id,
+        start,
+        end,
+        targetBlockId,
+        shown,
+        current: /\\w\b/u.test(instruction) ? full : own,
+      };
+};
+
 /** References as fields where a field shows what the source prints, and
  *  highlights where an internal reference has no target. */
 const markReferences = ({
@@ -4327,6 +4573,7 @@ export const buildTemplatePlan = ({
     headerFill: null,
     rejectedNumbers: rejectedNumbersOf(manifest, rejectedView),
     sourceLists: new Set(),
+    sourceLevels: new Map(),
   };
   takeHeaderLines(context);
 
@@ -4371,6 +4618,7 @@ export const buildTemplatePlan = ({
     labelRequests(context, body),
   );
   noteReadings(context, placed, references, suspicions);
+  noteStaleReferences(context);
   noteTrackedChanges(context, placed, manifest, trackedChangesStated);
 
   const health = profile.health ?? NO_HEALTH;
