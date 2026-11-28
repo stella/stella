@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -13,6 +13,7 @@ import type {
   SelectPropertyOption,
   WorkspaceProperty,
 } from "@/lib/types";
+import { useResourceMutation } from "@/lib/workspace-realtime";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 
 type CreatePropertyDependency = {
@@ -175,9 +176,9 @@ type UpdatePropertyVars = {
 
 export const useUpdateProperty = () => {
   const analytics = useAnalytics();
-  const queryClient = useQueryClient();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: { mutation: "updateProperty" },
     mutationFn: async ({
       workspaceId,
       propertyId,
@@ -208,11 +209,6 @@ export const useUpdateProperty = () => {
       if (response.error) {
         throw toAPIError(response.error);
       }
-    },
-    onSuccess: async (_data, { workspaceId }) => {
-      await queryClient.invalidateQueries({
-        queryKey: propertiesKeys.all(workspaceId),
-      });
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -262,7 +258,12 @@ export const suggestPropertyPrompt = async ({
 export const useSuggestPrompt = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: {
+      type: "none",
+      reason:
+        "Drafts a column extraction prompt without storing or changing cached resources.",
+    },
     mutationFn: suggestPropertyPrompt,
     onError: (error) => {
       analytics.captureError(error, {
@@ -281,9 +282,9 @@ type DeletePropertyVars = {
 
 export const useDeleteProperty = () => {
   const analytics = useAnalytics();
-  const queryClient = useQueryClient();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: { mutation: "deleteProperty" },
     mutationFn: async ({ workspaceId, propertyId }: DeletePropertyVars) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -293,11 +294,6 @@ export const useDeleteProperty = () => {
       if (response.error) {
         throw toAPIError(response.error);
       }
-    },
-    onSuccess: async (_data, { workspaceId }) => {
-      await queryClient.invalidateQueries({
-        queryKey: propertiesKeys.all(workspaceId),
-      });
     },
     onError: (error) => {
       analytics.captureError(error, {

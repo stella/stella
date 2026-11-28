@@ -21,7 +21,10 @@ import { replaceCachedFileName } from "@/lib/files/queries";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
-import { resourceMutation } from "@/lib/workspace-realtime";
+import {
+  resourceMutation,
+  useResourceMutation,
+} from "@/lib/workspace-realtime";
 import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
 
 type CreateEntitiesVars = {
@@ -105,27 +108,19 @@ type MoveEntityVars = {
 
 export const useMoveEntity = () => {
   const analytics = useAnalytics();
-  const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: resourceMutation({
-      mutation: "moveEntity",
-      queryClient,
-      mutationFn: async ({
-        workspaceId,
-        entityId,
-        parentId,
-      }: MoveEntityVars) => {
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .move.patch({
-            entityId: toSafeId<"entity">(entityId),
-            parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-          });
+  return useResourceMutation({
+    resource: { mutation: "moveEntity" },
+    mutationFn: async ({ workspaceId, entityId, parentId }: MoveEntityVars) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .move.patch({
+          entityId: toSafeId<"entity">(entityId),
+          parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+        });
 
-        return unwrapApiResponse(response);
-      },
-    }),
+      return unwrapApiResponse(response);
+    },
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useMoveEntity:failure",
