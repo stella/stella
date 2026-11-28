@@ -4315,6 +4315,11 @@ export const buildTemplatePlan = ({
     ...(context.keptSections.last === undefined
       ? {}
       : { lastSection: context.keptSections.last }),
+    // A template whose last section is not its body's (an annex, a
+    // signature page) gives the output the body's page and headers.
+    ...(context.profile.bodySection === undefined
+      ? {}
+      : { bodySection: context.profile.bodySection }),
     // The template's headers and footers stay; the source's (a notice, a
     // draft line, a logo, a page number) are added to them.
     sourceHeaders: "keep",
