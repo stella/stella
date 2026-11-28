@@ -2,9 +2,6 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as slimdom from "slimdom";
 
-import { assertProperty } from "@stll/property-testing";
-import { numPattern, refPattern } from "@stll/template-conditions";
-
 import {
   collectValidNumIds,
   createDirectiveProcessingContext,
@@ -16,12 +13,15 @@ import {
   readConditionRawValues,
   resolvePath,
   scanBlockDirectives,
-} from "./block-directives";
-import { processInlineConditions } from "./inline-conditions";
+} from "@stll/docx-engine/block-directives";
+import { processInlineConditions } from "@stll/docx-engine/inline-conditions";
+import { paragraphText, W_NS } from "@stll/docx-engine/ooxml";
+import { patchParagraphPlaceholders } from "@stll/docx-engine/rich-patch";
+import type { FieldMeta, TemplateData } from "@stll/docx-engine/types";
+import { assertProperty } from "@stll/property-testing";
+import { numPattern, refPattern } from "@stll/template-conditions";
+
 import { applyManifestFillSteps } from "./manifest-fill-steps";
-import { paragraphText, W_NS } from "./ooxml";
-import { patchParagraphPlaceholders } from "./rich-patch";
-import type { FieldMeta, TemplateData } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────
 

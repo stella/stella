@@ -10,10 +10,9 @@
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
+import { loadDocx } from "@stll/docx-utils";
 import { scanMarkers } from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
-
-import { loadDocx } from "@/api/lib/docx-archive";
 
 import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";

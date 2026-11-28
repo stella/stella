@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ResolvedField } from "@/api/lib/docx/types";
+import type { ResolvedField } from "@stll/docx-engine/types";
 
 import {
   buildPrefillTargets,

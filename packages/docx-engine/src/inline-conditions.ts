@@ -73,8 +73,6 @@ import {
 } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";
 
-import { isRecord } from "@/api/lib/type-guards";
-
 import {
   collectNumKeysInText,
   createDirectiveProcessingContext,
@@ -85,6 +83,7 @@ import {
   rewriteEachPlaceholdersInText,
   scopeIterationNumberingInText,
 } from "./block-directives";
+import { isRecord } from "./internal-helpers";
 import { W_NS } from "./ooxml";
 import {
   expandInlineEachRuns,
@@ -311,8 +310,8 @@ export const parseInlineConditions = (text: string): InlineParse => {
   if (unclosed) {
     return fail(
       unclosed.kind === "if"
-        ? "Unclosed inline {% if %} — the {% endif %} must be in the same paragraph"
-        : "Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph",
+        ? "Unclosed inline {% if %}: the {% endif %} must be in the same paragraph"
+        : "Unclosed inline {% for %}: the {% endfor %} must be in the same paragraph",
       unclosed.raw,
     );
   }

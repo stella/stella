@@ -24,7 +24,7 @@
 
 import { resolvePath } from "@stll/template-conditions";
 
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord } from "./internal-helpers";
 
 /** Outcome of {@link mapRepeatablePath}: whether the path was a repeatable
  *  (array-container) path and was iterated. `false` means the caller should

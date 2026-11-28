@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import type { TemplateManifest } from "@stll/docx-engine/types";
+
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -21,7 +23,6 @@ import {
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
-import type { TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";

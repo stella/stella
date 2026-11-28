@@ -10,8 +10,7 @@
  * is the only caller that should assemble a manifest from these.
  */
 
-import { arrayOrEmpty } from "@/api/lib/array";
-
+import { arrayOrEmpty } from "./internal-helpers";
 import type {
   DiscoveredField,
   DiscoveredTemplate,

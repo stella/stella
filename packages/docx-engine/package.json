@@ -1,0 +1,144 @@
+{
+  "name": "@stll/docx-engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure OOXML/DOCX template processing engine: placeholders, directives, conditions, manifests, and rich patching",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./ai-field-error-types": {
+      "types": "./src/ai-field-error-types.ts",
+      "import": "./src/ai-field-error-types.ts"
+    },
+    "./ai-visible-values": {
+      "types": "./src/ai-visible-values.ts",
+      "import": "./src/ai-visible-values.ts"
+    },
+    "./array-bounds": {
+      "types": "./src/array-bounds.ts",
+      "import": "./src/array-bounds.ts"
+    },
+    "./binding-sources": {
+      "types": "./src/binding-sources.ts",
+      "import": "./src/binding-sources.ts"
+    },
+    "./block-directives": {
+      "types": "./src/block-directives.ts",
+      "import": "./src/block-directives.ts"
+    },
+    "./clause-slots": {
+      "types": "./src/clause-slots.ts",
+      "import": "./src/clause-slots.ts"
+    },
+    "./date-fields": {
+      "types": "./src/date-fields.ts",
+      "import": "./src/date-fields.ts"
+    },
+    "./dependent-fields": {
+      "types": "./src/dependent-fields.ts",
+      "import": "./src/dependent-fields.ts"
+    },
+    "./diff-paragraphs": {
+      "types": "./src/diff-paragraphs.ts",
+      "import": "./src/diff-paragraphs.ts"
+    },
+    "./discover-placeholders": {
+      "types": "./src/discover-placeholders.ts",
+      "import": "./src/discover-placeholders.ts"
+    },
+    "./field-filters": {
+      "types": "./src/field-filters.ts",
+      "import": "./src/field-filters.ts"
+    },
+    "./formula-fields": {
+      "types": "./src/formula-fields.ts",
+      "import": "./src/formula-fields.ts"
+    },
+    "./inline-conditions": {
+      "types": "./src/inline-conditions.ts",
+      "import": "./src/inline-conditions.ts"
+    },
+    "./manifest-conditions": {
+      "types": "./src/manifest-conditions.ts",
+      "import": "./src/manifest-conditions.ts"
+    },
+    "./numbering": {
+      "types": "./src/numbering.ts",
+      "import": "./src/numbering.ts"
+    },
+    "./ooxml": {
+      "types": "./src/ooxml.ts",
+      "import": "./src/ooxml.ts"
+    },
+    "./repeatable-paths": {
+      "types": "./src/repeatable-paths.ts",
+      "import": "./src/repeatable-paths.ts"
+    },
+    "./resolve-ai-conditions": {
+      "types": "./src/resolve-ai-conditions.ts",
+      "import": "./src/resolve-ai-conditions.ts"
+    },
+    "./resolved-values": {
+      "types": "./src/resolved-values.ts",
+      "import": "./src/resolved-values.ts"
+    },
+    "./rich-patch": {
+      "types": "./src/rich-patch.ts",
+      "import": "./src/rich-patch.ts"
+    },
+    "./row-block-markers": {
+      "types": "./src/row-block-markers.ts",
+      "import": "./src/row-block-markers.ts"
+    },
+    "./strip-custom-xml-manifest": {
+      "types": "./src/strip-custom-xml-manifest.ts",
+      "import": "./src/strip-custom-xml-manifest.ts"
+    },
+    "./template-manifest": {
+      "types": "./src/template-manifest.ts",
+      "import": "./src/template-manifest.ts"
+    },
+    "./template-warnings": {
+      "types": "./src/template-warnings.ts",
+      "import": "./src/template-warnings.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "import": "./src/types.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/docx-engine",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/docx-engine"
+  },
+  "dependencies": {
+    "@stll/agent-input": "workspace:*",
+    "@stll/api-contract": "workspace:*",
+    "@stll/collation": "workspace:*",
+    "@stll/concurrency": "workspace:*",
+    "@stll/docx-core": "catalog:",
+    "@stll/docx-utils": "workspace:*",
+    "@stll/folio-core": "catalog:",
+    "@stll/template-conditions": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
+    "better-result": "catalog:",
+    "diff": "catalog:",
+    "slimdom": "^4.3.5",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/property-testing": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
+  }
+}

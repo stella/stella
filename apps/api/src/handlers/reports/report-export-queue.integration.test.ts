@@ -19,6 +19,7 @@ import {
 import { eq } from "drizzle-orm";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { member } from "@/api/db/auth-schema";
@@ -40,7 +41,6 @@ import { processReportExport } from "@/api/handlers/reports/report-export-queue"
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import * as chatRuntime from "@/api/lib/chat/tanstack-chat-runtime";
-import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import * as entityWriter from "@/api/lib/entities/create-from-buffer";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";

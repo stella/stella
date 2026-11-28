@@ -8,6 +8,9 @@
 import { panic } from "better-result";
 import { and, eq, inArray, or } from "drizzle-orm";
 
+import type { ClauseSlot } from "@stll/docx-engine/clause-slots";
+import type { ClauseProvenance } from "@stll/docx-engine/types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -15,9 +18,6 @@ import { clauseBodyToPlainText } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { LIMITS } from "@/api/lib/limits";
 import { isVariantDeleted } from "@/api/lib/template-clause-links";
-
-import type { ClauseSlot } from "./discover-clause-slots";
-import type { ClauseProvenance } from "./types";
 
 // ── Version parsing ──────────────────────────────────
 

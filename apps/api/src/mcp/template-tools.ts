@@ -4,6 +4,8 @@ import * as v from "valibot";
 
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
 import { displayNameSchema } from "@stll/api-contract/display-name";
+import { inlineBytesIgnoredWarning } from "@stll/docx-engine/template-warnings";
+import { CLAUSE_RESOLUTIONS, type FieldMeta } from "@stll/docx-engine/types";
 
 import { entities, templates } from "@/api/db/schema";
 import type {
@@ -44,8 +46,6 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
-import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
-import { CLAUSE_RESOLUTIONS, type FieldMeta } from "@/api/lib/docx/types";
 import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";

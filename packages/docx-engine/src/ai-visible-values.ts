@@ -1,7 +1,6 @@
 import { isSafeFieldPath } from "@stll/template-conditions";
 
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-
+import { isRecord, isUnknownArray } from "./internal-helpers";
 import type { FieldMeta } from "./types";
 
 type OmitSourceBoundValuesOptions = {

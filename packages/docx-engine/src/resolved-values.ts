@@ -7,8 +7,7 @@
  * step cannot invent a second key for the same path.
  */
 
-import { isRecord } from "@/api/lib/type-guards";
-
+import { isRecord } from "./internal-helpers";
 import type { RichPatchValue } from "./types";
 
 /** Replace the value at `path` where `resolvePath` found it: the exact flat

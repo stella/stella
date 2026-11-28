@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import type { FieldMeta } from "@stll/docx-engine/types";
+
 import {
   type AiFieldDraft,
   type AiFieldGenerator,
   resolveAiFields,
 } from "./resolve-ai-fields";
-import type { FieldMeta } from "./types";
 
 const drafted = (value: string): AiFieldDraft => ({ type: "drafted", value });
 

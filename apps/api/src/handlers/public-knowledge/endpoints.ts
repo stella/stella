@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { CLAUSE_RESOLUTIONS } from "@stll/docx-engine/types";
 import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 import type { GeneratedTemplatePack } from "@stll/template-packs/schema";
@@ -11,7 +12,6 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
-import { CLAUSE_RESOLUTIONS } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanFailedError,

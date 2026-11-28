@@ -85,6 +85,19 @@ import {
 import { isIcoShape as isRpoIcoShape } from "@stll/business-registries/rpo";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { validateVatFormat } from "@stll/business-registries/vies";
+import {
+  mapRepeatablePath,
+  readRowSubPath,
+  writeRowSubPath,
+} from "@stll/docx-engine/repeatable-paths";
+import { replaceResolvedValue } from "@stll/docx-engine/resolved-values";
+import type {
+  FieldLookup,
+  FieldMeta,
+  LookupRegistry,
+  RichPatchValue,
+  RichRun,
+} from "@stll/docx-engine/types";
 import { assertNever, resolvePath } from "@stll/template-conditions";
 import { parseIsoDateLocal } from "@stll/time";
 
@@ -98,20 +111,6 @@ import {
   executeRegistryLookup,
   NO_REGISTRY_WEB_SEARCH,
 } from "@/api/lib/business-registries/dispatch";
-
-import {
-  mapRepeatablePath,
-  readRowSubPath,
-  writeRowSubPath,
-} from "./repeatable-paths";
-import { replaceResolvedValue } from "./resolved-values";
-import type {
-  FieldLookup,
-  FieldMeta,
-  LookupRegistry,
-  RichPatchValue,
-  RichRun,
-} from "./types";
 
 true satisfies [
   Exclude<LookupRegistry, RegistryFormatSlug>,

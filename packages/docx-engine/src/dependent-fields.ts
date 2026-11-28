@@ -15,9 +15,7 @@
 
 import { resolvePath } from "@stll/template-conditions";
 
-import { arrayOrEmpty } from "@/api/lib/array";
-import { isRecord } from "@/api/lib/type-guards";
-
+import { arrayOrEmpty, isRecord } from "./internal-helpers";
 import { mapRepeatablePath, readRowSubPath } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 

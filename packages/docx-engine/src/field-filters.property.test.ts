@@ -24,8 +24,7 @@ import {
   MATTER_FIELDS,
   USER_FIELDS,
   WORKSPACE_CONTACT_ROLES,
-} from "@/api/lib/template-binding/binding-sources";
-
+} from "./binding-sources";
 import { fieldMetaFromFilters } from "./field-filters";
 import {
   DATE_FORMAT_STYLES,

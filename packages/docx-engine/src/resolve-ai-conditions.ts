@@ -21,9 +21,8 @@ import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-pro
 import { mapWithConcurrency } from "@stll/concurrency";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
-import { isRecord } from "@/api/lib/type-guards";
-
 import { omitSourceBoundValues } from "./ai-visible-values";
+import { isRecord } from "./internal-helpers";
 import { findRepeatableContainer } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 

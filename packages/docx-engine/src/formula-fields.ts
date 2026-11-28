@@ -23,8 +23,7 @@
 
 import { evaluateNumericExpression } from "@stll/template-conditions";
 
-import { isRecord } from "@/api/lib/type-guards";
-
+import { isRecord } from "./internal-helpers";
 import { mapRepeatablePath, writeRowSubPath } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 

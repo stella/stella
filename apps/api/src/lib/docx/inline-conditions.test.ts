@@ -2,20 +2,20 @@ import { describe, expect, test } from "bun:test";
 import * as slimdom from "slimdom";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import {
+  MAX_INLINE_NESTING,
+  parseInlineConditions,
+  processInlineConditions,
+} from "@stll/docx-engine/inline-conditions";
+import { paragraphText, W_NS } from "@stll/docx-engine/ooxml";
+import type { FieldMeta, TemplateData } from "@stll/docx-engine/types";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { adaptAiFields, type AiOccurrenceAdapter } from "./adapt-ai-fields";
-import {
-  MAX_INLINE_NESTING,
-  parseInlineConditions,
-  processInlineConditions,
-} from "./inline-conditions";
 import { applyManifestFillSteps } from "./manifest-fill-steps";
-import { paragraphText, W_NS } from "./ooxml";
 import { fillTemplate } from "./patch-template";
-import type { FieldMeta, TemplateData } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────
 

@@ -16,16 +16,15 @@ import {
   type RowScope,
 } from "@stll/template-conditions";
 
-import type { ClauseSlot } from "@/api/lib/docx/discover-clause-slots";
-import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
-import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   type FieldSource,
   fieldSourceSchema,
   fieldSourceToolInputSchema,
-} from "@/api/lib/template-binding/binding-sources";
+} from "./binding-sources";
+import type { ClauseSlot } from "./clause-slots";
+import type { TemplateWarning } from "./template-warnings";
 
-export type { FieldSource } from "@/api/lib/template-binding/binding-sources";
+export type { FieldSource } from "./binding-sources";
 export { DATE_FORMAT_STYLES };
 export type { FieldDateFormat };
 
@@ -50,13 +49,6 @@ export type RichRun = {
 };
 
 export type RichPatchValue = string | { paragraphs: { runs: RichRun[] }[] };
-
-export type FillTemplateResult = {
-  file: ScannedFile;
-  unmatchedPlaceholders: string[];
-  unusedValues: string[];
-  structureErrors: TemplateStructureError[];
-};
 
 // ── Mode (c): Tracked-changes editing ─────────────────────
 

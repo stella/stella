@@ -17,8 +17,7 @@ import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
 import type { ZipArchive } from "@stll/docx-core/zip";
-
-import { loadDocx } from "@/api/lib/docx-archive";
+import { loadDocx } from "@stll/docx-utils";
 
 const MANIFEST_NS = "urn:stella:template:v1";
 

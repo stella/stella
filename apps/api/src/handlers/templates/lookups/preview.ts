@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { LOOKUP_REGISTRIES } from "@stll/docx-engine/types";
+
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -12,7 +14,6 @@ import {
   lookupRegistryName,
   renderLookupOutput,
 } from "@/api/lib/docx/lookup-fields";
-import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   ACTION_COST_CALL_KIND,

@@ -12,6 +12,33 @@ import { panic, Result } from "better-result";
  */
 
 import { compareCodeUnit } from "@stll/collation";
+import { loopContext } from "@stll/docx-engine/block-directives";
+import { manifestNamedConditions } from "@stll/docx-engine/manifest-conditions";
+import {
+  type AiConditionDecider,
+  isAiConditionField,
+  resolveAiConditions,
+  type ResolvedAiCondition,
+} from "@stll/docx-engine/resolve-ai-conditions";
+import {
+  boundTemplateWarnings,
+  fieldOverlayWarnings,
+  type TemplateWarning,
+} from "@stll/docx-engine/template-warnings";
+import type {
+  ClauseProvenance,
+  DiscoveredField,
+  DiscoveredTemplate,
+  FieldDateFormat,
+  FieldMeta,
+  FieldSource,
+  FieldValidation,
+  InputType,
+  LookupRegistry,
+  TemplateData,
+  TemplateManifest,
+} from "@stll/docx-engine/types";
+import { isTemplateData } from "@stll/docx-engine/types";
 import { replaceOutputMarkers } from "@stll/template-conditions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -39,7 +66,6 @@ import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/lib/docx/adapt-ai-fields";
-import { loopContext } from "@/api/lib/docx/block-directives";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import {
@@ -51,7 +77,6 @@ import {
   type LookupOutcome,
   type LookupResolver,
 } from "@/api/lib/docx/lookup-fields";
-import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
 import {
   fillTemplate,
@@ -60,36 +85,11 @@ import {
 } from "@/api/lib/docx/patch-template";
 import type { ClauseSlotVisitor } from "@/api/lib/docx/patch-template";
 import {
-  type AiConditionDecider,
-  isAiConditionField,
-  resolveAiConditions,
-  type ResolvedAiCondition,
-} from "@/api/lib/docx/resolve-ai-conditions";
-import {
   type AiFieldError,
   type AiFieldGenerator,
   resolveAiFields,
 } from "@/api/lib/docx/resolve-ai-fields";
 import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
-import {
-  boundTemplateWarnings,
-  fieldOverlayWarnings,
-  type TemplateWarning,
-} from "@/api/lib/docx/template-warnings";
-import type {
-  ClauseProvenance,
-  DiscoveredField,
-  DiscoveredTemplate,
-  FieldDateFormat,
-  FieldMeta,
-  FieldSource,
-  FieldValidation,
-  InputType,
-  LookupRegistry,
-  TemplateData,
-  TemplateManifest,
-} from "@/api/lib/docx/types";
-import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
