@@ -5088,54 +5088,6 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/at-decision-regions.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/at-findok.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/at-ris-markup.property.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/at-ris-markup.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/at-ris-wrap.property.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/at-ris.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/br-tjdft-retention.property.test.ts": {
       "peakMb": 214,
       "baselineMb": 214,
@@ -5174,14 +5126,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/courtlistener/harvard-page-labels.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/handlers/case-law/ingestion/parsers/courtlistener/harvard-xml.test.ts": {
@@ -5272,46 +5216,6 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/courtlistener/usability.property.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/courtlistener/usability.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/courtlistener/validation-paragraphs.property.test.ts": {
-      "peakMb": 264,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/cz-isir.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/cz-ns-retention.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/cz-ns-sbirka.test.ts": {
       "peakMb": 244,
       "baselineMb": 193,
@@ -5320,52 +5224,12 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/cz-ns.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/cz-nss-retention.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/cz-nss.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/cz-patterns.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/cz-printed-text.test.ts": {
       "peakMb": 261,
       "baselineMb": 214,
       "source": {
         "runId": "44976310794",
         "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/cz-regional-retention.property.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/handlers/case-law/ingestion/parsers/cz-regional.test.ts": {
@@ -5384,80 +5248,8 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/cz-us-fixtures.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/cz-us-retention.property.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/cz-us.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/eu-ecj-court-html.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/eu-ecj-operative-formula.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/eu-ecj.test.ts": {
       "peakMb": 195,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/hu-bhgy.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/letter-spacing-fixtures.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/markup-residue.test.ts": {
-      "peakMb": 193,
       "baselineMb": 193,
       "source": {
         "runId": "44976310794",
@@ -5472,44 +5264,12 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/pdf-bands.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/pl-common-court-markup.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/pl-courts.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
       "source": {
         "runId": "44976310794",
         "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/pl-kio-body-headings.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/pl-kio-layout.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/handlers/case-law/ingestion/parsers/pl-kis.test.ts": {
@@ -5520,60 +5280,12 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/pl-ncourt-lexlink-chains.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/pl-ncourt-lexlink.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/pl-ncourt.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/pl-nsa.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/pl-nsa.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/pl-sn-ii-cskp.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/pl-sn.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
       }
     },
     "src/handlers/case-law/ingestion/parsers/pl-tk.test.ts": {
@@ -5608,47 +5320,7 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/shared-html.property.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/shared-inlines.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/sk-anonymization.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/sk-courts-letter-spacing.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/sk-courts-paragraph-labels.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/sk-courts-title-formula.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
       "source": {
@@ -5664,14 +5336,6 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/sk-us-retention.property.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/sk-us.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
@@ -5682,22 +5346,6 @@
     },
     "src/handlers/case-law/ingestion/parsers/structure-fidelity-guard.test.ts": {
       "peakMb": 1108,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/uk-fcl.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/case-law/ingestion/parsers/validation-document-reuse.test.ts": {
-      "peakMb": 214,
       "baselineMb": 214,
       "source": {
         "runId": "44976310794",

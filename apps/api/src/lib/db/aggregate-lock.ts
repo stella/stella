@@ -90,6 +90,8 @@ import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-inde
 import {
   corpusIndexProjectionAppendGateIsClear,
   corpusIndexProjectionAppendIsUnblocked,
+  corpusIndexProjectionAppendRequestCap,
+  corpusIndexProjectionAppendRequestIsFull,
   corpusIndexProjectionCleanupIsDue,
   corpusIndexProjectionNeedsWork,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
@@ -4541,10 +4543,10 @@ type CorpusProjectionReservationQueueOptions = {
    */
   after?: CorpusProjectionReservationQueueKey | null;
   /**
-   * Only entities that may travel with others. One a failed shared append
-   * isolated keeps to single requests, which only the per-row path sends.
+   * Only entities at the full request cap. One a failed shared append capped
+   * is sent by the per-row path, which groups it by its cap.
    */
-  batchableOnly?: boolean;
+  fullRequestsOnly?: boolean;
   /** Entities the caller will not take this time; they keep their place. */
   skipEntityIds?: readonly string[];
 };
@@ -4571,7 +4573,7 @@ export const corpusProjectionReservationQueue = (
     scopedIndexId,
     excludedIndexIds,
     after = null,
-    batchableOnly = false,
+    fullRequestsOnly = false,
     skipEntityIds = [],
   }: CorpusProjectionReservationQueueOptions,
 ) => {
@@ -4588,7 +4590,9 @@ export const corpusProjectionReservationQueue = (
       indexId: corpusIndexProjectionStates.desiredIndexId,
       failureAttempts: corpusIndexProjectionStates.failureAttempts,
       lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
-      appendMode: corpusIndexProjectionStates.appendMode,
+      appendRequestCap: corpusIndexProjectionAppendRequestCap(
+        corpusIndexProjectionStates,
+      ),
     })
     .from(corpusIndexProjectionStates)
     .innerJoin(
@@ -4623,8 +4627,10 @@ export const corpusProjectionReservationQueue = (
           : notInArray(corpusIndexProjectionStates.entityId, [
               ...skipEntityIds,
             ]),
-        batchableOnly
-          ? eq(corpusIndexProjectionStates.appendMode, "batchable")
+        fullRequestsOnly
+          ? corpusIndexProjectionAppendRequestIsFull(
+              corpusIndexProjectionStates,
+            )
           : undefined,
         after === null
           ? undefined

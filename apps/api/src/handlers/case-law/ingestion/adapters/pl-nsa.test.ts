@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlNsaDecision as uncheckedParsePlNsaDecision } from "@stll/case-law-parsers/pl-nsa";
 import { createSha256 } from "@stll/sha256/node";
 
@@ -72,7 +73,6 @@ import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

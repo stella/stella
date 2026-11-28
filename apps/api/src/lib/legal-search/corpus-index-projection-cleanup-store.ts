@@ -45,7 +45,9 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
+  CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
   type CorpusIndexIntentStatus,
+  corpusIndexProjectionHalvedAppendRequestCap,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
@@ -71,6 +73,7 @@ import {
   judgeCorpusProjectionCleanupSettlement,
 } from "@/api/lib/legal-search/corpus-index-projection-settlement-judgement";
 import {
+  corpusIndexProjectionAppendRequestCap,
   corpusIndexProjectionCleanupIsDue,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionRevisionIsRestorable,
@@ -2120,6 +2123,13 @@ const chargeExpiredAppendStatesTx = async (
   }
 };
 
+/**
+ * A shared append whose lease expired says nothing about which of its
+ * revisions, if any, failed: each one is retried uncharged in a request of at
+ * most half the size (`corpusIndexProjectionHalvedAppendRequestCap`), never
+ * above the cap it already had. A revision started before requests recorded
+ * their size has no count to halve and goes to a request of its own.
+ */
 const deferExpiredBatchStatesTx = async (
   tx: Transaction,
   {
@@ -2127,14 +2137,35 @@ const deferExpiredBatchStatesTx = async (
     generation,
     targets,
     transitionAt,
-  }: ChargeExpiredAppendStatesOptions,
+  }: Omit<ChargeExpiredAppendStatesOptions, "targets"> & {
+    targets: readonly (ExpiredAppendStateTarget & {
+      appendRequestRevisionCount: number | null;
+    })[];
+  },
 ): Promise<void> => {
+  const halvedCap = sqlCaseFragment({
+    operand: sql`${corpusIndexProjectionStates.entityId}`,
+    branches: targets.map(
+      ({ entityId, appendRequestRevisionCount }) =>
+        sql`WHEN ${entityId}::uuid THEN ${
+          appendRequestRevisionCount === null
+            ? 1
+            : corpusIndexProjectionHalvedAppendRequestCap({
+                sharedWith: appendRequestRevisionCount,
+                current: CORPUS_INDEX_PROJECTION_APPEND_REQUEST_CAP_FULL,
+              })
+        }::integer`,
+    ),
+    fallback: sql`1`,
+  });
   await tx
     .update(corpusIndexProjectionStates)
     .set({
       workStatus: "retry_scheduled",
       retryNotBefore: sql<Date>`${transitionAt}::timestamptz + ${CORPUS_PROJECTION_APPEND_RETRY_BASE_MS} * INTERVAL '1 millisecond'`,
-      appendMode: "single",
+      appendRequestCap: sql<number>`LEAST(${corpusIndexProjectionAppendRequestCap(corpusIndexProjectionStates)}, ${halvedCap})`,
+      // The cap now carries what the retired mark said.
+      appendMode: "batchable",
       lastFailureKind: "append_unknown",
       lastFailureMessage:
         "projection batch append lease expired with unknown outcome",

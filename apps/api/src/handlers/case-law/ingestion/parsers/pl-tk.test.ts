@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { fileURLToPath } from "node:url";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   listPlTkPageFields,
   parsePlTkPage,
@@ -27,7 +28,6 @@ import {
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlTkText = guardParser(uncheckedParsePlTkText);
 

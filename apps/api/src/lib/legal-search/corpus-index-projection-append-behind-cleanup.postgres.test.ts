@@ -41,6 +41,7 @@ import {
 import { proveCorpusProjectionRevisionsPresent } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import {
+  CORPUS_PROJECTION_LEASE_MAX_MS,
   type CorpusProjectionIntentLease,
   proveAcceptedCorpusProjectionAppendsTx,
   recordAcceptedCorpusProjectionAppendsTx,
@@ -211,7 +212,7 @@ const reserve = async (
     generation: GENERATION,
     scope: { type: "subjects", entityIds: decisionIdsOf(fixture) },
     limit: fixture.entityIds.length,
-    leaseMs: 60_000,
+    leaseMs: CORPUS_PROJECTION_LEASE_MAX_MS,
   });
 
 /** Settle the old revisions' delete in `tx`, its proof read beforehand. */

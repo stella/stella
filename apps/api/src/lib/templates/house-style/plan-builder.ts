@@ -37,6 +37,8 @@ import type {
   TrackedChanges,
   TrackedChangesView,
 } from "@/api/lib/templates/house-style/folio-contract";
+import { readHeadLines } from "@/api/lib/templates/house-style/head-fields";
+import type { HeadField } from "@/api/lib/templates/house-style/head-fields";
 import {
   buildLabelIndex,
   isRunningText,
@@ -224,6 +226,10 @@ export type FormattingNoteItem =
    *  picture; the output is written without them, so numbers and text are
    *  text. The template's own findings are in its profile. */
   | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
+  /** Fields of the source the output shows as their text, by kind: a
+   *  form field's box or list, a citation's link, an entry of the source's
+   *  contents no longer update. */
+  | { kind: "fieldsAsText"; fields: { kind: string; count: number }[] }
   /** The template's style for a numbered level sets it apart from its
    *  sibling levels (bold, or another size). `blocks` paragraphs of the
    *  role were placed in the sibling's style instead, on their own level of
@@ -276,6 +282,17 @@ export type FormattingNoteItem =
       kind: "letterheadFilled";
       filled: ("addressee" | "date" | "reference")[];
       left: ("addressee" | "date" | "reference")[];
+    }
+  /** The fields of the header the template keeps (a memo's `To:`,
+   *  `From:`): each of `filled` took the value of the document's own line
+   *  for that field, which lost its own name of the field (`from`, as
+   *  typed) for the template's (`to`): `Re` became `Subject`. A field in
+   *  `left` has no such line in the document; its cell is as the template
+   *  has it, to be filled in by hand. */
+  | {
+      kind: "headerFieldsFilled";
+      filled: { field: HeadField; from: string; to: string }[];
+      left: HeadField[];
     }
   /** `blocks` paragraphs whose number the source types with a blank
    *  between its parts (`1. 1.`) are numbered by the list, which prints the
@@ -759,8 +776,9 @@ type Placed = {
   closingLines: Set<string>;
   /** The tab stops placed paragraphs get of their own. */
   tabStops: Map<string, number[]>;
-  /** Where the lines of a paragraph set under an item start. */
-  itemIndents: Map<string, number>;
+  /** The indent of a paragraph set under an item: where its lines start,
+   *  and how far a mark of its own hangs in front of them. */
+  itemIndents: Map<string, TemplatePlanIndent>;
   /** The alignment placed paragraphs keep from the source. */
   alignments: Map<string, TemplatePlanAlignment>;
   /** The indent of a numbered item the template's levels would set left
@@ -1651,6 +1669,20 @@ const nestDeeperItems = (context: Context, placed: Placed): void => {
 };
 
 /**
+ * The indent of a line set under an item whose text starts at `start`. A
+ * line that hangs a mark of its own in front of its text (a typed dash, a
+ * box) keeps that hanging: the mark stands where the item's text starts,
+ * the line's text one hanging step further in, as in the source.
+ */
+const underItemIndent = (
+  start: number,
+  { block }: Placement,
+): TemplatePlanIndent => {
+  const hanging = -(block.indent?.firstLine ?? 0);
+  return hanging > 0 ? { left: start + hanging, hanging } : { left: start };
+};
+
+/**
  * Sets the unnumbered lines that continue a numbered item under that
  * item's text: the address lines under `(i)`, a second paragraph of a
  * lettered point. The template's style for unnumbered text has one indent,
@@ -1676,7 +1708,10 @@ const indentContinuations = (context: Context, placed: Placed): void => {
       UNNUMBERED_ROLES.has(placement.role) &&
       standsUnder(placement, item)
     ) {
-      placed.itemIndents.set(block.id, textStartOf(context, item));
+      placed.itemIndents.set(
+        block.id,
+        underItemIndent(textStartOf(context, item), placement),
+      );
     } else {
       item = null;
     }
@@ -1794,18 +1829,24 @@ const alignFrontLines = (context: Context, placed: Placed): void => {
     const placement =
       block.kind === "table" ? undefined : placed.placementById.get(block.id);
     const alignment = setApartOf(block);
+    // A bullet is no number: a line led by one (`- nachstehend „X“
+    // genannt -`, a dash an editor turned into a list) is still set apart.
+    const bullet = placement?.pattern?.numFmt === "bullet";
     if (
       placement !== undefined &&
       alignment !== undefined &&
       FRONT_TEXT_ROLES.has(placement.role) &&
-      !showsLabel(placement) &&
+      (bullet || !showsLabel(placement)) &&
       block.text.trim().length <= SET_LINE_MAX &&
       !block.text.includes("\t")
     ) {
       placed.alignments.set(block.id, alignment);
-      // Set between the margins, not inside the indent of a text style.
-      placement.styleId =
-        context.profile.roles.body?.styleId ?? placement.styleId;
+      // Set between the margins, not inside the indent of a text style; a
+      // bullet's list sets its indent.
+      if (!bullet) {
+        placement.styleId =
+          context.profile.roles.body?.styleId ?? placement.styleId;
+      }
     }
   }
 };
@@ -2024,7 +2065,12 @@ const placeParagraphs = (context: Context): Placed => {
       }
       continue;
     }
-    if (index.contentsBlockIds.has(block.id)) {
+    // The source's own contents give way to the template's; a template
+    // without contents keeps the source's, so no entry goes missing.
+    if (
+      index.contentsBlockIds.has(block.id) &&
+      context.profile.regions.contents.length > 0
+    ) {
       placed.omitted.set(block.id, "sourceToc");
       continue;
     }
@@ -2363,8 +2409,8 @@ type ParagraphItemOptions = {
   keepNext: boolean;
   /** The tab stops the paragraph gets of its own. */
   tabStops: readonly number[] | undefined;
-  /** Where the paragraph's lines start under the item it continues. */
-  itemIndent: number | undefined;
+  /** The indent of the paragraph under the item it continues. */
+  itemIndent: TemplatePlanIndent | undefined;
   /** The alignment the paragraph keeps from the source. */
   alignment: TemplatePlanAlignment | undefined;
   /** The indent that keeps a numbered item deeper than its parent. */
@@ -2407,7 +2453,7 @@ const paragraphItems = ({
   // prints left of the item it belongs to hangs in from that item.
   const hang =
     numbering === null ? hangOf(context, placement) : (nestedIndent ?? null);
-  const under = itemIndent === undefined ? null : { left: itemIndent };
+  const under = itemIndent ?? null;
   const item: TemplatePlanSourceItem = {
     kind: "source",
     blockId: block.id,
@@ -2500,8 +2546,13 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       body.push({ kind: "slot", ...slot });
     }
     if (context.headerFill !== null) {
-      const { filled, left } = context.headerFill;
-      items.push({ kind: "letterheadFilled", filled, left });
+      const { filled, left, fields } = context.headerFill;
+      if (profile.header !== undefined) {
+        items.push({ kind: "letterheadFilled", filled, left });
+      }
+      if (fields !== null) {
+        items.push({ kind: "headerFieldsFilled", ...fields });
+      }
     }
   }
   // A heading without a number heads what follows it: the preamble's
@@ -2572,7 +2623,16 @@ const NO_SLOTS: HeaderFill["slots"] = [];
 const NO_LINES: readonly string[] = [];
 
 type HeaderFill = {
-  slots: { templateBlockId: string; sourceBlockIds: string[] }[];
+  slots: {
+    templateBlockId: string;
+    sourceBlockIds: string[];
+    dropLead?: { text: string; shownByTemplateBlockId: string };
+  }[];
+  /** The fields of a header of names and values, as filled and as left. */
+  fields: {
+    filled: { field: HeadField; from: string; to: string }[];
+    left: HeadField[];
+  } | null;
   /** Sample lines of the addressee the letter has no line for. */
   emptied: string[];
   filled: HeaderField[];
@@ -2595,7 +2655,13 @@ const fillHeader = ({ profile, topLevel }: Context): HeaderFill | null => {
     return null;
   }
   const head = readLetterHead(topLevel);
-  const fill: HeaderFill = { slots: [], emptied: [], filled: [], left: [] };
+  const fill: HeaderFill = {
+    slots: [],
+    fields: null,
+    emptied: [],
+    filled: [],
+    left: [],
+  };
   const cells = header.addressee;
   const lines = head?.addressee ?? NO_LINES;
   if (cells.length > 0 && lines.length > 0) {
@@ -2631,11 +2697,73 @@ const fillHeader = ({ profile, topLevel }: Context): HeaderFill | null => {
 };
 
 /**
- * A letter's own head goes into the template's letterhead; its lines are
- * then no paragraphs of the body.
+ * Puts the document's own lines for the fields of a kept header (`To:`,
+ * `From:`, `Date:`, `Re:`) into the empty cells beside the template's names
+ * of those fields. A line gives its value; its own name of the field is
+ * dropped for the template's, which may be another word for the same field
+ * (`Re` for `Subject`, `Věc` for `Subject`). A field the document has no
+ * line for leaves its cell as the template has it. A line a tracked change
+ * the output keeps reaches into (its name of the field, its paragraph mark)
+ * keeps its place in the body.
+ */
+const fillHeaderFields = (
+  { profile, topLevel, blockById }: Context,
+  fill: HeaderFill | null,
+): HeaderFill | null => {
+  const cells = profile.headerFields;
+  if (cells === undefined || cells.length === 0) {
+    return fill;
+  }
+  const lines = readHeadLines(topLevel).filter(({ blockId, lead }) => {
+    const block = blockById.get(blockId);
+    const leadEnd =
+      (block?.text.length ?? 0) -
+      (block?.text.trimStart().length ?? 0) +
+      lead.length;
+    return (
+      block?.revisions?.some(
+        ({ start, paragraphMark }) =>
+          paragraphMark === true || start <= leadEnd,
+      ) !== true
+    );
+  });
+  const filled: { field: HeadField; from: string; to: string }[] = [];
+  const left: HeadField[] = [];
+  const slots: HeaderFill["slots"] = [];
+  for (const { field, name, labelBlockId, valueBlockId } of cells) {
+    const line = lines.find((candidate) => candidate.field === field);
+    if (line === undefined) {
+      left.push(field);
+      continue;
+    }
+    slots.push({
+      templateBlockId: valueBlockId,
+      sourceBlockIds: [line.blockId],
+      dropLead: { text: line.lead, shownByTemplateBlockId: labelBlockId },
+    });
+    filled.push({ field, from: line.word, to: name });
+  }
+  const letter: HeaderFill = fill ?? {
+    slots: [],
+    fields: null,
+    emptied: [],
+    filled: [],
+    left: [],
+  };
+  return {
+    ...letter,
+    slots: [...letter.slots, ...slots],
+    fields: { filled, left },
+  };
+};
+
+/**
+ * A letter's own head goes into the template's letterhead, and a memo's
+ * lines for the fields of its header into the cells beside their names;
+ * these lines are then no paragraphs of the body.
  */
 const takeHeaderLines = (context: Context): void => {
-  context.headerFill = fillHeader(context);
+  context.headerFill = fillHeaderFields(context, fillHeader(context));
   if (context.headerFill === null) {
     return;
   }
@@ -3477,8 +3605,13 @@ const noteParagraphOptions = (
   if (closingLines.size > 0) {
     items.push({ kind: "closingKeptTogether", blocks: closingLines.size });
   }
+  // A line under an item that hangs its own mark is counted with the
+  // continuations, not with the numbers written as text.
   const hung = body.filter(
-    (item) => item.kind === "source" && item.indent?.hanging !== undefined,
+    (item) =>
+      item.kind === "source" &&
+      item.indent?.hanging !== undefined &&
+      !itemIndents.has(item.blockId),
   ).length;
   if (hung > 0) {
     items.push({ kind: "textLabelsHung", blocks: hung });

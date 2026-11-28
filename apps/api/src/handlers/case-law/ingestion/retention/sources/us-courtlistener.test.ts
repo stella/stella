@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { type Block, hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -22,7 +23,6 @@ import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const mapCourtListenerRecord = guardParser(uncheckedMapCourtListenerRecord);
 

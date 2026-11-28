@@ -334,7 +334,7 @@ const readStates = async (entityIds: readonly string[]) =>
       desiredAction: corpusIndexProjectionStates.desiredAction,
       appliedRevision: corpusIndexProjectionStates.appliedRevision,
       workStatus: corpusIndexProjectionStates.workStatus,
-      appendMode: corpusIndexProjectionStates.appendMode,
+      appendRequestCap: corpusIndexProjectionStates.appendRequestCap,
       retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
     })
     .from(corpusIndexProjectionStates)
@@ -377,10 +377,10 @@ const shardsOf = async (leases: readonly CorpusProjectionIntentLease[]) => {
   const capOf = (lease: CorpusProjectionIntentLease) =>
     caps.get(lease.intentId) ?? panic("A lease has no request cap");
   const shards = leases
-    .filter(({ appendMode }) => appendMode === "single")
+    .filter(({ appendRequestCap }) => appendRequestCap < 512)
     .map((lease) => [lease]);
   let rest = leases
-    .filter(({ appendMode }) => appendMode === "batchable")
+    .filter(({ appendRequestCap }) => appendRequestCap === 512)
     .toSorted((left, right) => capOf(left) - capOf(right));
   while (rest.length > 0) {
     const cap = capOf(rest[0] ?? panic("No lease to pack"));
@@ -971,7 +971,7 @@ const assertStepInvariants = async (
     }
   }
   for (const state of states) {
-    if (state.appendMode === "single") {
+    if (state.appendRequestCap < 512) {
       model.everSingle.add(state.entityId);
     }
     const inFlight = intents.filter(
@@ -1334,7 +1334,7 @@ describe("offline request caps", () => {
       ),
     ).toHaveLength(ENTITIES_PER_RUN);
     for (const state of states) {
-      expect(state.appendMode).toBe("batchable");
+      expect(state.appendRequestCap).toBe(512);
       expect(state.workStatus).toBe("retry_scheduled");
       expect((await stateOf(state.entityId)).failureAttempts).toBe(0);
     }
@@ -1673,7 +1673,7 @@ describe("offline request caps", () => {
     const state = await stateOf(lease.entityId);
     // Alone in what was delivered, the fault is its own: charged, not split.
     expect(state.failureAttempts).toBe(1);
-    expect(state.appendMode).toBe("batchable");
+    expect(state.appendRequestCap).toBe(512);
   });
 });
 
@@ -1930,24 +1930,24 @@ describe("offline settlement", () => {
     {
       committedBy: "the indexer's verdict",
       fault: "documents",
-      appendMode: "single",
+      appendRequestCap: 1,
       nextCap: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
     },
     {
       committedBy: "a kill of the run",
       fault: "killed",
-      appendMode: "batchable",
+      appendRequestCap: 512,
       nextCap: 1,
     },
     {
       committedBy: "the sweep",
       fault: "none",
-      appendMode: "batchable",
+      appendRequestCap: 512,
       nextCap: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
     },
   ] as const)(
-    "a partial offline revision committed by $committedBy goes to cleanup uncharged, its entity $appendMode, its next request at most $nextCap",
-    async ({ fault, appendMode, nextCap }) => {
+    "a partial offline revision committed by $committedBy goes to cleanup uncharged, its entity's request cap $appendRequestCap, its next offline request at most $nextCap",
+    async ({ fault, appendRequestCap, nextCap }) => {
       const model = await newModel();
       const leases = await reserve(model, 2);
       const startedAt = await now(model);
@@ -1986,13 +1986,13 @@ describe("offline settlement", () => {
       expect((await intentOf(exact.intentId)).status).toBe("applied");
       expect((await intentOf(partial.intentId)).status).toBe("cleanup_pending");
       // Shared with another, a partial count says only that one of them may
-      // be at fault: only a delivery its indexer ran to a verdict isolates
-      // the entity, and nobody is charged.
+      // be at fault: only a delivery its indexer ran to a verdict halves the
+      // entity's request cap, and nobody is charged.
       const state = await stateOf(partial.entityId);
-      expect(state.appendMode).toBe(appendMode);
+      expect(state.appendRequestCap).toBe(appendRequestCap);
       expect(state.failureAttempts).toBe(0);
       // Retired from a killed request it halves like a withdrawal from one;
-      // from a verdict it went to single requests; after a crash nothing is
+      // from a verdict its ingest cap halved instead; after a crash nothing is
       // known, so nothing halves.
       const caps = await db.transaction(
         async (tx) =>

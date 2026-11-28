@@ -6,12 +6,12 @@ import {
   parseCzNsSbirkaText as uncheckedParseCzNsSbirkaText,
   readCzNsSbirkaPage,
 } from "@stll/case-law-parsers/cz-ns-sbirka";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 
 import {
   CZ_NS_SBIRKA_RECORDINGS,
   czNsSbirkaRecordedPage,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseCzNsSbirkaText = guardParser(uncheckedParseCzNsSbirkaText);
 

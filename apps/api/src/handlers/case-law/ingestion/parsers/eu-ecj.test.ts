@@ -33,6 +33,7 @@ import {
   normalizeOracleText,
   parseFormex,
 } from "@stll/case-law-parsers/eu-ecj-formex";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { load } from "@stll/html";
 import { headingPathsByAnchor } from "@stll/legal-ast";
 import {
@@ -41,8 +42,6 @@ import {
 } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { sectionsFromAst } from "@stll/legal-ast/sections-from-ast";
-
-import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   manifestationStem,

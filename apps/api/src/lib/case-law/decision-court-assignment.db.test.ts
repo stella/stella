@@ -184,7 +184,7 @@ test.each(FIXTURES)(
         indexId,
         leaseToken,
         leaseExpiresAt,
-        appendMode: "batchable",
+        appendRequestCap: 512,
       } as const;
       // db-await-in-loop: each material read names one generation's exact reservation.
       await db.insert(corpusIndexProjectionIntents).values({
