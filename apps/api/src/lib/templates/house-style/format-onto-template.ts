@@ -25,7 +25,10 @@ import {
 } from "@/api/lib/templates/house-style/ambiguity";
 import type { AmbiguityResolver } from "@/api/lib/templates/house-style/ambiguity";
 import { closeNumberParts } from "@/api/lib/templates/house-style/designators";
-import { TemplateEngineError } from "@/api/lib/templates/house-style/folio-contract";
+import {
+  TemplateEngineError,
+  textFieldsOf,
+} from "@/api/lib/templates/house-style/folio-contract";
 import type {
   DocxBlockManifest,
   TemplateEngineRefusal,
@@ -81,7 +84,7 @@ const vouchedBySource = (
   const target = manifest.blocks.find(({ id }) => id === targetBlockId);
   return (
     target?.selfNumbers !== undefined &&
-    block?.crossReferences?.some(
+    (block === undefined ? [] : textFieldsOf(block)).some(
       ({ start, end, targetBlockId: cited }) =>
         cited === targetBlockId &&
         block.text.slice(start, end) === expectedText,
@@ -89,6 +92,35 @@ const vouchedBySource = (
     !report.leftovers.fields.some(({ kind }) => SELF_NUMBERING_KINDS.test(kind))
   );
 };
+
+/** Whether a reference result is of a field the plan wrote as a PAGEREF. */
+const isPageReference = (
+  { references }: TemplatePlan,
+  { blockId, targetBlockId, expectedText }: ReferenceResult,
+): boolean =>
+  (references ?? []).some(
+    (reference) =>
+      reference.field === "PAGEREF" &&
+      reference.blockId === blockId &&
+      reference.targetBlockId === targetBlockId &&
+      reference.expectedText === expectedText,
+  );
+
+/**
+ * Whether a reference's field text is contradicted: neither the engine nor
+ * the source vouches for it. A page reference shows a page, which the
+ * output's layout gives when it opens: no text vouches for it, and none
+ * has to.
+ */
+const contradicted = (
+  manifest: DocxBlockManifest,
+  report: TemplatePlanReport,
+  plan: TemplatePlan,
+  result: ReferenceResult,
+): boolean =>
+  !isPageReference(plan, result) &&
+  result.predictedText !== result.expectedText &&
+  !(result.predictedText === null && vouchedBySource(manifest, report, result));
 
 /** Applies of one document; each repair costs one. */
 const ATTEMPTS_MAX = 8;
@@ -575,13 +607,8 @@ export const formatOntoTemplate = async ({
       repaired = exclude("numbering", blockId, "labelDiffers") || repaired;
     }
     for (const result of report.references.results) {
-      const { targetBlockId, expectedText, predictedText } = result;
-      // A field text neither the engine nor the source vouches for counts
-      // as contradicted.
-      if (
-        predictedText !== expectedText &&
-        !(predictedText === null && vouchedBySource(manifest, report, result))
-      ) {
+      const { targetBlockId, predictedText } = result;
+      if (contradicted(manifest, report, built.plan, result)) {
         const cause =
           predictedText === null ? "fieldTextUnverified" : "fieldTextDiffers";
         repaired = exclude("targets", targetBlockId, cause) || repaired;

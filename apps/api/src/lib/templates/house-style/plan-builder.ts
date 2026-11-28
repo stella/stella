@@ -3449,6 +3449,27 @@ const KEPT_LOOK = /^(?:mergeformat|charformat)$/iu;
  * number the plan may change and a position switch shows words, so a
  * field with either, or with any other format, stays its text.
  */
+/** The switches a page reference keeps: `\h`, `\p`, a numeric picture
+ *  (a drafter's words in quotes, or digits) and a format that keeps the
+ *  result's look. */
+const PAGE_SWITCH =
+  /\\[hp](?![A-Za-z])|\\#\s*(?:"[^"\\]*"|[^\s"\\]+)|\\\*\s*(?:mergeformat|charformat)\b/giu;
+const PAGE_FIELD_HEAD = /^\s*PAGEREF\s+(?:"[^"]*"|[^\s"\\]+)/iu;
+
+/** The switches a PAGEREF of the source keeps, or null when it is none or
+ *  holds a switch a carried one cannot. */
+const pageSwitchesOf = (instruction: string): string | null => {
+  const head = PAGE_FIELD_HEAD.exec(instruction);
+  if (head === null) {
+    return null;
+  }
+  const rest = instruction.slice(head[0].length);
+  if (rest.replace(PAGE_SWITCH, "").trim() !== "") {
+    return null;
+  }
+  return (rest.match(PAGE_SWITCH) ?? []).join(" ");
+};
+
 const carriedSwitchesOf = (instruction: string): string | null => {
   const head = /^\s*REF\s+\S+/iu.exec(instruction);
   if (head === null) {
@@ -3619,6 +3640,41 @@ const carryCrossReferences = ({
   );
   const references: TemplatePlanReference[] = [];
   const spans = new Map<string, { start: number; end: number }[]>();
+  /**
+   * A page reference points at where its target stands, not at its text:
+   * it is kept wherever the target is placed, whatever the target reads
+   * as, and Word fills its page when the output opens. One whose picture
+   * shows the drafter's words (`clause ` in front of the clause's number)
+   * keeps showing them, now linked to the output's target.
+   */
+  const carryPage = (
+    block: DocxBlock,
+    { start, end, instruction, targetBlockId }: CrossReference,
+  ): void => {
+    const switches = pageSwitchesOf(instruction);
+    const expectedText = block.text.slice(start, end);
+    if (
+      targetBlockId === null ||
+      switches === null ||
+      !(placementById.has(targetBlockId) || mergedInto.has(targetBlockId)) ||
+      exclusions.targets.has(targetBlockId) ||
+      paragraphOf(block.id) === paragraphOf(targetBlockId) ||
+      expectedText.trim() === "" ||
+      !claim(block.id, start, end)
+    ) {
+      return;
+    }
+    spans.set(block.id, [...(spans.get(block.id) ?? []), { start, end }]);
+    references.push({
+      blockId: block.id,
+      start,
+      end,
+      targetBlockId,
+      instruction: switches,
+      expectedText,
+      field: "PAGEREF",
+    });
+  };
   const carry = (
     block: DocxBlock,
     { start, end, instruction, targetBlockId, targetWhole }: CrossReference,
@@ -3663,7 +3719,11 @@ const carryCrossReferences = ({
   };
   for (const block of blocks) {
     for (const crossReference of block.crossReferences ?? NO_CROSS_REFERENCES) {
-      carry(block, crossReference);
+      if (PAGE_FIELD_HEAD.test(crossReference.instruction)) {
+        carryPage(block, crossReference);
+      } else {
+        carry(block, crossReference);
+      }
     }
   }
   return { references, spans };
@@ -4305,6 +4365,8 @@ export const buildTemplatePlan = ({
     sourceHeaders: "keep",
     // Comments stay on the text they were made on.
     comments: "keep",
+    // A link to a heading of the document (a contents line) still jumps.
+    internalLinks: "keep",
   };
   return {
     plan,

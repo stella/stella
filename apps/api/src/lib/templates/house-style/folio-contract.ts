@@ -436,10 +436,23 @@ export type TemplatePlanReference = {
   start: number;
   end: number;
   targetBlockId: string;
-  /** REF field switches, e.g. `\n \t \h`. */
+  /** The field's switches, e.g. `\n \t \h`. */
   instruction: string;
   expectedText: string;
+  /** The field written: `REF` (the default) or `PAGEREF`. An engine that
+   *  does not know it writes a REF. */
+  field?: "REF" | "PAGEREF";
 };
+
+/** The source's REF fields of a block: those that show the text or number
+ *  of what they point to. A manifest lists its PAGEREF fields among them
+ *  too; those show a page, or words of the drafter's, never a citation. */
+export const textFieldsOf = (
+  block: Pick<DocxBlock, "crossReferences">,
+): NonNullable<DocxBlock["crossReferences"]> =>
+  (block.crossReferences ?? []).filter(({ instruction }) =>
+    /^\s*REF\b/iu.test(instruction),
+  );
 
 export type TemplatePlanHighlight = {
   blockId: string;
@@ -502,6 +515,10 @@ export type TemplatePlan = {
    *  the output places, on the same text. An engine that does not know the
    *  option carries none. */
   comments?: "drop" | "keep";
+  /** Whether the source's links to a place in itself lead to the output
+   *  paragraph that stands for their target. An engine that does not know
+   *  the option writes their text. */
+  internalLinks?: "drop" | "keep";
 };
 
 /** What the output carries of the source's comments. */
