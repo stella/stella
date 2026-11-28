@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { roleItemId } from "@/api/lib/templates/house-style/ambiguity";
 import type {
   DocxBlock,
   DocxBlockManifest,
@@ -222,6 +223,113 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
         reason: "annexTyped",
       }),
     );
+  });
+});
+
+describe("buildTemplatePlan, roles nobody decided", () => {
+  const manifest = czechContract("Viz čl. II odst. 2 této smlouvy.");
+  const blockId = blockIdOf(manifest, "SMLOUVA O DODÁVCE");
+  const roleItems = [
+    {
+      id: roleItemId(blockId),
+      kind: "blockRole" as const,
+      blockId,
+      options: [
+        { role: "title" as const, confidence: 0.45 },
+        { role: "body" as const, confidence: 0.4 },
+      ],
+    },
+  ];
+  const uncertain = (items: readonly FormattingNoteItem[]) =>
+    items.filter(({ kind }) => kind === "roleUncertain");
+
+  test("a doubtful paragraph left undecided is noted with the style its other reading would get", () => {
+    const { note } = build(manifest, "keepSource", { roleItems });
+    expect(uncertain(note.items)).toEqual([
+      {
+        kind: "roleUncertain",
+        blockId,
+        lastBlockId: blockId,
+        blocks: 1,
+        role: "title",
+        styleId: "Title",
+        alternative: "body",
+        alternativeStyleId: expect.any(String),
+      },
+    ]);
+  });
+
+  test("paragraphs in a row with the same doubt are one item", () => {
+    const first = blockIdOf(manifest, "První ujednání, oddíl I.");
+    const second = blockIdOf(manifest, "Druhé ujednání, oddíl I:");
+    const doubt = (id: string) => ({
+      id: roleItemId(id),
+      kind: "blockRole" as const,
+      blockId: id,
+      options: [
+        { role: "clause1" as const, confidence: 0.45 },
+        { role: "body" as const, confidence: 0.1 },
+      ],
+    });
+    const { note } = build(manifest, "keepSource", {
+      roleItems: [doubt(first), doubt(second)],
+    });
+    expect(uncertain(note.items)).toMatchObject([
+      { blockId: first, lastBlockId: second, blocks: 2, alternative: "body" },
+    ]);
+    // A reading with even odds or better is asked about, not noted.
+    const likely = {
+      ...doubt(first),
+      options: [
+        { role: "clause1" as const, confidence: 0.6 },
+        { role: "body" as const, confidence: 0.1 },
+      ],
+    };
+    expect(
+      uncertain(
+        build(manifest, "keepSource", { roleItems: [likely] }).note.items,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a reading that would set the paragraph in its own style is not noted", () => {
+    // Recitals are numbered here, so an unlabelled one is set as body text:
+    // both readings look the same.
+    const recital = PROFILE.roles.clause1;
+    if (recital === null) {
+      throw new Error("the template numbers clauses");
+    }
+    const profile = {
+      ...PROFILE,
+      roles: { ...PROFILE.roles, recital: { ...recital, styleId: "Recital" } },
+    };
+    // The word between the parties, read as body text.
+    const line = manifest.blocks.find(({ text }) => text === "a")?.id ?? "";
+    const doubt = {
+      id: roleItemId(line),
+      kind: "blockRole" as const,
+      blockId: line,
+      options: [
+        { role: "body" as const, confidence: 0.45 },
+        { role: "recital" as const, confidence: 0.1 },
+      ],
+    };
+    const { plan, note } = build(manifest, "keepSource", {
+      profile,
+      roleItems: [doubt],
+    });
+    expect(
+      sourceItems(plan).find((item) => item.blockId === line)?.styleId,
+    ).toBe(PROFILE.roles.body?.styleId);
+    expect(uncertain(note.items)).toEqual([]);
+  });
+
+  test("an answered one is not", () => {
+    const { note } = build(manifest, "keepSource", {
+      roleItems,
+      decisions: new Map([[roleItemId(blockId), "title"]]),
+    });
+    expect(uncertain(note.items)).toEqual([]);
   });
 });
 

@@ -17,6 +17,7 @@ import {
   scopeItemId,
   targetItemId,
 } from "@/api/lib/templates/house-style/ambiguity";
+import type { AmbiguityItem } from "@/api/lib/templates/house-style/ambiguity";
 import { closeNumberParts } from "@/api/lib/templates/house-style/designators";
 import { isStrippableLabel } from "@/api/lib/templates/house-style/folio-contract";
 import type {
@@ -197,6 +198,20 @@ export type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
+  /** The rules were unsure what these paragraphs are and nobody decided:
+   *  `blocks` paragraphs in a row from `blockId` to `lastBlockId` were
+   *  placed as `role` in `styleId`, and their next likeliest reading,
+   *  `alternative`, would have set them in `alternativeStyleId`. */
+  | {
+      kind: "roleUncertain";
+      blockId: string;
+      lastBlockId: string;
+      blocks: number;
+      role: HouseStyleRole;
+      styleId: string | null;
+      alternative: HouseStyleRole;
+      alternativeStyleId: string;
+    }
   /** The source tracked changes and was formatted in one view of them: the
    *  output carries no revision. `stated` is false when nobody chose and
    *  every change was accepted. */
@@ -471,6 +486,9 @@ type BuildOptions = {
   index?: LabelIndex;
   /** Accepted answers to the open decisions, by item id. */
   decisions?: ReadonlyMap<string, string>;
+  /** The role questions that were asked; one left without an answer is
+   *  noted where its answer would change the paragraph's style. */
+  roleItems?: readonly Extract<AmbiguityItem, { kind: "blockRole" }>[];
   suspicions?: readonly ReferenceSuspicion[];
   exclusions?: PlanExclusions;
   /** The highlight colours the source's own text carries. */
@@ -687,6 +705,80 @@ const styleTarget = (
     }
   }
   return null;
+};
+
+/**
+ * Notes each paragraph placed outside a table whose role the rules were
+ * unsure of and no answer decided, when its next likeliest reading would
+ * set it in another style: what a person should look at. Two readings that
+ * share a style look the same and are not noted.
+ */
+/** A reading the rules give less than even odds is noted when nobody
+ *  answers it; likelier ones are asked about but not noted. */
+const ROLE_NOTE_BELOW = 0.5;
+
+type RoleUncertainItem = Extract<FormattingNoteItem, { kind: "roleUncertain" }>;
+
+/** Whether a paragraph carries the same doubt as the item before it. */
+const continuesRun = (
+  run: RoleUncertainItem | null,
+  next: Pick<RoleUncertainItem, "role" | "alternative" | "styleId">,
+): run is RoleUncertainItem =>
+  run !== null &&
+  run.role === next.role &&
+  run.alternative === next.alternative &&
+  run.styleId === next.styleId;
+
+const noteUncertainRoles = (
+  context: Context,
+  placements: readonly Placement[],
+  roleItems: readonly Extract<AmbiguityItem, { kind: "blockRole" }>[],
+): void => {
+  const open = new Map(
+    roleItems
+      .filter(
+        ({ id, options }) =>
+          !context.decisions.has(id) &&
+          (options[0]?.confidence ?? 0) < ROLE_NOTE_BELOW,
+      )
+      .map((item) => [item.blockId, item]),
+  );
+  // Paragraphs in a row with the same doubt are one item.
+  let run: RoleUncertainItem | null = null;
+  for (const { block, role, styleId } of placements) {
+    const item = open.get(block.id);
+    const alternative = item?.options.find(
+      (option) => option.role !== role,
+    )?.role;
+    const alternativeStyleId =
+      alternative === undefined || context.tableOf.has(block.id)
+        ? null
+        : styleIdAs(context, block, alternative);
+    if (
+      alternative === undefined ||
+      alternativeStyleId === null ||
+      alternativeStyleId === styleId
+    ) {
+      run = null;
+      continue;
+    }
+    if (continuesRun(run, { role, alternative, styleId })) {
+      run.lastBlockId = block.id;
+      run.blocks += 1;
+      continue;
+    }
+    run = {
+      kind: "roleUncertain",
+      blockId: block.id,
+      lastBlockId: block.id,
+      blocks: 1,
+      role,
+      styleId,
+      alternative,
+      alternativeStyleId,
+    };
+    context.items.push(run);
+  }
 };
 
 /**
@@ -915,6 +1007,25 @@ const placementOf = (
     context.sourceLevels.set(numbering.abstractNumId, levels);
   }
   return placement;
+};
+
+/**
+ * The style `block` would get as `role`, set as a placement sets it. A
+ * reading not taken leaves the count of roles without a style alone.
+ */
+const styleIdAs = (
+  context: Context,
+  block: DocxBlock,
+  role: HouseStyleRole,
+): string | null => {
+  const entry = context.index.entryByBlockId.get(block.id) ?? null;
+  const { profile } = settingOf(context, block, entry);
+  const { target } = targetsOf(
+    { ...context, stylelessRoles: new Map() },
+    profile,
+    { block, role, entry },
+  );
+  return target?.styleId ?? null;
 };
 
 const placementAt = (
@@ -4700,6 +4811,7 @@ const buildOnce = (
     mode,
     index = buildLabelIndex(manifest),
     decisions = new Map<string, string>(),
+    roleItems = [],
     suspicions = [],
     exclusions = NO_EXCLUSIONS,
     sourceHighlightColors,
@@ -4785,6 +4897,7 @@ const buildOnce = (
     labelRequests(context, body),
   );
   noteReadings(context, placed, references, suspicions);
+  noteUncertainRoles(context, placed.placements, roleItems);
   noteStaleReferences(context);
   noteTrackedChanges(context, placed, manifest, trackedChangesStated);
 

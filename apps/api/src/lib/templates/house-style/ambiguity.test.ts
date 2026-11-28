@@ -83,6 +83,35 @@ describe("collectAmbiguities", () => {
         : [value];
     expect(ITEMS.flatMap(leaves).every(isIdLike)).toBe(true);
   });
+
+  test("offers a doubtful block the readings of the blocks around it", () => {
+    const sure = (blockId: string, reading: "title" | "party") => ({
+      blockId,
+      role: reading,
+      confidence: 0.85,
+      alternatives: [],
+      mergedIntoBlockId: null,
+    });
+    const [item] = collectAmbiguities({
+      references: [],
+      roles: [
+        sure("p1", "title"),
+        {
+          blockId: "p2",
+          role: "body",
+          confidence: 0.4,
+          alternatives: [{ role: "title", confidence: 0.2 }],
+          mergedIntoBlockId: null,
+        },
+        sure("p3", "party"),
+      ],
+    });
+    expect(
+      item?.kind === "blockRole"
+        ? item.options.map((option) => option.role)
+        : [],
+    ).toEqual(["body", "title", "party"]);
+  });
 });
 
 describe("acceptDecisions", () => {
