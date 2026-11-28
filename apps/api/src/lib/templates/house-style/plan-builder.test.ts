@@ -922,6 +922,60 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("a line between two bullets of one list leaves the bullets behind it under the list's paragraph", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Klient může smlouvu vypovědět, zejména při:", 1),
+      numbered("•", "porušení mlčenlivosti,", 5),
+      numbered("•", "opakovaně nízké kvalitě služeb, na kterou byl", 5),
+      "předem písemně upozorněn,",
+      numbered("•", "narušení důvěry.", 5),
+    ]);
+    const roles = proposeBlockRoles({
+      manifest,
+      index: buildLabelIndex(manifest),
+    }).map((proposal) =>
+      proposal.blockId === blockIdOf(manifest, "předem písemně")
+        ? { ...proposal, role: "body" as const }
+        : proposal,
+    );
+    const { plan } = build(manifest, "keepSource", { roles });
+    const levelOf = (start: string) =>
+      itemOf(plan, manifest, start)?.numbering?.ilvl;
+    // All three bullets hang from the clause: one level, one indent.
+    expect(levelOf("narušení důvěry")).toBe(levelOf("porušení mlčenlivosti"));
+  });
+
+  test("a recital's letter written as text hangs as a clause's number where the template numbers no recitals", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Preambule",
+      // The letters count in the list the provisions count in, so that
+      // list stays the template's and the letters go as text.
+      numbered("A.", "Investor zamýšlí po provedení stavby vybudovat park.", 1),
+      numbered("B.", "Smluvní strany budou na základě Smlouvy činit kroky.", 1),
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+      numbered("2.", "Odstavec druhý.", 1),
+      numbered("3.", "Odstavec třetí.", 1),
+    ]);
+    // No level of the template for recitals, and none spare.
+    const { plan } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, recital: null },
+        spareLevels: [],
+        markLevels: [],
+      },
+    });
+    const item = itemOf(plan, manifest, "Investor zamýšlí");
+    const clause = PROFILE.roles.clause1?.numbering?.indent;
+    expect(item?.labelAsText).toBe(true);
+    expect(item?.indent?.left).toBe(clause?.left ?? undefined);
+    expect(item?.indent?.hanging).toBe(clause?.hanging ?? undefined);
+  });
+
   test("the plan names the template section its body stands in, where the template gives one", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -4135,6 +4189,27 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
     expect(note.items.map(({ kind }) => kind)).not.toContain("textLabelsHung");
   });
 
+  test("a line that reaches the item's text by a tab stands under it, its tab on a hanging indent", () => {
+    const indented = withIndents({
+      2: { left: 567, firstLine: -567 },
+      3: { left: 1506, firstLine: -360 },
+      // Set further out than the item's text; its tab takes it there.
+      4: { left: 1146, firstLine: 0 },
+    });
+    const manifest = {
+      ...indented,
+      blocks: indented.blocks.map((block, position) =>
+        position === 4 ? { ...block, text: `\t${block.text}` } : block,
+      ),
+    };
+    const { plan } = build(manifest, "keepSource", { roles });
+    const under = PROFILE.roles.roman?.numbering?.indent.left ?? 0;
+    expect(itemOf(plan, manifest, "\tk.ú.")?.indent).toEqual({
+      left: under,
+      hanging: Math.min(under, 708),
+    });
+  });
+
   test("without the source's indents nothing is moved", () => {
     const manifest = withIndents({});
     const { plan, note } = build(manifest, "keepSource", { roles });
@@ -4142,6 +4217,77 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
     expect(note.items.map(({ kind }) => kind)).not.toContain(
       "continuationsIndented",
     );
+  });
+});
+
+describe("buildTemplatePlan, labelled lines under an item with indents of their own", () => {
+  test("their values meet at a hanging indent that lies beyond every label", () => {
+    const base = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "Součástí Smlouvy jsou tyto přílohy:",
+      "Příloha č. 1:\tMapový zákres záměru",
+      "Příloha č. 2:\tStudie záměru",
+      "Příloha č. 3:\tVyčíslení plnění",
+      "Další přílohy:\tPodle obsahu Smlouvy",
+    ]);
+    const indents: Record<number, { left: number; firstLine: number }> = {
+      2: { left: 567, firstLine: -567 },
+      // Two lines hang their values at a far indent, one tabs to it.
+      3: { left: 2265, firstLine: -1698 },
+      4: { left: 567, firstLine: 0 },
+      5: { left: 2268, firstLine: -1701 },
+    };
+    const manifest = {
+      ...base,
+      blocks: base.blocks.map((block, position) => ({
+        ...block,
+        ...(position === 2 ? { label: "1.", hash: "c" } : {}),
+        ...(indents[position] === undefined
+          ? {}
+          : { indent: indents[position] }),
+      })),
+    };
+    const reading = (
+      blockId: string,
+      role: "title" | "articleHeading" | "clause1" | "continuation" | "body",
+    ) => ({
+      blockId,
+      role,
+      confidence: 0.9,
+      alternatives: [],
+      mergedIntoBlockId: null,
+    });
+    const { body } = PROFILE.roles;
+    if (body === null) {
+      throw new Error("The contract template has a body style.");
+    }
+    const { plan } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, body: { ...body, indentLeft: 0 } },
+      },
+      roles: [
+        reading("p0", "title"),
+        reading("p1", "articleHeading"),
+        reading("p2", "clause1"),
+        reading("p3", "continuation"),
+        reading("p4", "continuation"),
+        reading("p5", "continuation"),
+        // Read as text of its own: another style, the same block.
+        reading("p6", "body"),
+      ],
+    });
+    const first = itemOf(plan, manifest, "Příloha č. 1");
+    const second = itemOf(plan, manifest, "Příloha č. 2");
+    const third = itemOf(plan, manifest, "Příloha č. 3");
+    expect(first?.indent?.hanging).toBeGreaterThan(0);
+    // The flush line's stop is where the hanging lines' values start: the
+    // nearer of two hanging indents a point apart, which each hanging
+    // line's own stop does not stand in front of.
+    const shared = Math.min(first?.indent?.left ?? 0, third?.indent?.left ?? 0);
+    expect(second?.tabStops).toEqual([shared]);
+    expect(itemOf(plan, manifest, "Další přílohy")?.tabStops).toEqual([shared]);
   });
 });
 
