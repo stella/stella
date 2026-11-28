@@ -85,6 +85,10 @@ export type LabelIndex = {
    *  (`Article 4` of a model contract behind an agreement): the label is
    *  the heading's own name, no citation of another provision. */
   ownLabelLengths: ReadonlyMap<string, number>;
+  /** Headings that name a part of the document above its articles
+   *  (`IV. Short form Terms` over `4 The Buyer's obligations`); they head
+   *  no article. */
+  partHeadingBlockIds: ReadonlySet<string>;
 };
 
 const HEADING_TITLE_MAX = 160;
@@ -1368,6 +1372,11 @@ export const buildLabelIndex = ({
             !entries.some(({ blockId }) => blockId === block.id),
         )
         .map(({ block, raw }) => [block.id, raw.manualLength]),
+    ),
+    partHeadingBlockIds: new Set(
+      labelled
+        .filter(({ position }) => partHeadings.has(position))
+        .map(({ block }) => block.id),
     ),
   };
 };
