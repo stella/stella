@@ -2891,7 +2891,7 @@ const main = () => {
   ];
   if (errors.length > 0) {
     process.stderr.write(
-      `Mutation/query invalidation baseline failed.\n${errors.join("\n")}\n`,
+      `Mutation/query invalidation baseline failed.\n${errors.join("\n")}\nFix: update invalidation declarations or shrink stale entries with \`bun scripts/check-mutation-query-invalidation.ts --write\`, then re-run \`bun scripts/check-mutation-query-invalidation.ts\`.\n`,
     );
     process.exit(1);
   }
