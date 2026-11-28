@@ -3512,6 +3512,48 @@ const labelFieldOf = (
     : "punctuatedLevelWords";
 };
 
+/**
+ * The label a target counted by the source's own list prints (a placed
+ * paragraph on a kept list, or a cell paragraph placed with its table whose
+ * list is kept); null for any other target.
+ */
+const keptListLabelOf = (
+  { sourceLists, tableOf, blockById }: Context,
+  target: Placement | undefined,
+  targetBlockId: string,
+): string | null => {
+  if (target !== undefined) {
+    return target.numbered && target.sourceList !== null
+      ? (target.block.label?.trim() ?? null)
+      : null;
+  }
+  const block = blockById.get(targetBlockId);
+  const numbering = block?.numbering ?? null;
+  return tableOf.has(targetBlockId) &&
+    numbering !== null &&
+    sourceLists.has(numbering.abstractNumId)
+    ? (block?.label?.trim() ?? null)
+    : null;
+};
+
+/**
+ * The field for a citation of a target on a kept source list: the list
+ * prints what the source prints, so `\n` shows the label without its
+ * trailing periods, where that is what the sentence cites.
+ */
+const keptListFieldOf = (
+  { text, start, end }: Citation,
+  label: string | null,
+): Field | UnlinkedReason => {
+  const number = (label ?? "").replace(/\.+$/u, "");
+  if (number === "") {
+    return "targetNotNumbered";
+  }
+  return text.slice(start, end) === number
+    ? { instruction: "\\n \\h", expectedText: number }
+    : "designatorMismatch";
+};
+
 /** What the general format switch may name for a carried field: that an
  *  update keeps the look of the result before it. */
 const KEPT_LOOK = /^(?:mergeformat|charformat)$/iu;
@@ -3862,9 +3904,9 @@ const markReferences = ({
   ): UnlinkedReason | TemplatePlanReference => {
     const { start, end } = designator;
     const target = placementById.get(targetBlockId);
+    const keptList = keptListLabelOf(context, target, targetBlockId);
     if (
-      target === undefined ||
-      !target.numbered ||
+      (keptList === null && (target === undefined || !target.numbered)) ||
       exclusions.targets.has(targetBlockId)
     ) {
       return typedAnnex(target) ? "annexTyped" : "targetNotNumbered";
@@ -3876,7 +3918,10 @@ const markReferences = ({
     if (text === undefined) {
       return "notPlaceable";
     }
-    const field = fieldOf(context, levelsByList, { text, start, end }, target);
+    const field =
+      keptList !== null || target === undefined
+        ? keptListFieldOf({ text, start, end }, keptList)
+        : fieldOf(context, levelsByList, { text, start, end }, target);
     if (typeof field === "string") {
       return field;
     }
