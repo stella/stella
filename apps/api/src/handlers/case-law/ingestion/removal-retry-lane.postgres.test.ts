@@ -6,6 +6,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, getTableName, isNull, sql } from "drizzle-orm";
 
+import { PublisherRateLimitRefusalError } from "@stll/case-law-adapters/retry";
+
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -20,7 +22,6 @@ import {
 } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
-import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { probeUkFclRemoval } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl-removal";
 import { getIngestionStatus } from "@/api/handlers/case-law/ingestion/get";
 import {

@@ -675,11 +675,6 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/pl-courts-normalize.test.ts::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/pl-courts-recheck.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3041,6 +3036,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/web/src/lib/organization/feature-access/capability-action-coverage.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/case-law-adapters/src/pl-courts-normalize.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },

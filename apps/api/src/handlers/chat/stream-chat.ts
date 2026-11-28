@@ -66,6 +66,11 @@ import {
   MAX_RUN_ATTACHMENTS,
 } from "@stll/api-contract/desktop-runner";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
+import {
+  readPresent,
+  readUnavailable,
+} from "@stll/case-law-ingestion-core/read-outcome";
+import type { ReadOutcome } from "@stll/case-law-ingestion-core/read-outcome";
 import type { ChatTurnBudget } from "@stll/chat-limits";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
@@ -297,8 +302,6 @@ import {
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
-import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
-import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
   createProviderDiagnostic,
   redactedProviderDiagnostic,

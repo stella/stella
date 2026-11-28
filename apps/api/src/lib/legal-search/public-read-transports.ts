@@ -31,7 +31,7 @@ export const PUBLIC_READ_TRANSPORTS = {
   database: ["apps/api/src/lib/public-law-read-db.ts"],
   "corpus-index": ["apps/api/src/lib/legal-search/corpus-index-client.ts"],
   "object-storage": ["apps/api/src/lib/s3.ts"],
-  publisher: ["apps/api/src/handlers/case-law/ingestion/adapters/retry.ts"],
+  publisher: ["packages/case-law-adapters/src/retry.ts"],
   development: ["apps/api/src/handlers/case-law/decisions/dev-reparse.ts"],
   hydration: [
     "apps/api/src/handlers/case-law/decisions/document-on-demand.ts",

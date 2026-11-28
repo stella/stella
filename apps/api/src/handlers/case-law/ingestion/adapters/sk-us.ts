@@ -1,3 +1,5 @@
+// parser-output-unchanged: [sk-us] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -21,6 +23,17 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-field";
+import { logDocumentParseFailure } from "@stll/case-law-adapters/document-parse-failure";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+import {
+  readPublisherBytes,
+  readPublisherText,
+} from "@stll/case-law-adapters/publisher-read";
+import {
+  adapterCatch,
+  normalizeMetadataValues,
+} from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -113,23 +126,13 @@ import { sha256Hex } from "@stll/sha256/bun";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { Temporal } from "@stll/time";
 
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  readPublisherBytes,
-  readPublisherText,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  adapterCatch,
-  INGESTION_USER_AGENT,
-  normalizeMetadataValues,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import {
   type AbsenceEvidence,
   isReadRefusal,
@@ -149,8 +152,6 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-
-import { logDocumentParseFailure } from "./document-parse-failure";
 
 // ── Constants ─────────────────────────────────────────────
 

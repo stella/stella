@@ -11,13 +11,6 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@stll/case-law-ingestion-core/ingestion-types";
-import type {
-  IngestionResult,
-  RawIngestionResult,
-} from "@stll/case-law-ingestion-core/ingestion-types";
-import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
-
 import {
   encodePlSnCursor,
   normalizePlSnListingItem,
@@ -27,7 +20,14 @@ import {
   plSnDecisionType,
   plSnListingIdentity,
   readPlSnEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
+} from "@stll/case-law-adapters/pl-sn";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  RawIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

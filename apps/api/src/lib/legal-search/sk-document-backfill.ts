@@ -52,6 +52,10 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type {
+  ReadOutcome,
+  ReadUnavailableCause,
+} from "@stll/case-law-ingestion-core/read-outcome";
 import { isUnreadablePdfError } from "@stll/case-law-parsers/sk-courts";
 import { sanitizeErrorForOutput } from "@stll/errors";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -83,10 +87,6 @@ import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
-import type {
-  ReadOutcome,
-  ReadUnavailableCause,
-} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";

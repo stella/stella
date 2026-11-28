@@ -24,6 +24,53 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
+import { AT_ASYLGH_SOURCE } from "@stll/case-law-adapters/at-asylgh";
+import { AT_BKS_SOURCE } from "@stll/case-law-adapters/at-bks";
+import { AT_BVWG_SOURCE } from "@stll/case-law-adapters/at-bvwg";
+import {
+  AT_COURTS_SOURCE,
+  buildAtRisDecision,
+} from "@stll/case-law-adapters/at-courts";
+import type { AtRisSourceDefinition } from "@stll/case-law-adapters/at-courts";
+import { AT_LVWG_SOURCE } from "@stll/case-law-adapters/at-lvwg";
+import {
+  AT_RIS_APPLICATIONS,
+  atRisBranchElement,
+} from "@stll/case-law-adapters/at-ris-fields";
+import type {
+  AtRisBranchField,
+  AtRisDocumentField,
+} from "@stll/case-law-adapters/at-ris-fields";
+import { AT_UBAS_SOURCE } from "@stll/case-law-adapters/at-ubas";
+import { AT_UMSE_SOURCE } from "@stll/case-law-adapters/at-umse";
+import { AT_UVS_SOURCE } from "@stll/case-law-adapters/at-uvs";
+import { AT_VERG_SOURCE } from "@stll/case-law-adapters/at-verg";
+import { AT_VFGH_SOURCE } from "@stll/case-law-adapters/at-vfgh";
+import { AT_VWGH_SOURCE } from "@stll/case-law-adapters/at-vwgh";
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+  plCourtsAdapter,
+} from "@stll/case-law-adapters/pl-courts";
+import { buildPlKisDecision } from "@stll/case-law-adapters/pl-kis";
+import { fetchPlNcourtDecision } from "@stll/case-law-adapters/pl-ncourt";
+import { assemblePlNsaDecision } from "@stll/case-law-adapters/pl-nsa";
+import {
+  huggingFaceShardSource,
+  PL_NSA_SNAPSHOT,
+  readPlNsaRows,
+} from "@stll/case-law-adapters/pl-nsa-dataset";
+import { buildPlSnDecision } from "@stll/case-law-adapters/pl-sn";
+import {
+  buildPlTkDecision,
+  createPlTkPageCache,
+} from "@stll/case-law-adapters/pl-tk";
+import type { PlTkListingRow } from "@stll/case-law-adapters/pl-tk";
+import { plUodoAdapter } from "@stll/case-law-adapters/pl-uodo";
+import {
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@stll/case-law-adapters/publisher-read";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   decodeSourceRawEnvelope,
@@ -43,30 +90,7 @@ import {
   czUohsSyntheticPdf,
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
-import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
-import { AT_BVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
-import {
-  AT_COURTS_SOURCE,
-  buildAtRisDecision,
-} from "@/api/handlers/case-law/ingestion/adapters/at-courts";
-import type { AtRisSourceDefinition } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import { createAtFindokAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
-import { AT_LVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-lvwg";
-import {
-  AT_RIS_APPLICATIONS,
-  atRisBranchElement,
-} from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
-import type {
-  AtRisBranchField,
-  AtRisDocumentField,
-} from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
-import { AT_UBAS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-ubas";
-import { AT_UMSE_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-umse";
-import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs";
-import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
-import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
-import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
 import { brTjdftAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import {
   brTstFetchPage,
@@ -94,27 +118,7 @@ import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
-import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-  plCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { fetchPlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
-import { buildPlKisDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { fetchPlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
-import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import {
-  huggingFaceShardSource,
-  PL_NSA_SNAPSHOT,
-  readPlNsaRows,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import { buildPlSnDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
-import {
-  buildPlTkDecision,
-  createPlTkPageCache,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import { plUodoAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import {
   assemblePlUokikRuling,
   buildPlUokikDecision,
@@ -124,10 +128,6 @@ import {
   plUokikDetailUrl,
   plUokikFileUrl,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
-import {
-  unreadPublisherError,
-  type UnreadPublisherOutcome,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { buildSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import {
   buildSkUsDecision,

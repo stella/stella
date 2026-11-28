@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 import { inspect } from "node:util";
 
+import { logDocumentParseFailure } from "@stll/case-law-adapters/document-parse-failure";
 import {
   createDevErrorLogger,
   errorOutputLogger,
@@ -10,7 +11,6 @@ import {
   sanitizeErrorForOutput,
 } from "@stll/errors";
 
-import { logDocumentParseFailure } from "@/api/handlers/case-law/ingestion/adapters/document-parse-failure";
 import { formatHealthReport } from "@/api/handlers/case-law/ingestion/adapters/health-check";
 import { captureError } from "@/api/lib/analytics/capture";
 import {

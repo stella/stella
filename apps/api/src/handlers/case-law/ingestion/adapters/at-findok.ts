@@ -1,3 +1,5 @@
+// parser-output-unchanged: [at-findok] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
@@ -12,6 +14,13 @@
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result, TaggedError } from "better-result";
 
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import {
+  PublisherPageError,
+  validatePublisherPage,
+} from "@stll/case-law-adapters/publisher-page";
+import { unreadPublisherError } from "@stll/case-law-adapters/publisher-read";
+import { adapterCatch } from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -60,13 +69,6 @@ import {
   FINDOK_REQUEST_INTERVAL_MS,
   readAtFindok,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import {
-  PublisherPageError,
-  validatePublisherPage,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   absentDecisionTextFields,
   absentTextField,

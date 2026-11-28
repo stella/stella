@@ -9,6 +9,8 @@ import {
   test,
 } from "bun:test";
 
+import { plSnAdapter } from "@stll/case-law-adapters/pl-sn";
+import { PUBLISHER_BODY_MAX_BYTES } from "@stll/case-law-adapters/publisher-read";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -18,8 +20,6 @@ import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { huBhgyAdapter } from "./hu-bhgy";
-import { plSnAdapter } from "./pl-sn";
-import { PUBLISHER_BODY_MAX_BYTES } from "./publisher-read";
 
 type Publisher = "hu-bhgy" | "pl-sn";
 const testFetch = createTestFetch();

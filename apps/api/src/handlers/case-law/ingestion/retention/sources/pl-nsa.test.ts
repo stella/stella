@@ -1,15 +1,15 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { assemblePlNsaDecision } from "@stll/case-law-adapters/pl-nsa";
+import {
+  PL_NSA_SNAPSHOT,
+  type PlNsaDatasetRow,
+} from "@stll/case-law-adapters/pl-nsa-dataset";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 
-import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import {
-  PL_NSA_SNAPSHOT,
-  type PlNsaDatasetRow,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { RETENTION_TEXT_ABSENCE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plNsaRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-nsa";
 import { isRecord } from "@/api/lib/type-guards";

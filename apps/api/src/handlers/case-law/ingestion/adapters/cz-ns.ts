@@ -1,3 +1,5 @@
+// parser-output-unchanged: [cz-ns] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -13,6 +15,25 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
+import { createCalendarDaySliceWalk } from "@stll/case-law-adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import { validatePublisherPage } from "@stll/case-law-adapters/publisher-page";
+import {
+  readBodyText,
+  readPublisher,
+  readPublisherText,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@stll/case-law-adapters/publisher-read";
+import {
+  adapterCatch,
+  isNullishArrayOf,
+  isNullishString,
+  isNullishValue,
+  parseCeDate,
+  stripHtml,
+  toOptionalValue,
+} from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -63,26 +84,6 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
-import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import {
-  readBodyText,
-  readPublisher,
-  readPublisherText,
-  unreadPublisherError,
-  type UnreadPublisherOutcome,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  adapterCatch,
-  INGESTION_USER_AGENT,
-  isNullishArrayOf,
-  isNullishString,
-  isNullishValue,
-  parseCeDate,
-  stripHtml,
-  toOptionalValue,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   absentDecisionTextFields,
@@ -90,6 +91,7 @@ import {
   sourceTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { isRecord } from "@/api/lib/type-guards";

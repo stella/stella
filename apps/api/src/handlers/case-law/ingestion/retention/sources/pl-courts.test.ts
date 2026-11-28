@@ -1,15 +1,15 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+} from "@stll/case-law-adapters/pl-courts";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,

@@ -2,6 +2,16 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  PUBLISHER_BODY_MAX_BYTES,
+  type PublisherReadInit,
+  readBodyText,
+  readGatedResponseText,
+  readPublisher,
+  readPublisherBytes,
+  readPublisherText,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty } from "@stll/property-testing";
@@ -14,17 +24,6 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
-
-import {
-  PUBLISHER_BODY_MAX_BYTES,
-  type PublisherReadInit,
-  readBodyText,
-  readGatedResponseText,
-  readPublisher,
-  readPublisherBytes,
-  readPublisherText,
-  unreadPublisherError,
-} from "./publisher-read";
 
 const testFetchState = createTestFetch();
 

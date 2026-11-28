@@ -1,3 +1,5 @@
+// parser-output-unchanged: [pl-kio] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
@@ -12,6 +14,16 @@
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { createCalendarDaySliceWalk } from "@stll/case-law-adapters/calendar-day-slice-walk";
+import { logDocumentParseFailure } from "@stll/case-law-adapters/document-parse-failure";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+import {
+  readPublisher,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
+import { rethrowCycleStop } from "@stll/case-law-adapters/retry";
+import { adapterCatch } from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -74,15 +86,6 @@ import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
-import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  readPublisher,
-  unreadPublisherError,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -136,7 +139,6 @@ import {
 } from "@/api/lib/legal-search/ingestion-normalization";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { logDocumentParseFailure } from "./document-parse-failure";
 import {
   loadPlKioHtml,
   PL_KIO_DOCUMENT_REJECTION,

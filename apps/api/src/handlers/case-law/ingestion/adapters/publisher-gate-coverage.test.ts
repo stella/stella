@@ -24,8 +24,6 @@ const SCANNED_TREES = ["ingestion", "judges"] as const;
  * Paths are relative to the case-law handler root.
  */
 const DIRECT_FETCH_MODULES = {
-  /** The gate itself: it reserves the slot, then makes the request. */
-  "ingestion/adapters/retry.ts": "reserve",
   /**
    * NALUS: the origin pinning and the court's limit-page redirect are this
    * module's own, and it reserves the shared slot through the policy map.

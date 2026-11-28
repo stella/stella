@@ -10,15 +10,14 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 const testFetchState = createTestFetch();
 
 const { createAtCourtsAdapter } =
-  await import("@/api/handlers/case-law/ingestion/adapters/at-courts");
+  await import("@stll/case-law-adapters/at-courts");
 const { readGatedResponseText } =
-  await import("@/api/handlers/case-law/ingestion/adapters/publisher-read");
+  await import("@stll/case-law-adapters/publisher-read");
 const { czNsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
 const { czRegionalAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/cz-regional");
-const { plCourtsAdapter } =
-  await import("@/api/handlers/case-law/ingestion/adapters/pl-courts");
+const { plCourtsAdapter } = await import("@stll/case-law-adapters/pl-courts");
 const { skCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/sk-courts");
 

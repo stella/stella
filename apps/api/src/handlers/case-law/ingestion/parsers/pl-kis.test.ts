@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { fileURLToPath } from "node:url";
 
+import { plKisCategoryById } from "@stll/case-law-adapters/pl-kis";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import {
   parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml,
@@ -16,8 +17,6 @@ import { load } from "@stll/html";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
-
-import { plKisCategoryById } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 
 const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
 const parsePlKisDocumentPdf = guardParser(uncheckedParsePlKisDocumentPdf);

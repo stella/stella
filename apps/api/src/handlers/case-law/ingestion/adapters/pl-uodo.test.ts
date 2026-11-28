@@ -12,15 +12,6 @@ import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
-  decodeSourceRawEnvelope,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@stll/case-law-ingestion-core/ingestion-types";
-import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
-import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
-import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
-
-import {
   assemblePlUodoDecision,
   classifyPlUodoRow,
   encodePlUodoCursor,
@@ -37,7 +28,16 @@ import {
   plUodoQuarantineId,
   plUodoRawPartsOf,
   tallyPlUodoSkips,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+} from "@stll/case-law-adapters/pl-uodo";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
+
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

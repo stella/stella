@@ -12,6 +12,8 @@ import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { plCommonCourtRulingKeys } from "@stll/case-law-adapters/pl-common-court-ruling-keys";
+import { plSupremeCourtRulingKeys } from "@stll/case-law-adapters/pl-sn-ruling-keys";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -27,8 +29,6 @@ import { PL_UOKIK_RULING_UNREAD } from "@stll/case-law-parsers/pl-uokik";
 import { load } from "@stll/html";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
-import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import {
   assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   encodePlUokikCursor,

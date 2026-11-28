@@ -1,18 +1,18 @@
+import "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { withPublisherRequestRateLimit } from "@stll/case-law-adapters/publisher-policy";
+import {
+  fetchPublisher,
+  fetchWithRetry,
+  PublisherRateLimitRefusalError,
+} from "@stll/case-law-adapters/retry";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
-
-import { withPublisherRequestRateLimit } from "./publisher-policy";
-import {
-  fetchPublisher,
-  fetchWithRetry,
-  PublisherRateLimitRefusalError,
-} from "./retry";
 
 const testFetchState = createTestFetch();
 

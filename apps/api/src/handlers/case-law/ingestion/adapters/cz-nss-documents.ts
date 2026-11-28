@@ -1,3 +1,4 @@
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -6,6 +7,7 @@
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { Result } from "better-result";
 
+import { PublisherTargetError } from "@stll/case-law-adapters/publisher-target";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
 import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
@@ -20,8 +22,6 @@ import {
   visibleHtmlText,
 } from "@stll/case-law-parsers/shared-inlines";
 import { load } from "@stll/html";
-
-import { PublisherTargetError } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 
 const NSS_REGISTRY_ORIGIN = "https://www.nssoud.cz";
 const ANONYMISED_DECISION_PATH =

@@ -1,3 +1,5 @@
+// parser-output-unchanged: [br-tst] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -73,6 +75,14 @@ import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
 } from "@stll/api-contract/decision-docket-grammar";
+import { logDocumentParseFailure } from "@stll/case-law-adapters/document-parse-failure";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+import {
+  readPublisherText,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
+import { adapterCatch } from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -130,14 +140,6 @@ import type {
 import { sha256Hex } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal, todayFor } from "@stll/time";
 
-import { logDocumentParseFailure } from "@/api/handlers/case-law/ingestion/adapters/document-parse-failure";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  readPublisherText,
-  unreadPublisherError,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { MAX_SLICE_PAGES } from "@/api/handlers/case-law/ingestion/slice-listing";
 import {
   absentDecisionTextFields,

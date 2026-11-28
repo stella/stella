@@ -1,3 +1,5 @@
+// parser-output-unchanged: [hu-bhgy] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -13,6 +15,16 @@
 // parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
 import { panic, Result } from "better-result";
 
+import { logDocumentParseFailure } from "@stll/case-law-adapters/document-parse-failure";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+// parser-output-unchanged: publisher reads now route through typed readPublisherText/readPublisherBytes; served payloads and parsed decisions are unchanged.
+import {
+  readPublisherBytes,
+  readPublisherText,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
+import { adapterCatch } from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -118,15 +130,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-// parser-output-unchanged: publisher reads now route through typed readPublisherText/readPublisherBytes; served payloads and parsed decisions are unchanged.
-import {
-  readPublisherBytes,
-  readPublisherText,
-  unreadPublisherError,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { arrayOrEmpty } from "@/api/lib/array";
 // parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
@@ -141,8 +144,6 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 import { isRecord } from "@/api/lib/type-guards";
-
-import { logDocumentParseFailure } from "./document-parse-failure";
 
 // ── Publisher boundary ───────────────────────────────────
 

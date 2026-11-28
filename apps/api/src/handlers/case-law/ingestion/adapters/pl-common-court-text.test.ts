@@ -11,19 +11,19 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+} from "@stll/case-law-adapters/pl-courts";
+import {
+  assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
+  readPlNcourtListing,
+} from "@stll/case-law-adapters/pl-ncourt";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import {
-  assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
-  readPlNcourtListing,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,

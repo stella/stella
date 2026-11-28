@@ -23,13 +23,13 @@
 
 import { Result } from "better-result";
 
-import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
-import { storedRawResultReader } from "@stll/case-law-ingestion-core/ingestion-types";
-
 import {
   PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
   plCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+} from "@stll/case-law-adapters/pl-courts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { storedRawResultReader } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { foldStoredSupplements } from "@/api/handlers/case-law/ingestion/supplement-fold";
 import type { SupplementFoldReport } from "@/api/handlers/case-law/ingestion/supplement-fold";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";

@@ -15,6 +15,7 @@ import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   caseLawSourceLanguagesOf,
 } from "@stll/api-contract/case-law-source-languages";
+import { PublisherRateLimitRefusalError } from "@stll/case-law-adapters/retry";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { withDocumentStageWindow } from "@stll/case-law-ingestion-core/document-stage-observation";
 import type {
@@ -55,7 +56,6 @@ import {
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   classifyObservation,
   resolveExistingDecisionPolicy,

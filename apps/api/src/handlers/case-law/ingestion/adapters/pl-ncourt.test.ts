@@ -21,6 +21,34 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import { plCommonCourtRulingKeys } from "@stll/case-law-adapters/pl-common-court-ruling-keys";
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+  PL_COURTS_RULING_DECISION_TYPES,
+  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+} from "@stll/case-law-adapters/pl-courts";
+import {
+  assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
+  encodePlNcourtCursor,
+  normalizePlNcourtListingRow,
+  parsePlNcourtCursor,
+  PL_NCOURT_WINDOW,
+  plNcourtAdapter,
+  plNcourtCensus,
+  plNcourtComponents,
+  plNcourtCourtCount,
+  plNcourtDay,
+  plNcourtDecisionType,
+  plNcourtPositionId,
+  readPlNcourtDetail,
+  readPlNcourtListing,
+  readPlNcourtListingRow,
+} from "@stll/case-law-adapters/pl-ncourt";
+import type {
+  PlNcourtBuild,
+  PlNcourtComponent,
+} from "@stll/case-law-adapters/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
 import type {
   IngestionResult,
@@ -43,34 +71,6 @@ import {
   validateAst,
 } from "@stll/case-law-parsers/validate-ast";
 
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
-import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-  PL_COURTS_RULING_DECISION_TYPES,
-  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import {
-  assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
-  encodePlNcourtCursor,
-  normalizePlNcourtListingRow,
-  parsePlNcourtCursor,
-  PL_NCOURT_WINDOW,
-  plNcourtAdapter,
-  plNcourtCensus,
-  plNcourtComponents,
-  plNcourtCourtCount,
-  plNcourtDay,
-  plNcourtDecisionType,
-  plNcourtPositionId,
-  readPlNcourtDetail,
-  readPlNcourtListing,
-  readPlNcourtListingRow,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
-import type {
-  PlNcourtBuild,
-  PlNcourtComponent,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import {

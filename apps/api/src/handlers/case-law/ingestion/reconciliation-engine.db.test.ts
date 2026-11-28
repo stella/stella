@@ -12,6 +12,10 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@stll/case-law-adapters/pl-courts.metadata-urls";
+import { plTkAdapter } from "@stll/case-law-adapters/pl-tk";
+import type { PlTkListingRow } from "@stll/case-law-adapters/pl-tk";
+import { plUodoHeldWithoutDetail } from "@stll/case-law-adapters/pl-uodo";
 import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import {
@@ -44,10 +48,6 @@ import {
 } from "@/api/db/schema";
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
-import { plTkAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readSourceContract } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";

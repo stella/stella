@@ -3,6 +3,9 @@ import { Glob } from "bun";
 import path from "node:path";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
+import { assembleAtRisDecision } from "@stll/case-law-adapters/at-courts";
+import { plCourtsAdapter } from "@stll/case-law-adapters/pl-courts";
+import { plSnAdapter } from "@stll/case-law-adapters/pl-sn";
 import {
   type DecisionSupplement,
   decodeSourceRawEnvelope,
@@ -24,7 +27,6 @@ import { load } from "@stll/html";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 
-import { assembleAtRisDecision } from "../apps/api/src/handlers/case-law/ingestion/adapters/at-courts";
 import {
   assembleAtFindokDecision,
   parseFindokManifest,
@@ -44,8 +46,6 @@ import {
   normalizeHuBhgyRow,
   readHuBhgySearch,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy";
-import { plCourtsAdapter } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-courts";
-import { plSnAdapter } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-sn";
 import { skCourtsAdapter } from "../apps/api/src/handlers/case-law/ingestion/adapters/sk-courts";
 import { skUsAdapter } from "../apps/api/src/handlers/case-law/ingestion/adapters/sk-us";
 import {

@@ -2,6 +2,11 @@ import { panic, Result } from "better-result";
 
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
+import {
+  type ReadOutcome,
+  readPresent,
+  readUnavailable,
+} from "@stll/case-law-ingestion-core/read-outcome";
 import type { PermissionInput } from "@stll/permissions";
 import type { listSkillMetadata } from "@stll/skills";
 
@@ -94,11 +99,6 @@ import type {
 } from "@/api/lib/chat/browser-site-notes/store";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
-import {
-  type ReadOutcome,
-  readPresent,
-  readUnavailable,
-} from "@/api/lib/errors/read-outcome";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";

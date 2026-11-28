@@ -1,3 +1,5 @@
+// parser-output-unchanged: [cz-nss] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -17,6 +19,22 @@ import {
   DECISION_TEXT_FIELD_KEYS,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { createCalendarDaySliceWalk } from "@stll/case-law-adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
+import {
+  readBodyText,
+  readPublisher,
+  readPublisherBytes,
+  readPublisherText,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@stll/case-law-adapters/publisher-read";
+import { publisherTarget } from "@stll/case-law-adapters/publisher-target";
+import {
+  adapterCatch,
+  parseCeDate,
+  stripHtml,
+} from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -69,7 +87,6 @@ import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
-import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { nssDocumentReferenceMatches } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-document-identity";
 import {
   decodeNssDocument,
@@ -83,22 +100,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { parseCzNssPublisherReviewMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-review-metadata";
 import type { CzNssPublisherReviewMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-review-metadata";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import {
-  readBodyText,
-  readPublisher,
-  readPublisherBytes,
-  readPublisherText,
-  unreadPublisherError,
-  type UnreadPublisherOutcome,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import {
-  adapterCatch,
-  INGESTION_USER_AGENT,
-  parseCeDate,
-  stripHtml,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechReporterIdentifiersFromCitationLabel } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { CzechAppealReview } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
@@ -111,6 +112,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { isDocketShapedDecisionType } from "@/api/lib/case-law/decision-type-key";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {

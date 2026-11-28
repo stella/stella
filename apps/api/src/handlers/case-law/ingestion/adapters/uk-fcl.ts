@@ -1,3 +1,5 @@
+// parser-output-unchanged: [uk-fcl] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
@@ -9,6 +11,12 @@ import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { GBR_EWHC_DIVISIONS } from "@stll/api-contract/decision-docket-grammar";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+import {
+  readPublisher,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
+import { adapterCatch } from "@stll/case-law-adapters/utils";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   defineSourceAdapter,
@@ -31,16 +39,14 @@ import { load } from "@stll/html";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
-import { publisherRequestIntervalMs } from "./publisher-policy";
-import { readPublisher, unreadPublisherError } from "./publisher-read";
 import {
   buildUkFclDecision,
   readUkFclFeed,
   reparseUkFclStoredRaw,
 } from "./uk-fcl-feed";
-import { adapterCatch, INGESTION_USER_AGENT } from "./utils";
 
 const ORIGIN = "https://caselaw.nationalarchives.gov.uk";
 const KEY = ADAPTER_KEYS.UK_FCL;

@@ -1,3 +1,4 @@
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: listing-stage labels do not alter directory parsing.
@@ -7,6 +8,8 @@ import {
   SK_COURT_REGISTRY_TIERS,
   SK_COURT_TIERS,
 } from "@stll/api-contract/sk-court-tiers";
+import { readPublisher } from "@stll/case-law-adapters/publisher-read";
+import { isNullishString } from "@stll/case-law-adapters/utils";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -14,8 +17,6 @@ import {
 import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import { readCappedBytes } from "@stll/skills/streaming";
 
-import { readPublisher } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { isNullishString } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   isReadRefusal,
   isStoredReadAbsence,

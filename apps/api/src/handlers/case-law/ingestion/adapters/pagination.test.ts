@@ -3,6 +3,15 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import type { FirstPageNumber } from "@stll/case-law-adapters/pagination";
+import {
+  createPagePaginatedFetch,
+  decodeOffsetCursor,
+  decodeTraversalCursor,
+  defineWalkKind,
+  encodeOffsetCursor,
+  encodeTraversalCursor,
+} from "@stll/case-law-adapters/pagination";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { IngestionItem } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
@@ -24,16 +33,6 @@ import {
   asTestRaw,
   readTestJson,
 } from "@/api/tests/helpers/test-tool-set";
-
-import type { FirstPageNumber } from "./pagination";
-import {
-  createPagePaginatedFetch,
-  decodeOffsetCursor,
-  decodeTraversalCursor,
-  defineWalkKind,
-  encodeOffsetCursor,
-  encodeTraversalCursor,
-} from "./pagination";
 
 const testFetchState = createTestFetch();
 

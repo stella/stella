@@ -16,10 +16,6 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
-import { BodyByteLimitError } from "@stll/fetch/body-reader";
-import { Temporal } from "@stll/time";
-
 import {
   listPlCourtsDayPage,
   PL_COURTS_DETAIL_READ_STATE,
@@ -27,8 +23,12 @@ import {
   PL_COURTS_WALK_KINDS,
   plCourtsAdapter,
   plCourtsModifiedSince,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+} from "@stll/case-law-adapters/pl-courts";
+import { PUBLISHER_BODY_MAX_BYTES } from "@stll/case-law-adapters/publisher-read";
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
+import { Temporal } from "@stll/time";
+
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

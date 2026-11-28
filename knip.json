@@ -62,6 +62,9 @@
     "packages/brand": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/case-law-adapters": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/case-law-ingestion-core": {
       "entry": ["src/**/*.test.ts"]
     },

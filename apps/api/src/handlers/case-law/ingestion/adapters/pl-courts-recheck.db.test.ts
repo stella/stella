@@ -17,6 +17,8 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { SaosItem } from "@stll/case-law-adapters/pl-courts";
+import { plCourtsAdapter } from "@stll/case-law-adapters/pl-courts";
 import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
 import type {
   SourceReconciliation,
@@ -34,8 +36,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
   RECONCILIATION_INGEST_BUDGET_MS,

@@ -1,3 +1,4 @@
+import "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { Result } from "better-result";
 /**
  * hu-bhgy against payloads eakta.birosag.hu actually served.
@@ -12,6 +13,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   decodeSourceRawEnvelope,
@@ -35,7 +37,6 @@ import {
   parseHuStatuteReferences,
   readHuBhgySearch,
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";

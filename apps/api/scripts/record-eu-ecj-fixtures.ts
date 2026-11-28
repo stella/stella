@@ -46,7 +46,6 @@ import {
   ecjEnvelopeDocument,
   fetchDecisionsByCelex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   manifestationStem,
   PORTAL_CORPUS,
@@ -54,6 +53,7 @@ import {
   type PortalPair,
   portalStem,
 } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
 
 import {

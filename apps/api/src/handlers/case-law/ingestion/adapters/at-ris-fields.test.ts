@@ -12,16 +12,16 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
-
-import { assembleAtRisDecision } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
-import type { AtRisSourceDefinition } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
+import { assembleAtRisDecision } from "@stll/case-law-adapters/at-courts";
+import type { AtRisSourceDefinition } from "@stll/case-law-adapters/at-courts";
 import {
   AT_RIS_APPLICATIONS,
   AT_RIS_PART,
   atRisSourceFields,
   listAtRisSourceFields,
-} from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
+} from "@stll/case-law-adapters/at-ris-fields";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
 import { isRecord } from "@/api/lib/type-guards";
 import { AT_RIS_SOURCES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import type { AtRisFixtureAdapter } from "@/api/tests/helpers/case-law-enrolled-fixtures";

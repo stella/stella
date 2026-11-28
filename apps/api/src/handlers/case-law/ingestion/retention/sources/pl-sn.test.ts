@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { plSnAdapter } from "@stll/case-law-adapters/pl-sn";
 import type {
   IngestionResult,
   RawIngestionResult,
@@ -14,7 +15,6 @@ import {
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import { plSnAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,

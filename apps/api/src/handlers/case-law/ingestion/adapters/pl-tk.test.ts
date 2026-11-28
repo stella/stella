@@ -1,3 +1,5 @@
+import "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import "@/api/lib/case-law/ingestion-user-agent";
 import { panic, Result } from "better-result";
 /**
  * pl-tk against pages the Tribunal's portal served.
@@ -17,16 +19,6 @@ import {
   test,
 } from "bun:test";
 
-import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@stll/case-law-ingestion-core/ingestion-types";
-import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
-import { parsePlTkPage } from "@stll/case-law-parsers/pl-tk";
-import { load } from "@stll/html";
-import { DAY_IN_MS, Temporal } from "@stll/time";
-
 import {
   assemblePlTkDecision,
   buildPlTkDecision,
@@ -43,13 +35,23 @@ import {
   plTkBatchWindow,
   plTkRawPartsOf,
   plTkSessionCooldown,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+} from "@stll/case-law-adapters/pl-tk";
 import type {
   PlTkListingRow,
   PlTkPageCache,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+} from "@stll/case-law-adapters/pl-tk";
+import { plConstitutionalTribunalRulingKeys } from "@stll/case-law-adapters/pl-tk-ruling-keys";
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { parsePlTkPage } from "@stll/case-law-parsers/pl-tk";
+import { load } from "@stll/html";
+import { DAY_IN_MS, Temporal } from "@stll/time";
+
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";

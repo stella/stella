@@ -24,17 +24,6 @@ import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  decodeSourceRawEnvelope,
-  PUBLISHER_REQUEST,
-  toPlainTextIngestionResult,
-} from "@stll/case-law-ingestion-core/ingestion-types";
-import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
-import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
-import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
-import { parsePlNsaDecision as uncheckedParsePlNsaDecision } from "@stll/case-law-parsers/pl-nsa";
-import { createSha256 } from "@stll/sha256/node";
-
-import {
   assemblePlNsaDecision,
   composePlNsaFullText,
   createPlNsaCrawler,
@@ -49,8 +38,8 @@ import {
   plNsaDocketRangeMembers,
   plNsaIdentityOf,
   plNsaQuarantineId,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import type { PlNsaDecisionKind } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
+} from "@stll/case-law-adapters/pl-nsa";
+import type { PlNsaDecisionKind } from "@stll/case-law-adapters/pl-nsa";
 import {
   huggingFaceShardSource,
   isPermanentPlNsaError,
@@ -60,12 +49,24 @@ import {
   plNsaSnapshotRows,
   readPlNsaListing,
   readPlNsaRows,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+} from "@stll/case-law-adapters/pl-nsa-dataset";
 import type {
   PlNsaDatasetRow,
   PlNsaShardSource,
   PlNsaSnapshot,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+} from "@stll/case-law-adapters/pl-nsa-dataset";
+import { PL_NSA_METADATA_URL_SCHEMA } from "@stll/case-law-adapters/pl-nsa.metadata-urls";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  toPlainTextIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { parsePlNsaDecision as uncheckedParsePlNsaDecision } from "@stll/case-law-parsers/pl-nsa";
+import { createSha256 } from "@stll/sha256/node";
+
 import {
   decisionIdentifiersFromMetadata,
   normalizeDecisionIdentifier,
@@ -75,8 +76,6 @@ import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
-
-import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
 
 const parsePlNsaDecision = guardParser(uncheckedParsePlNsaDecision);
 const testFetchState = createTestFetch();

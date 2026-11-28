@@ -1,3 +1,5 @@
+// parser-output-unchanged: [cz-uohs] extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
@@ -11,6 +13,13 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { publisherRequestIntervalMs } from "@stll/case-law-adapters/publisher-policy";
+import {
+  readPublisherBytes,
+  readPublisherText,
+  unreadPublisherError,
+} from "@stll/case-law-adapters/publisher-read";
+import { adapterCatch } from "@stll/case-law-adapters/utils";
 import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -78,13 +87,6 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  readPublisherBytes,
-  readPublisherText,
-  unreadPublisherError,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,

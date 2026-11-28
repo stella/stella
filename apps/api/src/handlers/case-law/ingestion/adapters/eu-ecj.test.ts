@@ -2,6 +2,7 @@ import { Result } from "better-result";
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { PublisherRateLimitRefusalError } from "@stll/case-law-adapters/retry";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
@@ -33,7 +34,6 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { SHELL_STEM } from "../parsers/__fixtures__/eu-ecj/corpus";
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
-import { PublisherRateLimitRefusalError } from "./retry";
 
 const testFetchState = createTestFetch();
 

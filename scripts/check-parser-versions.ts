@@ -34,6 +34,10 @@ const REGISTRY_PATH =
 const LEGISLATION_REGISTRY_PATH =
   "apps/api/src/handlers/legislation/ingestion/adapter-registry.ts";
 const ADAPTER_DIRECTORY = "apps/api/src/handlers/case-law/ingestion/adapters/";
+const ADAPTER_DIRECTORIES = [
+  ADAPTER_DIRECTORY,
+  "packages/case-law-adapters/src/",
+];
 const LEGISLATION_DIRECTORY = "apps/api/src/handlers/legislation/";
 const LEGISLATION_ADAPTER_DIRECTORY = `${LEGISLATION_DIRECTORY}ingestion/adapters/`;
 const CASE_LAW_DIRECTORY = "apps/api/src/lib/case-law/";
@@ -159,6 +163,7 @@ const OUTPUT_SHAPING_ROOTS = [
   LEGISLATION_ADAPTER_DIRECTORY,
   ...PARSER_DIRECTORIES,
   CASE_LAW_DIRECTORY,
+  "packages/case-law-adapters/",
   "packages/case-law-ingestion-core/",
   "packages/case-law-parsers/",
   "packages/legal-ast/",
@@ -585,7 +590,9 @@ class StaticTree {
   version(module: string, sourceKey: string): number | undefined {
     const versions = new Set<number>();
     for (const file of this.closure(module)) {
-      if (!file.startsWith(ADAPTER_DIRECTORY)) {
+      if (
+        !ADAPTER_DIRECTORIES.some((directory) => file.startsWith(directory))
+      ) {
         continue;
       }
       for (const match of this.code(file).matchAll(
@@ -706,7 +713,7 @@ class StaticTree {
       // Adapter-local assemblers, stored-raw decoders and case-law helpers
       // determine output even when no dedicated parser module exists.
       if (
-        file.startsWith(ADAPTER_DIRECTORY) ||
+        ADAPTER_DIRECTORIES.some((directory) => file.startsWith(directory)) ||
         (file.startsWith(CASE_LAW_DIRECTORY) &&
           !SEARCH_ONLY_CASE_LAW_MODULES.has(file))
       ) {
@@ -1182,6 +1189,21 @@ export const checkParserVersions = ({
       if (
         !head.has(file) &&
         externalizedRoots.some((root) => file.startsWith(root))
+      ) {
+        return false;
+      }
+      const movedDestination =
+        !head.has(file) && file.startsWith(ADAPTER_DIRECTORY)
+          ? `packages/case-law-adapters/src/${file.slice(ADAPTER_DIRECTORY.length)}`
+          : undefined;
+      if (
+        movedDestination !== undefined &&
+        current.parsers.has(movedDestination) &&
+        (head.get(movedDestination) ?? "").split("\n").some((line) => {
+          const marker = OUTPUT_UNCHANGED.exec(line);
+          const owner = marker?.at(1);
+          return marker !== null && (owner === undefined || owner === key);
+        })
       ) {
         return false;
       }

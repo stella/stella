@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@stll/case-law-adapters/pl-courts.metadata-urls";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
@@ -23,7 +24,6 @@ import {
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline as runIngestionPipelineWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processDecision as processDecisionWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline/decision";

@@ -12,6 +12,14 @@ import { afterEach, describe, expect, test } from "bun:test";
  * identity held and take the document out of every later reconciliation.
  */
 
+import type { SaosItem } from "@stll/case-law-adapters/pl-courts";
+import {
+  PL_COURTS_FIRST_SLICE,
+  PL_COURTS_LANGUAGE,
+  PL_COURTS_SLICE_PAGE_SIZE,
+  plCourtsAdapter,
+  plCourtsListingIdentity,
+} from "@stll/case-law-adapters/pl-courts";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   listingIdentityKey,
@@ -20,14 +28,6 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
-import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import {
-  PL_COURTS_FIRST_SLICE,
-  PL_COURTS_LANGUAGE,
-  PL_COURTS_SLICE_PAGE_SIZE,
-  plCourtsAdapter,
-  plCourtsListingIdentity,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import {

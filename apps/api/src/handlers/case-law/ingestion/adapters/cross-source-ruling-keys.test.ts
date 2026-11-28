@@ -15,19 +15,19 @@ import {
   rulingGroupKeys,
   rulingKeysOf,
 } from "@stll/api-contract/decision-ruling-identity";
-import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
-
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+} from "@stll/case-law-adapters/pl-courts";
+import { assemblePlNsaDecision } from "@stll/case-law-adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@stll/case-law-adapters/pl-nsa-dataset";
 import {
   assemblePlUodoDecision,
   normalizePlUodoRow,
   plUodoRawPartsOf,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+} from "@stll/case-law-adapters/pl-uodo";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { plTkFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";

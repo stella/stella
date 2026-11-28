@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 7,
+  "reason": "The new @stll/case-law-adapters package extracts pure case-law adapter modules from apps/api and declares the seven existing third-party packages those modules already use (@stll/time, better-result, hyparquet, slimdom, valibot, bun-types, fast-check); no new third-party dependency is added to the repository."
+}

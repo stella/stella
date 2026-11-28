@@ -9,6 +9,7 @@ import fc from "fast-check";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
+import { PL_NSA_SNAPSHOT } from "@stll/case-law-adapters/pl-nsa-dataset";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -37,7 +38,6 @@ import {
   caseLawCourtStatusRows,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readProvisionPendingCounts } from "@/api/lib/case-law/provision-pending";

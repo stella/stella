@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { buildPlainTextItem } from "@stll/case-law-adapters/item-build";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
@@ -12,7 +13,6 @@ import {
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { PublisherPageError } from "@stll/case-law-adapters/publisher-page";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
@@ -14,7 +15,6 @@ import {
   czNsAdapter,
   type CzNsListingRow,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { recaptureDecisionFromListing } from "@/api/handlers/case-law/ingestion/recapture";
 import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";

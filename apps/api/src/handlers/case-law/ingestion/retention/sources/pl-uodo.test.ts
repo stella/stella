@@ -6,16 +6,16 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
-import { validateAst } from "@stll/case-law-parsers/validate-ast";
-import { hasUsableAst } from "@stll/legal-ast/document-ast";
-
 import {
   assemblePlUodoDecision,
   normalizePlUodoRow,
   plUodoBodyFrom,
   plUodoRawPartsOf,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+} from "@stll/case-law-adapters/pl-uodo";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { validateAst } from "@stll/case-law-parsers/validate-ast";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
+
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,

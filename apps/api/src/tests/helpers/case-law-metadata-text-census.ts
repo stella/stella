@@ -1,3 +1,4 @@
+import { AT_RIS_APPLICATIONS } from "@stll/case-law-adapters/at-ris-fields";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 /**
  * What the display-text residue census does with every metadata key an
@@ -19,7 +20,6 @@ import {
   metadataUrlKeys,
 } from "@stll/case-law-ingestion-core/metadata-urls";
 
-import { AT_RIS_APPLICATIONS } from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
 import { UK_FCL_SOURCE_FIELDS } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
 import { isRecord } from "@/api/lib/type-guards";
 

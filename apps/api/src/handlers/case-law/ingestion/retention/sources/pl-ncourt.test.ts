@@ -5,18 +5,18 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
+  readPlNcourtDetail,
+  readPlNcourtListing,
+} from "@stll/case-law-adapters/pl-ncourt";
+import type { PlNcourtBuild } from "@stll/case-law-adapters/pl-ncourt";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import {
-  assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
-  readPlNcourtDetail,
-  readPlNcourtListing,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
-import type { PlNcourtBuild } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { plNcourtRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);

@@ -29,6 +29,7 @@ import {
   test,
 } from "bun:test";
 
+import { readPublisherText } from "@stll/case-law-adapters/publisher-read";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
 
@@ -87,8 +88,6 @@ import {
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
-
-import { readPublisherText } from "./publisher-read";
 
 const testFetchState = createTestFetch();
 

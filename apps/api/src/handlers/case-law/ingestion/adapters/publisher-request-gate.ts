@@ -1,3 +1,4 @@
+// parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: the cz-isir adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the Finanční správa and Ministry of the Interior gate reservations are new; existing gates and parsed output are unchanged.
@@ -13,8 +14,13 @@ import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+import {
+  advancePublisherGateFixtureGeneration,
+  publisherGateFixtureGeneration,
+} from "@stll/case-law-adapters/publisher-gate-fixture-state";
 import type { PublisherGateId } from "@stll/case-law-ingestion-core/publisher-gates";
 import {
+  abortableSleep,
   type PublisherGateClient,
   PublisherPacingStopped,
   type PublisherRequestGateConfig,
@@ -28,11 +34,6 @@ import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
-
-import {
-  advancePublisherGateFixtureGeneration,
-  publisherGateFixtureGeneration,
-} from "./publisher-gate-fixture-state";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
 const PUBLISHER_GATE_TIMEOUT_LABEL = {
@@ -148,42 +149,7 @@ export const withPublisherGateFixture = async <T>(
   return await fixtureDependencies.run(dependencies, operation);
 };
 
-export const abortableSleep = async (
-  durationMs: number,
-  signal?: AbortSignal,
-): Promise<void> => {
-  if (durationMs <= 0) {
-    return;
-  }
-  if (signal?.aborted) {
-    throw signal.reason instanceof Error
-      ? signal.reason
-      : new DOMException("Aborted", "AbortError");
-  }
-  if (signal === undefined) {
-    await Bun.sleep(durationMs);
-    return;
-  }
-
-  let onAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    onAbort = () => {
-      reject(
-        signal.reason instanceof Error
-          ? signal.reason
-          : new DOMException("Aborted", "AbortError"),
-      );
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-  try {
-    await Promise.race([Bun.sleep(durationMs), aborted]);
-  } finally {
-    if (onAbort !== undefined) {
-      signal.removeEventListener("abort", onAbort);
-    }
-  }
-};
+export { abortableSleep } from "@stll/case-law-ingestion-core/publisher-request-gate-hook";
 
 let redisClientModulePromise: Promise<typeof RedisClientModule> | undefined;
 const loadRedisClient = async () => {

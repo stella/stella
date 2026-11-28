@@ -24,15 +24,15 @@ import {
   mobileUpdateSignatureKey,
   type MobileUpdateTarget,
 } from "@stll/api-contract/mobile-updates";
-
-import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
-import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   type ReadOutcome,
   readOutcomeOfStatus,
   readPresent,
   readUnavailable,
-} from "@/api/lib/errors/read-outcome";
+} from "@stll/case-law-ingestion-core/read-outcome";
+
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type {
   SafeOutboundFetchError,
   SafeOutboundFetchResponse,

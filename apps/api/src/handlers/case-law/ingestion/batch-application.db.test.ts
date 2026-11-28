@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@stll/case-law-adapters/pl-courts.metadata-urls";
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   PUBLISHER_REQUEST,
@@ -47,7 +48,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import {
   applyCaseLawIngestionBatch,

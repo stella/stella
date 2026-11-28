@@ -156,6 +156,7 @@ const isTestSupportModule = (moduleId: string): boolean =>
 const PARSER_OR_AST_ROOTS = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/handlers/case-law/ingestion/adapters/",
+  "packages/case-law-adapters/src/",
   "apps/api/src/lib/legal-search/parsers/",
   "packages/case-law-parsers/",
   "packages/legal-ast/",

@@ -1,16 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  PublisherPageError,
+  readBotChallenge,
+  validatePublisherPage,
+} from "@stll/case-law-adapters/publisher-page";
 import { ZipArchive } from "@stll/docx-core/zip";
 
 import { ingestionStopKindOf } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
-
-import {
-  PublisherPageError,
-  readBotChallenge,
-  validatePublisherPage,
-} from "./publisher-page";
 
 const context = { adapterKey: "cz-regional", cursor: "2026-01-01:0" };
 

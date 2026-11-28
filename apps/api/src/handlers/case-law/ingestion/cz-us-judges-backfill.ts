@@ -25,6 +25,7 @@ import { panic, Result, TaggedError } from "better-result";
  */
 import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
 
+import { NALUS_DAILY_REQUEST_LIMIT } from "@stll/case-law-adapters/publisher-policy";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
@@ -46,7 +47,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { NalusSession } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
-import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { applyStoredDecisionBackfill } from "@/api/handlers/case-law/ingestion/pipeline/stored-decision-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";

@@ -101,9 +101,7 @@ const duplicateName = ({
     return "chunk";
   }
   if (
-    filename.endsWith(
-      "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
-    ) &&
+    filename.endsWith("packages/case-law-adapters/src/retry.ts") &&
     id.name === "backoffMs"
   ) {
     return "backoff";
