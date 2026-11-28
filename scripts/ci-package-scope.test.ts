@@ -458,9 +458,10 @@ test("tracked reader candidates yield the same census as reading every source", 
     }
     write("scripts/unrelated.ts", 'export const value = "notes.txt";');
     write("packages/example/unrelated.tsx", "export const Notes = () => null;");
-    execFileSync("git", ["init", "-q"], { cwd: root });
-    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync("git", ["init", "-q"], { maxBuffer: 2 ** 30, cwd: root });
+    execFileSync("git", ["add", "."], { maxBuffer: 2 ** 30, cwd: root });
     const tracked = execFileSync("git", ["ls-files", "-z"], {
+      maxBuffer: 2 ** 30,
       cwd: root,
       encoding: "utf-8",
     })
