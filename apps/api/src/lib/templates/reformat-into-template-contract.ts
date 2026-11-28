@@ -36,6 +36,10 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
   "label_kept_as_text",
   "label_converted_to_text",
   "role_without_style",
+  /** The formatter was unsure what this paragraph is and placed it in a
+   *  style its likeliest other reading (`reason`: that role) would not
+   *  use; check that its style fits. */
+  "role_uncertain",
   "articles_set_as_text",
   "page_start_not_kept",
   "page_start_moved",

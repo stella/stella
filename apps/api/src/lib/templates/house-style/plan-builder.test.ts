@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { roleItemId } from "@/api/lib/templates/house-style/ambiguity";
 import type {
   DocxBlock,
   DocxBlockManifest,
@@ -222,6 +223,46 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
         reason: "annexTyped",
       }),
     );
+  });
+});
+
+describe("buildTemplatePlan, roles nobody decided", () => {
+  const manifest = czechContract("Viz čl. II odst. 2 této smlouvy.");
+  const blockId = blockIdOf(manifest, "SMLOUVA O DODÁVCE");
+  const roleItems = [
+    {
+      id: roleItemId(blockId),
+      kind: "blockRole" as const,
+      blockId,
+      options: [
+        { role: "title" as const, confidence: 0.45 },
+        { role: "body" as const, confidence: 0.4 },
+      ],
+    },
+  ];
+  const uncertain = (items: readonly FormattingNoteItem[]) =>
+    items.filter(({ kind }) => kind === "roleUncertain");
+
+  test("a doubtful paragraph left undecided is noted with the style its other reading would get", () => {
+    const { note } = build(manifest, "keepSource", { roleItems });
+    expect(uncertain(note.items)).toEqual([
+      {
+        kind: "roleUncertain",
+        blockId,
+        role: "title",
+        styleId: "Title",
+        alternative: "body",
+        alternativeStyleId: expect.any(String),
+      },
+    ]);
+  });
+
+  test("an answered one is not", () => {
+    const { note } = build(manifest, "keepSource", {
+      roleItems,
+      decisions: new Map([[roleItemId(blockId), "title"]]),
+    });
+    expect(uncertain(note.items)).toEqual([]);
   });
 });
 

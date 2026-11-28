@@ -42,7 +42,15 @@ export type AmbiguityResolver = (
   items: readonly AmbiguityItem[],
 ) => Promise<AmbiguityDecision[]>;
 
-const ROLE_REVIEW_BELOW = 0.5;
+/** Below this the rules' reading of a block is a guess between near
+ *  readings: a line at the boundary of two zones, text under a provision that
+ *  may or may not continue it. */
+const ROLE_REVIEW_BELOW = 0.7;
+const ROLE_OPTIONS_MAX = 4;
+/** Readings offered from the blocks around a doubtful one, and plain text:
+ *  less likely than the rules' own alternatives. */
+const NEIGHBOUR_CONFIDENCE = 0.2;
+const PLAIN_CONFIDENCE = 0.1;
 const TARGET_CONFIDENCE_MIN = 0.6;
 const TARGET_MARGIN_MIN = 0.2;
 
@@ -55,6 +63,42 @@ export const targetItemId = (
 ): string => `target:${referenceId}:${String(designatorIndex)}`;
 
 export const roleItemId = (blockId: string): string => `role:${blockId}`;
+
+/**
+ * The readings offered for a doubtful block: the rules' reading and their
+ * alternatives, then the readings of the blocks before and after it, then
+ * plain text. Most doubtful readings put a line on the wrong side of a
+ * boundary (the title and the parties, the parties and the recitals, a
+ * provision and the text under it), and the reading of the other side is
+ * that of a neighbour.
+ */
+const roleOptionsOf = (
+  roles: readonly RoleProposal[],
+  position: number,
+): { role: HouseStyleRole; confidence: number }[] => {
+  const proposal = roles[position];
+  if (proposal === undefined) {
+    return [];
+  }
+  const neighbours = [roles[position - 1], roles[position + 1]].flatMap(
+    (neighbour) =>
+      neighbour === undefined
+        ? []
+        : [{ role: neighbour.role, confidence: NEIGHBOUR_CONFIDENCE }],
+  );
+  const options: { role: HouseStyleRole; confidence: number }[] = [];
+  for (const option of [
+    { role: proposal.role, confidence: proposal.confidence },
+    ...proposal.alternatives,
+    ...neighbours,
+    { role: "body" as const, confidence: PLAIN_CONFIDENCE },
+  ]) {
+    if (!options.some(({ role }) => role === option.role)) {
+      options.push(option);
+    }
+  }
+  return options.slice(0, ROLE_OPTIONS_MAX);
+};
 
 type CollectOptions = {
   references: readonly DetectedReference[];
@@ -87,13 +131,14 @@ export const collectAmbiguities = ({
       }
     }
   }
-  for (const { blockId, role, confidence, alternatives } of roles) {
-    if (confidence < ROLE_REVIEW_BELOW && alternatives.length > 0) {
+  for (const [position, { blockId, confidence }] of roles.entries()) {
+    const options = roleOptionsOf(roles, position);
+    if (confidence < ROLE_REVIEW_BELOW && options.length > 1) {
       items.push({
         id: roleItemId(blockId),
         kind: "blockRole",
         blockId,
-        options: [{ role, confidence }, ...alternatives],
+        options,
       });
     }
   }

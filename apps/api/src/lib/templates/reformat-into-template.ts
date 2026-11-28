@@ -193,6 +193,7 @@ const KNOWN_NOTE_KINDS = [
   "labelKeptAsText",
   "labelConvertedToText",
   "roleWithoutStyle",
+  "roleUncertain",
   "articlesSetAsText",
   "pageStartNotKept",
   "pageStartMoved",
@@ -324,6 +325,13 @@ const noteItemOf = (
         kind: "role_without_style",
         reason: item.role,
         count: item.blocks,
+      };
+    case "roleUncertain":
+      return {
+        kind: "role_uncertain",
+        blockId: item.blockId,
+        reason: item.alternative,
+        ...textOf(item.blockId),
       };
     case "articlesSetAsText":
       return { kind: "articles_set_as_text", count: item.blocks };

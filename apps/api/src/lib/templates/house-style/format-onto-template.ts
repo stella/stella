@@ -23,7 +23,10 @@ import {
   acceptDecisions,
   collectAmbiguities,
 } from "@/api/lib/templates/house-style/ambiguity";
-import type { AmbiguityResolver } from "@/api/lib/templates/house-style/ambiguity";
+import type {
+  AmbiguityItem,
+  AmbiguityResolver,
+} from "@/api/lib/templates/house-style/ambiguity";
 import { closeNumberParts } from "@/api/lib/templates/house-style/designators";
 import { TemplateEngineError } from "@/api/lib/templates/house-style/folio-contract";
 import type {
@@ -476,6 +479,10 @@ export const formatOntoTemplate = async ({
     open,
     await resolveAmbiguities(structuredClone(open)),
   );
+  const roleItems = open.filter(
+    (item): item is Extract<AmbiguityItem, { kind: "blockRole" }> =>
+      item.kind === "blockRole",
+  );
 
   const exclusions: Exclusions = {
     numbering: new Set(),
@@ -517,6 +524,7 @@ export const formatOntoTemplate = async ({
       mode,
       index,
       decisions,
+      roleItems,
       suspicions,
       exclusions,
       sourceHighlightColors: highlighted.value,

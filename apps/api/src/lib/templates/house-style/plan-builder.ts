@@ -17,6 +17,7 @@ import {
   scopeItemId,
   targetItemId,
 } from "@/api/lib/templates/house-style/ambiguity";
+import type { AmbiguityItem } from "@/api/lib/templates/house-style/ambiguity";
 import { closeNumberParts } from "@/api/lib/templates/house-style/designators";
 import { isStrippableLabel } from "@/api/lib/templates/house-style/folio-contract";
 import type {
@@ -197,6 +198,17 @@ export type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
+  /** The rules were unsure what this paragraph is and nobody decided: it
+   *  was placed as `role` in `styleId`, and its next likeliest reading,
+   *  `alternative`, would have set it in `alternativeStyleId`. */
+  | {
+      kind: "roleUncertain";
+      blockId: string;
+      role: HouseStyleRole;
+      styleId: string | null;
+      alternative: HouseStyleRole;
+      alternativeStyleId: string;
+    }
   /** The source tracked changes and was formatted in one view of them: the
    *  output carries no revision. `stated` is false when nobody chose and
    *  every change was accepted. */
@@ -471,6 +483,9 @@ type BuildOptions = {
   index?: LabelIndex;
   /** Accepted answers to the open decisions, by item id. */
   decisions?: ReadonlyMap<string, string>;
+  /** The role questions that were asked; one left without an answer is
+   *  noted where its answer would change the paragraph's style. */
+  roleItems?: readonly Extract<AmbiguityItem, { kind: "blockRole" }>[];
   suspicions?: readonly ReferenceSuspicion[];
   exclusions?: PlanExclusions;
   /** The highlight colours the source's own text carries. */
@@ -687,6 +702,55 @@ const styleTarget = (
     }
   }
   return null;
+};
+
+/** The style a role's paragraphs get, without counting a missing one. */
+const styleIdOf = (context: Context, role: HouseStyleRole): string | null => {
+  for (const candidate of [role, ...STYLE_FALLBACK[role]]) {
+    const target = context.profile.roles[candidate];
+    if (target !== null) {
+      return evenedStyle(context, candidate, target).styleId;
+    }
+  }
+  return null;
+};
+
+/**
+ * Notes each paragraph placed outside a table whose role the rules were
+ * unsure of and no answer decided, when its next likeliest reading would
+ * set it in another style: what a person should look at. Two readings that
+ * share a style look the same and are not noted.
+ */
+const noteUncertainRoles = (
+  context: Context,
+  placements: readonly Placement[],
+  roleItems: readonly Extract<AmbiguityItem, { kind: "blockRole" }>[],
+): void => {
+  const open = new Map(
+    roleItems
+      .filter(({ id }) => !context.decisions.has(id))
+      .map((item) => [item.blockId, item]),
+  );
+  for (const { block, role, styleId } of placements) {
+    const item = open.get(block.id);
+    const alternative = item?.options.find(
+      (option) => option.role !== role,
+    )?.role;
+    if (alternative === undefined || context.tableOf.has(block.id)) {
+      continue;
+    }
+    const alternativeStyleId = styleIdOf(context, alternative);
+    if (alternativeStyleId !== null && alternativeStyleId !== styleId) {
+      context.items.push({
+        kind: "roleUncertain",
+        blockId: block.id,
+        role,
+        styleId,
+        alternative,
+        alternativeStyleId,
+      });
+    }
+  }
 };
 
 /**
@@ -4700,6 +4764,7 @@ const buildOnce = (
     mode,
     index = buildLabelIndex(manifest),
     decisions = new Map<string, string>(),
+    roleItems = [],
     suspicions = [],
     exclusions = NO_EXCLUSIONS,
     sourceHighlightColors,
@@ -4785,6 +4850,7 @@ const buildOnce = (
     labelRequests(context, body),
   );
   noteReadings(context, placed, references, suspicions);
+  noteUncertainRoles(context, placed.placements, roleItems);
   noteStaleReferences(context);
   noteTrackedChanges(context, placed, manifest, trackedChangesStated);
 
