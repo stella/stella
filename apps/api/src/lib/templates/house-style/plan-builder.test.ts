@@ -1124,6 +1124,42 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
     expect(placed.labelsNotKept).toEqual([]);
   });
 
+  test("a citation of a row the source's own list numbers is a number field", () => {
+    const table = inColumns(2, [
+      numbered("1.", "", 7),
+      "Customer",
+      numbered("2.", "", 7),
+      "Supplier",
+    ]);
+    const citing = "The party identified at Item 2 of the details.";
+    const block = {
+      ...manifestOf([citing]).blocks[0],
+      id: "p9",
+      index: 9,
+    } as DocxBlock;
+    const start = citing.indexOf("2");
+    block.crossReferences = [
+      {
+        start,
+        end: start + 1,
+        instruction: String.raw` REF _Ref2 \w \h `,
+        bookmark: "_Ref2",
+        targetBlockId: "p2",
+        targetWhole: true,
+      },
+    ];
+    const withCitation = { ...table, blocks: [...table.blocks, block] };
+    const { plan } = build(withCitation);
+    expect(plan.references).toContainEqual({
+      blockId: "p9",
+      start,
+      end: start + 1,
+      targetBlockId: "p2",
+      instruction: String.raw`\n \h`,
+      expectedText: "2",
+    });
+  });
+
   test("a list one paragraph of which a level of the template prints stays on the template's list", () => {
     // Paragraph 1. and the composite items count in one definition: a copy
     // of it would count without 1., so the composite labels stay text.
