@@ -714,8 +714,11 @@ const fieldsReadAsNone = (
   index: LabelIndex,
 ): DetectedReference[] =>
   blocks.flatMap((block) => {
+    if (block.crossReferences === undefined) {
+      return [];
+    }
     const read = references.filter(({ blockId }) => blockId === block.id);
-    return (block.crossReferences ?? []).flatMap(
+    return block.crossReferences.flatMap(
       ({ start, end, targetBlockId }): DetectedReference[] => {
         const entry =
           targetBlockId === null
@@ -801,7 +804,10 @@ const linkedByDrafter = (
     const field = fields.find(
       ({ start, end }) => start <= designator.start && designator.end <= end,
     );
-    if (field === undefined || field.targetBlockId === null) {
+    if (field === undefined) {
+      return null;
+    }
+    if (field.targetBlockId === null) {
       return null;
     }
     const last = !reference.designators.some(
@@ -849,9 +855,13 @@ const settledBySourceFields = (
   blocks: readonly DocxBlock[],
   index: LabelIndex,
 ): DetectedReference => {
-  const fields = (
-    blocks.find(({ id }) => id === reference.blockId)?.crossReferences ?? []
-  ).filter(({ targetBlockId }) => targetBlockId !== null);
+  const held = blocks.find(
+    ({ id }) => id === reference.blockId,
+  )?.crossReferences;
+  const fields =
+    held === undefined
+      ? []
+      : held.filter(({ targetBlockId }) => targetBlockId !== null);
   if (fields.length === 0) {
     return reference;
   }

@@ -904,7 +904,7 @@ describe("a chain read as another document's that the drafter linked here", () =
     const block = manifest.blocks.find(({ text }) => text.includes(citing));
     const start = citing.indexOf("3.2");
     if (block === undefined) {
-      return panic("the citing paragraph is missing");
+      throw new Error("the citing paragraph is missing");
     }
     block.crossReferences = [
       {
