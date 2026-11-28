@@ -1,3 +1,4 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: listing-stage labels do not alter collection parsing.
 // parser-output-unchanged: publisher reads use readPublisher with identical status handling; collection parsing is unchanged.

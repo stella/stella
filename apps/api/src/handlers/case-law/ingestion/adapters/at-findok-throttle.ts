@@ -1,3 +1,4 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: [at-findok] migrated throttle wrapper to readPublisher; served response parsing is unchanged.
 import { panic } from "better-result";

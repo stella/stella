@@ -1,3 +1,4 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 // parser-output-unchanged: Refusal results carry typed read outcomes; successful responses are parsed unchanged.

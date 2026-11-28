@@ -1,3 +1,4 @@
+// parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: typed publisher read wrapper preserves the RIS origin/path policy and served response text.
 import { panic } from "better-result";
 
