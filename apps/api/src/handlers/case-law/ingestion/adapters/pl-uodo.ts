@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and narrow-union lookup refactor preserves identical runtime output
@@ -17,6 +18,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -51,6 +53,7 @@ import type {
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { parsePlUodoDecisionXml } from "@stll/case-law-parsers/pl-uodo";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -115,8 +118,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -617,10 +618,13 @@ export const classifyPlUodoRow = (row: PlUodoRow): PlUodoRecordClass => {
     }
     const authority = authorityOf(row);
     if (authority === null) {
-      logger.warn("case_law.ingestion.court_not_stated", {
-        adapterKey: ADAPTER_KEYS.PL_UODO,
-        court: row.name ?? "",
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.court_not_stated",
+        {
+          adapterKey: ADAPTER_KEYS.PL_UODO,
+          court: row.name ?? "",
+        },
+      );
       return {
         type: "skipped",
         reason: PL_UODO_SKIP_REASON.UNRECOGNISED_AUTHORITY,
@@ -631,10 +635,13 @@ export const classifyPlUodoRow = (row: PlUodoRow): PlUodoRecordClass => {
   if (type === "court" && country === "pl") {
     const court = rulingCourtOf(row);
     if (court === null) {
-      logger.warn("case_law.ingestion.court_not_stated", {
-        adapterKey: ADAPTER_KEYS.PL_UODO,
-        court: row.name ?? "",
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.court_not_stated",
+        {
+          adapterKey: ADAPTER_KEYS.PL_UODO,
+          court: row.name ?? "",
+        },
+      );
       return {
         type: "skipped",
         reason: PL_UODO_SKIP_REASON.UNRECOGNISED_COURT,
@@ -673,11 +680,14 @@ const reportSkips = (where: string, tally: PlUodoSkipTally): void => {
   if (Object.keys(tally).length === 0) {
     return;
   }
-  logger.info("case_law.ingestion.records_out_of_scope", {
-    adapterKey: ADAPTER_KEYS.PL_UODO,
-    where,
-    ...tally,
-  });
+  getIngestionDiagnosticsSink().info(
+    "case_law.ingestion.records_out_of_scope",
+    {
+      adapterKey: ADAPTER_KEYS.PL_UODO,
+      where,
+      ...tally,
+    },
+  );
 };
 
 // ── Identity, dockets and links ──────────────────────────
@@ -877,10 +887,13 @@ const rulingKindOf = (kind: string | undefined): string | undefined => {
   const lowered = kind?.trim().toLocaleLowerCase("pl-PL") ?? "";
   const matched = RULING_KINDS.find((candidate) => candidate === lowered);
   if (matched === undefined) {
-    logger.warn("case_law.ingestion.decision_type_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_UODO,
-      decisionForm: kind ?? "",
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.decision_type_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_UODO,
+        decisionForm: kind ?? "",
+      },
+    );
   }
   return matched;
 };
@@ -1208,11 +1221,14 @@ const fetchBody = async ({
         });
       }
       if (outcome.cause.kind === "too-large") {
-        logger.warn("case_law.ingestion.document_too_large", {
-          adapterKey: ADAPTER_KEYS.PL_UODO,
-          caseNumber: row.refname ?? "",
-          maxBytes: BODY_MAX_BYTES,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.document_too_large",
+          {
+            adapterKey: ADAPTER_KEYS.PL_UODO,
+            caseNumber: row.refname ?? "",
+            maxBytes: BODY_MAX_BYTES,
+          },
+        );
         return Result.ok({
           type: "absent",
           status: PL_UODO_BODY_STATUS.TOO_LARGE,
@@ -1236,11 +1252,14 @@ const fetchBody = async ({
   if (bytes.length > BODY_MAX_BYTES) {
     // A body past the ceiling is as unreadable on the next cycle as on this
     // one, so the decision is kept as its record rather than holding the page.
-    logger.warn("case_law.ingestion.document_too_large", {
-      adapterKey: ADAPTER_KEYS.PL_UODO,
-      caseNumber: row.refname ?? "",
-      maxBytes: BODY_MAX_BYTES,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.document_too_large",
+      {
+        adapterKey: ADAPTER_KEYS.PL_UODO,
+        caseNumber: row.refname ?? "",
+        maxBytes: BODY_MAX_BYTES,
+      },
+    );
     return Result.ok({ type: "absent", status: PL_UODO_BODY_STATUS.TOO_LARGE });
   }
   const body = plUodoBodyFrom(row, bytes);
@@ -1394,17 +1413,20 @@ const assembleAuthorityDecision = ({
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
   if (document !== null) {
     for (const element of document.unmappedMarkup) {
-      logger.warn("case_law.ingestion.markup_unmapped", {
+      getIngestionDiagnosticsSink().warn("case_law.ingestion.markup_unmapped", {
         adapterKey: ADAPTER_KEYS.PL_UODO,
         element,
       });
     }
   }
   if (body?.checksumMatches === false) {
-    logger.warn("case_law.ingestion.document_checksum_mismatch", {
-      adapterKey: ADAPTER_KEYS.PL_UODO,
-      caseNumber,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.document_checksum_mismatch",
+      {
+        adapterKey: ADAPTER_KEYS.PL_UODO,
+        caseNumber,
+      },
+    );
   }
   const documentAst: DocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
@@ -1612,7 +1634,7 @@ const assembleQuarantined = ({
     recordClass === "authority-decision"
       ? PL_UODO_DECISION_TYPE
       : rulingKindOf(row.kind);
-  logger.warn("case_law.ingestion.record_quarantined", {
+  getIngestionDiagnosticsSink().warn("case_law.ingestion.record_quarantined", {
     adapterKey: ADAPTER_KEYS.PL_UODO,
     sourceDocumentId: quarantineId,
   });
@@ -2523,10 +2545,13 @@ const plUodoFetchPage = async (
       // A record stating neither a URN nor anything to fingerprint: nothing
       // can key it, and the report is what keeps it from being a silence.
       case "unkeyable":
-        logger.warn("case_law.ingestion.record_unidentifiable", {
-          adapterKey: ADAPTER_KEYS.PL_UODO,
-          cursor: encoded,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.record_unidentifiable",
+          {
+            adapterKey: ADAPTER_KEYS.PL_UODO,
+            cursor: encoded,
+          },
+        );
         break;
       // The cursor moves past the record either way, so the crawl keeps the
       // row a decision without a body still describes; only the

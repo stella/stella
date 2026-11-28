@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 // parser-output-unchanged: [cz-ns] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
@@ -52,6 +53,7 @@ import { panic, Result } from "better-result";
 import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/case-law-consts";
 import { observePublisherDocumentFetch } from "@stll/case-law-ingestion-core/document-stage-observation";
 import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 // parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import type { FetchWithTimeoutInit } from "@stll/fetch";
@@ -68,7 +70,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
-import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";
 import { limitPublisherResponse } from "./publisher-response-limit";
@@ -519,7 +520,7 @@ export const fetchWithRetry = async (
           rangeMs: baseDelayMs,
         },
       });
-      logger.warn("case_law.ingestion.fetch_retry", {
+      getIngestionDiagnosticsSink().warn("case_law.ingestion.fetch_retry", {
         adapterKey,
         url,
         httpStatus: response.status,
@@ -550,13 +551,16 @@ export const fetchWithRetry = async (
             rangeMs: baseDelayMs,
           },
         });
-        logger.warn("case_law.ingestion.fetch_timeout_retry", {
-          adapterKey,
-          url,
-          attempt: attempt + 1,
-          maxRetries,
-          delayMs: Math.round(delay),
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.fetch_timeout_retry",
+          {
+            adapterKey,
+            url,
+            attempt: attempt + 1,
+            maxRetries,
+            delayMs: Math.round(delay),
+          },
+        );
         await Bun.sleep(delay);
         continue;
       }

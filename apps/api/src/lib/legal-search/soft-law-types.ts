@@ -7,9 +7,8 @@ import type {
   SourceSurfaceCensus,
   SourceTotalCount,
 } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { PublisherGateId } from "@stll/case-law-ingestion-core/publisher-gates";
 import type { GuidanceKind } from "@stll/legal-ast/document-kind";
-
-import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 
 import {
   SOFT_LAW_BLOCK_REASONS,

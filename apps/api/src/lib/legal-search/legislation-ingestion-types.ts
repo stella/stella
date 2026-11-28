@@ -11,12 +11,12 @@ import type {
   SourceSliceWalk,
   SourceTotalCount,
 } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { OutboundHostPolicy } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
 
 import type { LegislationAmendmentEffect } from "./legislation-amendment-effect";
 

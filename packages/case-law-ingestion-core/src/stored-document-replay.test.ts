@@ -1,14 +1,14 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 import {
   encodeSourceRawEnvelope,
   StoredRawReadError,
   type StoredRawReparseInput,
-} from "@stll/case-law-ingestion-core/ingestion-types";
-import { sha256Hex } from "@stll/sha256/bun";
-
-import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
+} from "./ingestion-types";
+import { readStoredDocumentObject } from "./stored-document-replay";
 
 const bytes = new TextEncoder().encode("stored document");
 const input = {

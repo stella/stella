@@ -1,12 +1,13 @@
 // parser-output-unchanged: typed publisher read wrapper preserves the RIS origin/path policy and served response text.
 import { panic } from "better-result";
 
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+
 import {
   type PublisherReadInit,
   readPublisherText,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 /**
  * Every RIS request, pinned to the publisher's own origins and paths.

@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: listing-stage labels do not alter directory parsing.
 import { panic, Result } from "better-result";
@@ -10,6 +11,7 @@ import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
 } from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { readPublisher } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
@@ -22,7 +24,6 @@ import {
   type StoredReadAbsence,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 export type SkCourtRegistryRecord = Readonly<Record<string, unknown>> & {
@@ -136,11 +137,14 @@ export const skCourtDirectoryMetadata = (
     ? SK_COURT_REGISTRY_TIERS[record.registreGuid]
     : statedTier;
   if (tier === undefined) {
-    logger.warn("case_law.ingestion.unknown_court_type", {
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      registreGuid: record.registreGuid,
-      type: type ?? "not_stated",
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.unknown_court_type",
+      {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        registreGuid: record.registreGuid,
+        type: type ?? "not_stated",
+      },
+    );
   }
   return {
     courtRegistry: {
@@ -231,12 +235,15 @@ export const createSkCourtRegistryReader = (
         httpStatus: number,
         reason: SkCourtRegistryUnavailable["reason"],
       ) => {
-        logger.warn("case_law.ingestion.court_registry_unavailable", {
-          adapterKey: ADAPTER_KEYS.SK_COURTS,
-          registreGuid,
-          httpStatus,
-          reason,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.court_registry_unavailable",
+          {
+            adapterKey: ADAPTER_KEYS.SK_COURTS,
+            registreGuid,
+            httpStatus,
+            reason,
+          },
+        );
         return Result.ok({
           status: "unavailable",
           httpStatus,
@@ -249,11 +256,14 @@ export const createSkCourtRegistryReader = (
           SkCourtRegistryUnavailable
         >,
       ) => {
-        logger.warn("case_law.ingestion.court_registry_withheld", {
-          adapterKey: ADAPTER_KEYS.SK_COURTS,
-          registreGuid,
-          outcome: observation.status,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.court_registry_withheld",
+          {
+            adapterKey: ADAPTER_KEYS.SK_COURTS,
+            registreGuid,
+            outcome: observation.status,
+          },
+        );
         return Result.ok(observation);
       };
       const unread = (cause: ReadUnavailableCause) => {

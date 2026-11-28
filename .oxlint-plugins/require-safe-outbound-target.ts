@@ -117,7 +117,8 @@ const GLOBAL_OBJECTS: ReadonlySet<string> = new Set([
   "window",
 ]);
 
-const TRUSTED_RESTRICTION_MODULE = "apps/api/src/lib/restrict-outbound-url";
+const TRUSTED_RESTRICTION_MODULE =
+  "@stll/case-law-ingestion-core/restrict-outbound-url";
 const TRUSTED_RESTRICTION_HELPER = "restrictOutboundUrl";
 const TRUSTED_PROVIDER_RESTRICTIONS: ReadonlyMap<
   string,

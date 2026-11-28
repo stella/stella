@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -26,6 +27,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -153,7 +155,6 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { EU_ECJ_METADATA_URL_SCHEMA } from "./eu-ecj.metadata-urls";
@@ -329,9 +330,12 @@ const toCellarManifestationId = (
   if (!CELLAR_MANIFESTATION_ID.test(manifestationId)) {
     // A Cellar-prefixed URI that fails validation means the upstream ID
     // format changed; surface it instead of silently dropping the variant.
-    logger.warn("case_law.ingestion.unexpected_cellar_manifestation_id", {
-      manifestationUri,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.unexpected_cellar_manifestation_id",
+      {
+        manifestationUri,
+      },
+    );
     return undefined;
   }
   return manifestationId;
@@ -720,7 +724,7 @@ const queryDecisions = async ({
         cursor: dateFrom,
       });
     }
-    logger.warn("case_law.ingestion.sparql_limit_hit", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.sparql_limit_hit", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       limit: SPARQL_LIMIT,
       date: dateFrom,
@@ -1064,13 +1068,16 @@ const readDocumentResponse = async ({
   const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
   if (!DOCUMENT_MEDIA_TYPES.some((type) => type === mediaType)) {
     await response.body?.cancel();
-    logger.warn("case_law.ingestion.manifestation_not_a_document", {
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      celex,
-      language: lang,
-      mediaType,
-      url,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.manifestation_not_a_document",
+      {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        celex,
+        language: lang,
+        mediaType,
+        url,
+      },
+    );
     return { type: "address-exhausted", status: response.status };
   }
 
@@ -1210,13 +1217,16 @@ const fetchManifestation = async ({
       ) {
         // A deterministic bad document request must not pin the crawl's
         // date cursor and prevent every later decision from being fetched.
-        logger.warn("case_law.ingestion.manifestation_rejected", {
-          adapterKey: ADAPTER_KEYS.EU_ECJ,
-          celex,
-          language: lang,
-          httpStatus: lookup.outcome.cause.status,
-          url: contentUrl,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.manifestation_rejected",
+          {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            celex,
+            language: lang,
+            httpStatus: lookup.outcome.cause.status,
+            url: contentUrl,
+          },
+        );
         return Result.ok(undefined);
       }
       return Result.err(
@@ -1228,13 +1238,16 @@ const fetchManifestation = async ({
         }),
       );
     case "exhausted":
-      logger.warn("case_law.ingestion.manifestation_unavailable", {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        celex,
-        language: lang,
-        httpStatuses: lookup.statuses.join(","),
-        url: contentUrl,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.manifestation_unavailable",
+        {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          celex,
+          language: lang,
+          httpStatuses: lookup.statuses.join(","),
+          url: contentUrl,
+        },
+      );
       return Result.ok(undefined);
     default: {
       lookup satisfies never;
@@ -1306,14 +1319,17 @@ const parseManifestation = (
       (code) => code === "CONTENT_LOSS" || code === "MISSING_WORDS",
     );
     if (lostContent) {
-      logger.error("case_law.ingestion.parse_lost_content_fallback", {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        celex: input.celex,
-        caseNumber: input.caseNumber,
-        codes: parsed.validationIssues.join(","),
-        ...(input.language === undefined ? {} : { language: input.language }),
-        ...(input.sourceUrl === undefined ? {} : { url: input.sourceUrl }),
-      });
+      getIngestionDiagnosticsSink().error(
+        "case_law.ingestion.parse_lost_content_fallback",
+        {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          celex: input.celex,
+          caseNumber: input.caseNumber,
+          codes: parsed.validationIssues.join(","),
+          ...(input.language === undefined ? {} : { language: input.language }),
+          ...(input.sourceUrl === undefined ? {} : { url: input.sourceUrl }),
+        },
+      );
     }
     // An unmatched layout is not a page: the whole body is the document
     // and its text is the Court's, so rule 10 keeps it exactly as before.
@@ -1359,13 +1375,16 @@ const parseManifestation = (
   // publisher's own signals have to agree before that happens, so one
   // selector that stopped matching cannot retire a real decision.
   if (source.boundary === "page-chrome") {
-    logger.warn("case_law.ingestion.manifestation_not_a_decision", {
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      celex: input.celex,
-      caseNumber: input.caseNumber,
-      ...(input.language === undefined ? {} : { language: input.language }),
-      ...(input.sourceUrl === undefined ? {} : { url: input.sourceUrl }),
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.manifestation_not_a_decision",
+      {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        celex: input.celex,
+        caseNumber: input.caseNumber,
+        ...(input.language === undefined ? {} : { language: input.language }),
+        ...(input.sourceUrl === undefined ? {} : { url: input.sourceUrl }),
+      },
+    );
     return {
       documentAst: EMPTY_AST,
       sections: undefined,
@@ -1620,10 +1639,13 @@ const courtFromEcli = (ecli: string): string | undefined => {
   }
   const court = COURT_BY_ECLI_CODE.get(code);
   if (court === undefined) {
-    logger.warn("case_law.ingestion.unmapped_cjeu_ecli_court", {
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      ecliCourtCode: code,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.unmapped_cjeu_ecli_court",
+      {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        ecliCourtCode: code,
+      },
+    );
   }
   return court;
 };
@@ -1709,10 +1731,13 @@ const courtFromNotice = (code: string | undefined): string | undefined => {
   }
   const court = COURT_BY_CORPORATE_BODY.get(code);
   if (court === undefined) {
-    logger.warn("case_law.ingestion.unmapped_cjeu_corporate_body", {
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      corporateCode: code,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.unmapped_cjeu_corporate_body",
+      {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        corporateCode: code,
+      },
+    );
   }
   return court;
 };
@@ -1917,11 +1942,14 @@ const ecjDecisionFromParts = ({
       : parseFormexBibliography(ecjFormexDocuments(formexXml));
   const statedCourt = ecjStatedCourt({ ecli, facts, bibliography, court });
   if (statedCourt === undefined) {
-    logger.warn("case_law.ingestion.cjeu_court_unstated", {
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      celex,
-      ecli,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.cjeu_court_unstated",
+      {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        celex,
+        ecli,
+      },
+    );
     return undefined;
   }
 
@@ -2398,22 +2426,28 @@ export const fetchNotice = async ({
         status: outcome.evidence === "http-410" ? 410 : 404,
       });
     case "refused":
-      logger.warn("case_law.ingestion.notice_unavailable", {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        httpStatus: outcome.status,
-        celex,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.notice_unavailable",
+        {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          httpStatus: outcome.status,
+          celex,
+        },
+      );
       return Result.ok({ type: "refused", status: outcome.status });
     case "unavailable":
       if (
         outcome.cause.kind === "status" &&
         !isRetryableStatus(outcome.cause.status)
       ) {
-        logger.warn("case_law.ingestion.notice_unavailable", {
-          adapterKey: ADAPTER_KEYS.EU_ECJ,
-          httpStatus: outcome.cause.status,
-          celex,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.notice_unavailable",
+          {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            httpStatus: outcome.cause.status,
+            celex,
+          },
+        );
         return Result.ok({ type: "refused", status: outcome.cause.status });
       }
       return Result.err(
@@ -2489,11 +2523,14 @@ const fetchFormex = async (
     `${manifestation.uri.replace("http://", "https://")}/DOC_1`,
   );
   if (Result.isError(contentUrl)) {
-    logger.warn("case_law.ingestion.formex_unavailable", {
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      reason: sanitizeErrorForOutput(contentUrl.error.message),
-      url: sanitizeErrorForOutput(contentUrl.error.url),
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.formex_unavailable",
+      {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        reason: sanitizeErrorForOutput(contentUrl.error.message),
+        url: sanitizeErrorForOutput(contentUrl.error.url),
+      },
+    );
     return Result.ok({ type: "not-located" });
   }
   const formexInit: PublisherReadInit = {
@@ -2516,22 +2553,28 @@ const fetchFormex = async (
     case "absent":
       return Result.ok({ type: "gone" });
     case "refused":
-      logger.warn("case_law.ingestion.formex_unavailable", {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        httpStatus: outcome.status,
-        url: contentUrl.value,
-      });
+      getIngestionDiagnosticsSink().warn(
+        "case_law.ingestion.formex_unavailable",
+        {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          httpStatus: outcome.status,
+          url: contentUrl.value,
+        },
+      );
       return Result.ok({ type: "refused", status: outcome.status });
     case "unavailable":
       if (
         outcome.cause.kind === "status" &&
         !isRetryableStatus(outcome.cause.status)
       ) {
-        logger.warn("case_law.ingestion.formex_unavailable", {
-          adapterKey: ADAPTER_KEYS.EU_ECJ,
-          httpStatus: outcome.cause.status,
-          url: contentUrl.value,
-        });
+        getIngestionDiagnosticsSink().warn(
+          "case_law.ingestion.formex_unavailable",
+          {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            httpStatus: outcome.cause.status,
+            url: contentUrl.value,
+          },
+        );
         return Result.ok({ type: "refused", status: outcome.cause.status });
       }
       return Result.err(
@@ -3519,10 +3562,13 @@ const isWalkableVariant = (binding: SparqlResult): boolean => {
   if (isValidCelex(binding.celex.value)) {
     return true;
   }
-  logger.warn("case_law.ingestion.cjeu_unkeyable_celex", {
-    adapterKey: ADAPTER_KEYS.EU_ECJ,
-    celex: binding.celex.value,
-  });
+  getIngestionDiagnosticsSink().warn(
+    "case_law.ingestion.cjeu_unkeyable_celex",
+    {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      celex: binding.celex.value,
+    },
+  );
   return false;
 };
 

@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import {
@@ -18,7 +19,6 @@ import {
   SoftLawContentTypeMismatchError,
 } from "@/api/lib/legal-search/soft-law-access-types";
 import type { SoftLawAccessPolicy } from "@/api/lib/legal-search/soft-law-types";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 const SOFT_LAW_RESPONSE_MAX_BYTES = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;

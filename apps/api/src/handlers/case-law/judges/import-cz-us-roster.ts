@@ -23,6 +23,7 @@ import type {
   PortraitSource,
 } from "@stll/case-law-ingestion-core/judges-consts";
 import { PORTRAIT_SOURCE } from "@stll/case-law-ingestion-core/judges-consts";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { load } from "@stll/html";
@@ -47,7 +48,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
 import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 /* -- the source ---------------------------------------------------------- */
 

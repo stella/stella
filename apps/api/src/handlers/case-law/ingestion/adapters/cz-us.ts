@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -19,6 +20,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -120,9 +122,6 @@ import {
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
@@ -1080,11 +1079,6 @@ type ParseDecisionPageOptions = {
 };
 
 /** A served page the structured parser could not read. */
-const documentParseFailed = failureSink({
-  event: "case_law.ingestion.document_parse_failed",
-  expected: [],
-});
-
 const parseDecisionPage = ({
   html,
   recordCard,
@@ -1173,8 +1167,8 @@ const parseDecisionPage = ({
     // page is kept for a later re-parse. Reported, so a parser that starts
     // failing across the corpus is told apart from decisions that carry
     // unstructured text.
-    observeFailure(error, {
-      sink: documentParseFailed,
+    getIngestionDiagnosticsSink().observeFailure(error, {
+      event: "case_law.ingestion.document_parse_failed",
       ctx: { adapterKey: ADAPTER_KEYS.CZ_US, documentId: sourceDocumentId },
     });
   }
@@ -1574,12 +1568,15 @@ const afterUnconfirmedSlice = (
   if (state.phase === SWEEP_PHASE.HISTORICAL) {
     return restartSlice(state);
   }
-  logger.warn("case_law.ingestion.cz_us_recent_window_unconfirmed", {
-    adapterKey: ADAPTER_KEYS.CZ_US,
-    availableFrom: addUtcDays(state.verifiedThrough, 1),
-    availableTo: state.availableTo,
-    reason,
-  });
+  getIngestionDiagnosticsSink().warn(
+    "case_law.ingestion.cz_us_recent_window_unconfirmed",
+    {
+      adapterKey: ADAPTER_KEYS.CZ_US,
+      availableFrom: addUtcDays(state.verifiedThrough, 1),
+      availableTo: state.availableTo,
+      reason,
+    },
+  );
   return recentFrontier(state.availableTo, now);
 };
 
@@ -2441,11 +2438,6 @@ const buildCzUsDecision = ({
 };
 
 /** A page beside the document that the court did not answer for. */
-const detailReadFailed = failureSink({
-  event: "case_law.ingestion.detail_fetch_failed",
-  expected: [],
-});
-
 /** A page read for one decision, named as the failure report names it. */
 type NalusPage = "text" | "record-card" | "abstract";
 
@@ -2501,7 +2493,7 @@ const fetchListedDecision = async (
   // A refusal is reported with its typed `ReadRefusal`; a failed read with
   // the court's status or its own thrown error.
   const reportUnreadPage = (part: NalusPage, read: UnreadNalusPage): void => {
-    observeFailure(
+    getIngestionDiagnosticsSink().observeFailure(
       classifyFailure(
         read.type === "refused"
           ? unreadPublisherError({
@@ -2514,7 +2506,7 @@ const fetchListedDecision = async (
         "upstream_unavailable",
       ),
       {
-        sink: detailReadFailed,
+        event: "case_law.ingestion.detail_fetch_failed",
         ctx: {
           adapterKey: ADAPTER_KEYS.CZ_US,
           documentId: listed.sourceDocumentId,

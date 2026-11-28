@@ -12,11 +12,18 @@ import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+import type { PublisherGateId } from "@stll/case-law-ingestion-core/publisher-gates";
+import {
+  type PublisherGateClient,
+  PublisherPacingStopped,
+  type PublisherRequestGateConfig,
+  type PublisherRequestGateDependencies,
+  registerPublisherRequestGate,
+} from "@stll/case-law-ingestion-core/publisher-request-gate-hook";
 import { Temporal } from "@stll/time";
 
 import type * as RedisClientModule from "@/api/lib/admission-redis";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
-import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
@@ -116,23 +123,6 @@ export const publisherGateKeys = (slot: string) => {
   // an unbraced key in full; bracing that full key colocates the cooldown.
   // coordinationKey prefixes its hash tag, so it cannot preserve this format.
   return { key, cooldownKey: `{${key}}:cooldown` };
-};
-
-export type PublisherGateClient = {
-  send: (command: string, args: string[]) => unknown;
-};
-
-type PublisherRequestGateConfig = {
-  intervalMs: number;
-  key: string;
-  publisherCode: PublisherGateId;
-  publisher: string;
-  cooldown?: "shared";
-};
-
-export type PublisherRequestGateDependencies = {
-  redis: () => PublisherGateClient | Promise<PublisherGateClient>;
-  sleep: (durationMs: number, signal?: AbortSignal) => Promise<void>;
 };
 
 const fixtureDependencies =
@@ -293,14 +283,6 @@ export const publisherGateReserves = (): boolean =>
 /** Redis answered a gate reservation with something other than a wait. */
 class PublisherGateReplyError extends TaggedError("PublisherGateReplyError")<{
   message: string;
-}> {}
-
-export class PublisherPacingStopped extends TaggedError(
-  "PublisherPacingStopped",
-)<{
-  message: string;
-  status: "pacing-deferred" | "pacing-unavailable";
-  cause?: unknown;
 }> {}
 
 export const createPublisherRequestSlot = (
@@ -470,4 +452,15 @@ export const createPublisherRequestSlot = (
         { signal },
       ),
   });
+};
+
+registerPublisherRequestGate({
+  createPublisherRequestSlot,
+  publisherGateReserves,
+});
+
+export {
+  type PublisherGateClient,
+  PublisherPacingStopped,
+  type PublisherRequestGateDependencies,
 };

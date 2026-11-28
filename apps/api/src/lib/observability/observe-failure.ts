@@ -12,6 +12,7 @@
 
 import { Result } from "better-result";
 
+import { registerIngestionFailureObserver } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   type ExceptionScope,
   type FailureGrade,
@@ -29,6 +30,7 @@ import type {
 import {
   errorFields,
   failureFields,
+  failureSink,
   fingerprintDegradation,
   gradeFailure,
 } from "@/api/lib/observability/failure";
@@ -387,3 +389,86 @@ export const observeAnswerFailure = (
     reportEmitFailure("observe", observed.error);
   }
 };
+
+const ingestionItemBuildFailed = failureSink({
+  event: "case_law.ingestion.item_build_failed",
+  expected: [],
+});
+const ingestionDetailFetchFailed = failureSink({
+  event: "case_law.ingestion.detail_fetch_failed",
+  expected: [],
+});
+const ingestionDetailParseFailed = failureSink({
+  event: "case_law.ingestion.detail_parse_failed",
+  expected: [],
+});
+const ingestionDocumentFetchFailed = failureSink({
+  event: "case_law.ingestion.document_fetch_failed",
+  expected: [],
+});
+const ingestionDocumentParseFailed = failureSink({
+  event: "case_law.ingestion.document_parse_failed",
+  expected: [],
+});
+const ingestionOtherFailed = failureSink({
+  event: "case_law.ingestion.failure",
+  expected: [],
+});
+
+const toFailureContext = (
+  ctx: Readonly<Record<string, unknown>> | undefined,
+): FailureContext | undefined => {
+  if (ctx === undefined) {
+    return undefined;
+  }
+  const entries: [FailureContextKey, string][] = [];
+  for (const key of FAILURE_CONTEXT_KEYS) {
+    const value = ctx[key];
+    if (typeof value === "string") {
+      entries.push([key, value]);
+    }
+  }
+  return entries.length === 0 ? undefined : Object.fromEntries(entries);
+};
+
+registerIngestionFailureObserver((error, { event, ctx }) => {
+  const failureCtx = toFailureContext(ctx);
+  switch (event) {
+    case "case_law.ingestion.item_build_failed":
+      observeFailure(error, {
+        sink: ingestionItemBuildFailed,
+        ctx: failureCtx,
+      });
+      break;
+    case "case_law.ingestion.detail_fetch_failed":
+      observeFailure(error, {
+        sink: ingestionDetailFetchFailed,
+        ctx: failureCtx,
+      });
+      break;
+    case "case_law.ingestion.detail_parse_failed":
+      observeFailure(error, {
+        sink: ingestionDetailParseFailed,
+        ctx: failureCtx,
+      });
+      break;
+    case "case_law.ingestion.document_fetch_failed":
+      observeFailure(error, {
+        sink: ingestionDocumentFetchFailed,
+        ctx: failureCtx,
+      });
+      break;
+    case "case_law.ingestion.document_parse_failed":
+      observeFailure(error, {
+        sink: ingestionDocumentParseFailed,
+        ctx: failureCtx,
+      });
+      break;
+    default:
+      observeFailure(error, {
+        sink: ingestionOtherFailed,
+        ctx: failureCtx,
+      });
+      break;
+  }
+});

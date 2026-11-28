@@ -4,6 +4,7 @@
 import { panic, Result } from "better-result";
 
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -28,7 +29,6 @@ import {
   type SkCollectionReadOutcome,
   type SkCollectionSeries,
 } from "@/api/lib/legal-search/sk-collection-enrichment";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 const PUBLISHERS = {
   [SK_COLLECTION_SERIES.NS_R]: {

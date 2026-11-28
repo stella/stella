@@ -37,7 +37,9 @@ import type {
   StoredRawReparseValue,
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
+import { readStoredDocumentObject } from "@stll/case-law-ingestion-core/stored-document-replay";
 import { courtParagraphNumbers } from "@stll/case-law-parsers/court-paragraph-numbers";
 import {
   assemblePdfParagraphs,
@@ -95,8 +97,6 @@ import {
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";

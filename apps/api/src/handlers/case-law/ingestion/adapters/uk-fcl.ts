@@ -25,12 +25,12 @@ import type {
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
 } from "@stll/case-law-ingestion-core/ingestion-types";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { load } from "@stll/html";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 import { publisherRequestIntervalMs } from "./publisher-policy";
 import { readPublisher, unreadPublisherError } from "./publisher-read";

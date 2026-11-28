@@ -36,6 +36,7 @@ import {
   PUBLISHER_REQUEST,
   type PublisherRequest,
 } from "@stll/case-law-ingestion-core/ingestion-types";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
@@ -49,7 +50,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 // ── The pinned snapshot ──────────────────────────────────
 

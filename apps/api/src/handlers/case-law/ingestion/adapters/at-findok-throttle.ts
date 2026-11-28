@@ -3,6 +3,7 @@
 import { panic } from "better-result";
 
 import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -10,7 +11,6 @@ import {
   readPublisher,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 /**
  * Every Findok request, pinned to the publisher's own origin and path.
