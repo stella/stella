@@ -3832,11 +3832,15 @@ const PAGE_SWITCH =
   /\\[hp](?![A-Za-z])|\\#\s*(?:"[^"\\]*"|[^\s"\\]+)|\\\*\s*(?:mergeformat|charformat)\b/giu;
 /** Whether a cached field result holds a character it cannot be checked
  *  as text with: a tab, a break, another control character. */
-const holdsControlCharacter = (text: string): boolean =>
-  [...text].some((character) => {
-    const code = character.codePointAt(0) ?? 0;
-    return code < 0x20 || code === 0x7f;
-  });
+const holdsControlCharacter = (text: string): boolean => {
+  for (let at = 0; at < text.length; at += 1) {
+    const code = text.codePointAt(at) ?? 0;
+    if (code < 0x20 || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
+};
 const PAGE_FIELD_HEAD = /^\s*PAGEREF\s+(?:"[^"]*"|[^\s"\\]+)/iu;
 
 /** The switches a PAGEREF of the source keeps, or null when it is none or
