@@ -41,6 +41,11 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { envPublicCorpus } from "@/api/env-public-corpus";
+import {
+  CASE_LAW_HEADNOTE_KEYWORDS,
+  CASE_LAW_HEADNOTE_MAX_CHARS,
+  MCP_CASE_LAW_HEADNOTE_MAX_CHARS,
+} from "@/api/lib/case-law/decision-headnote";
 import { SITEMAP_RANGE_ROWS_CEILING } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   API_RATE_LIMITS,
@@ -866,15 +871,15 @@ export const LIMITS = {
    */
   caseLawYearFacetLimit: 200,
   /** One-row budget for the headnote a list row shows under the case number. */
-  caseLawHeadnoteMaxChars: 240,
-  mcpCaseLawHeadnoteMaxChars: 4000,
+  caseLawHeadnoteMaxChars: CASE_LAW_HEADNOTE_MAX_CHARS,
+  mcpCaseLawHeadnoteMaxChars: MCP_CASE_LAW_HEADNOTE_MAX_CHARS,
   mcpCaseLawSearchPageMaxChars: 60_000,
   /**
    * Terms of a publisher's classification one row draws as tags. A subject
    * index runs to dozens of terms on some sources, and a row is a hook, not
    * the index.
    */
-  caseLawHeadnoteKeywords: 8,
+  caseLawHeadnoteKeywords: CASE_LAW_HEADNOTE_KEYWORDS,
   /** Courts on the browse page's "newest decisions" shelf, by corpus size. */
   caseLawLatestCourts: 4,
   caseLawLatestPerCourt: 5,

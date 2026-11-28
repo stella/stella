@@ -894,7 +894,6 @@
     "Instruction policy": ["**"],
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
-    "Knip dead-export check (packages/cli)": ["**"],
     "Knip dead-export budget (all workspaces)": ["**"],
     "Dependabot group guard (installed packages)": [
       ".github/dependabot.yml",

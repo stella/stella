@@ -204,6 +204,7 @@ const KNOWN_NOTE_KINDS = [
   "trackedChangesKept",
   "trackedChangesResolved",
   "fieldsAsText",
+  "internalLinksAsText",
 ] as const satisfies readonly NoteSource["kind"][];
 
 type KnownNoteSource = Extract<
@@ -372,6 +373,8 @@ const noteItemOf = (
         reason: "signature",
         ...textOf(item.blockId, 0, LABEL_EXCERPT_MAX),
       };
+    case "internalLinksAsText":
+      return { kind: "internal_links_as_text", count: item.links };
     case "trackedChangesResolved":
       return {
         kind: "tracked_changes_resolved",
