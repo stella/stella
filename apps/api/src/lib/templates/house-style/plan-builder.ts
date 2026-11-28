@@ -2240,7 +2240,7 @@ const holdsOnlyPageMarks = (block: DocxBlock): boolean =>
   block.pageShapes !== undefined &&
   block.inlineObjects === block.pageShapes &&
   // A number a field counts is in no text and is content of its own.
-  (block.selfNumbers ?? []).length === 0 &&
+  (block.selfNumbers === undefined || block.selfNumbers.length === 0) &&
   (block.pageBreaks ?? 0) === 0 &&
   block.pageBreakBefore !== true &&
   block.endsSection !== true;
