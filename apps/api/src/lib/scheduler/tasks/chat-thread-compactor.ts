@@ -397,7 +397,7 @@ const compactThread = async ({
       });
       const deadline = AbortSignal.timeout(compactionTimeoutMs);
       return await withCompactionDeadline(
-        deadline,
+        { deadline, stop: signal },
         thread,
         async () =>
           await runChatThreadCompaction({
@@ -456,11 +456,12 @@ const compactThread = async ({
 };
 
 /**
- * The run's own budget ending is a deadline outcome: the thread stays queued
- * and is retried. Any other rejection is reported as unhandled.
+ * The run's own budget ending is a deadline outcome, and the scheduler stopping
+ * the task is a cancellation; either way the thread stays queued and is
+ * retried. Any other rejection is reported as unhandled.
  */
 const withCompactionDeadline = async <T, E>(
-  deadline: AbortSignal,
+  { deadline, stop }: { deadline: AbortSignal; stop: AbortSignal },
   thread: QueuedCompactionThread,
   run: () => Promise<Result<T, E>>,
 ): Promise<Result<T, E | ChatCompactionError | UnhandledException>> => {
@@ -468,19 +469,31 @@ const withCompactionDeadline = async <T, E>(
   if (Result.isOk(settled)) {
     return settled.value;
   }
-  if (!deadline.aborted) {
-    return settled;
+  if (deadline.aborted) {
+    return Result.err(
+      classifyFailure(
+        new ChatCompactionError({
+          cause: settled.error.cause,
+          message: "chat compaction exceeded its deadline",
+          threadId: thread.threadId,
+        }),
+        "work_deadline_exceeded",
+      ),
+    );
   }
-  return Result.err(
-    classifyFailure(
-      new ChatCompactionError({
-        cause: settled.error.cause,
-        message: "chat compaction exceeded its deadline",
-        threadId: thread.threadId,
-      }),
-      "work_deadline_exceeded",
-    ),
-  );
+  if (stop.aborted) {
+    return Result.err(
+      classifyFailure(
+        new ChatCompactionError({
+          cause: settled.error.cause,
+          message: "chat compaction was stopped with its task",
+          threadId: thread.threadId,
+        }),
+        "work_cancelled",
+      ),
+    );
+  }
+  return settled;
 };
 
 /** Reported, as the cause of an `UnhandledException` like any other aborted
