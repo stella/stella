@@ -4542,8 +4542,13 @@ describe("buildTemplatePlan, automatic labels the index does not read", () => {
     const unread = blockIdOf(manifest, "The addressees");
     // The index leaves the paragraph out, as it does a second run of
     // numbers in notes behind a report's text.
-    const index = buildLabelIndex(manifest);
-    index.entryByBlockId.delete(unread);
+    const read = buildLabelIndex(manifest);
+    const index = {
+      ...read,
+      entryByBlockId: new Map(
+        [...read.entryByBlockId].filter(([blockId]) => blockId !== unread),
+      ),
+    };
     const { plan, note: formattingNote } = build(manifest, "keepSource", {
       index,
     });
