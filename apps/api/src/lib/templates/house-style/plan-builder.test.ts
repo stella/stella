@@ -3698,6 +3698,64 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
   });
 });
 
+describe("buildTemplatePlan, labelled lines under an item with indents of their own", () => {
+  test("their values meet at a hanging indent that lies beyond every label", () => {
+    const base = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      "Součástí Smlouvy jsou tyto přílohy:",
+      "Příloha č. 1:\tMapový zákres záměru",
+      "Příloha č. 2:\tStudie záměru",
+      "Příloha č. 3:\tVyčíslení plnění",
+    ]);
+    const indents: Record<number, { left: number; firstLine: number }> = {
+      2: { left: 567, firstLine: -567 },
+      // Two lines hang their values at a far indent, one tabs to it.
+      3: { left: 2265, firstLine: -1698 },
+      4: { left: 567, firstLine: 0 },
+      5: { left: 2268, firstLine: -1701 },
+    };
+    const manifest = {
+      ...base,
+      blocks: base.blocks.map((block, position) => ({
+        ...block,
+        ...(position === 2 ? { label: "1.", hash: "c" } : {}),
+        ...(indents[position] === undefined
+          ? {}
+          : { indent: indents[position] }),
+      })),
+    };
+    const reading = (
+      blockId: string,
+      role: "title" | "articleHeading" | "clause1" | "continuation",
+    ) => ({
+      blockId,
+      role,
+      confidence: 0.9,
+      alternatives: [],
+      mergedIntoBlockId: null,
+    });
+    const { plan } = build(manifest, "keepSource", {
+      roles: [
+        reading("p0", "title"),
+        reading("p1", "articleHeading"),
+        reading("p2", "clause1"),
+        reading("p3", "continuation"),
+        reading("p4", "continuation"),
+        reading("p5", "continuation"),
+      ],
+    });
+    const first = itemOf(plan, manifest, "Příloha č. 1");
+    const second = itemOf(plan, manifest, "Příloha č. 2");
+    const third = itemOf(plan, manifest, "Příloha č. 3");
+    expect(first?.indent?.hanging).toBeGreaterThan(0);
+    // The flush line's stop is where the hanging lines' values start.
+    expect(second?.tabStops).toEqual([
+      Math.max(first?.indent?.left ?? 0, third?.indent?.left ?? 0),
+    ]);
+  });
+});
+
 describe("buildTemplatePlan, a source list deeper than the template's levels", () => {
   const reading = (
     blockId: string,

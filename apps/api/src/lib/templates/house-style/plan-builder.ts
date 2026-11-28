@@ -1543,7 +1543,15 @@ const TAB_STEP = 20;
  *  tabbed its values into place over default stops types that many. */
 const TAB_STOPS_MAX = 8;
 
-type LabelledLine = { blockId: string; labelEnd: number; tabs: number };
+type LabelledLine = {
+  blockId: string;
+  labelEnd: number;
+  tabs: number;
+  /** Where a line that hangs its first line ends its hanging indent: a
+   *  tab of the first line stops there too. Null for a line that hangs
+   *  nothing. */
+  hangingLeft: number | null;
+};
 
 /** Where a party line's label ends, from the left margin, and how many
  *  tabs follow it; null for a line without the shape or a style whose
@@ -1551,6 +1559,7 @@ type LabelledLine = { blockId: string; labelEnd: number; tabs: number };
 const labelledLine = (
   { profile }: Context,
   { block, styleId, role, numbered }: Placement,
+  own: TemplatePlanIndent | undefined,
 ): LabelledLine | null => {
   const read = LABELLED_LINE.exec(block.text)?.groups;
   const parts =
@@ -1563,7 +1572,13 @@ const labelledLine = (
   const style = Object.values(profile.roles).find(
     (target) => target?.styleId === styleId,
   );
-  const indentLeft = style?.indentLeft;
+  // The line's own indent, where the plan gives it one, sets where its
+  // first line starts; else its style's.
+  const hanging = own?.hanging ?? 0;
+  const indentLeft =
+    own !== undefined && own.left !== undefined
+      ? own.left - hanging
+      : style?.indentLeft;
   if (parts === undefined || indentLeft === undefined) {
     return null;
   }
@@ -1576,6 +1591,10 @@ const labelledLine = (
     blockId: block.id,
     labelEnd: (indentLeft ?? 0) + Math.ceil(width),
     tabs: (parts["tabs"] ?? "").length,
+    hangingLeft:
+      own !== undefined && own.left !== undefined && hanging > 0
+        ? own.left
+        : null,
   };
 };
 
@@ -1593,8 +1612,17 @@ const alignPartyLines = (context: Context, placed: Placed): void => {
   let style: string | null = null;
   const close = (): void => {
     if (run.length >= 2) {
+      const widest = Math.max(...run.map(({ labelEnd }) => labelEnd));
+      // Lines that hang their first line stop a tab at their hanging
+      // indent: where every such indent lies beyond the labels, the shared
+      // stop is there, so the other lines' values meet theirs.
+      const hangs = run.flatMap(({ hangingLeft }) =>
+        hangingLeft === null ? [] : [hangingLeft],
+      );
       const first =
-        Math.max(...run.map(({ labelEnd }) => labelEnd)) + LABEL_GAP;
+        hangs.length > 0 && Math.min(...hangs) >= widest
+          ? Math.max(...hangs)
+          : widest + LABEL_GAP;
       for (const { blockId, tabs } of run) {
         // As many stops as the line has tabs, the last one the shared one.
         const count = Math.min(Math.max(tabs, 1), TAB_STOPS_MAX);
@@ -1627,7 +1655,11 @@ const alignPartyLines = (context: Context, placed: Placed): void => {
       close();
       style = placement.styleId;
     }
-    const line = labelledLine(context, placement);
+    const line = labelledLine(
+      context,
+      placement,
+      placed.itemIndents.get(block.id),
+    );
     if (line !== null) {
       run.push(line);
     }
@@ -2266,10 +2298,12 @@ const placeParagraphs = (context: Context): Placed => {
   );
   keepLinesWithBody(context, placed);
   keepClosingTogether(context, placed);
-  alignPartyLines(context, placed);
   nestDeeperItems(context, placed);
   indentContinuations(context, placed);
   setMarginLines(context, placed);
+  // Behind the lines' own indents: a stop is placed from where each line
+  // starts.
+  alignPartyLines(context, placed);
   alignFrontLines(context, placed);
   return placed;
 };
