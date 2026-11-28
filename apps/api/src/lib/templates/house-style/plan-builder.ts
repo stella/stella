@@ -1354,10 +1354,13 @@ const hangOf = (
   if (!labelled || !provision) {
     return null;
   }
+  // A role the template numbers by no level of its own (a recital under a
+  // template without recitals) hangs its number as a clause's would too.
   const beside =
     level ??
     borrowedLevel ??
-    (partyHead ? profile.roles.clause1 : profile.roles[role])?.numbering ??
+    (partyHead ? null : profile.roles[role]?.numbering) ??
+    profile.roles.clause1?.numbering ??
     null;
   const left = beside?.indent.left ?? null;
   const hanging = beside?.indent.hanging ?? null;
@@ -1432,6 +1435,23 @@ const hangBullet = (
     },
   };
 };
+
+/**
+ * Whether an unnumbered line stands inside a list of bullets: right behind
+ * a bullet and right in front of another of the same list (a bullet's
+ * text broken over two paragraphs). The bullets behind it belong to the
+ * paragraph the list began under, not to this line.
+ */
+const continuesBulletList = (
+  line: Placement,
+  before: Placement | undefined,
+  next: DocxBlock | undefined,
+): boolean =>
+  before?.pattern?.numFmt === "bullet" &&
+  shownLabelOf(line.block) === null &&
+  next?.kind === "paragraph" &&
+  isBulleted(next) &&
+  next.numbering?.numId === before.block.numbering?.numId;
 
 const HEADING_TEXT_MAX = 160;
 /** How far, in twentieths of a point, a bullet's mark may stand from the
@@ -1649,15 +1669,19 @@ const leadsLines = ({ role, pattern }: Placement): boolean =>
 const standsUnder = (line: Placement, item: Placement): boolean => {
   const own = line.block.indent;
   const above = item.block.indent;
-  return (
-    own !== undefined &&
-    above !== undefined &&
-    above.left > 0 &&
-    // A line that hangs a mark of its own in front (a box, a dash) starts
-    // at that mark.
-    own.left + own.firstLine >= above.left - UNDER_ITEM_TOLERANCE
-  );
+  if (own === undefined || above === undefined || above.left <= 0) {
+    return false;
+  }
+  // A line that hangs a mark of its own in front (a box, a dash) starts
+  // at that mark; one that opens with a tab starts at the next stop, at
+  // most a default tab further in.
+  const start = own.left + own.firstLine;
+  const reach = line.block.text.startsWith("\t") ? DEFAULT_TAB : 0;
+  return start + reach >= above.left - UNDER_ITEM_TOLERANCE;
 };
+
+/** Word's default tab stop, in twentieths of a point. */
+const DEFAULT_TAB = 708;
 
 /** Where the text of a numbered item starts in the output: at its role's
  *  level, which a spare level standing in for it takes the indent of. */
@@ -1742,7 +1766,14 @@ const underItemIndent = (
   { block }: Placement,
 ): TemplatePlanIndent => {
   const hanging = -(block.indent?.firstLine ?? 0);
-  return hanging > 0 ? { left: start + hanging, hanging } : { left: start };
+  if (hanging > 0) {
+    return { left: start + hanging, hanging };
+  }
+  // A line that opens with a tab: the tab reaches the item's text from a
+  // hanging indent, as it reached it in the source.
+  return block.text.startsWith("\t") && start > 0
+    ? { left: start, hanging: Math.min(start, DEFAULT_TAB) }
+    : { left: start };
 };
 
 /**
@@ -2163,7 +2194,7 @@ const placeParagraphs = (context: Context): Placed => {
   let lastPlaced: string | null = null;
   /** The paragraph in front of a list of bullets. */
   let lead: Placement | null = null;
-  for (const block of topLevel) {
+  for (const [position, block] of topLevel.entries()) {
     if (block.kind === "table") {
       lastPlaced = null;
       lead = null;
@@ -2204,7 +2235,13 @@ const placeParagraphs = (context: Context): Placed => {
     }
     if (placement.pattern?.numFmt === "bullet") {
       hangBullet(context, placement, lead);
-    } else {
+    } else if (
+      !continuesBulletList(
+        placement,
+        placed.placements.at(-1),
+        topLevel[position + 1],
+      )
+    ) {
       lead = placement;
     }
     placed.placements.push(placement);

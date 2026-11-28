@@ -891,6 +891,56 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("a line between two bullets of one list leaves the bullets behind it under the list's paragraph", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Klient může smlouvu vypovědět, zejména při:", 1),
+      numbered("•", "porušení mlčenlivosti,", 5),
+      numbered("•", "opakovaně nízké kvalitě služeb, na kterou byl", 5),
+      "předem písemně upozorněn,",
+      numbered("•", "narušení důvěry.", 5),
+    ]);
+    const roles = proposeBlockRoles({
+      manifest,
+      index: buildLabelIndex(manifest),
+    }).map((proposal) =>
+      proposal.blockId === blockIdOf(manifest, "předem písemně")
+        ? { ...proposal, role: "body" as const }
+        : proposal,
+    );
+    const { plan } = build(manifest, "keepSource", { roles });
+    const levelOf = (start: string) =>
+      itemOf(plan, manifest, start)?.numbering?.ilvl;
+    // All three bullets hang from the clause: one level, one indent.
+    expect(levelOf("narušení důvěry")).toBe(levelOf("porušení mlčenlivosti"));
+  });
+
+  test("a recital's letter written as text hangs as a clause's number where the template numbers no recitals", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Preambule",
+      numbered("A.", "Investor zamýšlí po provedení stavby vybudovat park.", 7),
+      numbered("B.", "Smluvní strany budou na základě Smlouvy činit kroky.", 7),
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    // No level of the template for recitals, and none spare.
+    const { plan } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, recital: null },
+        spareLevels: [],
+        markLevels: [],
+      },
+    });
+    const item = itemOf(plan, manifest, "Investor zamýšlí");
+    const clause = PROFILE.roles.clause1?.numbering?.indent;
+    expect(item?.labelAsText).toBe(true);
+    expect(item?.indent?.left).toBe(clause?.left ?? undefined);
+    expect(item?.indent?.hanging).toBe(clause?.hanging ?? undefined);
+  });
+
   test("a bullet takes a level outside the outline list where the template has one", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -3615,6 +3665,27 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
       blocks: 2,
     });
     expect(note.items.map(({ kind }) => kind)).not.toContain("textLabelsHung");
+  });
+
+  test("a line that reaches the item's text by a tab stands under it, its tab on a hanging indent", () => {
+    const indented = withIndents({
+      2: { left: 567, firstLine: -567 },
+      3: { left: 1506, firstLine: -360 },
+      // Set further out than the item's text; its tab takes it there.
+      4: { left: 1146, firstLine: 0 },
+    });
+    const manifest = {
+      ...indented,
+      blocks: indented.blocks.map((block, position) =>
+        position === 4 ? { ...block, text: `\t${block.text}` } : block,
+      ),
+    };
+    const { plan } = build(manifest, "keepSource", { roles });
+    const under = PROFILE.roles.roman?.numbering?.indent.left ?? 0;
+    expect(itemOf(plan, manifest, "\tk.ú.")?.indent).toEqual({
+      left: under,
+      hanging: Math.min(under, 708),
+    });
   });
 
   test("without the source's indents nothing is moved", () => {
