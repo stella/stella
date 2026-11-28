@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { FUNCTION_WORDS } from "@stll/legal-morphology/function-words";
+
 import {
   CASE_LAW_REFINE_MAX_TERMS,
   caseLawRefineOutputSchema,
@@ -17,7 +19,6 @@ import {
   corpusFreeTextClause,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
-import { FUNCTION_WORDS } from "@/api/lib/legal-search/morphology/function-words";
 
 const CZECH = FUNCTION_WORDS.cs;
 

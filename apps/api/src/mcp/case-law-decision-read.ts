@@ -10,6 +10,9 @@ import * as v from "valibot";
  */
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+import { documentMorphologyLanguage } from "@stll/legal-morphology/corpus-language";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import { stemLegalTerm } from "@stll/legal-morphology/stem";
 import { createSha256 } from "@stll/sha256/bun";
 import { stripUnicodeMarks } from "@stll/text-normalize";
 
@@ -23,9 +26,6 @@ import {
   queryWordsApartWarning,
 } from "@/api/lib/case-law/search-warnings";
 import type { DecisionQueryWarning } from "@/api/lib/case-law/search-warnings";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
-import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 import { printedParagraphLabel } from "@/api/mcp/case-law-decision-outline";

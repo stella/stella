@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
 
+import {
+  GLOBAL_MORPHOLOGY_KEY,
+  MORPHOLOGY_LANGUAGES,
+  MORPHOLOGY_REVISIONS,
+  morphologyKey,
+} from "@stll/legal-morphology/stem";
+
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -15,12 +22,6 @@ import {
 import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
-import {
-  GLOBAL_MORPHOLOGY_KEY,
-  MORPHOLOGY_LANGUAGES,
-  MORPHOLOGY_REVISIONS,
-  morphologyKey,
-} from "@/api/lib/legal-search/morphology/stem";
 import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
 
 const CASE_LAW_INPUT = {

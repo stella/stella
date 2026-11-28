@@ -166,6 +166,7 @@
     "@stll/invoicing": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
+    "@stll/legal-morphology": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/mcp-apps": "workspace:*",
     "@stll/mcp-kit": "workspace:^",

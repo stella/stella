@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 3,
+  "reason": "The new @stll/legal-morphology package extracts legal-search morphology and corpus tokenization modules from apps/api and declares the three existing third-party packages those modules already use (better-result, bun-types, fast-check); no new third-party dependency is added to the repository."
+}

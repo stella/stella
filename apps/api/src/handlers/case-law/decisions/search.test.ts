@@ -2,6 +2,8 @@ import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
+
 import { envBase } from "@/api/env-base";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
@@ -23,7 +25,6 @@ import {
 } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import {
   SEARCH_INDEX_UNAVAILABLE_CODE,
   searchIndexUnavailableError,

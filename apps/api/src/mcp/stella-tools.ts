@@ -28,6 +28,7 @@ import {
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
   CITATION_GRAPH_RESOURCE_URI,
@@ -94,7 +95,6 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { externalRefFromColumns } from "@/api/lib/imports/external-ref";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { failureSink } from "@/api/lib/observability/failure";
