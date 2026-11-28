@@ -683,9 +683,21 @@ const readUnlabelled = (
       confidence: CONFIDENCE.alternative,
     });
   }
+  const context = index.contextByBlockId.get(block.id);
+  const inProvision =
+    context !== undefined &&
+    (context.clauseBlockId !== null || context.itemBlockId !== null);
   if (position >= zones.firstAnnexHeading) {
-    return isSectionHeading(block)
-      ? sectionHeading()
+    if (isSectionHeading(block)) {
+      return sectionHeading();
+    }
+    // Text under a numbered provision continues it, in an annex as in the
+    // body.
+    return inProvision && printedLabel(block) === null
+      ? reading("continuation", CONFIDENCE.continuation, {
+          role: "body",
+          confidence: CONFIDENCE.weakAlternative,
+        })
       : reading("body", CONFIDENCE.annexBody);
   }
   if (position >= zones.signature) {
@@ -713,10 +725,6 @@ const readUnlabelled = (
   if (isSectionHeading(block)) {
     return sectionHeading();
   }
-  const context = index.contextByBlockId.get(block.id);
-  const inProvision =
-    context !== undefined &&
-    (context.clauseBlockId !== null || context.itemBlockId !== null);
   return inProvision
     ? reading("continuation", CONFIDENCE.continuation, {
         role: "body",

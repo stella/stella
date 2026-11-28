@@ -442,6 +442,22 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("text under a numbered provision of an annex continues it", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPředmět",
+      numbered("1.", "Zhotovitel provede dílo.", 1),
+      "Příloha č. 1",
+      "Definice",
+      numbered("1.", "Pojmy", 2),
+      numbered("1.1", "Následující pojmy mají tento význam:", 2),
+      "Dílem se rozumí stavba podle projektové dokumentace.",
+    ]);
+    expect(rolesOf(manifest)).toMatchObject({
+      "Dílem se rozumí stavba podle": "continuation",
+    });
+  });
+
   test("a table cell is not taken for the title, and a memo has no signature zone", () => {
     const cells = inColumns(1, ["CONFIDENTIAL"]);
     const memo = manifestOf([
