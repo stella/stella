@@ -6,14 +6,67 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
+  type FilenameContext,
   getImportedName,
   isAstNode,
   isIdentifier,
+  isUnshadowedGlobalIdentifier,
   memberPropertyName,
+  repoRelativeFilename,
+  type ScopeContext,
 } from "./utils.ts";
 
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
 const DIRECT_UUID_GENERATORS = new Set(["v4", "v7"]);
+
+const isBunApiRuntimeFile = (context: FilenameContext): boolean => {
+  const filename = repoRelativeFilename(context);
+  return (
+    /(?:^|\/)apps\/api\//u.test(filename) &&
+    !/(?:^|\/)apps\/api\/src\/handlers\/visual-sandbox\/browser\//u.test(
+      filename,
+    )
+  );
+};
+
+const isAmbientCryptoRandomUuidCall = (
+  context: ScopeContext,
+  node: AstNode,
+): boolean => {
+  if (
+    node.optional === true ||
+    !Array.isArray(node.arguments) ||
+    node.arguments.length !== 0
+  ) {
+    return false;
+  }
+  const callee = node.callee;
+  if (
+    !isAstNode(callee) ||
+    callee.type !== "MemberExpression" ||
+    callee.optional === true ||
+    callee.computed === true ||
+    !isIdentifier(callee.property, "randomUUID")
+  ) {
+    return false;
+  }
+  if (
+    isIdentifier(callee.object, "crypto") &&
+    isUnshadowedGlobalIdentifier(context, callee.object)
+  ) {
+    return true;
+  }
+  return (
+    isAstNode(callee.object) &&
+    callee.object.type === "MemberExpression" &&
+    callee.object.optional !== true &&
+    callee.object.computed !== true &&
+    isIdentifier(callee.object.object, "globalThis") &&
+    isUnshadowedGlobalIdentifier(context, callee.object.object) &&
+    isIdentifier(callee.object.property, "crypto")
+  );
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-crypto-random-uuid" },
@@ -21,6 +74,7 @@ export default eslintCompatPlugin({
     "no-crypto-random-uuid": {
       meta: {
         type: "problem",
+        fixable: "code",
         messages: {
           noCryptoRandomUuid:
             "Do not use crypto.randomUUID() directly. " +
@@ -122,6 +176,18 @@ export default eslintCompatPlugin({
               callee.type !== "MemberExpression" ||
               memberPropertyName(callee) !== "randomUUID"
             ) {
+              return;
+            }
+
+            if (
+              isBunApiRuntimeFile(context) &&
+              isAmbientCryptoRandomUuidCall(context, node)
+            ) {
+              context.report({
+                node,
+                messageId: "noCryptoRandomUuid",
+                fix: (fixer) => fixer.replaceText(node, "Bun.randomUUIDv7()"),
+              });
               return;
             }
 
