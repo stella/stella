@@ -331,6 +331,7 @@ const noteItemOf = (
         kind: "role_uncertain",
         blockId: item.blockId,
         reason: item.alternative,
+        count: item.blocks,
         ...textOf(item.blockId),
       };
     case "articlesSetAsText":

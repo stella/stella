@@ -198,12 +198,15 @@ export type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
-  /** The rules were unsure what this paragraph is and nobody decided: it
-   *  was placed as `role` in `styleId`, and its next likeliest reading,
-   *  `alternative`, would have set it in `alternativeStyleId`. */
+  /** The rules were unsure what these paragraphs are and nobody decided:
+   *  `blocks` paragraphs in a row from `blockId` to `lastBlockId` were
+   *  placed as `role` in `styleId`, and their next likeliest reading,
+   *  `alternative`, would have set them in `alternativeStyleId`. */
   | {
       kind: "roleUncertain";
       blockId: string;
+      lastBlockId: string;
+      blocks: number;
       role: HouseStyleRole;
       styleId: string | null;
       alternative: HouseStyleRole;
@@ -731,25 +734,46 @@ const noteUncertainRoles = (
       .filter(({ id }) => !context.decisions.has(id))
       .map((item) => [item.blockId, item]),
   );
+  // Paragraphs in a row with the same doubt are one item.
+  let run: Extract<FormattingNoteItem, { kind: "roleUncertain" }> | null = null;
   for (const { block, role, styleId } of placements) {
     const item = open.get(block.id);
     const alternative = item?.options.find(
       (option) => option.role !== role,
     )?.role;
-    if (alternative === undefined || context.tableOf.has(block.id)) {
+    const alternativeStyleId =
+      alternative === undefined || context.tableOf.has(block.id)
+        ? null
+        : styleIdOf(context, alternative);
+    if (
+      alternative === undefined ||
+      alternativeStyleId === null ||
+      alternativeStyleId === styleId
+    ) {
+      run = null;
       continue;
     }
-    const alternativeStyleId = styleIdOf(context, alternative);
-    if (alternativeStyleId !== null && alternativeStyleId !== styleId) {
-      context.items.push({
-        kind: "roleUncertain",
-        blockId: block.id,
-        role,
-        styleId,
-        alternative,
-        alternativeStyleId,
-      });
+    if (
+      run !== null &&
+      run.role === role &&
+      run.alternative === alternative &&
+      run.styleId === styleId
+    ) {
+      run.lastBlockId = block.id;
+      run.blocks += 1;
+      continue;
     }
+    run = {
+      kind: "roleUncertain",
+      blockId: block.id,
+      lastBlockId: block.id,
+      blocks: 1,
+      role,
+      styleId,
+      alternative,
+      alternativeStyleId,
+    };
+    context.items.push(run);
   }
 };
 

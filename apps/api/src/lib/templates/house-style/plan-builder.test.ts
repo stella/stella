@@ -249,11 +249,33 @@ describe("buildTemplatePlan, roles nobody decided", () => {
       {
         kind: "roleUncertain",
         blockId,
+        lastBlockId: blockId,
+        blocks: 1,
         role: "title",
         styleId: "Title",
         alternative: "body",
         alternativeStyleId: expect.any(String),
       },
+    ]);
+  });
+
+  test("paragraphs in a row with the same doubt are one item", () => {
+    const first = blockIdOf(manifest, "První ujednání, oddíl I.");
+    const second = blockIdOf(manifest, "Druhé ujednání, oddíl I:");
+    const doubt = (id: string) => ({
+      id: roleItemId(id),
+      kind: "blockRole" as const,
+      blockId: id,
+      options: [
+        { role: "clause1" as const, confidence: 0.6 },
+        { role: "body" as const, confidence: 0.1 },
+      ],
+    });
+    const { note } = build(manifest, "keepSource", {
+      roleItems: [doubt(first), doubt(second)],
+    });
+    expect(uncertain(note.items)).toMatchObject([
+      { blockId: first, lastBlockId: second, blocks: 2, alternative: "body" },
     ]);
   });
 
