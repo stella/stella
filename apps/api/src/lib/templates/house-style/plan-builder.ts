@@ -2301,7 +2301,12 @@ const placeParagraphs = (context: Context): Placed => {
 const keepSignatureIndents = (placed: Placed): void => {
   for (const { role, block } of placed.placements) {
     const indent = block.indent;
-    if (role !== "signature" || indent === undefined) {
+    // A list's item hangs from its list, not from the source's indent.
+    if (
+      role !== "signature" ||
+      indent === undefined ||
+      block.numbering !== null
+    ) {
       continue;
     }
     const { left, firstLine } = indent;
@@ -2352,7 +2357,10 @@ const setKeptContentsLines = (context: Context, placed: Placed): void => {
   const styles = profile.contentsLineStyles ?? [];
   for (const placement of placed.placements) {
     const { block } = placement;
-    const level = CONTENTS_LEVEL.exec(block.styleName ?? "")?.groups?.["level"];
+    const name = block.styleName ?? "";
+    const level = CONTENTS_LINE_STYLE.test(name)
+      ? CONTENTS_LEVEL.exec(name)?.groups?.["level"]
+      : undefined;
     if (!index.contentsBlockIds.has(block.id) || level === undefined) {
       continue;
     }
@@ -2379,6 +2387,9 @@ const setKeptContentsLines = (context: Context, placed: Placed): void => {
 /** The longest paragraph a source contents entry may point to and still be
  *  listed: a heading's title, never a clause's text. */
 const CONTENTS_ENTRY_MAX = 120;
+/** A style for the lines of a table of contents (`toc 2`, `Obsah 3`). */
+const CONTENTS_LINE_STYLE =
+  /^(?:toc|obsah|verzeichnis|inhaltsverzeichnis|table of contents)[ \u00A0]?\d$/iu;
 /** The level a contents line's style names (`toc 2`, `Obsah 3`). */
 const CONTENTS_LEVEL = /(?<level>[1-9])\s*$/u;
 /** The page number behind a contents line's leader tab. */
