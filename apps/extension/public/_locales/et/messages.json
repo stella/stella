@@ -50,27 +50,6 @@
   "statusConnected": {
     "message": "Ühendatud"
   },
-  "statusNotConnected": {
-    "message": "Pole ühendatud"
-  },
-  "statusWebsiteAccessNeeded": {
-    "message": "Vajalik on juurdepääs veebisaitidele"
-  },
-  "statusOpenStella": {
-    "message": "Ühendamiseks avage stella"
-  },
-  "allowAndConnect": {
-    "message": "Luba juurdepääs ja ühenda"
-  },
-  "allowWebsiteAccess": {
-    "message": "Luba juurdepääs veebisaitidele"
-  },
-  "connectStella": {
-    "message": "Ühenda stella"
-  },
-  "openStella": {
-    "message": "Ava stella"
-  },
   "adoptTab": {
     "message": "Kasuta seda vahekaarti stellaga"
   },
@@ -80,28 +59,25 @@
   "revokeAccess": {
     "message": "Eemalda juurdepääs"
   },
-  "checkingAccess": {
-    "message": "Ühenduse kontrollimine…"
-  },
-  "statusConnectedElsewhere": {
-    "message": "Ühendatud mujal"
-  },
-  "connectStellaInstead": {
-    "message": "Ühenda stella hoopis siin"
-  },
-  "allowDesktop": {
-    "message": "Kasuta koos stella desktopiga"
-  },
-  "desktopConnected": {
-    "message": "stella desktop on ühendatud"
-  },
-  "desktopNotRunning": {
-    "message": "stella desktop ei tööta"
-  },
   "desktopUpdateNeeded": {
     "message": "Uuendage stella desktopi ja seda laiendust"
   },
-  "desktopConnecting": {
-    "message": "Ühendamine rakendusega stella desktop…"
+  "lineWebsite": {
+    "message": "stella veebileht"
+  },
+  "lineDesktop": {
+    "message": "stella töölauarakendus"
+  },
+  "lineConnect": {
+    "message": "Ühenda"
+  },
+  "lineConnecting": {
+    "message": "Ühendamine…"
+  },
+  "lineOpenApp": {
+    "message": "Avage rakendus"
+  },
+  "lineUpdateApp": {
+    "message": "Värskendage rakendust"
   }
 }

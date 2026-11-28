@@ -50,27 +50,6 @@
   "statusConnected": {
     "message": "Connecté"
   },
-  "statusNotConnected": {
-    "message": "Non connecté"
-  },
-  "statusWebsiteAccessNeeded": {
-    "message": "Accès aux sites requis"
-  },
-  "statusOpenStella": {
-    "message": "Ouvrez stella pour vous connecter"
-  },
-  "allowAndConnect": {
-    "message": "Autoriser l’accès et connecter"
-  },
-  "allowWebsiteAccess": {
-    "message": "Autoriser l’accès aux sites"
-  },
-  "connectStella": {
-    "message": "Connecter stella"
-  },
-  "openStella": {
-    "message": "Ouvrir stella"
-  },
   "adoptTab": {
     "message": "Utiliser cet onglet avec stella"
   },
@@ -80,28 +59,25 @@
   "revokeAccess": {
     "message": "Retirer l’accès"
   },
-  "checkingAccess": {
-    "message": "Vérification de la connexion…"
-  },
-  "statusConnectedElsewhere": {
-    "message": "Connecté ailleurs"
-  },
-  "connectStellaInstead": {
-    "message": "Connecter stella ici à la place"
-  },
-  "allowDesktop": {
-    "message": "Utiliser avec stella desktop"
-  },
-  "desktopConnected": {
-    "message": "stella desktop connecté"
-  },
-  "desktopNotRunning": {
-    "message": "stella desktop n’est pas lancé"
-  },
   "desktopUpdateNeeded": {
     "message": "Mettez à jour stella desktop et cette extension"
   },
-  "desktopConnecting": {
-    "message": "Connexion à stella desktop…"
+  "lineWebsite": {
+    "message": "Site web stella"
+  },
+  "lineDesktop": {
+    "message": "Application de bureau stella"
+  },
+  "lineConnect": {
+    "message": "Connecter"
+  },
+  "lineConnecting": {
+    "message": "Connexion…"
+  },
+  "lineOpenApp": {
+    "message": "Ouvrez l’application"
+  },
+  "lineUpdateApp": {
+    "message": "Mettez à jour l’application"
   }
 }

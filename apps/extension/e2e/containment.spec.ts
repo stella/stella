@@ -333,7 +333,7 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
 
     // The popup names the tab stella keeps contained, so the user can find
     // it among their tabs and disconnect; the connected address is in the
-    // status tooltip and read out to screen readers.
+    // website line's status tooltip and read out to screen readers.
     const popupPage = await harness.context.newPage();
     await popupPage.goto(new URL("/popup.html", harness.worker.url()).href);
     await expect(popupPage.locator("#contained-tabs-label")).toHaveText(
@@ -343,18 +343,25 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     await expect(popupPage.locator(".tab-host")).toHaveText([
       new URL(FIXTURE_ORIGIN).host,
     ]);
-    const status = popupPage.locator("#status");
+    const status = popupPage.locator("#website-status");
     await expect(status).toHaveAttribute("role", "status");
     await expect(status).toHaveAttribute("title", harness.stellaOrigin);
-    await expect(popupPage.locator("#status-text")).toHaveText("Connected");
-    await expect(popupPage.locator("#status-origin")).toHaveText(
+    await expect(popupPage.locator("#website-status-text")).toHaveText(
+      "Connected",
+    );
+    await expect(popupPage.locator("#website-origin")).toHaveText(
       harness.stellaOrigin,
     );
-    await expect(popupPage.locator("#purpose")).toBeHidden();
+    await expect(
+      popupPage.getByRole("button", { name: "Connect stella website" }),
+    ).toBeHidden();
+    await expect(
+      popupPage.getByRole("button", { name: "Connect stella desktop app" }),
+    ).toBeVisible();
     await expect(popupPage.getByRole("button")).toHaveText([
+      "Connect",
       "Disconnect",
       "Remove access",
-      "Use with stella desktop",
     ]);
     await popupPage.close();
 
