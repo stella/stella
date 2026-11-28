@@ -27,6 +27,10 @@ export const PUBLIC_READ_SERVING_ROOTS = [
 
 const PUBLIC_READ_OWNER =
   "apps/api/src/lib/legal-search/public-read-timeout-context";
+const PUBLISHER_READ_HOOK_OWNERS = new Set([
+  "@stll/case-law-ingestion-core/public-read-io-hook",
+  "packages/case-law-ingestion-core/src/public-read-io-hook",
+]);
 const IO_METHODS = new Set(Object.keys(PUBLIC_READ_IO_METHODS));
 const IO_METHOD_KINDS = new Map(Object.entries(PUBLIC_READ_IO_METHODS));
 
@@ -48,12 +52,28 @@ const publicReadIoCallback = (
   if (
     !isAstNode(parent) ||
     parent.type !== "CallExpression" ||
-    !Array.isArray(parent.arguments) ||
-    parent.arguments.at(1) !== node
+    !Array.isArray(parent.arguments)
   ) {
     return null;
   }
   const binding = resolveImport(context, parent.callee);
+  if (
+    parent.arguments.at(0) === node &&
+    binding?.moduleId !== undefined &&
+    PUBLISHER_READ_HOOK_OWNERS.has(binding.moduleId) &&
+    binding.imported === "withPublisherReadIo"
+  ) {
+    const parameter = node.params.at(0);
+    return {
+      transport: "publisher",
+      parameter: isIdentifierReference(parameter)
+        ? resolveVariable(context, parameter)
+        : null,
+    };
+  }
+  if (parent.arguments.at(1) !== node) {
+    return null;
+  }
   const transport = parent.arguments.at(0);
   if (
     binding?.moduleId !== PUBLIC_READ_OWNER ||
@@ -186,7 +206,8 @@ export const publicReadIoWrapper = (
   call: AstNode,
 ) =>
   call.type === "CallExpression" && Array.isArray(call.arguments)
-    ? publicReadIoCallback(context, unwrapExpression(call.arguments.at(1)))
+    ? (publicReadIoCallback(context, unwrapExpression(call.arguments.at(1))) ??
+      publicReadIoCallback(context, unwrapExpression(call.arguments.at(0))))
     : null;
 
 /** Statically selected methods retain their kind through local aliases. */

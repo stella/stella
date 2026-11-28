@@ -1,3 +1,4 @@
+import "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 /**
  * Database wiring for the read-through document fetch.
  *

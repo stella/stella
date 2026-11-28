@@ -66,10 +66,6 @@ const COMPUTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     "upstream.status":
       "re-wraps the Better Auth answer, whose failures its own hooks observe",
   },
-  "src/handlers/case-law/ingestion/adapters/publisher-response-limit.ts": {
-    "response.status":
-      "re-wraps a publisher answer an adapter reads behind its byte limit, never served",
-  },
   "src/handlers/case-law/ingestion/eu-completion-runner.ts": {
     "response.status":
       "re-wraps an upstream answer the runner reads, never served",

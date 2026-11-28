@@ -1,3 +1,4 @@
+import "@/api/lib/observability/observe-failure";
 import { resetCaptureWindows } from "@/api/lib/analytics/capture";
 import {
   resetAnalyticsForTesting,

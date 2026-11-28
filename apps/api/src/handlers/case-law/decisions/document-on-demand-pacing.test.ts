@@ -1,7 +1,13 @@
+import "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { panic } from "better-result";
 import { expect, jest, mock, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  reservePublisherSlot,
+  withImmediatePublisherSlot,
+} from "@stll/case-law-adapters/publisher-policy";
+import { fetchPublisher } from "@stll/case-law-adapters/retry";
 import { assertProperty } from "@stll/property-testing";
 
 import { createSafeId } from "@/api/lib/branded-types";
@@ -15,11 +21,6 @@ import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
-import {
-  reservePublisherSlot,
-  withImmediatePublisherSlot,
-} from "../ingestion/adapters/publisher-policy";
-import { fetchPublisher } from "../ingestion/adapters/retry";
 import {
   type OnDemandDocumentDeps,
   readThroughDeferredDocument,

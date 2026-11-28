@@ -356,6 +356,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
+    path: "packages/case-law-ingestion-core/src/public-read-io-hook.ts",
+    class: "package-owned-client",
+    reason:
+      "Provides the default timeout-bounded publisher fetch handle when no host public-read context is registered.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/api/src/lib/files/gotenberg.ts",
     class: "operator-configured-infrastructure",
     reason: "Submits document conversion requests to the configured converter.",
