@@ -186,7 +186,7 @@ export type Formatted = {
   roleQuestions: RoleQuestion[];
 };
 
-export type RoleQuestion = { blockId: string; options: HouseStyleRole[] };
+type RoleQuestion = { blockId: string; options: HouseStyleRole[] };
 
 type Exclusions = {
   numbering: Set<string>;

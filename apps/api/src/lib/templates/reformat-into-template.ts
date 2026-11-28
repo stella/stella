@@ -493,7 +493,7 @@ type ReformatOptions = {
   askRoleQuestions?: boolean;
 };
 
-export type ReformatRoleDecision = {
+type ReformatRoleDecision = {
   blockId: string;
   role: (typeof REFORMAT_PARAGRAPH_ROLES)[number];
 };
