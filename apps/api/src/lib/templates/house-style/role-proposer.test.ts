@@ -471,7 +471,7 @@ describe("proposeBlockRoles", () => {
       "Note that the price is fixed for the whole term.",
     ]);
     expect(rolesOf(manifest)).toMatchObject({
-      "[Pozn. pro uchazeče: doplní": "body",
+      "[Pozn. pro uchazeče: doplní ": "body",
       "Hinweis: Die Parteien können": "body",
       "Note that the price is fixed": "continuation",
     });
