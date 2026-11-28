@@ -329,7 +329,7 @@ describe("captureError issue grouping", () => {
   test("renders an actionable value from typed failure fields", () => {
     captureError(
       new HandlerError({
-        code: "provider_request_rejected",
+        code: "provider_error",
         message: "Alex Doe <alex@example.test> privileged document text",
         status: 502,
       }),
@@ -337,7 +337,7 @@ describe("captureError issue grouping", () => {
     );
 
     expect(firstExceptionValue()).toMatch(
-      /^HandlerError\[provider_request_rejected\] 502 tagged_failure defect at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
+      /^HandlerError\[provider_error\] 502 tagged_failure defect at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
     );
   });
 
@@ -457,7 +457,7 @@ describe("captureError issue grouping", () => {
         captureError(
           Object.assign(
             new HandlerError({
-              code: "provider_request_rejected",
+              code: "provider_error",
               message: privateMessage,
               status: 502,
             }),

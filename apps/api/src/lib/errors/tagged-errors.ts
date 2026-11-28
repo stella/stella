@@ -30,6 +30,7 @@
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { ApiRefusalCode } from "@stll/api-contract/refusal-codes";
 import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
 
 export { FetchBoundaryError } from "@stll/errors";
@@ -55,7 +56,17 @@ export type HandlerErrorStatusCode =
   | 502
   | 503;
 
-export type HandlerErrorCode = string;
+export type GatewayErrorCode =
+  | "PUBLIC_READ_TIMEOUT"
+  | "action_admission_configuration_incomplete"
+  | "action_admission_lease_lost"
+  | "action_admission_org_state_unreadable"
+  | "configuration_unavailable"
+  | "limiter_store_unavailable"
+  | "mcp_oauth_refresh_refused"
+  | "upstream_unavailable";
+
+export type HandlerErrorCode = ApiRefusalCode | GatewayErrorCode;
 
 /**
  * Structured 402 usage-limit detail surfaced alongside the message so the

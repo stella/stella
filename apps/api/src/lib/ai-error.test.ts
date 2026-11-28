@@ -75,11 +75,17 @@ const tanStackRunError = (code: number) =>
 // status is a fixed 502 and the provider's status rides on `code`. An adapter
 // forwards the structured body as `rawEvent` only when the SDK exception
 // exposes one, so the code is often all the wrapper carries.
-const wrappedRunError = (code: number) =>
-  new HandlerError({
-    ...tanStackRunError(code),
-    status: 502,
-  });
+const wrappedRunError = (code: number) => {
+  const raw = tanStackRunError(code);
+  return Object.assign(
+    new HandlerError({
+      code: "upstream_unavailable",
+      message: raw.message,
+      status: 502,
+    }),
+    { code: raw.code },
+  );
+};
 
 const providerErrorEnvelopeFixture = (code: number, status: string) =>
   ({

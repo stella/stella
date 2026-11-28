@@ -16,6 +16,7 @@ import {
   FetchBoundaryError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import type { HandlerErrorCode } from "@/api/lib/errors/tagged-errors";
 import { isRetryLaterStatus } from "@/api/lib/errors/upstream-status";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 import {
@@ -1005,7 +1006,7 @@ export const refreshOAuthToken = async ({
 const refreshFailureCode = (
   cause: unknown,
   oauthError: Result<{ error: string }, unknown> | null,
-): string | null => {
+): HandlerErrorCode | null => {
   if (
     oauthError !== null &&
     Result.isOk(oauthError) &&

@@ -292,12 +292,12 @@ const checkStewardshipChange = ({
     body.confirmWidening !== true
   ) {
     return {
-      ok: false as const,
-      status: 409 as const,
+      ok: false,
+      status: 409,
       code: MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE,
       message:
         "This shows the matter to people who cannot see it now. Confirm the change to apply it.",
-    };
+    } as const;
   }
   return null;
 };
