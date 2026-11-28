@@ -20,8 +20,8 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { DECISION_UNDECIDED_REASON_CODES } from "@stll/api-contract/ai-decision-provider";
+import type { ResolvedAiCondition } from "@stll/docx-engine/resolve-ai-conditions";
 
-import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { TemplateConditionAnswer } from "@/api/lib/templates/template-decide-conditions";
 
 const TEMPLATE_CONDITION_DECISION_MODEL_OUTPUT_SCHEMA = v.strictObject({

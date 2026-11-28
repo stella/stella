@@ -96,6 +96,24 @@ describe("inferTemplateProfile", () => {
     expect(inferTemplateProfile(unnamed).annexRoles).toBeUndefined();
   });
 
+  test("entries of a filled table of contents do not make their style the annex heading's", () => {
+    const template = contractTemplate();
+    // More contents entries name annexes than the sample has annex headings.
+    const entry = template.blocks.find(({ id }) => id === "p6");
+    if (entry === undefined) {
+      throw new Error("the sample has a contents entry");
+    }
+    const entries = ["p90", "p91"].map((id, index) => ({
+      ...entry,
+      id,
+      text: `Annex ${String(index + 2)}\t${String(index + 5)}`,
+    }));
+    const filled = { ...template, blocks: [...entries, ...template.blocks] };
+    expect(inferTemplateProfile(filled).roles.annexHeading).toMatchObject({
+      styleId: "Annex",
+    });
+  });
+
   test("reads unnumbered roles from style names and the sample text", () => {
     const { roles, annex, headings } = inferTemplateProfile(contractTemplate());
     expect(roles.title).toMatchObject({
@@ -239,6 +257,42 @@ describe("inferTemplateProfile", () => {
     expect(regions.keepBefore).toEqual(["t90"]);
     expect(slots.party).toEqual({ blockIds: ["p3"] });
     expect(slots.signature).toEqual({ blockIds: ["t13"] });
+  });
+
+  test("a filled document's prose, headings and tables below them are no letterhead", () => {
+    const prose = "The parties agree as follows. ".repeat(8);
+    const signatures = { id: "t95", cells: ["p96"] };
+    const signer = {
+      id: "p96",
+      text: "Signed for the Supplier",
+      styleId: "Normal",
+    };
+    // Prose in front of a later table: only the letterhead above it is kept.
+    const withProse = inferTemplateProfile(
+      contractTemplate({
+        front: [
+          ...LETTERHEAD,
+          { id: "p93", text: prose, styleId: "Normal" },
+          signatures,
+          signer,
+        ],
+      }),
+    );
+    expect(withProse.regions.keepBefore).toEqual(["t90"]);
+    // A heading the template writes in its article style, even without a
+    // number, starts the body as well.
+    const withHeading = inferTemplateProfile(
+      contractTemplate({
+        front: [
+          ...LETTERHEAD,
+          { id: "p93", text: "Definitions", styleId: "Article" },
+          signatures,
+          signer,
+        ],
+      }),
+    );
+    expect(withHeading.regions.keepBefore).toEqual(["t90"]);
+    expect(withHeading.regions.filler).toContain("t95");
   });
 
   test("fields that prompt or change on open are frozen, the rest stay live", () => {

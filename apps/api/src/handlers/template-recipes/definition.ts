@@ -1,8 +1,6 @@
 import * as v from "valibot";
 
 import type { TemplateRecipeDefinition as ContractTemplateRecipeDefinition } from "@stll/api-contract";
-import { isFieldPath } from "@stll/template-conditions";
-
 import {
   DATE_FORMAT_STYLES,
   INPUT_TYPES,
@@ -10,7 +8,9 @@ import {
   LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
   LOOKUP_FORMATS_MAX,
   LOOKUP_REGISTRIES,
-} from "@/api/lib/docx/types";
+} from "@stll/docx-engine/types";
+import { isFieldPath } from "@stll/template-conditions";
+
 import { LIMITS } from "@/api/lib/limits";
 
 /**

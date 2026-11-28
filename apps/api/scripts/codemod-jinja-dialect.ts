@@ -25,18 +25,17 @@ import path from "node:path";
 import * as slimdom from "slimdom";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { templateContentPartPaths, W_NS } from "@stll/docx-engine/ooxml";
+import {
+  paragraphSpanText,
+  replaceParagraphTextRanges,
+} from "@stll/docx-engine/rich-patch";
 import {
   legacyLoopAlias,
   markerPattern,
   normalizeMarkerInner,
   translateLegacyExpression,
 } from "@stll/template-conditions";
-
-import { templateContentPartPaths, W_NS } from "@/api/lib/docx/ooxml";
-import {
-  paragraphSpanText,
-  replaceParagraphTextRanges,
-} from "@/api/lib/docx/rich-patch";
 
 /** One enclosing old-dialect loop and the alias its body now uses. */
 type LoopFrame = { alias: string; path: string };

@@ -1,6 +1,8 @@
 import type { Result } from "better-result";
 import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 
+import type { LookupRegistry } from "@stll/docx-engine/types";
+
 import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import {
@@ -9,7 +11,6 @@ import {
   templateLookupFormatUserDefaults,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { LookupRegistry } from "@/api/lib/docx/types";
 
 type ResolveLookupFormatDefaultArgs = SafeDbOrTx & {
   organizationId: SafeId<"organization">;

@@ -18,6 +18,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
 import { assertProperty } from "@stll/property-testing";
 
 import { decisionDatePositionOf } from "@/api/lib/case-law/decision-date-order";
@@ -25,7 +26,6 @@ import { encodeDecisionSearchCursor } from "@/api/lib/case-law/decision-search-c
 import { encodeEntitiesWindowCursor } from "@/api/lib/entities/window-cursor";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import {
   encodePaginationCursor,
   isIssuablePaginationCursor,

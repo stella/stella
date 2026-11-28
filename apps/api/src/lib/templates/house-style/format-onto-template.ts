@@ -32,7 +32,7 @@ import type {
   TemplatePlan,
   TemplatePlanEngine,
   TemplatePlanReport,
-  TrackedChangesView,
+  TrackedChangesChoice,
 } from "@/api/lib/templates/house-style/folio-contract";
 import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
 import { buildTemplatePlan } from "@/api/lib/templates/house-style/plan-builder";
@@ -156,9 +156,11 @@ type FormatOptions = {
   profile?: TemplateProfile;
   mode: NumberingMode;
   resolveAmbiguities: AmbiguityResolver;
-  /** The view of a document with tracked changes to format. Left out,
-   *  every change is accepted and the note says so. */
-  trackedChanges?: TrackedChangesView;
+  /** What to do with a document's tracked changes: format one view of it,
+   *  or keep the changes as changes in the output (`keep`), refused by
+   *  name when the document tracks something the output cannot carry. Left
+   *  out, every change is accepted and the note says so. */
+  trackedChanges?: TrackedChangesChoice;
   /** The languages of the document and of the template, when known: a
    *  template in another language is used as the closest one, and the note
    *  says so. */
@@ -168,7 +170,8 @@ type FormatOptions = {
 export type Formatted = {
   docx: Uint8Array;
   /** The source as it was formatted: the chosen view of a document with
-   *  tracked changes. The note's block ids are ids of its blocks. */
+   *  tracked changes, the accepted one when the changes are kept. The
+   *  note's block ids are ids of its blocks. */
   manifest: DocxBlockManifest;
   plan: TemplatePlan;
   profile: TemplateProfile;
@@ -358,18 +361,39 @@ const leftOf = ({
 
 /**
  * The manifest a document is formatted from. One that tracks changes is
- * read again in the view the caller names; when nobody chooses, every
- * change is accepted.
+ * read again as the caller asks: in one view, or with the changes kept.
+ * When nobody chooses, every change is accepted.
+ *
+ * A reading that keeps the changes comes with the document as it reads
+ * with them rejected: a citation becomes a field only where its target
+ * shows the same number in both.
  */
 const readView = async (
   engine: TemplatePlanEngine,
   source: Uint8Array,
   asRead: DocxBlockManifest,
-  view: TrackedChangesView | undefined,
-): Promise<Result<DocxBlockManifest, TemplateEngineError>> =>
-  asRead.trackedChanges > 0
-    ? await engine.analyze(source, { trackedChanges: view ?? "accept" })
-    : Result.ok(asRead);
+  view: TrackedChangesChoice | undefined,
+): Promise<
+  Result<
+    { manifest: DocxBlockManifest; rejectedView?: DocxBlockManifest },
+    TemplateEngineError
+  >
+> => {
+  if (asRead.trackedChanges === 0) {
+    return Result.ok({ manifest: asRead });
+  }
+  const viewed = await engine.analyze(source, {
+    trackedChanges: view ?? "accept",
+  });
+  if (viewed.isErr() || viewed.value.trackedChangesKept === undefined) {
+    return viewed.map((manifest) => ({ manifest }));
+  }
+  const rejected = await engine.analyze(source, { trackedChanges: "reject" });
+  return rejected.map((rejectedView) => ({
+    manifest: viewed.value,
+    rejectedView,
+  }));
+};
 
 /**
  * Formats `source` onto `template`. Returns the output with the plan that
@@ -411,7 +435,7 @@ export const formatOntoTemplate = async ({
   if (viewed.isErr()) {
     return Result.err(viewed.error);
   }
-  const manifest = viewed.value;
+  const { manifest, rejectedView } = viewed.value;
   const profile = confirmed ?? inferTemplateProfile(inspected.value);
   const issues = validateTemplateProfile(profile, inspected.value).filter(
     ({ severity }) => severity === "error",
@@ -482,6 +506,7 @@ export const formatOntoTemplate = async ({
       exclusions,
       sourceHighlightColors: highlighted.value,
       trackedChangesStated: trackedChanges !== undefined,
+      rejectedView,
       ...(languages === undefined ? {} : { languages }),
     });
     if (built.labelsNotKept.length > 0) {

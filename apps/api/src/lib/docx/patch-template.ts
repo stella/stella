@@ -12,14 +12,6 @@ import { panic, Result } from "better-result";
 import * as slimdom from "slimdom";
 
 import type { ZipArchive } from "@stll/docx-core/zip";
-import type { NamedCondition } from "@stll/template-conditions";
-import { scanMarkers, substitutionKey } from "@stll/template-conditions";
-
-import { loadDocx } from "@/api/lib/docx-archive";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
-import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-
 import {
   collectValidNumIds,
   createDirectiveProcessingContext,
@@ -28,23 +20,45 @@ import {
   processBlockDirectives,
   pruneDanglingNumPr,
   readConditionRawValues,
-} from "./block-directives";
-import { deriveManifest } from "./derived-manifest";
-import { discoverPlaceholders } from "./discover-placeholders";
-import { discoverTemplate, locateFieldMarkers } from "./discover-template";
-import { processInlineConditions } from "./inline-conditions";
-import { manifestNamedConditions } from "./manifest-conditions";
+} from "@stll/docx-engine/block-directives";
+import { discoverPlaceholders } from "@stll/docx-engine/discover-placeholders";
+import { processInlineConditions } from "@stll/docx-engine/inline-conditions";
+import { manifestNamedConditions } from "@stll/docx-engine/manifest-conditions";
 import {
   assignNumbersInDoc,
   mightContainNumberingMarkers,
   resolveRefsInDoc,
-} from "./numbering";
+} from "@stll/docx-engine/numbering";
 import {
   MAIN_DOCUMENT_PART_PATH,
   paragraphText,
   templateContentPartPaths,
   W_NS,
-} from "./ooxml";
+} from "@stll/docx-engine/ooxml";
+import {
+  paragraphSpanText,
+  patchParagraphPlaceholders,
+  patchXmlPart,
+} from "@stll/docx-engine/rich-patch";
+import { stripManifest } from "@stll/docx-engine/strip-custom-xml-manifest";
+import type {
+  ParagraphSource,
+  RichPatchValue,
+  TemplateData,
+  TemplateDataValue,
+  TemplateStructureError,
+} from "@stll/docx-engine/types";
+import { isTemplateData } from "@stll/docx-engine/types";
+import type { NamedCondition } from "@stll/template-conditions";
+import { scanMarkers, substitutionKey } from "@stll/template-conditions";
+
+import { loadDocx } from "@/api/lib/docx-archive";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+
+import { deriveManifest } from "./derived-manifest";
+import { discoverTemplate, locateFieldMarkers } from "./discover-template";
 import {
   collectRenderedFieldTokens,
   createFieldMarkerTable,
@@ -52,21 +66,6 @@ import {
   swapFieldMarkersForTokens,
 } from "./rendered-field-markers";
 import type { RenderedFieldOccurrence } from "./rendered-field-markers";
-import {
-  paragraphSpanText,
-  patchParagraphPlaceholders,
-  patchXmlPart,
-} from "./rich-patch";
-import { stripManifest } from "./strip-custom-xml-manifest";
-import type {
-  FillTemplateResult,
-  ParagraphSource,
-  RichPatchValue,
-  TemplateData,
-  TemplateDataValue,
-  TemplateStructureError,
-} from "./types";
-import { isTemplateData } from "./types";
 
 type PatchValues = Record<string, RichPatchValue>;
 
@@ -436,6 +435,13 @@ export const renderedClauseSlotOccurrences = async (
 
 /** Fills a scanned template; the filled document comes back as a derived
  *  `ScannedFile`, so it can be read again without a second scan. */
+export type FillTemplateResult = {
+  file: ScannedFile;
+  unmatchedPlaceholders: string[];
+  unusedValues: string[];
+  structureErrors: TemplateStructureError[];
+};
+
 export const fillTemplate = async (
   template: ScannedFile,
   values: PatchValues | TemplateData,

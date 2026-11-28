@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -13,7 +14,6 @@ import {
 } from "./adapt-ai-fields";
 import { deriveManifestFromDocx } from "./derived-manifest";
 import { fillTemplate } from "./patch-template";
-import type { FieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {

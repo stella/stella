@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import { functionWordKey } from "@stll/legal-morphology/function-words";
+import {
+  MORPHOLOGY_LANGUAGES,
+  type MorphologyLanguage,
+} from "@stll/legal-morphology/stem";
+
 import {
   CORPUS_SNIPPET_MAX_CHARS,
+  foldCorpusTerm,
   highlightCorpusPassage,
   markCorpusFragment,
 } from "@/api/lib/legal-search/corpus-passage-highlight";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import csHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/cs.json";
 import daHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/da.json";
 import deHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/de.json";
@@ -26,10 +33,6 @@ import ptHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/pt.jso
 import roHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/ro.json";
 import skHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/sk.json";
 import svHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/sv.json";
-import {
-  MORPHOLOGY_LANGUAGES,
-  type MorphologyLanguage,
-} from "@/api/lib/legal-search/morphology/stem";
 import {
   searchHighlightMarks,
   stripSearchHighlightMarkup,
@@ -325,4 +328,10 @@ describe("format", () => {
 
     expect(text).toBe(oversized);
   });
+});
+
+test("foldCorpusTerm folds accented words that functionWordKey keeps distinct", () => {
+  expect(foldCorpusTerm("být")).toBe(foldCorpusTerm("byt"));
+  expect(foldCorpusTerm("byť")).toBe(foldCorpusTerm("byt"));
+  expect(functionWordKey("být")).not.toBe(functionWordKey("byt"));
 });

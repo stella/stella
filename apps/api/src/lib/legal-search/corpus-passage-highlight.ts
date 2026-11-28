@@ -15,18 +15,18 @@
 
 import { Buffer } from "node:buffer";
 
-import { foldToAscii } from "@stll/text-normalize";
-
-import { CORPUS_TOKEN_LENGTH_LIMIT_BYTES } from "@/api/lib/legal-search/corpus-index-config";
-import type { CorpusQueryToken } from "@/api/lib/legal-search/corpus-query";
-import type { CorpusTokenSpan } from "@/api/lib/legal-search/corpus-tokens";
+import type { CorpusTokenSpan } from "@stll/legal-morphology/corpus-tokens";
 import {
   corpusTokens,
   corpusTokenSpans,
   normalizeCorpusText,
-} from "@/api/lib/legal-search/corpus-tokens";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
-import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
+} from "@stll/legal-morphology/corpus-tokens";
+import type { MorphologyLanguage } from "@stll/legal-morphology/stem";
+import { stemLegalTerm } from "@stll/legal-morphology/stem";
+import { foldToAscii } from "@stll/text-normalize";
+
+import { CORPUS_TOKEN_LENGTH_LIMIT_BYTES } from "@/api/lib/legal-search/corpus-index-config";
+import type { CorpusQueryToken } from "@/api/lib/legal-search/corpus-query";
 import { escapeSearchHtml } from "@/api/lib/search/highlight";
 
 /** Characters one fragment may span, unless a caller passes `maxChars`. */

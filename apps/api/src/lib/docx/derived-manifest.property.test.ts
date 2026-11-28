@@ -14,6 +14,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { type FieldMeta, isFieldMeta } from "@stll/docx-engine/types";
 import { assertProperty } from "@stll/property-testing";
 import {
   arrayFiltersFromFieldConfig,
@@ -24,7 +25,6 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { deriveManifestFromDocx } from "./derived-manifest";
-import { type FieldMeta, isFieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
 const WRAP = (body: string) =>

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Regenerates the committed Snowball stemmers under
- * `apps/api/src/lib/legal-search/morphology/snowball/`.
+ * `packages/legal-morphology/src/snowball/`.
  *
  * Stem output is an index-format dependency: re-stemming a corpus with a
  * different algorithm version silently changes what a query matches. The
@@ -28,7 +28,7 @@ import path from "node:path";
 import {
   SNOWBALL_BASE_STEMMER_SHA256,
   SNOWBALL_RELEASE,
-} from "../apps/api/src/lib/legal-search/morphology/snowball/base-stemmer";
+} from "../packages/legal-morphology/src/snowball/base-stemmer";
 import { hashGeneratedSource as sha256 } from "./generated-source-hash";
 
 const SNOWBALL_REPO = "https://github.com/snowballstem/snowball";
@@ -42,7 +42,7 @@ const SNOWBALL_DATA_COMMIT = "a0ec0d0a2839ec885878868de20fcb63209d92b0";
 const REPO_ROOT = path.join(import.meta.dir, "..");
 const MODULE_DIR = path.join(
   REPO_ROOT,
-  "apps/api/src/lib/legal-search/morphology/snowball",
+  "packages/legal-morphology/src/snowball",
 );
 const FIXTURE_DIR = path.join(MODULE_DIR, "__fixtures__");
 
@@ -110,8 +110,7 @@ const TARGETS = [
   { algorithm: "swedish", module: "swedish.gen", className: "SwedishStemmer" },
 ] as const satisfies readonly StemmerTarget[];
 
-const BASE_STEMMER_IMPORT =
-  "@/api/lib/legal-search/morphology/snowball/base-stemmer";
+const BASE_STEMMER_IMPORT = "./base-stemmer";
 
 /**
  * Imports the module actually uses. An algorithm with no substitution table
@@ -422,7 +421,7 @@ const buildArtifacts = async (
   if (upstreamDigest !== SNOWBALL_BASE_STEMMER_SHA256) {
     panic(
       `upstream javascript/base-stemmer.js changed (${upstreamDigest}); re-port ` +
-        "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts and update its digest",
+        "packages/legal-morphology/src/snowball/base-stemmer.ts and update its digest",
     );
   }
 

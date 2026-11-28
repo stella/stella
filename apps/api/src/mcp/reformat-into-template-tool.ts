@@ -43,6 +43,7 @@ import type { TemplatePlanEngine } from "@/api/lib/templates/house-style/folio-c
 import { folioTemplatePlanEngine } from "@/api/lib/templates/house-style/folio-engine";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
 import {
+  CHANGES_NOT_KEEPABLE_REASON,
   reformatDocxOntoTemplate,
   selectHouseStyleTemplate,
 } from "@/api/lib/templates/reformat-into-template";
@@ -50,6 +51,7 @@ import type { TemplateSelection } from "@/api/lib/templates/reformat-into-templa
 import {
   HOUSE_STYLE_TEMPLATE_TAG,
   REFORMAT_NUMBERING_MODES,
+  REFORMAT_TRACKED_CHANGES,
 } from "@/api/lib/templates/reformat-into-template-contract";
 import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -84,6 +86,20 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 /** Applying the template, retries included; well inside the tool budget. */
 const REFORMAT_INTO_TEMPLATE_TIMEOUT_MS = 60_000;
 
+/** What the caller does next about a refusal. A document with tracked
+ *  changes is refused for a choice, or because they cannot all be kept. */
+const refusalHint = (
+  code: string,
+  details: readonly { reason: string }[],
+): string => {
+  if (code !== "tracked_changes") {
+    return "Tell the user the document was not reformatted and why; nothing was saved.";
+  }
+  return details.some(({ reason }) => reason === CHANGES_NOT_KEEPABLE_REASON)
+    ? "Ask the user whether to accept or reject the tracked changes instead, then call again with tracked_changes set to accept or reject."
+    : "Ask the user whether to keep the tracked changes as tracked changes, accept them or reject them, then call again with tracked_changes set to keep, accept or reject.";
+};
+
 const reformatIntoTemplateArgsSchema = nullAsAbsent(
   v.strictObject({
     entity_id: uuidInputSchema("Document entity ID to reformat"),
@@ -111,6 +127,14 @@ const reformatIntoTemplateArgsSchema = nullAsAbsent(
         ),
       ),
     ),
+    tracked_changes: v.optional(
+      v.pipe(
+        v.picklist(REFORMAT_TRACKED_CHANGES),
+        v.description(
+          "For a document with tracked changes: keep carries them over as tracked changes; accept or reject reformats the text with all of them accepted or rejected. Omitted, such a document is refused so the user can choose",
+        ),
+      ),
+    ),
   }),
 );
 
@@ -123,9 +147,10 @@ export const REFORMAT_INTO_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     "footers come from the template, and a cross-reference whose target is " +
     "certain becomes a field. " +
     "Omit template_id to use the matching template tagged " +
-    `"${HOUSE_STYLE_TEMPLATE_TAG}". A document that cannot be reformatted ` +
-    "without changing its text (tracked changes, a number the template " +
-    "would not show) is refused and nothing is saved. Returns the new " +
+    `"${HOUSE_STYLE_TEMPLATE_TAG}". A document with tracked changes needs ` +
+    "tracked_changes (ask the user). A document that cannot be reformatted " +
+    "without changing its text (a number the template would not show) is " +
+    "refused and nothing is saved. Returns the new " +
     "document and a formatting note: counts, what stayed text, template " +
     "findings.",
   inputSchema: reformatIntoTemplateArgsSchema,
@@ -601,6 +626,9 @@ export const handleReformatIntoTemplateTool = async (
             template: new Uint8Array(template.value.file.bytes),
             numbering,
             acceptSuggestedDecisions: input.accept_suggested_decisions ?? false,
+            ...(input.tracked_changes === undefined
+              ? {}
+              : { trackedChanges: input.tracked_changes }),
           }),
         {
           label: "reformat-into-template",
@@ -621,10 +649,7 @@ export const handleReformatIntoTemplateTool = async (
     return structuredErrorResult({
       code: "validation_error",
       message,
-      hint:
-        code === "tracked_changes"
-          ? "Ask the user to accept or reject the tracked changes in the document, then retry."
-          : "Tell the user the document was not reformatted and why; nothing was saved.",
+      hint: refusalHint(code, details),
       issues: [
         { path: "", code, message },
         ...details.map(({ blockId, text, reason }) => ({

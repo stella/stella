@@ -22,6 +22,10 @@ import fc from "fast-check";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
+import type {
+  ResolvedAiCondition,
+  ResolvedAiConditions,
+} from "@stll/docx-engine/resolve-ai-conditions";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -31,15 +35,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { AdaptAiFieldsResult } from "@/api/lib/docx/adapt-ai-fields";
-import type {
-  ResolvedAiCondition,
-  ResolvedAiConditions,
-} from "@/api/lib/docx/resolve-ai-conditions";
+import type { FillTemplateResult as RenderedFill } from "@/api/lib/docx/patch-template";
 import type {
   AiFieldError,
   ResolveAiFieldsResult,
 } from "@/api/lib/docx/resolve-ai-fields";
-import type { FillTemplateResult as RenderedFill } from "@/api/lib/docx/types";
 import { recordTemplateFill } from "@/api/lib/templates/record-use";
 import {
   decideTemplateFillCompletion,

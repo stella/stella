@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import { API_TEST_TIMEOUT_MS } from "../apps/api/src/tests/test-timeouts";
+import { failCheck } from "../packages/scripts/src/check-failure";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import type { CheckPoolJob } from "./ci-check-pool-registry";
 
@@ -144,8 +145,18 @@ if (import.meta.main) {
   console.log(
     `\nRegistration checks: ${REGISTRATION_CHECKS.length - failures.length}/${REGISTRATION_CHECKS.length} passed; wall time ${((performance.now() - started) / 1000).toFixed(1)} s`,
   );
-  for (const failure of failures) {
-    console.error(`FAILED registration check: ${failure}`);
+  if (failures.length > 0) {
+    process.exitCode = failCheck({
+      check: "check-registrations",
+      summary: `${failures.length} of ${REGISTRATION_CHECKS.length} registration check(s) failed`,
+      details: failures.map(
+        (failure) => `FAILED registration check: ${failure}`,
+      ),
+      remediation:
+        "Inspect the failing check output above and update the corresponding registration, generator, or census entry.",
+      rerunCommand: "bun run check:registrations",
+    });
+  } else {
+    process.exitCode = 0;
   }
-  process.exitCode = failures.length === 0 ? 0 : 1;
 }

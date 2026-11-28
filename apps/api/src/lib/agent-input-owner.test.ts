@@ -30,6 +30,7 @@ const OWNER_DIR = "packages/agent-input/src";
  *  handlers, and the template half of the MCP surface. */
 const AGENT_VALUE_SURFACES = [
   "apps/api/src/lib/docx/**/*.ts",
+  "packages/docx-engine/src/**/*.ts",
   "apps/api/src/lib/templates/**/*.ts",
   "apps/api/src/handlers/templates/**/*.ts",
   "apps/api/src/mcp/template-*.ts",
@@ -79,7 +80,7 @@ const BYPASS_RULES = {
       /(?:^|[^\w.])(?:Number|parseFloat|parseInt)\(|Number\.parse(?:Float|Int)\(/u,
     allowed: [
       {
-        path: "apps/api/src/lib/docx/ooxml.ts",
+        path: "packages/docx-engine/src/ooxml.ts",
         reason: "OOXML numbering ids, written by Word and by us.",
       },
       {
@@ -87,7 +88,7 @@ const BYPASS_RULES = {
         reason: "A clause version suffix from our own slot marker.",
       },
       {
-        path: "apps/api/src/lib/docx/strip-custom-xml-manifest.ts",
+        path: "packages/docx-engine/src/strip-custom-xml-manifest.ts",
         reason:
           "A custom XML slot index out of a zip entry name, which Word and we wrote; nobody spells it.",
       },

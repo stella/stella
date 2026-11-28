@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { FieldMeta, FieldSource } from "@stll/docx-engine/types";
 import { resolvePath } from "@stll/template-conditions";
-
-import type { FieldMeta, FieldSource } from "@/api/lib/docx/types";
 
 import {
   applySourceFields,

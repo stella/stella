@@ -4,6 +4,7 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
+import { corpusMorphologyLanguage } from "@stll/legal-morphology/corpus-language";
 
 import {
   caseLawCitations,
@@ -36,7 +37,6 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";

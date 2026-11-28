@@ -118,8 +118,9 @@ const readHighlightColors = async (docx: Uint8Array): Promise<string[]> => {
  */
 export const folioTemplatePlanEngine: TemplatePlanEngine = {
   analyze: async (docx, options) => {
-    // One view of a document with tracked changes, when the caller names
-    // it; without one the engine reads the document as it stands.
+    // One view of a document with tracked changes, or its accepted view
+    // with the changes kept, when the caller names it; without a choice
+    // the engine reads the document as it stands.
     const view = options?.trackedChanges;
     const analyzed = await analyzeDocxBlocks(
       docx,

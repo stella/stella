@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  FUNCTION_WORD_LANGUAGES,
+  FUNCTION_WORDS,
+} from "@stll/legal-morphology/function-words";
 import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -9,10 +13,6 @@ import {
   corpusFreeTextClause,
 } from "@/api/lib/legal-search/corpus-query";
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
-import {
-  FUNCTION_WORD_LANGUAGES,
-  FUNCTION_WORDS,
-} from "@/api/lib/legal-search/morphology/function-words";
 
 test("relaxed legislation coverage ORs content words and drops Czech function words", () => {
   expect(

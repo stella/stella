@@ -884,7 +884,7 @@ test("lint selection derives committed generated outputs from the manifest", () 
   expect(isChangedLintPath("apps/web/public/prepaint-init.js")).toBe(true);
   expect(
     isChangedLintPath(
-      "apps/api/src/lib/legal-search/morphology/snowball/__fixtures__/vocabulary.ts",
+      "packages/legal-morphology/src/snowball/__fixtures__/vocabulary.ts",
     ),
   ).toBe(true);
 });

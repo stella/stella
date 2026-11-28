@@ -243,6 +243,19 @@ const LEVEL_WORDS = /[^\s\d.()[\]\-–—/:,;%]/u;
 /** A line that heads a table of contents and says nothing else. */
 const CONTENTS_CAPTION =
   /^(?:obsah|contents|table of contents|inhalt|inhaltsverzeichnis)[ \u00A0]*:?$/iu;
+/** Roles whose paragraphs are body text wherever they stand: the front
+ *  matter of a template ends at the first of them. */
+const BODY_START_ROLES = [
+  "articleHeading",
+  "clause1",
+  "clause2",
+  "clause3",
+  "recital",
+  "heading",
+] as const satisfies readonly HouseStyleRole[];
+/** A paragraph longer than this is prose of the sample, never a line of a
+ *  letterhead or of a memo's header. */
+const PROSE_LENGTH = 200;
 /** What a doubt about the template takes off the profile's confidence. */
 const UNCERTAIN_SHARE = 0.5;
 
@@ -755,7 +768,13 @@ const inferRoles = (
       ({ level, style }) =>
         level?.numFmt === "bullet" && style.outlineLvl === null,
     );
-  const annexSample = bySample(outside, ANNEX_SAMPLE);
+  // An entry of a filled table of contents names annexes too ("Annex 1 …
+  // 12"); a contents style is never the annex heading's.
+  const annexSample = bySample(
+    outside,
+    ANNEX_SAMPLE,
+    (fact) => !NAME.contents.test(nameOf(fact)),
+  );
   const annexListNamed = byName(outside, NAME.annexList);
   // The style of a heading without a number (`Preambule`): named for the
   // preamble and in no list; the numbered one of that name is the recital's.
@@ -1110,14 +1129,29 @@ const inferRegions = ({
   };
   // The sample body starts at the first numbered sample paragraph, alone
   // or in a table, or at the table of contents; what stands before it is
-  // front matter.
+  // front matter. A template that is really a filled document may number
+  // nothing by its styles: there the body starts no later than its first
+  // heading, its first numbered paragraph outside a table, or its first
+  // paragraph of prose. No letterhead holds one, and without that bound
+  // everything up to the document's last table (its signatures) would be
+  // kept as a letterhead.
+  const bodyStyles = new Set(
+    BODY_START_ROLES.flatMap((role) => {
+      const styleId = roles[role]?.styleId;
+      return styleId === undefined ? [] : [styleId];
+    }),
+  );
   const bodyStart = topLevel.findIndex(
     (block) =>
       inContents.has(block.id) ||
       insideOf(block).some(
         ({ label, styleId }) =>
           label !== null && numberedStyles.has(styleId ?? ""),
-      ),
+      ) ||
+      (block.kind === "paragraph" &&
+        (bodyStyles.has(block.styleId ?? "") ||
+          block.label !== null ||
+          block.text.trim().length > PROSE_LENGTH)),
   );
   const front = bodyStart === -1 ? topLevel : topLevel.slice(0, bodyStart);
   const isSample = (block: DocxBlock): boolean =>

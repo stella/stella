@@ -4,6 +4,11 @@
  * (`docxToMarkdown`), which owns the DOCX parser and its full fidelity.
  */
 
+import type {
+  ExtractedDocument,
+  ExtractedParagraph,
+  FieldMeta,
+} from "@stll/docx-engine/types";
 import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   blockDirectiveLinePattern,
@@ -12,8 +17,6 @@ import {
 
 import { extractScannedDocxText } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-
-import type { ExtractedDocument, ExtractedParagraph, FieldMeta } from "./types";
 
 // ── Directive detection ─────────────────────────────────
 

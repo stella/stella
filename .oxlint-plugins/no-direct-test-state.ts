@@ -3,14 +3,11 @@ import {
   type ESTree,
   type Variable,
 } from "@oxlint/plugins";
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import { BASELINE_PATHS } from "../scripts/baseline-paths.ts";
-import { parseTestBaseline } from "../scripts/check-test-state-baseline.ts";
 import { canonicalModuleId } from "./module-id.ts";
 import {
   type FilenameContext,
@@ -26,7 +23,6 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
-const BASELINE_PATH = BASELINE_PATHS.testState;
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CONFIG_MODULE = "apps/api/src/env";
 const FIXTURE_PACKAGE = "@stll/test-state";
@@ -44,17 +40,6 @@ const FIXTURE_MODULES = new Set([
   ),
 ]);
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
-
-// Counts are validated by the same parser as the shrink-only membership check.
-const baselineCounts = () => {
-  const text = readFileSync(path.join(REPO_ROOT, BASELINE_PATH), "utf-8");
-  const counts = new Map<string, number>();
-  for (const member of parseTestBaseline(text, BASELINE_PATH)) {
-    const file = member.slice(0, member.lastIndexOf("::"));
-    counts.set(file, (counts.get(file) ?? 0) + 1);
-  }
-  return counts;
-};
 
 const createStateResolver = (context: ScopeContext & FilenameContext) => {
   const variableOf = (node: unknown) =>
@@ -222,8 +207,6 @@ export default eslintCompatPlugin({
         messages: {
           mutation:
             "Use createTestState from @stll/test-state to mutate test environment or validated configuration; it restores file and test setup automatically.",
-          stale:
-            "{{file}} now has {{count}} state mutations (baseline {{baseline}}). Shrink scripts/test-state-baseline.json in this change.",
           concurrent:
             "Files using createTestState must run serial tests; concurrent tests share the environment and validated configuration.",
           registration:
@@ -233,7 +216,6 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const counts = baselineCounts();
         let filename = "";
         let mutations: ESTree.Node[] = [];
         let hasFixture = false;
@@ -367,25 +349,11 @@ export default eslintCompatPlugin({
               concurrent.push(node);
             }
           },
-          "Program:exit"(node) {
+          "Program:exit"() {
             if (!TEST_FILE.test(filename)) {
               return;
             }
-            if (context.settings.testDeterminismCensus === true) {
-              for (const mutation of mutations) {
-                context.report({ node: mutation, messageId: "mutation" });
-              }
-              return;
-            }
-            const baseline = counts.get(filename) ?? 0;
-            if (mutations.length < baseline) {
-              context.report({
-                node,
-                messageId: "stale",
-                data: { file: filename, count: mutations.length, baseline },
-              });
-            }
-            for (const mutation of mutations.slice(baseline)) {
+            for (const mutation of mutations) {
               context.report({ node: mutation, messageId: "mutation" });
             }
             if (hasFixture) {

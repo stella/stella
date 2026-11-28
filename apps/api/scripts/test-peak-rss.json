@@ -18240,28 +18240,12 @@
         "job": "measure-3"
       }
     },
-    "src/lib/docx/ai-visible-values.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/lib/docx/apply-field-suggestions.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
       "source": {
         "runId": "44976310794",
         "job": "measure-2"
-      }
-    },
-    "src/lib/docx/array-bounds.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/lib/docx/block-directives-properties.test.ts": {
@@ -18296,44 +18280,12 @@
         "job": "measure-1"
       }
     },
-    "src/lib/docx/date-fields.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/docx/dependent-fields.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/lib/docx/derived-manifest.property.test.ts": {
       "peakMb": 214,
       "baselineMb": 214,
       "source": {
         "runId": "44976310794",
         "job": "measure-1"
-      }
-    },
-    "src/lib/docx/diff-paragraphs.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/docx/discover-placeholders.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
       }
     },
     "src/lib/docx/discover-template.test.ts": {
@@ -18360,14 +18312,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/docx/docx-properties.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
     "src/lib/docx/engine-parity.test.ts": {
       "peakMb": 353,
       "baselineMb": 193,
@@ -18382,14 +18326,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-3"
-      }
-    },
-    "src/lib/docx/field-filters.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
       }
     },
     "src/lib/docx/field-filters.test.ts": {
@@ -18432,30 +18368,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/docx/manifest-conditions.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/docx/numbering.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/docx/ooxml.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/lib/docx/patch-template-numbering.test.ts": {
       "peakMb": 214,
       "baselineMb": 214,
@@ -18488,14 +18400,6 @@
         "job": "measure-1"
       }
     },
-    "src/lib/docx/resolve-ai-conditions.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
     "src/lib/docx/resolve-ai-fields.test.ts": {
       "peakMb": 233,
       "baselineMb": 233,
@@ -18512,22 +18416,6 @@
         "job": "measure-1"
       }
     },
-    "src/lib/docx/resolved-values.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/docx/rich-patch.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/lib/docx/row-block-markers.test.ts": {
       "peakMb": 214,
       "baselineMb": 214,
@@ -18536,36 +18424,12 @@
         "job": "measure-1"
       }
     },
-    "src/lib/docx/strip-custom-xml-manifest.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/docx/template-manifest.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
     "src/lib/docx/template-warnings.test.ts": {
       "peakMb": 214,
       "baselineMb": 214,
       "source": {
         "runId": "44976310794",
         "job": "measure-1"
-      }
-    },
-    "src/lib/docx/types.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/lib/docx/write-field-filters.test.ts": {
@@ -21814,70 +21678,6 @@
       "source": {
         "runId": "44976310794",
         "job": "measure-3"
-      }
-    },
-    "src/lib/legal-search/morphology/dictionary.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/legal-search/morphology/function-words.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/legal-search/morphology/slovak.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/lib/legal-search/morphology/snowball/conformance.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/legal-search/morphology/stem-memo.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/legal-search/morphology/stem-text.test.ts": {
-      "peakMb": 233,
-      "baselineMb": 233,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-3"
-      }
-    },
-    "src/lib/legal-search/morphology/stem.property.test.ts": {
-      "peakMb": 214,
-      "baselineMb": 214,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/legal-search/morphology/stem.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "44976310794",
-        "job": "measure-2"
       }
     },
     "src/lib/legal-search/parser-reparse-scopes.test.ts": {
