@@ -295,10 +295,6 @@ const SOURCE_LIST_REASONS: ReadonlySet<LabelKeptReason> = new Set([
  * would leave the copy counting without it. Bullets keep their marks on
  * the template's levels.
  */
-/** How many labels written as text a definition needs, for each of its
- *  numbered paragraphs, to move whole. */
-const SOURCE_LIST_SHARE = 2;
-
 const keepSourceLists = (
   placements: readonly Placement[],
   { loose, excluded }: SourceListOptions,
@@ -368,10 +364,7 @@ const keepSourceLists = (
   // article on a spare level) then count with the rest in its own list.
   for (const definition of kept) {
     const numbered = numberedOf.get(definition) ?? 0;
-    if (
-      numbered > 0 &&
-      (textOf.get(definition) ?? 0) < SOURCE_LIST_SHARE * numbered
-    ) {
+    if (numbered > 0 && (textOf.get(definition) ?? 0) <= numbered) {
       kept.delete(definition);
     }
   }
