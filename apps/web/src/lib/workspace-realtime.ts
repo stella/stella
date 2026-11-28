@@ -1224,14 +1224,14 @@ export function useResourceMutation<
 }): UseMutationResult<TData, TError, TVariables, TContext> {
   const queryClient = useQueryClient();
   const wrappedMutationFn =
-    "type" in resource
-      ? mutationFn
-      : wrapResourceMutation({
+    "mutation" in resource
+      ? wrapResourceMutation({
           mutation: resource.mutation,
           queryClient,
           mutationFn,
           scope: resource.scope,
-        });
+        })
+      : mutationFn;
 
   return useMutation({
     ...options,

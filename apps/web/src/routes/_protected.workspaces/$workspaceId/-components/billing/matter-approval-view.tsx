@@ -1,4 +1,4 @@
-import { useQueryClient, useSuspenseQueries } from "@tanstack/react-query";
+import { useSuspenseQueries } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -20,10 +20,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
-import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { useUpdateExpense } from "@/lib/workspaces/mutations/expenses";
 import type { expensesOptions } from "@/lib/workspaces/queries/expenses";
-import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
 import type { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 
 import {
@@ -216,7 +214,6 @@ const ExpenseApprovals = ({
   const workDate = useWorkDate();
   const itemErrors = useItemErrors();
   const updateExpense = useUpdateExpense();
-  const queryClient = useQueryClient();
   const pending = usePendingRows();
 
   const requestStatus = async (id: string, status: "draft" | "approved") => {
@@ -231,17 +228,6 @@ const ExpenseApprovals = ({
       return;
     }
     itemErrors.show([id], {});
-    detached(
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: expensesQueryRoot(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: invoicesKeys.all(workspaceId),
-        }),
-      ]),
-      "matter-approval.expense-refresh",
-    );
   };
   const setStatus = (id: string, status: "draft" | "approved") =>
     detached(

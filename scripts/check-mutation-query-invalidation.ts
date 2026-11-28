@@ -1665,7 +1665,7 @@ const validateResourceMutationHook = ({
         "useResourceMutation requires a single explicit resource declaration and mutationFn.",
     };
   }
-  const resource = resolveLocal(module, resourceEntry[1], call);
+  const resource = resolveLocal(module, resourceEntry[1]);
   if (!resource) {
     return {
       status: "invalid",
