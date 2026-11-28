@@ -501,9 +501,11 @@ export type TemplatePlanReference = {
 export const textFieldsOf = (
   block: Pick<DocxBlock, "crossReferences">,
 ): NonNullable<DocxBlock["crossReferences"]> =>
-  (block.crossReferences ?? []).filter(({ instruction }) =>
-    /^\s*REF\b/iu.test(instruction),
-  );
+  block.crossReferences === undefined
+    ? []
+    : block.crossReferences.filter(({ instruction }) =>
+        /^\s*REF\b/iu.test(instruction),
+      );
 
 export type TemplatePlanHighlight = {
   blockId: string;

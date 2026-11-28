@@ -99,13 +99,13 @@ const isPageReference = (
   { references }: TemplatePlan,
   { blockId, targetBlockId, expectedText }: ReferenceResult,
 ): boolean =>
-  (references ?? []).some(
+  references?.some(
     (reference) =>
       reference.field === "PAGEREF" &&
       reference.blockId === blockId &&
       reference.targetBlockId === targetBlockId &&
       reference.expectedText === expectedText,
-  );
+  ) === true;
 
 /**
  * Whether a reference's field text is contradicted: neither the engine nor

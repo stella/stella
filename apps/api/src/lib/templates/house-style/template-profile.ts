@@ -8,6 +8,8 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type {
   DocxBlock,
   TemplateInspection,
@@ -1176,7 +1178,9 @@ const inferRegions = ({
       contentsStyles = collectedStyles(contentsField.instruction, styles);
       const headings = CONTENTS_HEADINGS.exec(contentsField.instruction ?? "");
       if (headings !== null) {
-        contentsDepth = Number(headings.groups?.["high"] ?? "9");
+        contentsDepth = parseIntegerToken(headings.groups?.["high"] ?? "9", {
+          sign: "unsigned",
+        }).unwrapOr(9);
       }
     }
   }
@@ -1310,8 +1314,12 @@ const contentsLineStylesOf = (
     const level = CONTENTS_LINE_STYLE.exec(name?.trim() ?? "")?.groups?.[
       "level"
     ];
-    return type === "paragraph" && level !== undefined
-      ? [{ level: Number(level), styleId }]
+    const number =
+      level === undefined
+        ? null
+        : parseIntegerToken(level, { sign: "unsigned" }).unwrapOr(null);
+    return type === "paragraph" && number !== null
+      ? [{ level: number, styleId }]
       : [];
   });
   // One style a level: the first that names it.
