@@ -3721,6 +3721,13 @@ const KEPT_LOOK = /^(?:mergeformat|charformat)$/iu;
  *  result's look. */
 const PAGE_SWITCH =
   /\\[hp](?![A-Za-z])|\\#\s*(?:"[^"\\]*"|[^\s"\\]+)|\\\*\s*(?:mergeformat|charformat)\b/giu;
+/** Whether a cached field result holds a character it cannot be checked
+ *  as text with: a tab, a break, another control character. */
+const holdsControlCharacter = (text: string): boolean =>
+  [...text].some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code < 0x20 || code === 0x7f;
+  });
 const PAGE_FIELD_HEAD = /^\s*PAGEREF\s+(?:"[^"]*"|[^\s"\\]+)/iu;
 
 /** The switches a PAGEREF of the source keeps, or null when it is none or
@@ -3927,6 +3934,9 @@ const carryCrossReferences = ({
       exclusions.targets.has(targetBlockId) ||
       paragraphOf(block.id) === paragraphOf(targetBlockId) ||
       expectedText.trim() === "" ||
+      // A result that holds a tab or a break is no number the engine can
+      // check its field against (a contents line's whole entry).
+      holdsControlCharacter(expectedText) ||
       !claim(block.id, start, end)
     ) {
       return;
