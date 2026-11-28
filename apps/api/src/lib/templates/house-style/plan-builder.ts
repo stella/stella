@@ -2220,9 +2220,12 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     // The source's own contents give way to the template's; a template
-    // without contents keeps the source's, so no entry goes missing.
+    // without contents keeps the source's, so no entry goes missing. A
+    // part's own contents behind the first stay: the template's list the
+    // whole document, not that part.
     if (
       index.contentsBlockIds.has(block.id) &&
+      !index.localContentsBlockIds.has(block.id) &&
       context.profile.regions.contents.length > 0
     ) {
       placed.omitted.set(block.id, "sourceToc");
@@ -2284,7 +2287,93 @@ const placeParagraphs = (context: Context): Placed => {
   setMarginLines(context, placed);
   alignFrontLines(context, placed);
   listSourceContentsEntries(context, placed);
+  setKeptContentsLines(context, placed);
+  hangValuesAtTheirStop(context, placed);
+  keepSignatureIndents(placed);
   return placed;
+};
+
+/**
+ * The lines of the signatures keep the source's indents: their columns
+ * (`Příkazce:⇥⇥⇥Příkazník:`, a date line set right under the second party)
+ * are laid out by tabs from where each line starts.
+ */
+const keepSignatureIndents = (placed: Placed): void => {
+  for (const { role, block } of placed.placements) {
+    const indent = block.indent;
+    if (role !== "signature" || indent === undefined) {
+      continue;
+    }
+    const { left, firstLine } = indent;
+    if (left === 0 && firstLine === 0) {
+      continue;
+    }
+    placed.itemIndents.set(
+      block.id,
+      firstLine < 0
+        ? { left, hanging: -firstLine }
+        : { left, ...(firstLine === 0 ? {} : { firstLine }) },
+    );
+  }
+};
+
+/**
+ * A line of a label, a tab and a value that the source hangs (its value
+ * wraps under the value, `Příloha č. 1:⇥Mapový zákres …`) wraps under the
+ * shared stop its value starts at, not under the indent the source had.
+ */
+const hangValuesAtTheirStop = (context: Context, placed: Placed): void => {
+  for (const [blockId, stops] of placed.tabStops) {
+    const stop = stops.at(-1);
+    const indent = placed.itemIndents.get(blockId);
+    const hanging = indent?.hanging ?? 0;
+    const sourceHangs =
+      (context.blockById.get(blockId)?.indent?.firstLine ?? 0) < 0;
+    if (stop === undefined || indent === undefined || !sourceHangs) {
+      continue;
+    }
+    const start = indent.left - hanging;
+    if (hanging > 0 && stop > start) {
+      placed.itemIndents.set(blockId, { left: stop, hanging: stop - start });
+    }
+  }
+};
+
+/**
+ * Sets the lines of a source's contents that stay (the template has no
+ * contents, or they are a part's own) in the template's style for their
+ * level, so their page numbers stand at its leader tab. A level the
+ * template has no style for takes its first level's style and the line's
+ * own indent. Without such styles a line keeps its own indent. No rule for
+ * running text applies to them.
+ */
+const setKeptContentsLines = (context: Context, placed: Placed): void => {
+  const { index, profile } = context;
+  const styles = profile.contentsLineStyles ?? [];
+  for (const placement of placed.placements) {
+    const { block } = placement;
+    const level = CONTENTS_LEVEL.exec(block.styleName ?? "")?.groups?.["level"];
+    if (!index.contentsBlockIds.has(block.id) || level === undefined) {
+      continue;
+    }
+    const own = styles.find((style) => style.level === Number(level));
+    const style = own ?? styles.at(0);
+    if (style !== undefined) {
+      placement.styleId = style.styleId;
+    }
+    placed.tabStops.delete(block.id);
+    placed.alignments.delete(block.id);
+    const left = block.indent?.left ?? 0;
+    if (own === undefined && left > 0) {
+      const hanging = -(block.indent?.firstLine ?? 0);
+      placed.itemIndents.set(
+        block.id,
+        hanging > 0 ? { left, hanging } : { left },
+      );
+    } else {
+      placed.itemIndents.delete(block.id);
+    }
+  }
 };
 
 /** The longest paragraph a source contents entry may point to and still be
@@ -3041,16 +3130,31 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     role === "recital" ||
     role === "heading" ||
     CLAUSE_ROLES.some((clause) => clause === role);
-  // The table of contents stands where the template has it: after the
-  // front matter, in front of the first recital or article.
+  // The table of contents stands where the source's stood; a source
+  // without one has it where the template has it: after the front matter,
+  // in front of the first recital or article.
   const wanted = wantsContents(context, placed);
   let contentsPending = wanted && contentsCollect(profile, placed);
   if (wanted && !contentsPending) {
     items.push({ kind: "contentsNotKept", reason: "noHeadingCollected" });
   }
   let contentsKept = false;
+  const keepContents = (): void => {
+    contentsPending = false;
+    contentsKept = true;
+    body.push({ kind: "template", templateBlockIds: contents });
+    items.push({
+      kind: "templateBlocksKept",
+      region: "contents",
+      blockIds: contents,
+    });
+  };
   let placedCount = 0;
   for (const block of topLevel) {
+    // The template's contents stand where the source's stood.
+    if (contentsPending && omitted.get(block.id) === "sourceToc") {
+      keepContents();
+    }
     if (mergedInto.has(block.id) || omitted.has(block.id)) {
       continue;
     }
@@ -3067,14 +3171,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       continue;
     }
     if (contentsPending && opensBody(placement.role)) {
-      contentsPending = false;
-      contentsKept = true;
-      body.push({ kind: "template", templateBlockIds: contents });
-      items.push({
-        kind: "templateBlocksKept",
-        region: "contents",
-        blockIds: contents,
-      });
+      keepContents();
     }
     const paragraph = paragraphItems({
       context,

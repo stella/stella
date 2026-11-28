@@ -177,6 +177,11 @@ export type TemplateProfile = {
    *  the field takes no levels, and from a profile made before this was
    *  read. */
   contentsDepth?: number;
+  /** The template's styles for the lines of a table of contents, by the
+   *  level their name gives (`toc 1` → 1): a source's contents that stay
+   *  as lines of text are set in them. Absent when the template defines
+   *  none, and from a profile made before this was read. */
+  contentsLineStyles?: { level: number; styleId: string }[];
   /** The style the template writes the text of its tables in. Absent when
    *  it names none for that or its sample uses none, and from a profile
    *  made before this was read. */
@@ -1123,7 +1128,11 @@ const inferRegions = ({
   roles,
 }: RegionOptions): Pick<
   TemplateProfile,
-  "regions" | "slots" | "contentsStyles" | "contentsDepth"
+  | "regions"
+  | "slots"
+  | "contentsStyles"
+  | "contentsDepth"
+  | "contentsLineStyles"
 > => {
   const order = topLevel.map(({ id }) => id);
   const contents: string[] = [];
@@ -1282,7 +1291,38 @@ const inferRegions = ({
     },
     ...(contentsStyles === undefined ? {} : { contentsStyles }),
     ...(contentsDepth === undefined ? {} : { contentsDepth }),
+    ...contentsLineStylesOf(styles),
   };
+};
+
+/** A style named for a level of a table of contents: `toc 1`, `TOC 2`. */
+const CONTENTS_LINE_STYLE = /^toc (?<level>[1-9])$/iu;
+
+const contentsLineStylesOf = (
+  styles: readonly TemplateStyle[],
+): Pick<TemplateProfile, "contentsLineStyles"> => {
+  const found = styles.flatMap(({ styleId, name, type }) => {
+    const level = CONTENTS_LINE_STYLE.exec(name?.trim() ?? "")?.groups?.[
+      "level"
+    ];
+    return type === "paragraph" && level !== undefined
+      ? [{ level: Number(level), styleId }]
+      : [];
+  });
+  // One style a level: the first that names it.
+  const byLevel = new Map<number, string>();
+  for (const { level, styleId } of found) {
+    if (!byLevel.has(level)) {
+      byLevel.set(level, styleId);
+    }
+  }
+  return byLevel.size === 0
+    ? {}
+    : {
+        contentsLineStyles: [...byLevel]
+          .map(([level, styleId]) => ({ level, styleId }))
+          .toSorted((a, b) => a.level - b.level),
+      };
 };
 
 const inferFillerStrings = (blocks: readonly DocxBlock[]): string[] => {
@@ -2130,6 +2170,17 @@ const profileSchema = v.strictObject({
   ),
   contentsDepth: v.exactOptional(
     v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(9)),
+  ),
+  contentsLineStyles: v.exactOptional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          level: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(9)),
+          styleId: idSchema,
+        }),
+      ),
+      v.maxLength(9),
+    ),
   ),
   tableText: v.exactOptional(v.strictObject({ styleId: idSchema })),
   header: v.exactOptional(

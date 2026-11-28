@@ -2470,6 +2470,73 @@ describe("buildTemplatePlan, tables and omissions", () => {
     expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
   });
 
+  test("the template's contents stand where the source's stood, not inside the parties", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = manifestOf([
+      "SMLOUVA O DODÁVCE",
+      "Obsah",
+      { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+      "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "a",
+      "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+      "Článek I.\nPředmět",
+      numbered("1.", "Dodavatel dodá zboží.", 10),
+    ]);
+    const { plan } = build(manifest, "keepSource", { profile });
+    const supplier = plan.body.findIndex(
+      (item) =>
+        item.kind === "source" &&
+        item.blockId === blockIdOf(manifest, "Dodavatel:"),
+    );
+    expect(plan.body[supplier - 1]).toEqual({
+      kind: "template",
+      templateBlockIds: ["p4", "p5", "p6", "p7"],
+    });
+    expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
+  });
+
+  test("a part's own contents stay, in the template's style for contents lines", () => {
+    const plain = manifestOf([
+      "SMLOUVA",
+      "Obsah",
+      { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+      { text: "Článek II. Cena\t3", styleName: "toc 1" },
+      "Článek I.\nPředmět",
+      numbered("1.", "Dodavatel dodá zboží.", 10),
+      "Článek II.\nCena",
+      "Obsah",
+      { text: "1. Výše ceny\t3", styleName: "toc 2" },
+      numbered("1.", "Cena činí 100 Kč.", 11),
+    ]);
+    const manifest = {
+      ...plain,
+      blocks: plain.blocks.map((block) =>
+        block.text.startsWith("1. Výše")
+          ? { ...block, indent: { left: 709, firstLine: -425 } }
+          : block,
+      ),
+    };
+    const { plan } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        contentsLineStyles: [{ level: 1, styleId: "TOC1" }],
+      },
+    });
+    expect(plan.omit.map(({ reason }) => reason)).toEqual([
+      "sourceToc",
+      "sourceToc",
+      "sourceToc",
+    ]);
+    // The part's caption and line stay; the line takes the template's
+    // first contents style and keeps its own indent.
+    expect(itemOf(plan, manifest, "1. Výše ceny")).toMatchObject({
+      styleId: "TOC1",
+      indent: { left: 709, hanging: 425 },
+    });
+  });
+
   test("contents whose field would list none of the document's headings are left out, and the note says so", () => {
     const profile = inferTemplateProfile(
       contractTemplate({ contents: "empty" }),
@@ -3309,6 +3376,67 @@ describe("buildTemplatePlan, a memo on a template with a header of fields", () =
     ];
     const { plan } = build(manifest, "keepSource", { profile: memoHeader });
     expect(slotsOf(plan)).toEqual([]);
+  });
+});
+
+test("a hung line of a label and a value wraps under the stop its value starts at", () => {
+  const plain = manifestOf([
+    "SMLOUVA",
+    "Článek I.\nPředmět",
+    numbered("1.", "Nedílnou součástí smlouvy jsou tyto přílohy:", 10),
+    "Příloha č. 1:\tZákres pozemků do katastrální mapy se všemi dotčenými parcelami a jejich výměrou",
+    "Příloha č. 2:\tStudie záměru",
+  ]);
+  const manifest = {
+    ...plain,
+    blocks: plain.blocks.map((block) => {
+      if (block.text.startsWith("Nedílnou")) {
+        return { ...block, indent: { left: 1134, firstLine: -567 } };
+      }
+      if (block.text.startsWith("Příloha č. 1")) {
+        return { ...block, indent: { left: 2832, firstLine: -1698 } };
+      }
+      return block.text.startsWith("Příloha č. 2")
+        ? { ...block, indent: { left: 1134, firstLine: 0 } }
+        : block;
+    }),
+  };
+  const body = PROFILE.roles.body;
+  if (body === null) {
+    throw new Error("fixture");
+  }
+  const { plan } = build(manifest, "keepSource", {
+    profile: {
+      ...PROFILE,
+      roles: { ...PROFILE.roles, body: { ...body, indentLeft: 0 } },
+    },
+  });
+  const first = itemOf(plan, manifest, "Příloha č. 1");
+  const stop = first?.tabStops?.at(-1);
+  expect(stop).toBeDefined();
+  expect(first?.indent).toMatchObject({ left: stop });
+  expect(itemOf(plan, manifest, "Příloha č. 2")?.tabStops?.at(-1)).toBe(stop);
+});
+
+test("the lines of the signatures keep the source's indents, which their tabs count from", () => {
+  const plain = czechContract("Text.");
+  const manifest = {
+    ...plain,
+    blocks: plain.blocks.map((block) => {
+      if (block.text.startsWith("V Praze dne")) {
+        return { ...block, indent: { left: 708, firstLine: 708 } };
+      }
+      return block.text.startsWith("Za dodavatele")
+        ? { ...block, indent: { left: 4953, firstLine: 0 } }
+        : block;
+    }),
+  };
+  const { plan } = build(manifest);
+  expect(itemOf(plan, manifest, "V Praze dne")).toMatchObject({
+    indent: { left: 708, firstLine: 708 },
+  });
+  expect(itemOf(plan, manifest, "Za dodavatele")).toMatchObject({
+    indent: { left: 4953 },
   });
 });
 
