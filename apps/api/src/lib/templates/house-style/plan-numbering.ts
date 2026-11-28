@@ -270,6 +270,10 @@ const SOURCE_LIST_REASONS: ReadonlySet<LabelKeptReason> = new Set([
  * would leave the copy counting without it. Bullets keep their marks on
  * the template's levels.
  */
+/** How many labels written as text a definition needs, for each of its
+ *  numbered paragraphs, to move whole. */
+const SOURCE_LIST_SHARE = 2;
+
 const keepSourceLists = (
   placements: readonly Placement[],
   { loose, excluded }: SourceListOptions,
@@ -283,6 +287,10 @@ const keepSourceLists = (
   const byDefinition = new Map<number, Placement[]>();
   /** Definitions a paragraph of which must stay as it is planned. */
   const held = new Set<number>();
+  /** By definition: its paragraphs a level of the template numbers, and
+   *  those whose labels would be text. */
+  const numberedOf = new Map<number, number>();
+  const textOf = new Map<number, number>();
   for (const placement of placements) {
     const definition = definitionOf(placement.block);
     if (definition === null) {
@@ -291,8 +299,9 @@ const keepSourceLists = (
     const { numbered, keptReason, entry } = placement;
     // A label the index could not read at all is written as text too.
     const unread = keptReason === null && entry === null;
-    if (
-      numbered ||
+    if (numbered) {
+      numberedOf.set(definition, (numberedOf.get(definition) ?? 0) + 1);
+    } else if (
       !(
         unread ||
         (keptReason !== null && SOURCE_LIST_REASONS.has(keptReason))
@@ -300,6 +309,8 @@ const keepSourceLists = (
       excluded.has(placement.block.id)
     ) {
       held.add(definition);
+    } else {
+      textOf.set(definition, (textOf.get(definition) ?? 0) + 1);
     }
     const group = byDefinition.get(definition);
     if (group === undefined) {
@@ -326,6 +337,18 @@ const keepSourceLists = (
   }
   for (const definition of held) {
     kept.delete(definition);
+  }
+  // A definition the template's levels number in part moves whole only
+  // where most of its labels would be text: its numbered paragraphs (an
+  // article on a spare level) then count with the rest in its own list.
+  for (const definition of kept) {
+    const numbered = numberedOf.get(definition) ?? 0;
+    if (
+      numbered > 0 &&
+      (textOf.get(definition) ?? 0) < SOURCE_LIST_SHARE * numbered
+    ) {
+      kept.delete(definition);
+    }
   }
   for (const [definition, group] of byDefinition) {
     if (!kept.has(definition)) {
@@ -426,18 +449,39 @@ type SourceListOptions = {
 
 type Vote = { pattern: LabelPattern; n: number };
 
+/** Whether a pattern prints the counter of a level above its own. */
+const namesLevelAbove = ({ lvlText }: LabelPattern): boolean => {
+  const own = lvlText.indexOf(OWN_COUNTER);
+  return own !== -1 && /%\d/u.test(lvlText.slice(0, own));
+};
+
 /** The format each role level prints: the one most of its paragraphs need. */
 const voteLevelPatterns = (
   candidates: readonly Placement[],
 ): Map<string, LabelPattern> => {
+  // A heading whose counter the labels under it print (`I.` of `I.1.`)
+  // carries their votes too: given up to another format, it would take
+  // them along.
+  const dependents = new Map<string, number>();
+  for (const { entry, pattern } of candidates) {
+    const article = entry?.articleBlockId ?? null;
+    if (
+      article !== null &&
+      article !== entry?.blockId &&
+      pattern !== null &&
+      namesLevelAbove(pattern)
+    ) {
+      dependents.set(article, (dependents.get(article) ?? 0) + 1);
+    }
+  }
   const votes = new Map<string, Map<string, Vote>>();
-  for (const { level, pattern } of candidates) {
+  for (const { level, pattern, block } of candidates) {
     if (level === null || pattern === null) {
       continue;
     }
     const ofLevel = votes.get(levelKey(level)) ?? new Map<string, Vote>();
     const vote = ofLevel.get(formatKey(pattern)) ?? { pattern, n: 0 };
-    vote.n += 1;
+    vote.n += 1 + (dependents.get(block.id) ?? 0);
     ofLevel.set(formatKey(pattern), vote);
     votes.set(levelKey(level), ofLevel);
   }

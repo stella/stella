@@ -4458,3 +4458,65 @@ describe("buildTemplatePlan, labels printed by the source's level text", () => {
     ]);
   });
 });
+
+describe("buildTemplatePlan, levels the source's headings and their clauses share", () => {
+  test("a part whose clauses print its counter keeps the article level over more numerous headings", () => {
+    const part = (label: string, title: string) =>
+      leveled(label, title, { ilvl: 0, lvlText: "%1.", numFmt: "upperRoman" });
+    const clause = (label: string, text: string) =>
+      leveled(label, text, { ilvl: 1, lvlText: "%1.%2.", numFmt: "decimal" });
+    const annexArticle = (label: string, title: string) =>
+      leveled(
+        label,
+        title,
+        { ilvl: 0, lvlText: "Článek %1", numFmt: "decimal" },
+        2,
+      );
+    const manifest = manifestOf([
+      "RÁMCOVÁ SMLOUVA",
+      part("I.", "Zvláštní podmínky"),
+      clause("I.1.", "Smlouva se uzavírá na dobu čtyř let od jejího podpisu."),
+      clause("I.2.", "Dodavatel poskytuje služby podle zadávací dokumentace."),
+      part("II.", "Obecné podmínky"),
+      clause("II.1.", "Strany si poskytnou veškerou potřebnou součinnost."),
+      clause("II.2.", "Změny smlouvy jsou možné jen písemným dodatkem."),
+      annexArticle("Článek 1", "Předmět"),
+      annexArticle("Článek 2", "Cena"),
+      annexArticle("Článek 3", "Platnost"),
+    ]);
+    const { plan, note } = build(manifest);
+    for (const start of ["Smlouva se", "Dodavatel", "Strany si", "Změny"]) {
+      expect(itemOf(plan, manifest, start)?.numbering).not.toBeNull();
+    }
+    expect(note.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "labelConvertedToText",
+        blockId: blockIdOf(manifest, "Smlouva se"),
+      }),
+    );
+  });
+
+  test("a list most of whose labels no level prints moves whole, its numbered paragraph too", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s číslem.", 3),
+      numbered("I. 1)", "Bod se složeným označením.", 3),
+      numbered("I. 2)", "Další bod se složeným označením.", 3),
+      numbered("I. 3)", "Třetí bod se složeným označením.", 3),
+    ]);
+    const { plan, labelsNotKept } = build(manifest);
+    for (const start of [
+      "Odstavec s číslem",
+      "Bod se",
+      "Další bod",
+      "Třetí bod",
+    ]) {
+      expect(itemOf(plan, manifest, start)?.numbering).toMatchObject({
+        numId: "new",
+        sourceNumId: 3,
+      });
+    }
+    expect(labelsNotKept).toEqual([]);
+  });
+});
