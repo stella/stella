@@ -1814,9 +1814,14 @@ const indentContinuations = (context: Context, placed: Placed): void => {
       UNNUMBERED_ROLES.has(placement.role) &&
       standsUnder(placement, item)
     ) {
+      // An item hung in from its parent has its text where it hangs.
       placed.itemIndents.set(
         block.id,
-        underItemIndent(textStartOf(context, item), placement),
+        underItemIndent(
+          placed.nestedIndents.get(item.block.id)?.left ??
+            textStartOf(context, item),
+          placement,
+        ),
       );
     } else {
       item = null;
