@@ -399,6 +399,15 @@ const partyHeadsOf = (
   if (opened) {
     return new Set();
   }
+  // Numbered lines right under the line that announces the parties
+  // (`BETWEEN:`) are the parties, named or not yet.
+  const introducedAt = provisions.at(0)?.position ?? 0;
+  const introduced = PARTY_INTRO.test(
+    blocks
+      .slice(0, introducedAt)
+      .findLast(({ text }) => text.trim() !== "")
+      ?.text.trim() ?? "",
+  );
   for (const [at, entry] of provisions.entries()) {
     const first = heads.at(0);
     if (
@@ -420,7 +429,7 @@ const partyHeadsOf = (
       first !== undefined &&
       above !== undefined &&
       ENDS_IN_JOINER.test(above.text.trim());
-    if (!identified && !joined) {
+    if (!identified && !joined && !introduced) {
       break;
     }
     heads.push(entry);

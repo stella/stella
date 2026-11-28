@@ -228,6 +228,23 @@ describe("proposeBlockRoles", () => {
     expect(roles["Beta a.s., se sídlem Krátká "]).toBe("party");
   });
 
+  test("numbered lines under the line that announces the parties are parties, named or not yet", () => {
+    const roles = rolesOf(
+      manifestOf([
+        "CONVERTIBLE LOAN AGREEMENT",
+        "BETWEEN:",
+        numbered("(1)", "[] (the Company) as borrower;", 5),
+        numbered("(2)", "[] (the Investor) as lender.", 5),
+        "IT IS AGREED as follows:",
+        numbered("1.", "Interpretation", 9),
+        numbered("1.1", "Terms defined here apply throughout.", 9),
+      ]),
+    );
+    expect(roles["[] (the Company) as borrower"]).toBe("party");
+    expect(roles["[] (the Investor) as lender."]).toBe("party");
+    expect(roles["Terms defined here apply thr"]).toBe("clause1");
+  });
+
   test("numbered lines that head the parties are parties, and the provisions begin behind them", () => {
     const numberedParties = manifestOf([
       "KUPNÍ SMLOUVA",
