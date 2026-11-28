@@ -10,7 +10,8 @@ defaults:
 # release cut stops at its npm-publish-lag gate. Once a release pull request
 # merges and its final tag exists, this dispatches the manual CLI publication
 # for that tag if npm does not serve the tag's CLI version yet. Before the final
-# tag exists, the final release run publishes on its own.
+# tag exists, or while its final release run is still running, that run
+# publishes on its own.
 on:
   pull_request:
     branches: [main]
@@ -35,7 +36,34 @@ jobs:
       actions: write
       contents: read
     steps:
+      # A final release run still in flight publishes the CLI itself when it
+      # completes; a second publication would race it.
+      - name: Check for an unfinished final release run
+        id: release-run
+        timeout-minutes: 2
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        with:
+          retries: 3
+          script: |
+            const tag = (process.env.HEAD_REF ?? "").replace(/^release\//u, "");
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              ...context.repo,
+              workflow_id: "release.yml",
+              created: `>=${new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10)}`,
+              per_page: 100,
+            });
+            const unfinished = runs.find(
+              (run) => run.status !== "completed" && run.display_title === `Release Artifacts ${tag}`,
+            );
+            if (unfinished !== undefined) {
+              core.info(`Release run ${unfinished.id} for ${tag} is ${unfinished.status}; it publishes the CLI.`);
+            }
+            core.setOutput("unfinished", unfinished === undefined ? "false" : "true");
+
       - name: Dispatch the CLI publication when npm lacks it
+        if: steps.release-run.outputs.unfinished == 'false'
         timeout-minutes: 3
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
