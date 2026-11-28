@@ -3764,6 +3764,37 @@ test("the lines of the signatures keep the source's indents, which their tabs co
   });
 });
 
+test("the lines of the signatures keep the source's tab stops, and only those", () => {
+  const plain = czechContract("Text.");
+  const manifest = {
+    ...plain,
+    blocks: plain.blocks.map((block) =>
+      block.text.startsWith("V Praze dne")
+        ? {
+            ...block,
+            text: "V Praze dne ……………\tV Brně dne ……………",
+            tabStops: [
+              { position: 4536, alignment: "center" as const },
+              {
+                position: 9072,
+                alignment: "right" as const,
+                leader: "dot" as const,
+              },
+            ],
+          }
+        : block,
+    ),
+  };
+  const { plan } = build(manifest);
+  expect(itemOf(plan, manifest, "V Praze dne")).toMatchObject({
+    tabStops: [
+      { position: 4536, alignment: "center" },
+      { position: 9072, alignment: "right", leader: "dot" },
+    ],
+    tabStopsOnly: true,
+  });
+});
+
 describe("buildTemplatePlan, the lines of the parties", () => {
   const manifest = manifestOf([
     "SMLOUVA",
@@ -3818,6 +3849,47 @@ describe("buildTemplatePlan, the lines of the parties", () => {
     expect(itemOf(plan, manifest, "(dále jen")).not.toHaveProperty("tabStops");
     expect(itemOf(plan, manifest, "Univerzita")).not.toHaveProperty("tabStops");
     expect(note.items).toContainEqual({ kind: "partyLinesAligned", blocks: 3 });
+  });
+
+  test("a block whose lines share the source's tab stops keeps them, and only those", () => {
+    const LINES = ["se sídlem", "IČO", "bankovní"];
+    const withStops = (stopsOf: (start: string) => number) => ({
+      ...manifest,
+      blocks: manifest.blocks.map((block) => {
+        const start = LINES.find((line) => block.text.startsWith(line));
+        return start === undefined
+          ? block
+          : {
+              ...block,
+              tabStops: [
+                { position: stopsOf(start), alignment: "left" as const },
+              ],
+            };
+      }),
+    });
+    const shared = withStops(() => 4000);
+    const kept = build(shared, "keepSource", { profile: measured }).plan;
+    for (const start of LINES) {
+      expect(itemOf(kept, shared, start)).toMatchObject({
+        tabStops: [4000],
+        tabStopsOnly: true,
+      });
+    }
+    // Lines whose stops differ get the one stop behind the widest label.
+    const mixed = withStops((start) => (start === "IČO" ? 4200 : 4000));
+    const aligned = build(mixed, "keepSource", { profile: measured }).plan;
+    expect(itemOf(aligned, mixed, "se sídlem")?.tabStops).toEqual([
+      851 + 2057 + 170,
+    ]);
+    expect(itemOf(aligned, mixed, "se sídlem")).not.toHaveProperty(
+      "tabStopsOnly",
+    );
+    // Stops the values would not reach past the widest label are not kept.
+    const short = withStops(() => 1000);
+    const reset = build(short, "keepSource", { profile: measured }).plan;
+    expect(itemOf(reset, short, "se sídlem")?.tabStops).toEqual([
+      851 + 2057 + 170,
+    ]);
   });
 
   test("lines with a colon label align outside the parties' block too, block by block", () => {

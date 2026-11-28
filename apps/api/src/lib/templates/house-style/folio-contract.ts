@@ -100,6 +100,10 @@ export type DocxBlock = {
    *  (negative for a hanging indent). Absent when nothing states one, and
    *  from a manifest read before it was reported. */
   indent?: { left: number; firstLine: number };
+  /** The tab stops in effect, from the style's chain and the paragraph's
+   *  own, by position. Absent without one, and from an engine that does
+   *  not report them. */
+  tabStops?: DocxTabStop[];
   cells?: { row: number; col: number; blockIds: string[] }[];
 };
 
@@ -374,6 +378,27 @@ export type TemplatePlanSection = {
 };
 
 /** A paragraph indent a plan states; a side left out stays as it is. */
+/** The characters that fill the space in front of a tab stop. */
+export type TemplatePlanTabLeader =
+  "dot" | "hyphen" | "underscore" | "heavy" | "middleDot";
+
+/** A tab stop a paragraph of the source has, from the margin. */
+export type DocxTabStop = {
+  position: number;
+  alignment: "left" | "center" | "right" | "decimal" | "bar" | "num";
+  leader?: TemplatePlanTabLeader;
+};
+
+/** A plan item's tab stop: a left stop's position, or a stop with its
+ *  alignment (left when absent) and leader. */
+export type TemplatePlanTabStop =
+  | number
+  | {
+      position: number;
+      alignment?: "left" | "center" | "right" | "decimal" | "bar";
+      leader?: TemplatePlanTabLeader;
+    };
+
 export type TemplatePlanIndent = {
   left?: number;
   hanging?: number;
@@ -419,10 +444,14 @@ export type TemplatePlanSourceItem = {
    *  in twentieths of a point. As `keepNext`, it is left out by an engine
    *  that does not know it. */
   indent?: TemplatePlanIndent;
-  /** The paragraph's own left tab stops, in twentieths of a point from
-   *  the left margin, ascending. As `keepNext`, left out by an engine that
-   *  does not know them. */
-  tabStops?: number[];
+  /** The paragraph's own tab stops, ascending: a position in twentieths
+   *  of a point from the left margin for a left stop, or a stop with its
+   *  alignment and leader. As `keepNext`, left out by an engine that does
+   *  not know them. */
+  tabStops?: TemplatePlanTabStop[];
+  /** The paragraph's stops are `tabStops` only: the other stops its style
+   *  sets are cleared. */
+  tabStopsOnly?: true;
   /** The paragraph's own alignment, over its style's. As `keepNext`, left
    *  out by an engine that does not know it. */
   alignment?: TemplatePlanAlignment;
@@ -836,6 +865,24 @@ const blockSchema = v.strictObject({
       left: v.pipe(v.number(), v.integer()),
       firstLine: v.pipe(v.number(), v.integer()),
     }),
+  ),
+  tabStops: v.exactOptional(
+    v.array(
+      v.strictObject({
+        position: v.pipe(v.number(), v.integer()),
+        alignment: v.picklist([
+          "left",
+          "center",
+          "right",
+          "decimal",
+          "bar",
+          "num",
+        ]),
+        leader: v.exactOptional(
+          v.picklist(["dot", "hyphen", "underscore", "heavy", "middleDot"]),
+        ),
+      }),
+    ),
   ),
   cells: v.exactOptional(
     v.array(

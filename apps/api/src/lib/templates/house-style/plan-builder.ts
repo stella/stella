@@ -25,6 +25,7 @@ import type {
   DocxBlock,
   DocxBlockManifest,
   DocxSection,
+  DocxTabStop,
   SourceCommentsReport,
   SourceHeadersReport,
   TemplatePlan,
@@ -38,6 +39,7 @@ import type {
   TemplatePlanSection,
   TemplatePlanSourceItem,
   TemplatePlanSpacing,
+  TemplatePlanTabStop,
   TrackedChanges,
   TrackedChangesView,
 } from "@/api/lib/templates/house-style/folio-contract";
@@ -1048,7 +1050,10 @@ type Placed = {
   /** The paragraphs of a letter's closing that stay with the next one. */
   closingLines: Set<string>;
   /** The tab stops placed paragraphs get of their own. */
-  tabStops: Map<string, number[]>;
+  tabStops: Map<string, TemplatePlanTabStop[]>;
+  /** Paragraphs whose tab stops are theirs only: their style's others are
+   *  cleared. */
+  tabStopsOnly: Set<string>;
   /** The indent of a paragraph set under an item: where its lines start,
    *  and how far a mark of its own hangs in front of them. */
   itemIndents: Map<string, TemplatePlanIndent>;
@@ -1865,6 +1870,17 @@ const alignPartyLines = (context: Context, placed: Placed): void => {
     if (run.length >= 2) {
       const first =
         Math.max(...run.map(({ labelEnd }) => labelEnd)) + LABEL_GAP;
+      // The source's own stops, where every line has the same and its
+      // values start behind the widest label: they are kept as they are.
+      const own = sharedSourceStops(context, run, first);
+      if (own !== null) {
+        for (const { blockId } of run) {
+          placed.tabStops.set(blockId, own);
+          placed.tabStopsOnly.add(blockId);
+        }
+        run = [];
+        return;
+      }
       for (const { blockId, tabs } of run) {
         // As many stops as the line has tabs, the last one the shared one.
         const count = Math.min(Math.max(tabs, 1), TAB_STOPS_MAX);
@@ -2499,6 +2515,7 @@ const placeParagraphs = (context: Context): Placed => {
     keptWithNext: new Set(),
     closingLines: new Set(),
     tabStops: new Map(),
+    tabStopsOnly: new Set(),
     itemIndents: new Map(),
     alignments: new Map(),
     nestedIndents: new Map(),
@@ -2583,7 +2600,83 @@ const placeParagraphs = (context: Context): Placed => {
   setKeptContentsLines(context, placed);
   hangValuesAtTheirStop(context, placed);
   keepSignatureIndents(placed);
+  keepSignatureTabStops(placed);
   return placed;
+};
+
+/** The most tab stops a plan gives one paragraph. */
+const OWN_TAB_STOPS_MAX = 16;
+
+/** A source's tab stops as a plan item states them; null when the plan
+ *  cannot state one of them (a list's own stop) or there are too many. */
+const planTabStopsOf = (
+  stops: readonly DocxTabStop[] | undefined,
+): TemplatePlanTabStop[] | null => {
+  if (
+    stops === undefined ||
+    stops.length === 0 ||
+    stops.length > OWN_TAB_STOPS_MAX ||
+    stops.some(
+      ({ alignment, position }) => alignment === "num" || position <= 0,
+    )
+  ) {
+    return null;
+  }
+  return stops.map(({ position, alignment, leader }) =>
+    alignment === "left" && leader === undefined
+      ? position
+      : {
+          position,
+          ...(alignment === "left" || alignment === "num" ? {} : { alignment }),
+          ...(leader === undefined ? {} : { leader }),
+        },
+  );
+};
+
+/**
+ * The stops every line of a block of labels and values has in the source,
+ * where they are the same for all and the values start behind the widest
+ * label (`first`); null otherwise.
+ */
+const sharedSourceStops = (
+  { blockById }: Context,
+  run: readonly LabelledLine[],
+  first: number,
+): TemplatePlanTabStop[] | null => {
+  const keys = new Set(
+    run.map(({ blockId }) => {
+      const own = blockById.get(blockId)?.tabStops;
+      // A line without stops of its own keys alike, listed empty or not.
+      return own === undefined || own.length === 0 ? "" : JSON.stringify(own);
+    }),
+  );
+  const [line] = run;
+  const stops =
+    keys.size === 1 && line !== undefined
+      ? planTabStopsOf(blockById.get(line.blockId)?.tabStops)
+      : null;
+  const last = stops?.at(-1);
+  const at = typeof last === "object" ? last.position : last;
+  return at !== undefined && at >= first - LABEL_GAP ? stops : null;
+};
+
+/**
+ * The lines of the signatures that lay out their columns by tabs keep the
+ * source's tab stops, and only those: the template's style may set others.
+ */
+const keepSignatureTabStops = (placed: Placed): void => {
+  for (const { role, block } of placed.placements) {
+    const stops =
+      role === "signature" &&
+      block.numbering === null &&
+      block.text.includes("\t")
+        ? planTabStopsOf(block.tabStops)
+        : null;
+    if (stops !== null) {
+      placed.tabStops.set(block.id, stops);
+      placed.tabStopsOnly.add(block.id);
+    }
+  }
 };
 
 /**
@@ -2622,7 +2715,8 @@ const keepSignatureIndents = (placed: Placed): void => {
  */
 const hangValuesAtTheirStop = (context: Context, placed: Placed): void => {
   for (const [blockId, stops] of placed.tabStops) {
-    const stop = stops.at(-1);
+    const last = stops.at(-1);
+    const stop = typeof last === "object" ? last.position : last;
     const indent = placed.itemIndents.get(blockId);
     const hanging = indent?.hanging ?? 0;
     const sourceHangs =
@@ -3419,7 +3513,9 @@ type ParagraphItemOptions = {
   /** Whether the paragraph stays on the page of the one after it. */
   keepNext: boolean;
   /** The tab stops the paragraph gets of its own. */
-  tabStops: readonly number[] | undefined;
+  tabStops: readonly TemplatePlanTabStop[] | undefined;
+  /** Whether they are its only ones. */
+  tabStopsOnly: boolean;
   /** The indent of the paragraph under the item it continues. */
   itemIndent: TemplatePlanIndent | undefined;
   /** The alignment the paragraph keeps from the source. */
@@ -3441,6 +3537,7 @@ const paragraphItems = ({
   pageStart,
   keepNext,
   tabStops,
+  tabStopsOnly,
   itemIndent,
   alignment,
   endsSection,
@@ -3489,6 +3586,7 @@ const paragraphItems = ({
     ...(hang === null ? {} : { indent: hang }),
     ...(hang === null && under !== null ? { indent: under } : {}),
     ...(tabStops === undefined ? {} : { tabStops: [...tabStops] }),
+    ...(tabStops !== undefined && tabStopsOnly ? { tabStopsOnly: true } : {}),
     ...(alignment === undefined ? {} : { alignment }),
     ...(outlineLevel === undefined ? {} : { outlineLevel }),
   };
@@ -3644,6 +3742,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       keepNext:
         placed.keptWithNext.has(block.id) || placed.closingLines.has(block.id),
       tabStops: placed.tabStops.get(block.id),
+      tabStopsOnly: placed.tabStopsOnly.has(block.id),
       itemIndent: placed.itemIndents.get(block.id),
       alignment: placed.alignments.get(block.id),
       endsSection: context.keptSections.ends.get(block.id),
