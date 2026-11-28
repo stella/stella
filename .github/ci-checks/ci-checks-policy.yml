@@ -265,9 +265,20 @@ checks:
     # entry). New runtimes are enrolled here deliberately, alongside a
     # boot/compile smoke.
     run: |
+      bun scripts/knip-generated-entries.ts
+      bun apps/api/scripts/generate-capability-runtime.ts >&2
+      pids=()
       for workspace in apps/api apps/legal-atlas-runner apps/web; do
-        DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
+        DATABASE_URL=postgresql://invalid bun --no-env-file x --bun knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace" &
+        pids+=("$!")
       done
+      status=0
+      for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+          status=1
+        fi
+      done
+      exit "$status"
 
   - name: Knip workspace dependency checks
     env:
@@ -279,22 +290,6 @@ checks:
     # gate above also checks deployment boundaries for the server apps.
     run: bun run dependencies:check
 
-  - name: Knip dead-export check (packages/cli)
-    env:
-      CI_CHECK_KIND: STATIC
-      CI_CHECK_INPUTS: tracked-tree+generated-inputs
-    id: static_check_010
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_010 != 'true') }}
-    # The CLI is small enough to enforce the `exports`/`types` issue
-    # types today (the apps above are not; see the note in the step
-    # before). An exported helper that no runtime or test path calls
-    # usually means a code path that was meant to be wired up is not.
-    # Test files are entries in
-    # knip.json so test-only exports count as used; anything else that
-    # is exported but unreferenced fails here.
-    run: |
-      DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
-
   - name: Knip dead-export budget (all workspaces)
     continue-on-error: ${{ github.event_name == 'merge_group' }}
     env:
@@ -302,13 +297,9 @@ checks:
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
     id: static_check_011
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_011 != 'true') }}
-    # What the packages/cli step enforces at zero, every other workspace
-    # carries as a decrease-only budget: one knip run for the whole repo,
-    # counted per workspace against scripts/knip-exports-baseline.json. A
-    # rise fails here and names the offending symbols; a fall only prompts
-    # `bun scripts/knip-exports-ratchet.ts --write` so the improvement can
-    # never regress. The parser tests run first, so a broken summary cannot
-    # pass silently.
+    # Repo-wide dead-export gate (`exports`, `types`, `nsExports`) enforced at
+    # zero across every workspace in one knip run. The parser tests run first,
+    # so a broken summary cannot pass silently.
     run: |
       bun test scripts/knip-exports-ratchet.test.ts
       bun run check:knip-exports
