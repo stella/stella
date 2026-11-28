@@ -122,20 +122,16 @@ test("full-suite batches balance skewed file sizes with LPT bin-packing", () => 
   try {
     // Alphabetical round-robin would pair a (10 KiB) + c (4 KiB) vs b (6 KiB).
     // LPT places a (10 KiB) on worker 0 and b (6 KiB) + c (4 KiB) on worker 1.
-    const sizes = [
-      ["a.test.ts", 10_000],
-      ["b.test.ts", 6000],
-      ["c.test.ts", 4000],
-    ] as const;
-    const files = sizes.map(([name, bytes]) => {
-      const filename = path.join(directory, name);
-      writeFileSync(filename, "x".repeat(bytes));
-      return filename;
-    });
-    const commands = customLintTestCommands([], files);
+    const fileA = path.join(directory, "a.test.ts");
+    const fileB = path.join(directory, "b.test.ts");
+    const fileC = path.join(directory, "c.test.ts");
+    writeFileSync(fileA, "x".repeat(10_000));
+    writeFileSync(fileB, "x".repeat(6000));
+    writeFileSync(fileC, "x".repeat(4000));
+    const commands = customLintTestCommands([], [fileA, fileB, fileC]);
     expect(commands.map((command) => command.slice(4))).toEqual([
-      [files[0]],
-      [files[1], files[2]],
+      [fileA],
+      [fileB, fileC],
     ]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
