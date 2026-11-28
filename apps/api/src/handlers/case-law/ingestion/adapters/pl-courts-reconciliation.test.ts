@@ -12,6 +12,11 @@ import { afterEach, describe, expect, test } from "bun:test";
  * identity held and take the document out of every later reconciliation.
  */
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
@@ -32,11 +37,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-} from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";

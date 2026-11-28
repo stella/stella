@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 
-import type { ScopedDb } from "@/api/db/safe-db";
-import { recordImportSnapshot } from "@/api/handlers/case-law/ingestion/import-snapshot";
 import {
   ADAPTER_KEYS,
   IMPORT_SOURCE_KEYS,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
+import type { ScopedDb } from "@/api/db/safe-db";
+import { recordImportSnapshot } from "@/api/handlers/case-law/ingestion/import-snapshot";
 
 // Invalid input is refused before a transaction opens, so the database is
 // never reached; reaching it is the failure.

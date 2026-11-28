@@ -25,9 +25,11 @@ import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
   CITATION_GRAPH_RESOURCE_URI,
@@ -92,9 +94,7 @@ import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { externalRefFromColumns } from "@/api/lib/imports/external-ref";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { failureSink } from "@/api/lib/observability/failure";

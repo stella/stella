@@ -6,8 +6,6 @@ import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 const BASELINES = {
-  state: BASELINE_PATHS.testState,
-  "wallclock-assertion": BASELINE_PATHS.testWallclockAssertion,
   "real-timers": BASELINE_PATHS.testRealTimers,
   "ambient-time": BASELINE_PATHS.testAmbientTime,
 } as const;
@@ -98,11 +96,9 @@ export const validateTestBaselineFiles = ({
 if (import.meta.main) {
   const args = process.argv.slice(2);
   const kindIndex = args.indexOf("--kind");
-  const kind = kindIndex === -1 ? "state" : args.at(kindIndex + 1);
+  const kind = kindIndex === -1 ? undefined : args.at(kindIndex + 1);
   if (kind === undefined || !isBaselineKind(kind)) {
-    panic(
-      "--kind requires state, ambient-time, real-timers or wallclock-assertion",
-    );
+    panic("--kind requires ambient-time or real-timers");
   }
   if (kindIndex !== -1) {
     args.splice(kindIndex, 2);
@@ -137,10 +133,7 @@ if (import.meta.main) {
       },
       args,
       label: `test-${kind}`,
-      remediation:
-        kind === "state"
-          ? "use an auto-restoring fixture instead of adding state access"
-          : "migrate nondeterministic test work to @stll/test-kit",
+      remediation: "migrate nondeterministic test work to @stll/test-kit",
     }),
   );
 }

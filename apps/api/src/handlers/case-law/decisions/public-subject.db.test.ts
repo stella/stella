@@ -5,6 +5,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -35,8 +37,6 @@ import {
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";

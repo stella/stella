@@ -5,7 +5,6 @@ import listConflictChecks from "@/api/handlers/conflict-checks/list";
 import reviewConflictCheck from "@/api/handlers/conflict-checks/review";
 import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { CONFLICT_CHECK_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
@@ -21,8 +20,8 @@ export const conflictChecksRoute = routes(
   },
   {
     prefix: "/v1/conflict-checks",
+    deployment: { type: "flag", flag: "FEATURE_CONFLICT_CHECK" },
     middleware: [
-      deploymentFeatureGate("FEATURE_CONFLICT_CHECK"),
       featureAccessGate(CONFLICT_CHECK_FEATURE_ID),
       rateLimit(createStandardApiRateLimitOptions()),
     ],

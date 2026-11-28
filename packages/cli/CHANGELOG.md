@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.7.0
+
+### Minor Changes
+
+- [#9636](https://github.com/stella/stella/pull/9636) [`c6845b5`](https://github.com/stella/stella/commit/c6845b50db3852d22cf21dde246f08a2aae82472) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella template reformat` takes `--tracked-changes` (`keep`, `accept` or `reject`) for a document with tracked changes: keep them as tracked changes in the reformatted document, or reformat the text with all of them accepted or rejected.
+
 ## 8.6.0
 
 ### Minor Changes

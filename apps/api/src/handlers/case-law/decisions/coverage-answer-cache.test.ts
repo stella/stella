@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 
 import {
   assembleCaseLawCoverageAnswer,
@@ -10,7 +11,6 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { unmeasuredSourceCensus } from "@/api/lib/case-law/completeness-census";
 import { CASE_LAW_COVERAGE_PARTS } from "@/api/lib/case-law/coverage-parts";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 type Assembly = Parameters<typeof assembleCaseLawCoverageAnswer>[0];
 

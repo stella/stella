@@ -3,6 +3,13 @@ import { panic, Result } from "better-result";
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
 import {
+  EMPTY_AST,
+  type IngestionResult,
+  isPersistableSourceDocumentId,
+  type RawIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import {
   DECISION_IDENTIFIER_MAX_COUNT,
   type DecisionIdentifier,
   type DecisionIdentifiers,
@@ -51,19 +58,12 @@ import {
   parsePrimaryReferenceType,
 } from "@/api/lib/legal-search/decision-primary-reference";
 import {
-  EMPTY_AST,
-  type IngestionResult,
-  isPersistableSourceDocumentId,
-  type RawIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import {
   OBSERVATION_DETAIL,
   observationDetailOf,
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
   type PartialObservation,
 } from "@/api/lib/legal-search/partial-observation-sql";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 
 // Source IDs are UUIDs: every real source contributes the same 36 ASCII

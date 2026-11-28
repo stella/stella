@@ -3,6 +3,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  APP_READER_TEXT,
+  type AppReaderText,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { EMPTY_AST } from "@stll/legal-ast/document-types";
@@ -30,11 +35,6 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
-import {
-  APP_READER_TEXT,
-  type AppReaderText,
-} from "@/api/lib/legal-search/adapter-manifest";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,

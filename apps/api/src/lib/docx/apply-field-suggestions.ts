@@ -15,12 +15,12 @@
 
 import { Result } from "better-result";
 
+import type { FieldMeta, InputType } from "@stll/docx-engine/types";
+
 import {
   replaceXmlElements,
   type XmlScanError,
 } from "@/api/lib/files/xml-scan";
-
-import type { FieldMeta, InputType } from "./types";
 
 export type FieldSuggestion = {
   /** Exact document text to replace (as the model read it, unescaped). */

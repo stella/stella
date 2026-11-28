@@ -12,7 +12,6 @@ import {
   lockVatRateOrganization,
   overlappingVatRatePeriods,
 } from "@/api/lib/billing/vat-rates";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -27,6 +26,11 @@ const config = {
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: applyVatRatePresetBody,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Adds one organization's statutory VAT rate periods under that organization's VAT rate advisory lock; no aggregate state spans organizations.",
+  },
 } satisfies HandlerConfig;
 
 const applyVatRatePreset = createSafeRootHandler(
@@ -78,11 +82,5 @@ const applyVatRatePreset = createSafeRootHandler(
   },
   { authorize: authorizeOrganizationReplay },
 );
-
-declareAggregateMutation(applyVatRatePreset, {
-  type: "independent",
-  reason:
-    "Adds one organization's statutory VAT rate periods under that organization's VAT rate advisory lock; no aggregate state spans organizations.",
-});
 
 export default applyVatRatePreset;

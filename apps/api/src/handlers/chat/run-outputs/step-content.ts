@@ -2,7 +2,6 @@ import { Result } from "better-result";
 
 import type { UploadUserFileDependencies } from "@/api/handlers/chat/upload-files";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 
 import {
@@ -40,6 +39,11 @@ export const createStoreRunStepContent = (
       query: STEP_CONTENT_REQUEST.query,
       body: STEP_CONTENT_REQUEST.body,
       requestBodyMaxBytes: STEP_CONTENT_REQUEST.requestBodyMaxBytes,
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Writes one step's content row, and for an image one immutable file row with its audit event and storage object, against the run's own storage counters; it changes no aggregate's ordered state.",
+      },
     },
     verifyRunCaller(dependencies),
     async function* ({
@@ -67,11 +71,5 @@ export const createStoreRunStepContent = (
   );
 
 const storeRunStepContent = createStoreRunStepContent();
-
-declareAggregateMutation(storeRunStepContent, {
-  type: "independent",
-  reason:
-    "Writes one step's content row, and for an image one immutable file row with its audit event and storage object, against the run's own storage counters; it changes no aggregate's ordered state.",
-});
 
 export default storeRunStepContent;

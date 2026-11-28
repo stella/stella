@@ -37,6 +37,7 @@ import { panic } from "better-result";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { parseFormex } from "@stll/case-law-parsers/eu-ecj-formex";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -54,7 +55,6 @@ import {
   portalStem,
 } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 import {
   formatProvenance,

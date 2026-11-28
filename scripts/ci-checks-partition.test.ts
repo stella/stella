@@ -1525,6 +1525,31 @@ const currentBaselineStep = (step: ReturnType<typeof legSteps>[number]) => {
       after:
         "bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
     },
+    "Knip production dependency checks": {
+      before: [
+        "for workspace in apps/api apps/legal-atlas-runner apps/web; do",
+        '  DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"',
+        "done",
+        "",
+      ].join("\n"),
+      after: [
+        "bun scripts/knip-generated-entries.ts",
+        "bun apps/api/scripts/generate-capability-runtime.ts >&2",
+        "pids=()",
+        "for workspace in apps/api apps/legal-atlas-runner apps/web; do",
+        '  DATABASE_URL=postgresql://invalid bun --no-env-file x --bun knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace" &',
+        '  pids+=("$!")',
+        "done",
+        "status=0",
+        ['for pid in "$', '{pids[@]}"; do'].join(""),
+        '  if ! wait "$pid"; then',
+        "    status=1",
+        "  fi",
+        "done",
+        'exit "$status"',
+        "",
+      ].join("\n"),
+    },
   };
   const migration = Object.entries(runnerMigrations).find(
     ([name]) => name === step.name,
@@ -2559,7 +2584,10 @@ test("background Bun tests declare measured contention budgets without changing 
   ).toEqual({ name: "Check", run: "bun test scripts/example.test.ts" });
   expect(
     withoutTestTimeout({ name: "Check", run: "echo --timeout 35000" }),
-  ).toEqual({ name: "Check", run: "echo --timeout 35000" });
+  ).toEqual({
+    name: "Check",
+    run: "echo --timeout 35000",
+  });
 });
 
 test("implicit nested parallel tests cannot omit their contention timeout", () => {

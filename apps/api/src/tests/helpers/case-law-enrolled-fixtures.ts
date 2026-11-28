@@ -24,13 +24,20 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  withSourceRawObjects,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { load } from "@stll/html";
 import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   CZ_UOHS_SYNTHETIC_LISTING,
   czUohsSyntheticPdf,
@@ -131,13 +138,6 @@ import type { ParserParityIdentity } from "@/api/handlers/case-law/ingestion/par
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  withSourceRawObjects,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
   sourceBinaryRef,

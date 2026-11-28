@@ -4,14 +4,14 @@
 // parser-output-unchanged: replay enrolment chooses which stored rows are re-parsed, never how a row is parsed.
 import { panic } from "better-result";
 
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import type { HealthConfig } from "@stll/db-load-gate/health";
 
 import { loadGateHealthConfig } from "@/api/env-online-index";
 import { readReplayTickEnvironment } from "@/api/env-replay";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
 
 import { MAX_REPLAY_ROW_READMISSIONS } from "./replay-failure";
 

@@ -1,6 +1,13 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 import { createSafeId } from "@/api/lib/branded-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import {
@@ -8,12 +15,6 @@ import {
   SK_DOCUMENT_RAW_PART,
   SkDocumentRawMissingError,
 } from "@/api/lib/legal-search/sk-document-raw";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
 import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 
 const bytes = new TextEncoder().encode("%PDF-1.7 not a pdf");

@@ -12,7 +12,6 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import {
   buildEmailDraftMessage,
@@ -34,6 +33,11 @@ const config = {
   mcp: { type: "internal", reason: "native_tool_ui" },
   body: draftEmailBodySchema,
   requiresUsage: { actionType: "chat", modelTask: EMAIL_GENERATION_TASK },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Generates text from the request body; writes only its own usage rows, with no cross-row invariant.",
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -103,11 +107,5 @@ const draftEmail = createSafeRootHandler(
     return Result.ok({ draft } satisfies OutlookAIDraftResponse);
   },
 );
-
-declareAggregateMutation(draftEmail, {
-  type: "independent",
-  reason:
-    "Generates text from the request body; writes only its own usage rows, with no cross-row invariant.",
-});
 
 export default draftEmail;

@@ -791,7 +791,9 @@
       "@stll/fetch",
       "@stll/docx-utils",
       "@stll/locales",
-      "@stll/case-law-parsers"
+      "@stll/case-law-parsers",
+      "@stll/case-law-ingestion-core",
+      "@stll/docx-engine"
     ],
     "Test projection-totality classification": [
       "@stll/api",
@@ -822,7 +824,9 @@
       "@stll/text-normalize",
       "@stll/uuid-codec",
       "scripts/**",
-      "@stll/case-law-parsers"
+      "@stll/case-law-parsers",
+      "@stll/case-law-ingestion-core",
+      "@stll/docx-engine"
     ],
     "Test aggregate inventories": [
       "scripts/**",
@@ -892,7 +896,6 @@
     "Instruction policy": ["**"],
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
-    "Knip dead-export check (packages/cli)": ["**"],
     "Knip dead-export budget (all workspaces)": ["**"],
     "Dependabot group guard (installed packages)": [
       ".github/dependabot.yml",

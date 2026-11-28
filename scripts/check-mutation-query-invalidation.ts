@@ -22,6 +22,7 @@ const API_CONTRACT_MODULE = "packages/api-contract/src/resource-ref.ts";
 const HELPER_MODULE = "@/lib/workspace-realtime";
 const API_CONTRACT_IMPORT = "@stll/api-contract";
 const MUTATION_HELPER = "resourceMutation";
+const MUTATION_HOOK_HELPER = "useResourceMutation";
 const READER_HELPER = "resourceQueryOptions";
 const MUTATION_PRIMITIVES = new Set(["useMutation", "mutationOptions"]);
 const READER_PRIMITIVES = new Set(["queryOptions", "infiniteQueryOptions"]);
@@ -1466,6 +1467,217 @@ const nestedResourceMutationError = ({
   return undefined;
 };
 
+const hasNestedMutationHelper = (
+  module: ModuleIndex,
+  call: ts.CallExpression,
+): boolean => {
+  const nestedHelpers = new Set<ts.CallExpression>();
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      canonicalCall(module, node, MUTATION_HELPER)
+    ) {
+      nestedHelpers.add(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(call);
+  return nestedHelpers.size > 0;
+};
+
+const validateResourceMutationOptOut = ({
+  resource,
+  entry,
+  contracts,
+}: {
+  resource: ts.Expression;
+  entry: MutationQueryCensus["mutations"][number];
+  contracts: ReadonlyMap<string, MutationContract>;
+}): MutationExecutionResult => {
+  const typeProperty = objectProperty(resource, "type");
+  const typeValue = typeProperty && unwrap(typeProperty);
+  const reasonProperty = objectProperty(resource, "reason");
+  const reasonValue = reasonProperty && unwrap(reasonProperty);
+  if (
+    !hasExactProperties(resource, ["type", "reason"]) ||
+    !typeValue ||
+    !ts.isStringLiteral(typeValue) ||
+    typeValue.text !== "none" ||
+    !reasonValue ||
+    !ts.isStringLiteral(reasonValue) ||
+    !/\S/u.test(reasonValue.text)
+  ) {
+    return {
+      status: "invalid",
+      reason:
+        'useResourceMutation opt-out resource must be { type: "none", reason: "..." } with a non-empty string literal reason.',
+    };
+  }
+  if (entry.unresolved.length > 0) {
+    return {
+      status: "invalid",
+      reason:
+        'useResourceMutation with resource { type: "none" } has unresolved operations.',
+    };
+  }
+  const observedWrites = new Set(
+    entry.writes.map(({ method, route }) => `${method.toUpperCase()} ${route}`),
+  );
+  if (
+    [...contracts.values()].some(({ writes }) =>
+      writes.some((write) => observedWrites.has(write)),
+    )
+  ) {
+    return {
+      status: "invalid",
+      reason:
+        'useResourceMutation with resource { type: "none" } cannot write to a registered resource contract route.',
+    };
+  }
+  return { status: "valid" };
+};
+
+const validateResourceMutationContract = ({
+  resource,
+  entry,
+  contracts,
+}: {
+  resource: ts.Expression;
+  entry: MutationQueryCensus["mutations"][number];
+  contracts: ReadonlyMap<string, MutationContract>;
+}): MutationExecutionResult => {
+  if (!(
+    hasExactProperties(resource, ["mutation"]) ||
+    hasExactProperties(resource, ["mutation", "scope"])
+  )) {
+    return {
+      status: "invalid",
+      reason:
+        'useResourceMutation resource must contain mutation and optionally scope, or { type: "none", reason }.',
+    };
+  }
+  const scope = scopeKind(objectProperty(resource, "scope"));
+  if (scope === "invalid") {
+    return {
+      status: "invalid",
+      reason:
+        "useResourceMutation scope must name a closed primary scope, an explicit organization projection identity, or a public token.",
+    };
+  }
+  const publicToken = scope === PUBLIC_TOKEN_SCOPE;
+  const mutation = objectProperty(resource, "mutation");
+  const mutationValue = mutation && unwrap(mutation);
+  if (!mutationValue || !ts.isStringLiteral(mutationValue)) {
+    return {
+      status: "invalid",
+      reason: "useResourceMutation mutation key must be a string literal.",
+    };
+  }
+  const contract = contracts.get(mutationValue.text);
+  if (!contract) {
+    return {
+      status: "invalid",
+      reason: `useResourceMutation names unknown contract ${mutationValue.text}.`,
+    };
+  }
+  if (publicToken !== isPublicTokenContract(contract)) {
+    return {
+      status: "invalid",
+      reason: publicToken
+        ? "A public token useResourceMutation must name a contract whose writes are all public routes."
+        : "A contract whose writes are public routes must use the public token scope.",
+    };
+  }
+  const unresolved = entry.unresolved.filter(
+    ({ reason, file, expression }) =>
+      !(
+        reason === "dynamic-options-spread" &&
+        file === CONTRACT_MODULE &&
+        expression === "options"
+      ),
+  );
+  if (unresolved.length > 0) {
+    return {
+      status: "invalid",
+      reason: "useResourceMutation write analysis has unresolved operations.",
+    };
+  }
+  const observedWrites = entry.writes
+    .map(({ method, route }) => `${method.toUpperCase()} ${route}`)
+    .toSorted(compareCodeUnit);
+  if (JSON.stringify(observedWrites) !== JSON.stringify(contract.writes)) {
+    return {
+      status: "invalid",
+      reason:
+        "useResourceMutation route does not match its registered contract.",
+    };
+  }
+  return { status: "valid" };
+};
+
+const validateResourceMutationHook = ({
+  module,
+  call,
+  entry,
+  contracts,
+}: Omit<MutationExecutionArgs, "modules">): MutationExecutionResult => {
+  const options = call.arguments.at(0);
+  const spreadValidation = options
+    ? validateTaggedSpreadOverrides({
+        module,
+        expression: options,
+        reference: call,
+        allowedOverrides: MUTATION_SPREAD_OVERRIDES,
+        isTaggedSpread: () => false,
+      })
+    : "unresolved";
+  if (spreadValidation === "invalid") {
+    return {
+      status: "invalid",
+      reason:
+        "useResourceMutation option spread overrides must use an explicit allowed option key.",
+    };
+  }
+  if (hasNestedMutationHelper(module, call)) {
+    return {
+      status: "invalid",
+      reason:
+        "useResourceMutation wraps mutationFn automatically and must not nest resourceMutation.",
+    };
+  }
+  const shape = options
+    ? mutationOptionsShape({ module, expression: options, reference: call })
+    : undefined;
+  const orderedResources =
+    shape?.properties.filter(([key]) => key === "resource") ?? [];
+  const orderedMutationFunctions =
+    shape?.properties.filter(([key]) => key === "mutationFn") ?? [];
+  const resourceEntry =
+    orderedResources.length === 1 ? orderedResources[0] : undefined;
+  const mutationFnEntry =
+    orderedMutationFunctions.length === 1
+      ? orderedMutationFunctions[0]
+      : undefined;
+  if (!resourceEntry || !mutationFnEntry) {
+    return {
+      status: "invalid",
+      reason:
+        "useResourceMutation requires a single explicit resource declaration and mutationFn.",
+    };
+  }
+  const resource = resolveLocal(module, resourceEntry[1]);
+  if (!resource) {
+    return {
+      status: "invalid",
+      reason:
+        "useResourceMutation resource declaration must be statically resolvable.",
+    };
+  }
+  return objectProperty(resource, "type") !== undefined
+    ? validateResourceMutationOptOut({ resource, entry, contracts })
+    : validateResourceMutationContract({ resource, entry, contracts });
+};
+
 const inspectMutationExecution = ({
   module,
   modules,
@@ -1473,6 +1685,14 @@ const inspectMutationExecution = ({
   entry,
   contracts,
 }: MutationExecutionArgs): MutationExecutionResult => {
+  if (canonicalCall(module, call, MUTATION_HOOK_HELPER)) {
+    return validateResourceMutationHook({
+      module,
+      call,
+      entry,
+      contracts,
+    });
+  }
   const options = call.arguments.at(0);
   const spreadValidation = options
     ? validateTaggedSpreadOverrides({
@@ -2525,7 +2745,8 @@ export const inspectMutationQueryInvalidation = (
     const isPrimitive = MUTATION_PRIMITIVES.has(name);
     const inOwner =
       entry.file === REALTIME_MODULE &&
-      enclosingFunctionName(call) === MUTATION_HELPER;
+      (enclosingFunctionName(call) === MUTATION_HELPER ||
+        enclosingFunctionName(call) === MUTATION_HOOK_HELPER);
     if (inOwner && isPrimitive) {
       validMutationIds.add(entry.id);
       continue;
@@ -2891,7 +3112,7 @@ const main = () => {
   ];
   if (errors.length > 0) {
     process.stderr.write(
-      `Mutation/query invalidation baseline failed.\n${errors.join("\n")}\n`,
+      `Mutation/query invalidation baseline failed.\n${errors.join("\n")}\nFix: update invalidation declarations or shrink stale entries with \`bun scripts/check-mutation-query-invalidation.ts --write\`, then re-run \`bun scripts/check-mutation-query-invalidation.ts\`.\n`,
     );
     process.exit(1);
   }

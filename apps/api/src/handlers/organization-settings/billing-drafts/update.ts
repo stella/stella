@@ -29,7 +29,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   timestampCasToken,
@@ -219,6 +218,10 @@ const config = {
     consumesServices: false,
   },
   body: billingDraftConfigurationBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["billingDraftSettings"],
+  },
 } satisfies HandlerConfig;
 
 const updateBillingDraftConfiguration = createSafeRootHandler(
@@ -419,10 +422,5 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
     return Result.err(new HandlerError(CONFIGURATION_FAILURES[result.type]));
   },
 );
-
-declareAggregateMutation(updateBillingDraftConfiguration, {
-  type: "aggregate",
-  aggregates: ["billingDraftSettings"],
-});
 
 export default updateBillingDraftConfiguration;

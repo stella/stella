@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_HEADNOTE_TRUNCATION_MARK } from "@stll/api-contract/case-law-text-field";
-import { assertProperty } from "@stll/property-testing";
-
 import {
   collapseDecisionHeadnote,
   normalizeDecisionHeadnote,
   normalizeDecisionKeywords,
   truncateDecisionHeadnote,
-} from "@/api/lib/case-law/decision-headnote";
+} from "@stll/case-law-ingestion-core/decision-headnote";
+import { assertProperty } from "@stll/property-testing";
+
 import { LIMITS } from "@/api/lib/limits";
 
 const headnoteTextArbitrary = fc.oneof(

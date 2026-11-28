@@ -29,6 +29,9 @@ import {
   test,
 } from "bun:test";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   isStoredReadAbsence,
@@ -40,8 +43,6 @@ import {
   storedReadUnavailable,
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import {
   atFindokFixture,

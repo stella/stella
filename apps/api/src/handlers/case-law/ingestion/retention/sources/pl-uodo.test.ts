@@ -6,6 +6,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { validateAst } from "@stll/case-law-parsers/validate-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -22,7 +23,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plUodoRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uodo";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const FIXTURES = new URL("../../adapters/__fixtures__/", import.meta.url);

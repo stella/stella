@@ -1,6 +1,7 @@
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { encodePlNsaCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-cursor";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 export const SOURCE_SYNC_PROGRESS = {
   COMPLETE: "complete",

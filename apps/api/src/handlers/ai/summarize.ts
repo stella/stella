@@ -12,7 +12,6 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import {
   buildEmailSummaryMessage,
@@ -34,6 +33,11 @@ const config = {
   mcp: { type: "internal", reason: "native_tool_ui" },
   body: summarizeEmailBodySchema,
   requiresUsage: { actionType: "chat", modelTask: EMAIL_GENERATION_TASK },
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Generates text from the request body; writes only its own usage rows, with no cross-row invariant.",
+  },
 } satisfies HandlerConfig;
 
 /** A plain-text summary of the email text in the request. Persists nothing. */
@@ -100,11 +104,5 @@ const summarizeEmail = createSafeRootHandler(
     return Result.ok({ summary } satisfies OutlookAISummaryResponse);
   },
 );
-
-declareAggregateMutation(summarizeEmail, {
-  type: "independent",
-  reason:
-    "Generates text from the request body; writes only its own usage rows, with no cross-row invariant.",
-});
 
 export default summarizeEmail;

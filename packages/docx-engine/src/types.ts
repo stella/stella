@@ -1,0 +1,816 @@
+// Shared types for DOCX generation modes (b) and (c).
+
+import * as v from "valibot";
+
+import { isPlausibleLocale } from "@stll/agent-input";
+import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
+import {
+  type BlockDirectiveKind,
+  type ConditionNode,
+  conditionNodeSchema,
+  DATE_FORMAT_STYLES,
+  type FieldDateFormat,
+  type FilterCall,
+  isFieldPath,
+  type RowScope,
+} from "@stll/template-conditions";
+
+import {
+  type FieldSource,
+  fieldSourceSchema,
+  fieldSourceToolInputSchema,
+} from "./binding-sources";
+import type { ClauseSlot } from "./clause-slots";
+import type { TemplateWarning } from "./template-warnings";
+
+export type { FieldSource } from "./binding-sources";
+export { DATE_FORMAT_STYLES };
+export type { FieldDateFormat };
+
+// ── Common ────────────────────────────────────────────────
+
+type TextFormat = {
+  bold?: boolean;
+  italic?: boolean;
+};
+
+// ── Mode (b): Template filling ────────────────────────────
+
+export type DiscoveredPlaceholder = {
+  name: string;
+  count: number;
+};
+
+export type RichRun = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+};
+
+export type RichPatchValue = string | { paragraphs: { runs: RichRun[] }[] };
+
+// ── Mode (c): Tracked-changes editing ─────────────────────
+
+export type DocxEdit =
+  | {
+      kind: "insert";
+      paragraphIndex: number;
+      charOffset?: number;
+      text: string;
+      format?: TextFormat;
+    }
+  | {
+      kind: "delete";
+      paragraphIndex: number;
+      charOffset: number;
+      length: number;
+    }
+  | {
+      kind: "replace";
+      paragraphIndex: number;
+      charOffset: number;
+      length: number;
+      text: string;
+      format?: TextFormat;
+    };
+
+export type DiffStats = {
+  wordsAdded: number;
+  wordsRemoved: number;
+};
+
+export type DiffResult = {
+  edits: DocxEdit[];
+  /** Paragraph indices from rewrites that didn't match any
+   *  extracted paragraph (typo or stale index). */
+  skippedRewrites: number[];
+  stats: DiffStats;
+};
+
+export type ParagraphRewrite = {
+  paragraphIndex: number;
+  /** Full rewritten paragraph text. */
+  newText: string;
+};
+
+export type ParagraphSource = "header" | "body" | "footer";
+
+type ExtractedTableCellParagraph = {
+  text: string;
+  style?: string;
+  bold?: boolean;
+  fontSize?: number;
+  alignment?: "left" | "center" | "right" | "both";
+};
+
+type ExtractedTableCell = {
+  paragraphs: readonly ExtractedTableCellParagraph[];
+};
+
+type ExtractedTableRowPosition =
+  | {
+      table: number;
+      kind: "cells";
+      cells: readonly ExtractedTableCell[];
+    }
+  | {
+      table: number;
+      kind: "syntheticHeader" | "delimiter";
+    };
+
+export type ExtractedParagraph = {
+  index: number;
+  text: string;
+  /** Which part of the document this paragraph came from. */
+  source?: ParagraphSource | undefined;
+  style?: string;
+  bold?: boolean;
+  fontSize?: number;
+  alignment?: "left" | "center" | "right" | "both";
+  tableRow?: ExtractedTableRowPosition;
+  /** True when the paragraph is a block directive. */
+  isDirective?: boolean | undefined;
+  /** Which directive this paragraph represents. */
+  directiveKind?: BlockDirectiveKind | undefined;
+  /** The expression inside the directive (empty for `{% else %}`). */
+  directiveExpression?: string | undefined;
+};
+
+/**
+ * Which revision view the extracted text represents.
+ *
+ * - `"accepted"` — deleted text is excluded, inserted text is
+ *   included. This is the text as it would appear if all tracked
+ *   changes were accepted (Word's "No Markup" view).
+ */
+type RevisionView = "accepted";
+
+export type ExtractedDocument = {
+  paragraphs: ExtractedParagraph[];
+  charCount: number;
+  /** Which revision view this text represents. */
+  view: RevisionView;
+};
+
+// ── Template data model (extended) ───────────────────────
+
+export type TemplateDataValue =
+  | string
+  | number
+  | boolean
+  | RichPatchValue
+  | TemplateDataValue[]
+  | { [key: string]: TemplateDataValue };
+
+export type TemplateData = Record<string, TemplateDataValue>;
+
+export type BlockDirective = {
+  kind: BlockDirectiveKind;
+  /** The condition of an `{% if %}`/`{% elif %}`, or the array path of a
+   *  `{% for alias in path %}`. Empty for a closer. */
+  expression: string;
+  /** The loop variable of a `{% for %}`; absent on every other directive. */
+  alias?: string;
+  /** Filters written on a `{% for %}`'s path, which configure the array, or on
+   *  an `{% if %}`/`{% elif %}`'s path, which configure the boolean it asks
+   *  for. */
+  filters?: readonly FilterCall[];
+  paragraphIndex: number;
+};
+
+export type IfBranch = {
+  condition: string;
+  contentStart: number;
+  contentEnd: number;
+};
+
+export type IfBlock = {
+  kind: "if";
+  branches: IfBranch[];
+  directiveParagraphs: number[];
+};
+
+export type LoopBlock = {
+  kind: "for";
+  /** The loop variable the body addresses items through. */
+  alias: string;
+  arrayPath: string;
+  contentStart: number;
+  contentEnd: number;
+  directiveParagraphs: number[];
+};
+
+export type DirectiveBlock = IfBlock | LoopBlock;
+
+export type TemplateFieldKind = "string" | "boolean" | "array" | "object";
+
+export type DiscoveredField = {
+  path: string;
+  kind: TemplateFieldKind;
+  itemFields?: DiscoveredField[];
+  count: number;
+  /** Condition expression that must be true for this
+   *  field to be visible in the fill form. Absent when
+   *  the field is always visible. On an item field it is
+   *  evaluated per item, with `itemAliases` bound to it. */
+  visibleWhen?: string;
+  /** On an array field: the names a loop body gives its item. */
+  itemAliases?: string[];
+};
+
+/** The loops and branch content renders inside: none for a template's own
+ *  parts, the slot's for a clause body. */
+export type EnclosingScope = {
+  rowScopes: readonly RowScope[];
+  condition: string | undefined;
+};
+
+/** How a clause slot's body was chosen for a fill. */
+export const CLAUSE_RESOLUTIONS = [
+  "latest",
+  "pinned",
+  "explicit",
+  "variant",
+  "override",
+] as const;
+
+export type ClauseProvenance = {
+  slotKey: string;
+  resolution?: (typeof CLAUSE_RESOLUTIONS)[number] | undefined;
+  version?: number | undefined;
+  id?: string | undefined;
+  name?: string | undefined;
+};
+
+export type TemplateStructureError = {
+  message: string;
+  paragraphIndex: number;
+  directive: string;
+  /** Which container this error originated from. */
+  source?: ParagraphSource | "clause" | undefined;
+  clause?: ClauseProvenance | undefined;
+};
+
+export type DiscoveredTemplate = {
+  clauseSlots?: ClauseSlot[] | undefined;
+  clauseFieldPaths?: string[] | undefined;
+  /** Per clause slot key, the loops and branch its marker sits in, which its
+   *  clause body is read through; `null` when the slot's markers disagree. */
+  clauseSlotScopes?: Record<string, EnclosingScope | null> | undefined;
+  /** How value markers render. `scoped` fields are required exactly where
+   *  they render (per loop iteration, never in a pruned branch or slot);
+   *  `unconditional` ones have a marker that renders whatever the values. */
+  renderedFieldPaths?:
+    { scoped: string[]; unconditional: string[] } | undefined;
+  /** Per clause slot key, the field paths only that slot's clause body
+   *  renders (the template's own content never does). Their requiredness
+   *  holds where the slot renders, once per loop iteration it renders in. */
+  clauseScopedFieldPaths?: Record<string, string[]> | undefined;
+  placeholders: DiscoveredPlaceholder[];
+  fields: DiscoveredField[];
+  structureErrors: TemplateStructureError[];
+  /** Marker mistakes that parse but almost certainly do not do what the author
+   *  meant. Never blocks a save; reported so it is fixed before the first
+   *  fill. */
+  warnings: TemplateWarning[];
+  /** Paths a `{% if %}` / `{% elif %}` expression reads, sorted. Distinguishes
+   *  a condition driver from a value marker, which the field list alone
+   *  cannot: a path can be both. */
+  conditionPaths: string[];
+  /** The manifest the document itself declares: one entry per marker whose
+   *  filter chain configures something. This is the document layer — the
+   *  bytes are the source of truth, and a stored overlay only refines it. */
+  documentFields: FieldMeta[];
+  /** Each `{% for alias in path %}` the document opens, as the name its body
+   *  writes and the array path the manifest speaks. An alias two loops give
+   *  different arrays is absent: it names nothing on its own. */
+  loopAliases: LoopAlias[];
+};
+
+/** One loop's name for its item, and the array path it stands for. */
+type LoopAlias = { alias: string; path: string };
+
+// ── Custom XML Manifest ─────────────────────────────────
+
+export const INPUT_TYPES = [
+  "text",
+  "number",
+  "boolean",
+  "date",
+  "select",
+] as const;
+
+export type InputType = (typeof INPUT_TYPES)[number];
+
+/** Registries a lookup field can resolve against. Single-sourced from the
+ *  dispatch table's slug set, so every registry the fill boundary can resolve
+ *  (`BUSINESS_REGISTRY_DISPATCH`) is offered as a lookup target. */
+export const LOOKUP_REGISTRIES = BUSINESS_REGISTRY_SLUGS;
+
+export type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
+
+/**
+ * Registry lookup configuration (see {@link FieldMeta.lookup}): the person
+ * filling enters only the registry number; at fill time the company is
+ * resolved via the business-registry dispatch and the marker is filled with
+ * the rendered company details.
+ */
+/**
+ * One named output format for a lookup field (see {@link FieldLookup.formats}).
+ * The author enters the registry number once; each format renders the SAME
+ * resolved hit through its own [token] template. The FIRST format is the
+ * default, addressed by the bare marker `{{path}}`; every later format is
+ * addressed by a dotted marker `{{path.key}}` in the document.
+ */
+export type FieldLookupFormat = v.InferOutput<typeof fieldLookupFormatSchema>;
+
+/** Upper bound on named formats per lookup field; keeps the manifest small and
+ *  the per-fill render work bounded. */
+export const LOOKUP_FORMATS_MAX = 10;
+
+/** Max length of a single format template, mirroring the config UI's limit. */
+export const LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH = 2000;
+
+/** A format key is one field-path segment: letters, digits, underscore, dash;
+ *  no dots (the dot separates the field path from the key in the marker). */
+const LOOKUP_FORMAT_KEY_RE = /^[\p{L}\p{N}_-]+$/u;
+
+export const isLookupFormatKey = (value: string): boolean =>
+  LOOKUP_FORMAT_KEY_RE.test(value);
+
+export type FieldLookup = v.InferOutput<typeof fieldLookupSchema>;
+
+export type FieldValidation = v.InferOutput<typeof fieldValidationSchema>;
+
+/** Canonical parsed field metadata. Runtime validation, MCP schema generation,
+ * and downstream TypeScript all derive from {@link fieldMetaSchema}. */
+export type FieldMeta = v.InferOutput<typeof fieldMetaSchema>;
+
+export type TemplateManifest = {
+  /** Cached targets from the template bytes, absent on older caches. */
+  clauseSlots?: ClauseSlot[] | undefined;
+  version: number;
+  fields: FieldMeta[];
+};
+
+const isRecordLike = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const describedString = (description: string) =>
+  v.pipe(v.string(), v.description(description));
+
+/** A string whose empty value says nothing: an empty join template renders
+ *  nothing and an empty regex constrains nothing, so "" on either can only be
+ *  a placeholder for a property the caller is not setting. Rejecting it here is
+ *  what lets the tool surface read it as omitted. */
+const nonEmptyString = (description: string) =>
+  v.pipe(v.string(), v.minLength(1), v.description(description));
+
+const fieldPathSchema = (description: string) =>
+  v.pipe(
+    v.string(),
+    v.check(isFieldPath, "Invalid field path"),
+    v.description(description),
+  );
+
+export const fieldLookupFormatSchema = v.strictObject({
+  key: v.pipe(
+    v.string(),
+    v.check(isLookupFormatKey, "Invalid lookup format key"),
+    v.description("Format key, addressed as {{path.key}}"),
+  ),
+  template: v.pipe(
+    v.string(),
+    v.maxLength(LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH),
+    v.description("[token] rendering of the registry hit"),
+  ),
+});
+
+const fieldLookupSchema = v.pipe(
+  v.strictObject({
+    registry: v.pipe(
+      v.picklist(LOOKUP_REGISTRIES),
+      v.description("Business registry to query"),
+    ),
+    formats: v.pipe(
+      v.array(fieldLookupFormatSchema),
+      v.minLength(1),
+      v.maxLength(LOOKUP_FORMATS_MAX),
+      v.description("Named renderings; the first is the default"),
+    ),
+  }),
+  v.description("Who fills = business-registry lookup"),
+);
+
+export const FIELD_DATE_FORMAT_DESCRIPTION = "Date rendering config";
+
+/**
+ * The persisted pair, canonical only: `new Intl.DateTimeFormat("cs_CZ")`
+ * throws, so what a manifest stores has to be the spelling `Intl` accepts. The
+ * agent-facing mirror in `mcp/template-field-input.ts` reads the other
+ * spellings and canonicalizes before this schema sees them.
+ */
+export const fieldDateFormatObjectSchema = v.strictObject({
+  locale: v.pipe(
+    v.string(),
+    v.check(isPlausibleLocale, "Invalid BCP-47 locale"),
+    v.description("BCP-47 language tag"),
+  ),
+  style: v.pipe(
+    v.picklist(DATE_FORMAT_STYLES),
+    v.description("Date rendering style"),
+  ),
+});
+
+const fieldDateFormatSchema = v.pipe(
+  fieldDateFormatObjectSchema,
+  v.description(FIELD_DATE_FORMAT_DESCRIPTION),
+);
+
+/** Shared with the snake_case MCP mirror in `mcp/template-field-input.ts`, so
+ *  both surfaces advertise the same line. */
+export const FIELD_VALIDATION_DESCRIPTION = "Field-level value constraints";
+
+/**
+ * A maximum of 0 admits nothing, so no author means it: it is what a client
+ * that fills in every declared property writes for a length or a count it is
+ * not constraining, and saving it makes a field nobody can fill. Rejecting
+ * the value keeps the rest of that entry, which is what the configure tool
+ * does with a property it cannot read. `min*` and `max` are left alone: a
+ * bound of 0 is a real one.
+ *
+ * The marker filters read the same bound (`applyNumericValidation` in
+ * field-filters.ts), so `{{ x | max_items(0) }}` in a DOCX is refused where
+ * the wire refuses it.
+ */
+export const SMALLEST_MAXIMUM = 1;
+
+export const fieldValidationObjectSchema = v.strictObject({
+  required: v.optional(v.pipe(v.boolean(), v.description("Value is required"))),
+  minLength: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Minimum string length")),
+  ),
+  maxLength: v.optional(
+    v.pipe(
+      v.number(),
+      v.finite(),
+      v.minValue(SMALLEST_MAXIMUM),
+      v.description("Maximum string length, at least 1"),
+    ),
+  ),
+  min: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Minimum numeric value")),
+  ),
+  max: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Maximum numeric value")),
+  ),
+  pattern: v.optional(nonEmptyString("Regex for the whole value")),
+  minItems: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Minimum repeated items")),
+  ),
+  maxItems: v.optional(
+    v.pipe(
+      v.number(),
+      v.finite(),
+      v.minValue(SMALLEST_MAXIMUM),
+      v.description("Maximum repeated items, at least 1"),
+    ),
+  ),
+});
+
+const fieldValidationSchema = v.pipe(
+  fieldValidationObjectSchema,
+  v.description(FIELD_VALIDATION_DESCRIPTION),
+);
+
+/** The persisted property each derived-source mode occupies. Only the
+ *  persisted manifest still spells these separately: the MCP surface carries
+ *  one discriminated `source`, where a second mode is unrepresentable. Total
+ *  over the mode union, so a new derived source is a compile error here. */
+const DERIVED_SOURCE_PROPERTIES = {
+  "ai-adapt": "aiAdapt",
+  "ai-prompt": "aiPrompt",
+  condition: "condition",
+  formula: "formula",
+  lookup: "lookup",
+  source: "source",
+} as const satisfies Record<DerivedSourceMode, string>;
+
+type DerivedSourceMode =
+  "ai-adapt" | "ai-prompt" | "condition" | "formula" | "lookup" | "source";
+
+/** `lookup` and `source` are only presence-checked, so the snake_case MCP
+ *  mirror can pass its own shape of each. */
+type DerivedSourceFields = {
+  aiAdapt?: boolean | undefined;
+  aiPrompt?: string | undefined;
+  condition?: string | undefined;
+  conditionAst?: ConditionNode | undefined;
+  formula?: string | undefined;
+  lookup?: FieldLookup | undefined;
+  source?: FieldSource | undefined;
+};
+
+const activeDerivedSourceModes = ({
+  aiAdapt,
+  aiPrompt,
+  condition,
+  conditionAst,
+  formula,
+  lookup,
+  source,
+}: DerivedSourceFields): DerivedSourceMode[] => {
+  const modes: DerivedSourceMode[] = [];
+  if (aiAdapt === true) {
+    modes.push("ai-adapt");
+  }
+  if (aiPrompt !== undefined) {
+    modes.push("ai-prompt");
+  }
+  if (condition !== undefined || conditionAst !== undefined) {
+    modes.push("condition");
+  }
+  if (formula !== undefined) {
+    modes.push("formula");
+  }
+  if (lookup !== undefined) {
+    modes.push("lookup");
+  }
+  if (source !== undefined) {
+    modes.push("source");
+  }
+  return modes;
+};
+
+const hasCompatibleDerivedSources = (fields: DerivedSourceFields): boolean =>
+  activeDerivedSourceModes(fields).length <= 1;
+
+/**
+ * The rejection message for a manifest field that names more than one derived
+ * source. "Mutually exclusive" alone leaves the reader to guess which of the
+ * seven properties collided and on which field, so both are named here.
+ */
+const describeDerivedSourceConflict = (
+  fields: DerivedSourceFields & { path?: string | undefined },
+): string => {
+  const properties = activeDerivedSourceModes(fields).map(
+    (mode) => `\`${DERIVED_SOURCE_PROPERTIES[mode]}\``,
+  );
+  const at = fields.path === undefined ? "" : ` on "${fields.path}"`;
+  return (
+    "Derived field sources are mutually exclusive: " +
+    `${properties.join(", ")} are set together${at}. Keep exactly one.`
+  );
+};
+
+const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
+
+/** The persisted keys that say who fills a field. They travel as one cluster:
+ *  naming a source replaces whatever was there, so a field that used to be a
+ *  lookup does not keep it beside its new source. */
+export const FIELD_SOURCE_KEYS = [
+  "aiAdapt",
+  "aiPrompt",
+  "aiSeesDocument",
+  "condition",
+  "formula",
+  "lookup",
+  "source",
+] as const satisfies readonly (keyof FieldMeta)[];
+
+export type FieldSourceKey = (typeof FIELD_SOURCE_KEYS)[number];
+
+/**
+ * The cluster, cleared. Spread ahead of a configuration's own keys so a
+ * configure call that names one source (or none: a field a person fills)
+ * carries the clear with it, and total over the cluster by construction, so a
+ * new source property cannot be forgotten here.
+ */
+export const CLEARED_FIELD_SOURCE = {
+  aiAdapt: undefined,
+  aiPrompt: undefined,
+  aiSeesDocument: undefined,
+  condition: undefined,
+  formula: undefined,
+  lookup: undefined,
+  source: undefined,
+} satisfies Record<FieldSourceKey, undefined>;
+
+/**
+ * Every description below is advertised in `configure_template_fields`'s
+ * `inputSchema`,
+ * which each MCP client downloads on connect, so they stay one short line that
+ * names the property's role. The per-property guidance (examples, who fills a
+ * field, the binding kinds and their keys) lives in the `template-fields`
+ * reference resource — see `mcp/template-field-reference.ts`.
+ */
+const fieldMetaObjectSchema = v.strictObject({
+  path: fieldPathSchema("Field path; must match a {{ marker }}"),
+  label: v.optional(describedString("Field label")),
+  hint: v.optional(describedString("Fill hint for the person filling")),
+  inputType: v.optional(
+    v.pipe(v.picklist(INPUT_TYPES), v.description("Input control type")),
+  ),
+  options: v.optional(
+    v.pipe(
+      v.array(v.string()),
+      v.description("Allowed values for a select field"),
+    ),
+  ),
+  validation: v.optional(fieldValidationSchema),
+  required: v.optional(v.pipe(v.boolean(), v.description("Value is required"))),
+  aiPrompt: v.optional(describedString("Who fills = AI: drafting instruction")),
+  aiAdapt: v.optional(
+    v.pipe(v.boolean(), v.description("Who fills = person + AI")),
+  ),
+  aiSeesDocument: v.optional(
+    v.pipe(v.boolean(), v.description("AI field also sees the document")),
+  ),
+  optionsFrom: v.optional(
+    fieldPathSchema("Dependent select: source field path"),
+  ),
+  lookup: v.optional(fieldLookupSchema),
+  source: v.optional(
+    v.pipe(fieldSourceSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
+  ),
+  formula: v.optional(describedString("Arithmetic over other fields")),
+  condition: v.optional(describedString("Boolean rule for an {% if %} tag")),
+  conditionAst: v.optional(
+    v.pipe(
+      conditionNodeSchema,
+      v.description("Canonical condition AST for manifest round-tripping"),
+    ),
+  ),
+  dateFormat: v.optional(fieldDateFormatSchema),
+});
+
+export const fieldMetaSchema = v.pipe(
+  fieldMetaObjectSchema,
+  v.check(
+    (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
+      hasCompatibleDerivedSources(field),
+    (issue) => describeDerivedSourceConflict(issue.input),
+  ),
+);
+
+/** Model-facing subset: `conditionAst` is the persisted canonical form the
+ * engine derives from `condition`, not an authoring input. This schema derives
+ * its public fields from the persisted object schema and applies the same
+ * named invariant predicates. */
+export const fieldMetaToolInputObjectSchema = v.strictObject({
+  ...v.omit(fieldMetaObjectSchema, ["conditionAst"]).entries,
+  source: v.optional(
+    v.pipe(fieldSourceToolInputSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
+  ),
+});
+
+export const fieldMetaToolInputSchema = v.pipe(
+  fieldMetaToolInputObjectSchema,
+  v.check(
+    (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
+      hasCompatibleDerivedSources(field),
+    (issue) => describeDerivedSourceConflict(issue.input),
+  ),
+);
+
+/**
+ * The tool-wire property each manifest key is configured through: its own
+ * snake_case key, or the `source` union the derived half folds up into. Total
+ * over the model-facing shape, so a new manifest key cannot ship without
+ * saying which property a caller sets it with.
+ *
+ * Lives here, beside the schema, because both the wire serializer and the
+ * engine's own diagnostics have to name a property the way the caller spelled
+ * it, and two lists of that mapping would drift.
+ */
+export const FIELD_WIRE_PROPERTY = {
+  path: "path",
+  label: "label",
+  hint: "hint",
+  inputType: "input_type",
+  options: "options",
+  optionsFrom: "options_from",
+  validation: "validation",
+  required: "required",
+  dateFormat: "date_format",
+  aiPrompt: "source",
+  aiAdapt: "source",
+  aiSeesDocument: "source",
+  lookup: "source",
+  source: "source",
+  formula: "source",
+  condition: "source",
+} as const satisfies Record<
+  keyof v.InferOutput<typeof fieldMetaToolInputObjectSchema>,
+  string
+>;
+
+export const isFieldMeta = (value: unknown): value is FieldMeta =>
+  v.is(fieldMetaSchema, value);
+
+const isRichRun = (value: unknown): value is RichRun =>
+  isRecordLike(value) &&
+  typeof value["text"] === "string" &&
+  (value["bold"] === undefined || typeof value["bold"] === "boolean") &&
+  (value["italic"] === undefined || typeof value["italic"] === "boolean");
+
+const isRichPatchValueObject = (value: unknown): value is RichPatchValue =>
+  isRecordLike(value) &&
+  Array.isArray(value["paragraphs"]) &&
+  value["paragraphs"].every(
+    (paragraph) =>
+      isRecordLike(paragraph) &&
+      Array.isArray(paragraph["runs"]) &&
+      paragraph["runs"].every(isRichRun),
+  );
+
+const TEMPLATE_DATA_MAX_DEPTH = 64;
+
+const isTemplateDataValueAtDepth = (
+  value: unknown,
+  depth: number,
+): value is TemplateDataValue => {
+  if (depth > TEMPLATE_DATA_MAX_DEPTH) {
+    return false;
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every((item) => isTemplateDataValueAtDepth(item, depth + 1));
+  }
+  if (isRichPatchValueObject(value)) {
+    return true;
+  }
+  if (isRecordLike(value)) {
+    return Object.values(value).every((item) =>
+      isTemplateDataValueAtDepth(item, depth + 1),
+    );
+  }
+  return false;
+};
+
+export const isTemplateDataValue = (
+  value: unknown,
+): value is TemplateDataValue => isTemplateDataValueAtDepth(value, 0);
+
+export const isTemplateData = (value: unknown): value is TemplateData =>
+  isRecordLike(value) &&
+  Object.values(value).every((item) => isTemplateDataValueAtDepth(item, 0));
+
+export type ResolvedField = {
+  path: string;
+  kind: TemplateFieldKind;
+  count: number;
+  label?: string | undefined;
+  /** Mirrors {@link FieldMeta.hint}: the fill form shows it as the input's
+   *  placeholder; AI prefill includes it when mapping source text. */
+  hint?: string | undefined;
+  inputType?: InputType | undefined;
+  options?: string[] | undefined;
+  validation?: FieldValidation | undefined;
+  required?: boolean | undefined;
+  /** Mirrors {@link FieldMeta.aiAdapt}: the fill form shows an AI-adaptation
+   *  hint next to the field's input when set. */
+  aiAdapt?: boolean | undefined;
+  /** Mirrors {@link FieldMeta.aiPrompt}: AI-drafted fields render no
+   *  fill-form input (the model writes them at fill time). */
+  aiPrompt?: string | undefined;
+  /** Mirrors {@link FieldMeta.aiSeesDocument}: opts an AI-drafted field into
+   *  receiving the document text in its generator prompt. */
+  aiSeesDocument?: boolean | undefined;
+  /** Mirrors {@link FieldMeta.optionsFrom}: the fill form derives the select's
+   *  options live from the referenced field's current value(s). */
+  optionsFrom?: string | undefined;
+  /** Mirrors {@link FieldMeta.lookup}: the fill form shows a registry-lookup
+   *  hint and checks the registry-number format before submit. */
+  lookup?: FieldLookup | undefined;
+  /** Mirrors {@link FieldMeta.source}: the value is resolved from a contact
+   *  record at fill time, so the fill form renders no input for the field. */
+  source?: FieldSource | undefined;
+  /** Mirrors {@link FieldMeta.formula}: the value is derived at fill time, so
+   *  the fill form renders no input for the field. */
+  formula?: string | undefined;
+  /** Mirrors {@link FieldMeta.condition}: a boolean derived by rule at fill
+   *  time, so the fill form renders no input (computed/derived); a plain
+   *  boolean field without a condition is asked as a yes/no question instead. */
+  condition?: string | undefined;
+  /** Mirrors {@link FieldMeta.conditionAst}: the AST-backed form for boolean
+   *  condition rules that cannot be represented by the string grammar. */
+  conditionAst?: ConditionNode | undefined;
+  /** Mirrors {@link FieldMeta.dateFormat}: the fill form can preview how the
+   *  entered date will render in the document's language. */
+  dateFormat?: FieldDateFormat | undefined;
+  itemFields?: ResolvedField[] | undefined;
+  /** Mirrors {@link DiscoveredField.itemAliases}: the names under which an
+   *  item field's `visibleWhen` reads its own item. */
+  itemAliases?: string[] | undefined;
+  /** Condition expression that must be true for this
+   *  field to be visible in the fill form; per item on an item field. */
+  visibleWhen?: string | undefined;
+};

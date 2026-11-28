@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, mock, test } from "bun:test";
 
-import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/case-law-consts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import {
   ADAPTER_PUBLISHER_GATES,
   createPublisherGateSlot,
@@ -17,7 +19,6 @@ import {
   fetchPublisher,
   fetchWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

@@ -9,7 +9,7 @@ would break those operations. Installation performs no validation scan, table
 rewrite, backfill, or index build.
 
 The SQL predicate `plain_text_has_markup(text)` uses the verbatim
-`TAG_LIKE_MARKUP_SOURCE` from `apps/api/src/lib/case-law/plain-text-markup.ts`.
+`TAG_LIKE_MARKUP_SOURCE` from `packages/case-law-ingestion-core/src/plain-text-markup.ts`.
 The real-Postgres property test compares both engines and the installed SQL
 function. HTML attribute whitespace is space, tab, LF, FF, or CR; NBSP and BOM
 are text. Comparisons such as `a < b`, `§ 5 < 3`, and `i<5 and j>2` remain text.

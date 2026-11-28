@@ -8,7 +8,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -16,6 +15,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params: v.object({ grantId: resourceIdSchema("chatToolGrant") }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatToolGrants"],
+  },
 } satisfies HandlerConfig;
 
 /** Remove one of the user's stored approvals. Idempotent. */
@@ -70,10 +73,5 @@ const deleteChatToolGrant = createSafeRootHandler(
     return Result.ok({ deleted: deleted.length > 0 });
   },
 );
-
-declareAggregateMutation(deleteChatToolGrant, {
-  type: "aggregate",
-  aggregates: ["chatToolGrants"],
-});
 
 export default deleteChatToolGrant;

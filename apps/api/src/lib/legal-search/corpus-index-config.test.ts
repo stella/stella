@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { foldExpansionKey } from "@stll/legal-morphology/dictionary";
 
 import {
   CASE_LAW_INDEX_GROUP_CONTRACT_OF,
@@ -13,6 +14,7 @@ import {
   CORPUS_FINAL_INDEX_DOCSTORE_V7,
   corpusIndexConfig,
   DECISION_TIMESTAMP_FIELD,
+  FOLDED_TOKENIZER,
   TAG_FIELD_VALUE_LIMIT,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
@@ -443,4 +445,15 @@ test("the docstore settings a generation chooses differ only in block size", () 
     ...CORPUS_FINAL_INDEX_DOCSTORE_V7,
     blocksize: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT.blocksize,
   }).toEqual({ ...CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT });
+});
+
+test("FOLDED_TOKENIZER lowercases before ASCII folding, matching foldExpansionKey", () => {
+  // Unannotated on purpose: the tuple keeps its literal element type, so
+  // dropping either filter from the tokenizer makes the argument below a
+  // compile error rather than an `indexOf` returning -1.
+  const { filters } = FOLDED_TOKENIZER;
+  expect(filters.indexOf("lower_caser")).toBeLessThan(
+    filters.indexOf("ascii_folding"),
+  );
+  expect(foldExpansionKey("Ɩota")).toBe(foldExpansionKey("ɩota"));
 });

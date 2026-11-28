@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  type ExpansionDictionaryIdentity,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
+} from "@stll/legal-morphology/dictionary";
 import { assertProperty } from "@stll/property-testing";
 
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -20,10 +24,6 @@ import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   isCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
-import {
-  type ExpansionDictionaryIdentity,
-  NO_EXPANSION_DICTIONARY_IDENTITY,
-} from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
 import { encodeCursor } from "@/api/lib/search/cursor";
 

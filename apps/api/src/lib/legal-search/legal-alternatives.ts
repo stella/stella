@@ -12,6 +12,12 @@
 
 import * as v from "valibot";
 
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import {
+  type ExpansionDictionaryIdentity,
+  serializeExpansionDictionaryIdentity,
+} from "@stll/legal-morphology/dictionary";
+import { functionWordKey } from "@stll/legal-morphology/function-words";
 import { createSha256 } from "@stll/sha256/bun";
 
 import {
@@ -19,12 +25,6 @@ import {
   partitionCorpusFunctionWords,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import {
-  type ExpansionDictionaryIdentity,
-  serializeExpansionDictionaryIdentity,
-} from "@/api/lib/legal-search/morphology/dictionary";
-import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
 
 /**
  * Bounds on one query's alternatives. Each alternative costs a surface leaf

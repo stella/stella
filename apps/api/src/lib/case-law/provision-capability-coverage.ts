@@ -2,11 +2,10 @@ import { panic } from "better-result";
 
 import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
 import type { ProvisionLinkCapability } from "@stll/api-contract/provision-link-capability";
-
 import type {
   ADAPTER_MANIFESTS,
   IMPORT_SOURCE_MANIFESTS,
-} from "@/api/lib/legal-search/adapter-manifest";
+} from "@stll/case-law-ingestion-core/adapter-manifest";
 
 type RegisteredJurisdiction =
   | (typeof ADAPTER_MANIFESTS)[keyof typeof ADAPTER_MANIFESTS]["country"]

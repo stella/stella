@@ -6,7 +6,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -24,6 +23,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: createSavedSearchBodySchema,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["personalCatalog"],
+  },
 } satisfies HandlerConfig;
 
 const createSavedSearch = createSafeRootHandler(
@@ -117,10 +120,5 @@ const createSavedSearch = createSafeRootHandler(
     return Result.ok(toSavedSearchResponse(created));
   },
 );
-
-declareAggregateMutation(createSavedSearch, {
-  type: "aggregate",
-  aggregates: ["personalCatalog"],
-});
 
 export default createSavedSearch;

@@ -12,6 +12,8 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_ANCHOR_REDIRECT } from "@stll/api-contract/case-law-anchor-redirects";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { blockAnchorText } from "@stll/legal-ast/stable-block-anchors";
@@ -37,8 +39,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

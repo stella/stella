@@ -1,0 +1,267 @@
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+
+import {
+  ASPOSE_SPACER_GAP,
+  inlinesToPlainText,
+  walkInlines,
+  type WalkInlinesOptions,
+} from "@stll/case-law-parsers/shared-inlines";
+import { load } from "@stll/html";
+import type { Inline } from "@stll/legal-ast/document-ast";
+import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
+
+const walk = (html: string, options?: WalkInlinesOptions): Inline[] => {
+  const $ = load(html);
+  return walkInlines($, $("body"), options);
+};
+
+describe("walkInlines", () => {
+  test("builds an inline tree from formatting tags", () => {
+    const inlines = walk(
+      "foo <b>bar</b> <i>baz</i><br><a href='https://x.test'>link</a>",
+    );
+    expect(inlines).toEqual([
+      { type: "text", text: "foo " },
+      { type: "bold", children: [{ type: "text", text: "bar" }] },
+      { type: "text", text: " " },
+      { type: "italic", children: [{ type: "text", text: "baz" }] },
+      { type: "line-break" },
+      {
+        type: "link",
+        href: "https://x.test",
+        children: [{ type: "text", text: "link" }],
+      },
+    ]);
+  });
+
+  test("reads <sup> as a superscript only when the publisher opts in", () => {
+    const html = "art. 398<sup>9</sup> k.p.c.";
+
+    expect(walk(html, { superscripts: true })).toEqual([
+      { type: "text", text: "art. 398" },
+      { type: "superscript", children: [{ type: "text", text: "9" }] },
+      { type: "text", text: " k.p.c." },
+    ]);
+    const unwrapped = walk(html);
+    expect(unwrapped.every(({ type }) => type === "text")).toBe(true);
+    expect(inlinesToPlainText(unwrapped)).toBe("art. 3989 k.p.c.");
+  });
+
+  test("merges adjacent text separated by a skipped/empty node", () => {
+    expect(walk("a<span></span>b")).toEqual([{ type: "text", text: "ab" }]);
+  });
+
+  test("unwraps presentational wrappers, keeping unwrapped siblings separate", () => {
+    // Text spliced in via unwrap (push(...children)) is not coalesced at
+    // the seam; only direct adjacent text children merge.
+    expect(walk("<span>x</span><font>y</font>")).toEqual([
+      { type: "text", text: "x" },
+      { type: "text", text: "y" },
+    ]);
+  });
+
+  test("sanitizeHref drops unsafe links to their text", () => {
+    const options: WalkInlinesOptions = {
+      sanitizeHref: (href) => (href.startsWith("https:") ? href : undefined),
+    };
+    expect(walk("<a href='javascript:alert(1)'>x</a>", options)).toEqual([
+      { type: "text", text: "x" },
+    ]);
+    expect(walk("<a href='https://ok.test'>x</a>", options)).toEqual([
+      {
+        type: "link",
+        href: "https://ok.test",
+        children: [{ type: "text", text: "x" }],
+      },
+    ]);
+  });
+
+  test("parseImgAlt emits alt text only when enabled", () => {
+    expect(walk("<img alt='Header'>", { parseImgAlt: true })).toEqual([
+      { type: "text", text: "Header" },
+    ]);
+    expect(walk("<img alt='Header'>")).toEqual([]);
+  });
+
+  test("span declarations cascade before emphasis and spacer classification", () => {
+    for (const style of [
+      "FONT-WEIGHT : 650 ; FONT-STYLE : OBLIQUE",
+      "font-weight:normal; font-weight:bold; font-style:normal; font-style:italic",
+      "font-weight:bold ! IMPORTANT; font-weight:normal; font-style:italic!important; font-style:normal",
+    ]) {
+      expect(
+        walk(`<span style="${style}">x</span>`, { parseSpanStyle: true }),
+      ).toEqual([
+        {
+          type: "bold",
+          children: [
+            { type: "italic", children: [{ type: "text", text: "x" }] },
+          ],
+        },
+      ]);
+    }
+    expect(
+      walk(
+        '<span style="font-weight:bold; font-weight:normal; font-style:italic; font-style:normal">x</span>',
+        { parseSpanStyle: true },
+      ),
+    ).toEqual([{ type: "text", text: "x" }]);
+    for (const style of [
+      "-AW-IMPORT : SPACES",
+      "DISPLAY : INLINE-BLOCK !important; display:block",
+    ]) {
+      expect(
+        walk(`<span style="${style}"> </span>`, { parseSpanStyle: true }),
+      ).toEqual([{ type: "text", text: ASPOSE_SPACER_GAP }]);
+    }
+    expect(
+      walk('<span style="display:inline-block; display:block"> </span>', {
+        parseSpanStyle: true,
+      }),
+    ).toEqual([{ type: "text", text: " " }]);
+  });
+
+  test("parseSpanStyle reads emphasis and turns spacer spans into a gap", () => {
+    expect(
+      walk("<span style='font-weight:bold'>x</span>", { parseSpanStyle: true }),
+    ).toEqual([{ type: "bold", children: [{ type: "text", text: "x" }] }]);
+    for (const spacer of [
+      "<span style='-aw-import:spaces'>&nbsp;&nbsp;&nbsp;</span>",
+      "<span style='-aw-import:ignore'>   </span>",
+      "<span style='display:inline-block; width:36pt'></span>",
+    ]) {
+      expect(walk(spacer, { parseSpanStyle: true })).toEqual([
+        { type: "text", text: ASPOSE_SPACER_GAP },
+      ]);
+    }
+  });
+
+  test("a spacer-styled span holding an image keeps the image's alt text", () => {
+    const span =
+      '<span style="display:inline flow-root"><img alt="Figure"></span>';
+    expect(walk(span, { parseSpanStyle: true, parseImgAlt: true })).toEqual([
+      { type: "text", text: "Figure" },
+    ]);
+    // Without alt text to read, the span is still the gap it lays out.
+    expect(
+      walk('<span style="display:inline-block"><img alt=" "></span>', {
+        parseSpanStyle: true,
+        parseImgAlt: true,
+      }),
+    ).toEqual([{ type: "text", text: ASPOSE_SPACER_GAP }]);
+  });
+
+  test("anonymization spans mark text and coalesce", () => {
+    expect(walk("<span class='anon-block'>a<span></span>b</span>")).toEqual([
+      { type: "text", text: "ab", anonymized: true },
+    ]);
+  });
+
+  test("pageAnchor turns the elements it answers for into zero-width anchors", () => {
+    const html =
+      "Shrin<span class='page' data-page='114'>*114</span>ers <b>and</b>";
+    const options: WalkInlinesOptions = {
+      pageAnchor: (element) => {
+        const label = element.attribs["data-page"];
+        return label === undefined ? undefined : { type: "page-anchor", label };
+      },
+    };
+    expect(walk(html, options)).toEqual([
+      { type: "text", text: "Shrin" },
+      { type: "page-anchor", label: "114" },
+      { type: "text", text: "ers " },
+      { type: "bold", children: [{ type: "text", text: "and" }] },
+    ]);
+    // Without the hook the same markup keeps its printed label as text, as
+    // every existing parser reads it.
+    expect(inlinesToPlainText(walk(html))).toBe("Shrin*114ers and");
+  });
+
+  test("page markers retain their boundary whitespace without separating split words", () => {
+    for (const before of ["", " ", "\n", "\u00a0"]) {
+      for (const after of ["", " ", "\n", "\u00a0"]) {
+        const inlines = walk(`left<span>${before}*2${after}</span>right`, {
+          pageAnchor: () => ({ type: "page-anchor", label: "2" }),
+        });
+        expect(inlinesToPlainText(inlines)).toBe(`left${before}${after}right`);
+      }
+    }
+  });
+
+  test("keeps the page boundary space in a recorded opinion heading", () => {
+    const html = readFileSync(
+      new URL(
+        "../../../apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/__fixtures__/html/heading-4696496-discussion-ii.html",
+        import.meta.url,
+      ),
+      "utf-8",
+    );
+    const $ = load(html);
+    const inlines = walkInlines($, $("h").first(), {
+      pageAnchor: (element) =>
+        element.attribs["number"] === "6"
+          ? { type: "page-anchor", label: "6" }
+          : undefined,
+    });
+    expect(inlines).toEqual([
+      { type: "page-anchor", label: "6" },
+      { type: "text", text: "  II. DISCUSSION" },
+    ]);
+  });
+
+  test("non-anonymized and anonymized text do not merge together", () => {
+    const inlines = walk("plain<span class='anon-block'>secret</span>");
+    expect(inlines).toEqual([
+      { type: "text", text: "plain" },
+      { type: "text", text: "secret", anonymized: true },
+    ]);
+  });
+});
+
+describe("stripInlinePrefix", () => {
+  test("strips a leading prefix and trims the first text node", () => {
+    const inlines: Inline[] = [{ type: "text", text: "1. Hello" }];
+    expect(stripInlinePrefix(inlines, 3)).toEqual([
+      { type: "text", text: "Hello" },
+    ]);
+  });
+
+  test("strips into a nested formatting node", () => {
+    const inlines: Inline[] = [
+      { type: "bold", children: [{ type: "text", text: "12" }] },
+      { type: "text", text: "34" },
+    ];
+    expect(stripInlinePrefix(inlines, 1)).toEqual([
+      { type: "bold", children: [{ type: "text", text: "2" }] },
+      { type: "text", text: "34" },
+    ]);
+  });
+
+  test("invariant: stripping N chars equals the plain text minus that prefix", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "Hello " },
+      { type: "bold", children: [{ type: "text", text: "World" }] },
+    ];
+    const stripped = stripInlinePrefix(inlines, "Hello ".length);
+    expect(inlinesToPlainText(stripped)).toBe("World");
+  });
+
+  test("preserves the anonymized flag when slicing a text node", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "1. Secret", anonymized: true },
+    ];
+    expect(stripInlinePrefix(inlines, 3)).toEqual([
+      { type: "text", text: "Secret", anonymized: true },
+    ]);
+  });
+
+  test("preserves the anonymized flag through the leading-whitespace trim", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "12 Secret", anonymized: true },
+    ];
+    expect(stripInlinePrefix(inlines, 2)).toEqual([
+      { type: "text", text: "Secret", anonymized: true },
+    ]);
+  });
+});

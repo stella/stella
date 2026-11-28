@@ -4,7 +4,6 @@ import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteTaskParamsSchema = workspaceParams({
@@ -29,6 +28,11 @@ const deleteTask = createSafeHandler(
     realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "delete_task" },
     params: deleteTaskParamsSchema,
+    aggregateMutation: {
+      type: "independent",
+      reason:
+        "Deletes one task through the matter's entity delete, which serializes on the matter's own advisory lock and locks the matter row before it writes; it owns no registered aggregate.",
+    },
   },
   async function* ({ params, recordAuditEvent, safeDb, session, workspaceId }) {
     const task = yield* Result.await(
@@ -61,11 +65,5 @@ const deleteTask = createSafeHandler(
     });
   },
 );
-
-declareAggregateMutation(deleteTask, {
-  type: "independent",
-  reason:
-    "Deletes one task through the matter's entity delete, which serializes on the matter's own advisory lock and locks the matter row before it writes; it owns no registered aggregate.",
-});
 
 export default deleteTask;

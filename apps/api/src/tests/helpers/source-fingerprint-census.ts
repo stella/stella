@@ -12,18 +12,18 @@
  * suite using this restores the original in an `afterEach`.
  */
 
-import { sha256Hex } from "@stll/sha256/node";
-
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
-import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
-import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { sourceFingerprint } from "@stll/case-law-ingestion-core/source-fingerprint";
+import { sha256Hex } from "@stll/sha256/node";
+
+import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
+import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import {
   atFindokFixture,
   atRisFixture,

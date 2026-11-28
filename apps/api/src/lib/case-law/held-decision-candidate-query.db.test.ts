@@ -5,6 +5,12 @@ import * as v from "valibot";
 
 import { directoryCourtIdentities } from "@stll/api-contract/court-identity";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@stll/case-law-ingestion-core/decision-text";
+import type { RawIngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { EMPTY_AST } from "@stll/legal-ast/document-types";
 import { propertyTestTimeout } from "@stll/property-testing";
@@ -21,17 +27,11 @@ import { matchHostDecisionsTx } from "@/api/handlers/case-law/ingestion/pipeline
 import { createSafeId } from "@/api/lib/branded-types";
 import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
 import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import {
   heldDecisionEcliIdentity,
   readHeldDecisionCandidates,
 } from "@/api/lib/case-law/held-decision-candidate-query";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import { HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX } from "@/api/lib/legal-search/held-decision-attachment-values";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   createIngestionRoleScopedDb,
   createTestPglite,

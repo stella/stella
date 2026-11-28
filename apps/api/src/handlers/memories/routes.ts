@@ -5,7 +5,6 @@ import listMemories from "@/api/handlers/memories/list";
 import updateMemory from "@/api/handlers/memories/update";
 import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
@@ -21,8 +20,8 @@ export const memoriesRoute = routes(
   },
   {
     prefix: "/v1/memories",
+    deployment: { type: "flag", flag: "FEATURE_AI_MEMORY" },
     middleware: [
-      deploymentFeatureGate("FEATURE_AI_MEMORY"),
       featureAccessGate(AI_MEMORY_FEATURE_ID),
       rateLimit(createStandardApiRateLimitOptions()),
     ],

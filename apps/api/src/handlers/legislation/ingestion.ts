@@ -8,6 +8,12 @@ import {
   LEGISLATION_IDENTITY_MODES,
 } from "@stll/api-contract/legislation-expression";
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
+import {
+  ADAPTER_TIMEOUT,
+  MAX_CYCLE_MS,
+  MAX_SYNC_PAGES,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { SliceCoverage } from "@stll/case-law-ingestion-core/ingestion-types";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -46,12 +52,6 @@ import {
   canStartCyclePage,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
-import {
-  ADAPTER_TIMEOUT,
-  MAX_CYCLE_MS,
-  MAX_SYNC_PAGES,
-} from "@/api/lib/legal-search/ingestion-constants";
-import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
 import { syncLegislationAmendmentsTx } from "@/api/lib/legal-search/legislation-amendments";
 import { typedLegislationClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";

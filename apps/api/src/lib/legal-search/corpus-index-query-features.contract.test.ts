@@ -9,6 +9,9 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+import { stemCorpusText } from "@stll/legal-morphology/stem-text";
+
 import { envBase } from "@/api/env-base";
 import {
   CorpusIndexError,
@@ -26,8 +29,6 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { corpusYearRanges } from "@/api/lib/legal-search/corpus-index-search-facets";
 import { foldCorpusTerm } from "@/api/lib/legal-search/corpus-passage-highlight";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 import { LIMITS } from "@/api/lib/limits";
 
 // Opt-in like the existing engine suites; record build identity with every

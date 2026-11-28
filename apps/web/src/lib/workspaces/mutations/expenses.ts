@@ -1,5 +1,3 @@
-import { useMutation } from "@tanstack/react-query";
-
 import type { ExpenseCategory } from "@stll/api-contract";
 
 import { getTranslator } from "@/i18n/translator";
@@ -10,6 +8,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
+import { useResourceMutation } from "@/lib/workspace-realtime";
 
 type CreateExpenseVars = {
   workspaceId: string;
@@ -74,7 +73,8 @@ type UpdateExpenseVars = {
 export const useUpdateExpense = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: { mutation: "updateExpense" },
     mutationFn: async ({ workspaceId, ...body }: UpdateExpenseVars) => {
       const { id, matterId, ...restBody } = body;
       const response = await api
@@ -107,7 +107,8 @@ type DeleteExpenseVars = {
 export const useDeleteExpense = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useResourceMutation({
+    resource: { mutation: "deleteExpense" },
     mutationFn: async ({ workspaceId, id }: DeleteExpenseVars) => {
       const response = await api
         .expenses({ workspaceId: toSafeId<"workspace">(workspaceId) })

@@ -8,7 +8,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { probeOidcDiscovery } from "@/api/lib/auth/sso-discovery";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapOidcDiscoveryError, mapSsoManagementError } from "./sso-error-map";
 import { ssoProviderUrls } from "./sso-urls";
@@ -19,6 +18,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: createOidcSsoProviderBodySchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Provider uniqueness is enforced by unique indexes on sso_provider.",
+  },
 } satisfies HandlerConfig;
 
 const createOrganizationSsoProviderHandler = createSafeRootHandler(
@@ -70,10 +74,5 @@ const createOrganizationSsoProviderHandler = createSafeRootHandler(
     return Result.ok(created.value);
   },
 );
-
-declareAggregateMutation(createOrganizationSsoProviderHandler, {
-  type: "independent",
-  reason: "Provider uniqueness is enforced by unique indexes on sso_provider.",
-});
 
 export default createOrganizationSsoProviderHandler;

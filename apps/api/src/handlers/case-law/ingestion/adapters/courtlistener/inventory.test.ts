@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
 
 import {
   COURTLISTENER_SOURCE_FIELD_INVENTORY,

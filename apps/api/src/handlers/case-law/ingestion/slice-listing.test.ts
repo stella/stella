@@ -1,17 +1,18 @@
 import { panic, Result } from "better-result";
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
 
+import type {
+  ReconciliationListingItem,
+  ReconciliationSlicePageOptions,
+  SourceReconciliation,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
   SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type {
-  ReconciliationListingItem,
-  ReconciliationSlicePageOptions,
-  SourceReconciliation,
-} from "@/api/lib/legal-search/ingestion-types";
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {

@@ -1,5 +1,10 @@
 import { panic, Result } from "better-result";
 
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  MAX_CYCLE_MS,
+} from "@stll/case-law-ingestion-core/case-law-consts";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { handlerErrorContext } from "@stll/errors/exception-context";
 import { withExceptionScope } from "@stll/errors/exception-scope-context";
@@ -41,11 +46,6 @@ import {
   countPendingCitations,
   tryResolveCitationBatch as tryResolveCitationBatchInTransaction,
 } from "@/api/handlers/case-law/citation-resolution";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-  MAX_CYCLE_MS,
-} from "@/api/handlers/case-law/consts";
 import {
   getAdapter,
   listAdapters,

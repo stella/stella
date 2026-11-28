@@ -75,6 +75,8 @@ export type MountedRoute = {
   gateFlags: readonly string[];
   /** Behind the local-development gate: absent outside an open runtime. */
   localDevelopment: boolean;
+  /** Declared always-on on the route builder (`deployment: { type: "always-on", reason }`). */
+  alwaysOnReason?: string | undefined;
   /** The catalog capability the route's definition is, if it is one. */
   capability: string | undefined;
 };
@@ -537,7 +539,15 @@ const scanRoutes = (
     for (const prefix of alwaysOn) {
       usedPrefixes.add(prefix);
     }
-    if (!gated && capabilityFlag === undefined && alwaysOn.length === 0) {
+    const declaredAlwaysOn =
+      mounted.alwaysOnReason !== undefined &&
+      mounted.alwaysOnReason.trim().length > 0;
+    if (
+      !gated &&
+      capabilityFlag === undefined &&
+      alwaysOn.length === 0 &&
+      !declaredAlwaysOn
+    ) {
       scan.findings.push({ kind: "unclassified-route", route });
     }
   }

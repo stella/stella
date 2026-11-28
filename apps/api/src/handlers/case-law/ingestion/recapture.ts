@@ -22,7 +22,7 @@ import type {
   SourceReconciliation,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 
 type ReparseRefusal = Exclude<StoredRawReparseOutcome, { type: "parsed" }>;
 

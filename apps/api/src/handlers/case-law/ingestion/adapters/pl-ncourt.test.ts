@@ -21,6 +21,16 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import { DECISION_SUPPLEMENT_KIND } from "@stll/case-law-ingestion-core/decision-supplement-kind";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
 import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 import { readPlNcourtContent } from "@stll/case-law-parsers/pl-ncourt";
@@ -62,17 +72,7 @@ import type {
   PlNcourtComponent,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
-import {
-  decodeSourceRawEnvelope,
-  PUBLISHER_REQUEST,
-} from "@/api/lib/legal-search/ingestion-types";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import {
   resetLogSinkForTesting,
   setLogSinkForTesting,

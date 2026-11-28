@@ -7,6 +7,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import { PARSER_VERSIONS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   headMatterPrecedesBody,
   withUniqueBlockIdentities,
@@ -15,8 +17,6 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { loadParserFingerprint } from "@/api/handlers/case-law/ingestion/adapters/replay-parser-fingerprints";
-import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";

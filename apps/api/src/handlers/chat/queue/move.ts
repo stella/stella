@@ -16,7 +16,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -28,6 +27,10 @@ const config = {
     "or to the end with `beforeId: null`.",
   params: chatQueuedMessageParams,
   body: v.object({ beforeId: v.nullable(resourceIdSchema("chatMessage")) }),
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 const moveQueuedChatMessage = createSafeRootHandler(
@@ -74,9 +77,5 @@ const moveQueuedChatMessage = createSafeRootHandler(
 
 // Every queue change locks the member's thread first, the row its turns
 // lock, and writes only that thread's queue.
-declareAggregateMutation(moveQueuedChatMessage, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default moveQueuedChatMessage;

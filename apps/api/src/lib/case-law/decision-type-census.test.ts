@@ -22,6 +22,10 @@ import {
   DECISION_TYPE_KIND_OTHER,
   DECISION_TYPE_KINDS,
 } from "@stll/api-contract/case-law-decision-types";
+import {
+  ADAPTER_MANIFESTS,
+  IMPORT_SOURCE_MANIFESTS,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
 
 import {
   CZ_UOHS_PRINTED_DECISION_TYPES,
@@ -34,10 +38,6 @@ import {
   readDecisionType,
   STATED_DECISION_TYPE_KINDS,
 } from "@/api/lib/case-law/decision-type-kind";
-import {
-  ADAPTER_MANIFESTS,
-  IMPORT_SOURCE_MANIFESTS,
-} from "@/api/lib/legal-search/adapter-manifest";
 
 type ValuesByJurisdiction = Readonly<Record<string, readonly string[]>>;
 

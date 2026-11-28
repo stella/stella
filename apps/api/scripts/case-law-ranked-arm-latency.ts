@@ -28,6 +28,13 @@
 import { panic } from "better-result";
 import { parseArgs } from "node:util";
 
+import { functionWordsFor } from "@stll/legal-morphology/function-words";
+import {
+  MORPHOLOGY_LANGUAGES,
+  type MorphologyLanguage,
+  stemLegalTerm,
+} from "@stll/legal-morphology/stem";
+
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   partitionCorpusFunctionWords,
@@ -39,12 +46,6 @@ import {
   rankedDecisionQuery,
   type RankedDecisionWord,
 } from "@/api/lib/legal-search/corpus-ranked-decision-query";
-import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
-import {
-  MORPHOLOGY_LANGUAGES,
-  type MorphologyLanguage,
-  stemLegalTerm,
-} from "@/api/lib/legal-search/morphology/stem";
 
 const { values } = parseArgs({
   options: {

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { assertProperty } from "@stll/property-testing";
 
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
@@ -19,7 +20,6 @@ import {
   fitsDecisionSearchCandidateRow,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const decision = plainTextIngestionResult({
   caseNumber: "reference",

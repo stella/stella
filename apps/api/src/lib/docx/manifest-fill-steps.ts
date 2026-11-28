@@ -17,6 +17,19 @@
  * null when everything passed.
  */
 
+import { checkArrayBounds } from "@stll/docx-engine/array-bounds";
+import { CONDITION_RAW_VALUES } from "@stll/docx-engine/block-directives";
+import {
+  applyDateFields,
+  normalizeDateFieldValue,
+} from "@stll/docx-engine/date-fields";
+import { checkDependentFields } from "@stll/docx-engine/dependent-fields";
+import { applyFormulaFields } from "@stll/docx-engine/formula-fields";
+import {
+  mapRepeatablePath,
+  readRowSubPath,
+} from "@stll/docx-engine/repeatable-paths";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import { resolvePath } from "@stll/template-conditions";
 
 import type { BindingContext } from "@/api/lib/template-binding/apply-source-fields";
@@ -25,14 +38,7 @@ import {
   EMPTY_BINDING_CONTEXT,
 } from "@/api/lib/template-binding/apply-source-fields";
 
-import { checkArrayBounds } from "./array-bounds";
-import { CONDITION_RAW_VALUES } from "./block-directives";
-import { applyDateFields, normalizeDateFieldValue } from "./date-fields";
-import { checkDependentFields } from "./dependent-fields";
-import { applyFormulaFields } from "./formula-fields";
 import { applyLookupFields, type LookupResolver } from "./lookup-fields";
-import { mapRepeatablePath, readRowSubPath } from "./repeatable-paths";
-import type { FieldMeta } from "./types";
 
 /**
  * Capture each date field's raw ISO value (the submitted `YYYY-MM-DD`, still

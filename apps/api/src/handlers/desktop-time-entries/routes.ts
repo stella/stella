@@ -1,8 +1,4 @@
 import { mount, routes } from "@/api/http/route";
-import {
-  deploymentFeatureGate,
-  deploymentFeatureGateExcept,
-} from "@/api/lib/deployment-feature-route";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
@@ -28,7 +24,7 @@ export const desktopTimeEntriesRoute = mount(
         "/billing-drafts/settings": { GET: readBillingDraftSettings },
         "/billing-drafts": { POST: billingDrafts },
       },
-      { middleware: [deploymentFeatureGate("FEATURE_TIME_BILLING")] },
+      { deployment: { type: "flag", flag: "FEATURE_TIME_BILLING" } },
     ),
     // A consent withdrawal stays reachable whatever the deployment flag says;
     // with the flag off every other request, a malformed one included,
@@ -37,12 +33,11 @@ export const desktopTimeEntriesRoute = mount(
     routes(
       { "/billing-drafts/settings": { PUT: updateBillingDraftSettings } },
       {
-        middleware: [
-          deploymentFeatureGateExcept(
-            "FEATURE_TIME_BILLING",
-            consentWithdrawalException,
-          ),
-        ],
+        deployment: {
+          type: "flag-except",
+          flag: "FEATURE_TIME_BILLING",
+          exception: consentWithdrawalException,
+        },
       },
     ),
     routes({

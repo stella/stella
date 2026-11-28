@@ -1,0 +1,96 @@
+import { Result } from "better-result";
+import { describe, expect, it } from "bun:test";
+
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@stll/case-law-parsers/at-findok";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+
+import { PARSER_FIXTURES_DIR } from "./parser-fixtures-dir";
+
+const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
+
+const fixture = async (): Promise<string> =>
+  await Bun.file(new URL("at-findok-bfg-2026.xml", PARSER_FIXTURES_DIR)).text();
+
+describe("Austrian Findok XML parser", () => {
+  it("preserves the embedded decision structure and official metadata", async () => {
+    const parsed = parseFindokDecisionXml({
+      caseNumber: "RV/7500368/2026",
+      court: "BFG",
+      decisionDate: "2026-07-14",
+      decisionType: "bescheidbeschwerde - einzel - erkenntnis",
+      sourceDocumentId: "b68202a0-55e4-4dea-9e93-971f0b71ae32",
+      sourceUrl: "https://findok.bmf.gv.at/findok/iwg/152/152257/152257.1.pdf",
+      xml: await fixture(),
+    }).unwrap();
+
+    expect(parsed.ecli).toBe("ECLI:AT:BFG:2026:RV.7500368.2026");
+    expect(parsed.keywords).toEqual(["Verwaltungsstrafsachen Wien"]);
+    expect(parsed.statutes).toHaveLength(2);
+    expect(parsed.documentAst.blocks.at(0)).toMatchObject({
+      type: "heading",
+      role: "decision-title",
+      plainText: "IM NAMEN DER REPUBLIK",
+    });
+    expect(parsed.fulltext).toContain("Entscheidungsgründe");
+    expect(parsed.fulltext).toContain("Rechtliche Würdigung");
+  });
+
+  it("rejects an envelope without decision XHTML", () => {
+    const parsed = parseFindokDecisionXml({
+      caseNumber: "RV/7500368/2026",
+      court: "BFG",
+      decisionDate: "2026-07-14",
+      decisionType: "erkenntnis",
+      sourceDocumentId: "b68202a0-55e4-4dea-9e93-971f0b71ae32",
+      sourceUrl: "https://findok.bmf.gv.at/",
+      xml: "<Segmente />",
+    });
+
+    expect(Result.isError(parsed)).toBe(true);
+    if (Result.isError(parsed)) {
+      expect(parsed.error.message).toContain("no embedded decision XHTML");
+    }
+  });
+});
+
+it("excludes script and style text from embedded XHTML", () => {
+  const parsed = parseFindokDecisionXml({
+    caseNumber: "RV/1/2026",
+    court: "BFG",
+    decisionDate: "2026-07-14",
+    decisionType: "erkenntnis",
+    sourceDocumentId: "test",
+    sourceUrl: "https://findok.bmf.gv.at/",
+    xml: "<Segmente><Segk><txt><![CDATA[<body><h1>Title</h1><script>script-only</script><style>style-only</style><p>Visible<script>nested-script</script><style>nested-style</style> decision</p></body>]]></txt></Segk></Segmente>",
+  }).unwrap();
+  expect(parsed.documentAst.blocks.map((block) => block.plainText)).toEqual([
+    "Title",
+    "Visible decision",
+  ]);
+  expect(parsed.fulltext).toBe("Title\n\nVisible decision");
+});
+
+it("keeps a line break between the sentences it separates", async () => {
+  const parsed = parseFindokDecisionXml({
+    caseNumber: "RV/2100288/2018",
+    court: "BFG",
+    decisionDate: "2019-08-13",
+    decisionType: "erkenntnis",
+    sourceDocumentId: "test",
+    sourceUrl: "https://findok.bmf.gv.at/",
+    xml: await Bun.file(
+      new URL("at-findok-bfg-umbrueche.xml", PARSER_FIXTURES_DIR),
+    ).text(),
+  }).unwrap();
+
+  expect(parsed.textFidelity).toBeUndefined();
+  expect(parsed.fulltext).toContain("Sitz haben.\nMit Bescheid vom25.6.2015");
+  expect(parsed.fulltext).not.toMatch(/\p{Ll}{2}[.;:]\p{Lu}/u);
+  expect(
+    parsed.documentAst.blocks.some(
+      (block) =>
+        block.type === "paragraph" &&
+        block.inlines.some((inline) => inline.type === "line-break"),
+    ),
+  ).toBe(true);
+});

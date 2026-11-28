@@ -15,6 +15,20 @@ import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   caseLawSourceLanguagesOf,
 } from "@stll/api-contract/case-law-source-languages";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { withDocumentStageWindow } from "@stll/case-law-ingestion-core/document-stage-observation";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
 import { parseFormexBibliography } from "@stll/case-law-parsers/eu-ecj-formex-bibliography";
 import { parseEcjNotice } from "@stll/case-law-parsers/eu-ecj-notice";
 import { ZipArchive } from "@stll/docx-core/zip";
@@ -31,7 +45,6 @@ import {
   caseLawSources,
   corpusIndexGenerations,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   buildDecision,
   buildListingQuery,
@@ -50,7 +63,6 @@ import {
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { createSafeId } from "@/api/lib/branded-types";
 import { splitStoredDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -58,22 +70,10 @@ import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-mani
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
-import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import {
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";

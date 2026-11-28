@@ -31,6 +31,7 @@ import {
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import type { DecisionSheetSource } from "@stll/api-contract/decision-query-intent";
+import { splitCaseReference } from "@stll/case-law-ingestion-core/case-number";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
@@ -41,7 +42,6 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   holderAnswersSheetSql,
   SQL_READ_SHEET_SOURCES,

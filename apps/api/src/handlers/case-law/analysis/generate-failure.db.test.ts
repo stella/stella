@@ -22,6 +22,7 @@ import {
 } from "@stll/ai-catalog";
 import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import type {
   AnalysisGenerating,
   DecisionAnalysis,
@@ -48,7 +49,6 @@ import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
 import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
 import { outputTokensWithinModelLimit } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";

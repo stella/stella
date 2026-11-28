@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  isMorphologyDictionaryContentHash,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
+  serializeExpansionDictionaryIdentity,
+} from "@stll/legal-morphology/dictionary";
+import { FUNCTION_WORDS } from "@stll/legal-morphology/function-words";
+
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 import {
   LEGAL_ALTERNATIVES_LIMITS,
@@ -9,12 +16,6 @@ import {
   tLegalAlternatives,
   withLegalAlternativesIdentity,
 } from "@/api/lib/legal-search/legal-alternatives";
-import {
-  isMorphologyDictionaryContentHash,
-  NO_EXPANSION_DICTIONARY_IDENTITY,
-  serializeExpansionDictionaryIdentity,
-} from "@/api/lib/legal-search/morphology/dictionary";
-import { FUNCTION_WORDS } from "@/api/lib/legal-search/morphology/function-words";
 
 const CZECH = { functionWords: FUNCTION_WORDS.cs };
 

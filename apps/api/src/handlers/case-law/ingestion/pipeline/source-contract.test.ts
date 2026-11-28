@@ -1,14 +1,15 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
-import { sourceContractForAdapter } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import {
   ADAPTER_MANIFESTS,
   IMPORT_SOURCE_MANIFESTS,
   STATED_ECLI_IDENTITY,
-} from "@/api/lib/legal-search/adapter-manifest";
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+
+import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
+import { sourceContractForAdapter } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 
 const declaredEcliIdentity = (
   registration: ReturnType<typeof listSourceRegistrations>[number],

@@ -21,7 +21,6 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 const refineSearchEndpoint = createSafeRootHandler(
   {
@@ -180,7 +179,7 @@ export const searchRoute = mount(
     // The public corpus, behind the same gate as every other case-law route.
     routes(
       { "/case-law": { POST: searchCaseLawSection } },
-      { middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")] },
+      { deployment: { type: "flag", flag: "FEATURE_PUBLIC_LAW" } },
     ),
   ],
   { prefix: "/search" },

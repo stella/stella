@@ -5,7 +5,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { linkConflictCheckMatter } from "@/api/lib/conflict-check/operation";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -32,6 +31,11 @@ const config = {
     checkId: resourceIdSchema("conflictCheck"),
     workspaceId: resourceIdSchema("workspace"),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "One link row per check, keyed by the check; the upsert converges on the last matter linked.",
+  },
 } satisfies HandlerConfig;
 
 const linkConflictCheckMatterHandler = createSafeRootHandler(
@@ -60,11 +64,5 @@ const linkConflictCheckMatterHandler = createSafeRootHandler(
     return Result.ok(view);
   },
 );
-
-declareAggregateMutation(linkConflictCheckMatterHandler, {
-  type: "independent",
-  reason:
-    "One link row per check, keyed by the check; the upsert converges on the last matter linked.",
-});
 
 export default linkConflictCheckMatterHandler;

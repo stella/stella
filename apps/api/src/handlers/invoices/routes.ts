@@ -20,7 +20,6 @@ import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { mount, routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 const gatedInvoicesRoute = routes(
   {
@@ -48,10 +47,8 @@ const gatedInvoicesRoute = routes(
   },
   {
     prefix: "/invoices/:workspaceId",
-    middleware: [
-      deploymentFeatureGate("FEATURE_TIME_BILLING"),
-      featureAccessGate("time-billing"),
-    ],
+    deployment: { type: "flag", flag: "FEATURE_TIME_BILLING" },
+    middleware: [featureAccessGate("time-billing")],
   },
 );
 
@@ -62,10 +59,8 @@ export const invoiceSendsRoute = routes(
   },
   {
     prefix: "/invoices/:workspaceId",
-    middleware: [
-      deploymentFeatureGate("FEATURE_TIME_BILLING"),
-      featureAccessGate("invoice-links"),
-    ],
+    deployment: { type: "flag", flag: "FEATURE_TIME_BILLING" },
+    middleware: [featureAccessGate("invoice-links")],
   },
 );
 
@@ -77,7 +72,7 @@ export const invoiceSendManagementRoute = routes(
   },
   {
     prefix: "/invoices/:workspaceId",
-    middleware: [deploymentFeatureGate("FEATURE_TIME_BILLING")],
+    deployment: { type: "flag", flag: "FEATURE_TIME_BILLING" },
   },
 );
 

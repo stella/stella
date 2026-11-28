@@ -3,16 +3,17 @@ import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { PUBLISHER_REQUEST } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { databaseRelations } from "@/api/db/database-relations";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
-import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import {
   createIngestionRoleScopedDb,
   createTestPglite,

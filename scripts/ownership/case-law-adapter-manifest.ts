@@ -4,8 +4,8 @@ export default {
   id: "case-law-adapter-manifest",
   capability: "Case-law source declarations",
   owner: [
-    "apps/api/src/lib/legal-search/adapter-manifest.ts",
-    "apps/api/src/lib/case-law/ecli-court-codes.ts",
+    "packages/case-law-ingestion-core/src/adapter-manifest.ts",
+    "packages/case-law-ingestion-core/src/ecli-court-codes.ts",
   ],
   summary:
     "One total map binds every adapter key to its source name, jurisdiction, " +

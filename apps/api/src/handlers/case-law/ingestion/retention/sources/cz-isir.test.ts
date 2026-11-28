@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { encodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/ingestion-types";
+
 import { czIsirRetention } from "@/api/handlers/case-law/ingestion/retention/sources/cz-isir";
-import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 
 const project = async (sourceRaw: string) =>
   await czIsirRetention.project(sourceRaw);

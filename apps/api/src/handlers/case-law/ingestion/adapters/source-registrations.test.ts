@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   ADAPTER_KEYS,
   IMPORT_SOURCE_KEYS,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 
 import {
   getSourceRegistration,

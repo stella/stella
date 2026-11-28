@@ -10,6 +10,12 @@ import {
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import {
+  EMPTY_AST,
+  PUBLISHER_REQUEST,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { Temporal } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -20,7 +26,6 @@ import {
   legislationSources,
   relations,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { encodePlNsaCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
@@ -40,11 +45,6 @@ import {
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import {
-  EMPTY_AST,
-  PUBLISHER_REQUEST,
-} from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   createIngestionRoleScopedDb,
   createTestPglite,

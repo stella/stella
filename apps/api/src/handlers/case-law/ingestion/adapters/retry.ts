@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 // parser-output-unchanged: [cz-ns] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
 // parser-output-unchanged: [cz-nss] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
@@ -48,6 +49,9 @@ import { panic, Result } from "better-result";
  * `publisher-policy.ts` never saw, and neither can forget to.
  */
 
+import { ADAPTER_TIMEOUT } from "@stll/case-law-ingestion-core/case-law-consts";
+import { observePublisherDocumentFetch } from "@stll/case-law-ingestion-core/document-stage-observation";
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
 // parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import type { FetchWithTimeoutInit } from "@stll/fetch";
@@ -55,7 +59,6 @@ import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagno
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
-import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
   deferPublisherGate,
@@ -64,8 +67,6 @@ import {
   reservePublisherGateSlot,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 

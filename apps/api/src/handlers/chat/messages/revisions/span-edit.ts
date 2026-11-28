@@ -31,7 +31,6 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -68,6 +67,11 @@ const config = {
       v.maxLength(CHAT_MESSAGE_EDIT_INSTRUCTION_MAX_LENGTH),
     ),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Produces a proposal without changing chat messages, revisions or threads; model usage is recorded by the shared usage ledger.",
+  },
 } satisfies HandlerConfig;
 
 type SpanGenerationOptions = Extract<
@@ -270,11 +274,5 @@ export const createProposeMessageSpanEdit = ({
   );
 
 const proposeMessageSpanEdit = createProposeMessageSpanEdit();
-
-declareAggregateMutation(proposeMessageSpanEdit, {
-  type: "independent",
-  reason:
-    "Produces a proposal without changing chat messages, revisions or threads; model usage is recorded by the shared usage ledger.",
-});
 
 export default proposeMessageSpanEdit;

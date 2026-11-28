@@ -1,9 +1,10 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { corpusTokens } from "@stll/legal-morphology/corpus-tokens";
+
 import { foldCorpusTerm } from "@/api/lib/legal-search/corpus-passage-highlight";
 import type { CorpusPassageResult } from "@/api/lib/legal-search/corpus-passage-reader";
-import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import {
   searchHighlightMarks,

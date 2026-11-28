@@ -15,11 +15,11 @@
  */
 
 import { polishConstitutionalDocketKey } from "@stll/api-contract/decision-docket-grammar";
+import type { RawIngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 const CONSTITUTIONAL_TRIBUNAL = "trybunał konstytucyjny";
 

@@ -49,9 +49,9 @@
 
 import { panic } from "better-result";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,

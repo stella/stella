@@ -11,14 +11,14 @@ import { Result } from "better-result";
  * is written anywhere, and a fetch that fails leaves the stored document.
  */
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { czDecisionCourt } from "@stll/case-law-ingestion-core/cz-ecli-courts";
 import { parseNssDecisionHtml } from "@stll/case-law-parsers/cz-nss";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { envBase } from "@/api/env-base";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isLocalDevOpen } from "@/api/runtime-mode";

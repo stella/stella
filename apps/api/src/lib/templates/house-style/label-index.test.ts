@@ -198,6 +198,40 @@ describe("buildLabelIndex", () => {
     ]);
   });
 
+  test("roman parts of a pack over bare-number articles head no article", () => {
+    const part = (label: string, text: string) => ({
+      ...heading(text),
+      label,
+      numId: 5,
+    });
+    const article = (label: string, text: string) => ({
+      text,
+      label,
+      styleName: "Level 1",
+      outlineLevel: 1,
+    });
+    const manifest = manifestOf([
+      part("III.", "Order Form"),
+      "The Buyer orders the Deliverables.",
+      part("IV.", "Short form Terms"),
+      article("1", "Definitions"),
+      numbered("1.1", "Terms have the meaning given."),
+      article("4", "The Supplier's obligations"),
+      numbered("4.1", "The Supplier must deliver."),
+      numbered("4.1.1", "on time;"),
+      numbered("4.1.1.1", "in accordance with the Specification."),
+      part("V.", "Annex – Processing Personal Data"),
+    ]);
+    expect(keysOf(manifest)).toEqual([
+      "article 1",
+      "clause 1/1",
+      "article 4",
+      "clause 4/1",
+      "clause 4/1.1",
+      "clause 4/1.1.1",
+    ]);
+  });
+
   test("deeper dotted levels nest under their clause", () => {
     const manifest = manifestOf([
       { ...heading("Services"), label: "1." },
@@ -551,6 +585,47 @@ describe("buildLabelIndex", () => {
     // The caption in front of the lines; not a sentence that opens with the
     // word, nor the word alone where no contents follow.
     expect([...contentsBlockIds]).toEqual(["p3", "p1", "p4"]);
+  });
+
+  test("the column heads over the source's contents go with its caption and lines", () => {
+    const manifest = manifestOf([
+      "AGREEMENT",
+      "Contents",
+      "Clause\tPage",
+      { text: "1. Scope\t2", styleName: "toc 1" },
+      { text: "2. Price\t3", styleName: "toc 1" },
+      "Clause\tPage",
+      { ...heading("Scope"), label: "1." },
+    ]);
+    const { contentsBlockIds } = buildLabelIndex(manifest);
+    // Column heads with no lines under them head nothing.
+    expect([...contentsBlockIds].toSorted()).toEqual(["p1", "p2", "p3", "p4"]);
+  });
+
+  test("a group caption between lines of the source's contents goes with them", () => {
+    const manifest = manifestOf([
+      "Contents",
+      { text: "1. Scope\t2", styleName: "toc 1" },
+      "Schedule",
+      { text: "1. Warranties\t12", styleName: "toc 4" },
+      "Section II",
+      "Contents",
+      { text: "A. General\t6", styleName: "toc 2" },
+      { text: "Part B", styleName: "heading 1" },
+      { text: "B. Price\t7", styleName: "toc 2" },
+    ]);
+    const { contentsBlockIds } = buildLabelIndex(manifest);
+    // Two lines between runs are a part of the document and the caption of
+    // the next contents, not a group of the first; nor is a heading.
+    expect([...contentsBlockIds].toSorted()).toEqual([
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p8",
+    ]);
   });
 
   test("an annex named in front of the first article is not the annex", () => {

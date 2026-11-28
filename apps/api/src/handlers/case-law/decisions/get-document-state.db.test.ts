@@ -12,8 +12,9 @@ import { panic } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decisionRecordQuery,
   readDecisionHandler,

@@ -2,15 +2,15 @@ import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { markupResidueIn } from "@stll/case-law-parsers/markup-residue";
 import { load } from "@stll/html";
 
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { SHELL_STEM } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
 
 setDefaultTimeout(30_000);
 

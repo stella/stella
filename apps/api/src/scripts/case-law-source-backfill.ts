@@ -14,6 +14,8 @@ import { Result } from "better-result";
  */
 import { eq } from "drizzle-orm";
 
+import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+import type { StoredRawReader } from "@stll/case-law-ingestion-core/ingestion-types";
 import { printError, sanitizeErrorForOutput } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -22,8 +24,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
-import type { StoredRawReader } from "@/api/lib/legal-search/ingestion-types";
 import { readS3ObjectIfPresent, refreshS3 } from "@/api/lib/s3";
 
 const BUDGET_PREFIX = "--budget=";

@@ -1,5 +1,8 @@
 import { panic, Result } from "better-result";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
+import { decodeSourceRawEnvelopeObjects } from "@stll/case-law-ingestion-core/ingestion-types";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import {
   assertReaderAcceptsAst,
   guardParser,
@@ -7,11 +10,8 @@ import {
 import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import type { ParserParityEntry } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
-import { decodeSourceRawEnvelopeObjects } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   euEcjFixture,
   huBhgyFixture,

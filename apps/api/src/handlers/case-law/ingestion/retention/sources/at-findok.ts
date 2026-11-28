@@ -1,3 +1,4 @@
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * The publisher's text of a Findok decision, read from its stored raw.
@@ -18,7 +19,6 @@ import {
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { htmlParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/html-paragraphs";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 /** The adapter's part name for the decision XML (a module constant there). */
 const DOCUMENT_XML_PART = "document-xml";

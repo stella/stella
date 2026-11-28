@@ -11,7 +11,6 @@ import {
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readCleanupVocabulary } from "@/api/lib/dictation/organization-vocabulary";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -136,45 +135,43 @@ export const createDictationCleanupEndpoint = ({
   readVocabulary,
   ...gate
 }: DictationCleanupEndpointOptions = {}) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        body: desktopDictationCleanupRequestSchema,
-        response: safePublicHandlerResponseSchemasWithStatusText(
-          desktopDictationCleanupResponseSchema,
-        ),
-      },
-      async function* (ctx) {
-        return yield* runDesktopDictationModelAction({
-          ctx,
-          modelTask: "short-text",
-          gate,
-          async *handler({ caller, actionSignal, modelAdmission }) {
-            const segments = yield* Result.await(
-              cleanUpDictation({
-                caller,
-                body: ctx.body,
-                modelAdmission,
-                actionSignal,
-                ...(generateObjectForTask === undefined
-                  ? {}
-                  : { generateObjectForTask }),
-                ...(readVocabulary === undefined ? {} : { readVocabulary }),
-              }),
-            );
-            return Result.ok(segments);
-          },
-        });
-      },
-    ),
+  createSafeBoundedPublicHandler(
     {
-      type: "independent",
-      reason:
-        "Returns transient typed text for one dictation and stores nothing; the action-admission lifecycle owns model usage accounting.",
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      body: desktopDictationCleanupRequestSchema,
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopDictationCleanupResponseSchema,
+      ),
+      aggregateMutation: {
+        type: "independent",
+        reason:
+          "Returns transient typed text for one dictation and stores nothing; the action-admission lifecycle owns model usage accounting.",
+      },
+    },
+    async function* (ctx) {
+      return yield* runDesktopDictationModelAction({
+        ctx,
+        modelTask: "short-text",
+        gate,
+        async *handler({ caller, actionSignal, modelAdmission }) {
+          const segments = yield* Result.await(
+            cleanUpDictation({
+              caller,
+              body: ctx.body,
+              modelAdmission,
+              actionSignal,
+              ...(generateObjectForTask === undefined
+                ? {}
+                : { generateObjectForTask }),
+              ...(readVocabulary === undefined ? {} : { readVocabulary }),
+            }),
+          );
+          return Result.ok(segments);
+        },
+      });
     },
   );
 

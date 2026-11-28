@@ -25,6 +25,16 @@ import { panic, Result, TaggedError } from "better-result";
  */
 import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
 
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  StoredRawReader,
+  StoredRawReparseOutcome,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
@@ -41,15 +51,6 @@ import { applyStoredDecisionBackfill } from "@/api/handlers/case-law/ingestion/p
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  StoredRawReader,
-  StoredRawReparseOutcome,
-} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** The decision type the court gives the rulings a dissent is filed against. */

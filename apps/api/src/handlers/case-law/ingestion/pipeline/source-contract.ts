@@ -1,6 +1,18 @@
 import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
+import {
+  ADAPTER_MANIFESTS,
+  IMPORT_SOURCE_MANIFESTS,
+  STATED_ECLI_IDENTITY,
+  type StatedEcliIdentity,
+} from "@stll/case-law-ingestion-core/adapter-manifest";
+import {
+  IMPORT_SOURCE_KEYS,
+  type ImportSourceKey,
+  SOURCE_FINGERPRINT_VERSIONS,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawSources } from "@/api/db/schema";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
@@ -10,20 +22,9 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  ADAPTER_MANIFESTS,
-  IMPORT_SOURCE_MANIFESTS,
-  STATED_ECLI_IDENTITY,
-  type StatedEcliIdentity,
-} from "@/api/lib/legal-search/adapter-manifest";
-import {
   type HeldDecisionAttachment,
   heldDecisionAttachmentForAdapter,
 } from "@/api/lib/legal-search/held-decision-attachment";
-import {
-  IMPORT_SOURCE_KEYS,
-  type ImportSourceKey,
-  SOURCE_FINGERPRINT_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { sourceRegistryMembership } from "@/api/lib/legal-search/source-registry-membership";
 
 /** What the pipeline reads off a source's declarations for each decision. */

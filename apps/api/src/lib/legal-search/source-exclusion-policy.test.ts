@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import {
   excludedSourceField,
   SOURCE_EXCLUSION_REASONS,
-} from "./ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 
 test("every allowed exclusion names its justification and evidence pointer", () => {
   for (const reason of SOURCE_EXCLUSION_REASONS) {

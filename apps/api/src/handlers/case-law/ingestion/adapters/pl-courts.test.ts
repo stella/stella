@@ -1,21 +1,11 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
-import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
-
-import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-  plCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
 /**
  * What this adapter makes of the payloads SAOS actually serves.
  *
@@ -29,8 +19,18 @@ import {
 import type {
   IngestionResult,
   SourceRawParts,
-} from "@/api/lib/legal-search/ingestion-types";
-import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { DECISION_JUDGE_ROLE } from "@stll/case-law-ingestion-core/judges-consts";
+import { rehydrateMetadataUrls } from "@stll/case-law-ingestion-core/metadata-urls";
+import { guardParser } from "@stll/case-law-parsers/parser-reader-guard";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
+
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+  plCourtsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   installRecordingAnalytics,

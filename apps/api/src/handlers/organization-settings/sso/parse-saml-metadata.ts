@@ -6,7 +6,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveSamlIdpMetadata } from "@/api/lib/auth/saml-metadata";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapSamlMetadataError } from "./sso-error-map";
 
@@ -16,6 +15,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: parseSamlMetadataBodySchema,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Read-only SAML metadata parser and fetch with no persisted mutation.",
+  },
 } satisfies HandlerConfig;
 
 const parseOrganizationSamlMetadataHandler = createSafeRootHandler(
@@ -30,11 +34,5 @@ const parseOrganizationSamlMetadataHandler = createSafeRootHandler(
     return Result.ok(value);
   },
 );
-
-declareAggregateMutation(parseOrganizationSamlMetadataHandler, {
-  type: "independent",
-  reason:
-    "Read-only SAML metadata parser and fetch with no persisted mutation.",
-});
 
 export default parseOrganizationSamlMetadataHandler;

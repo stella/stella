@@ -1,20 +1,20 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  excludedSourceSurface,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  SourceFieldDisposition,
+  SourceSurfaceDisposition,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { load } from "@stll/html";
 import type { Cheerio, CheerioAPI } from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import {
-  excludedSourceSurface,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  SourceFieldDisposition,
-  SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
 import { extractSoftLawPdfText } from "@/api/lib/legal-search/soft-law-document-text";
 import {

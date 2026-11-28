@@ -96,6 +96,24 @@ describe("inferTemplateProfile", () => {
     expect(inferTemplateProfile(unnamed).annexRoles).toBeUndefined();
   });
 
+  test("entries of a filled table of contents do not make their style the annex heading's", () => {
+    const template = contractTemplate();
+    // More contents entries name annexes than the sample has annex headings.
+    const entry = template.blocks.find(({ id }) => id === "p6");
+    if (entry === undefined) {
+      throw new Error("the sample has a contents entry");
+    }
+    const entries = ["p90", "p91"].map((id, index) => ({
+      ...entry,
+      id,
+      text: `Annex ${String(index + 2)}\t${String(index + 5)}`,
+    }));
+    const filled = { ...template, blocks: [...entries, ...template.blocks] };
+    expect(inferTemplateProfile(filled).roles.annexHeading).toMatchObject({
+      styleId: "Annex",
+    });
+  });
+
   test("reads unnumbered roles from style names and the sample text", () => {
     const { roles, annex, headings } = inferTemplateProfile(contractTemplate());
     expect(roles.title).toMatchObject({
@@ -232,6 +250,59 @@ describe("inferTemplateProfile", () => {
     expect(inferTemplateProfile(without).contentsStyles).toBeUndefined();
   });
 
+  test("a contents field that ends in the next heading's paragraph keeps that heading out of the contents", () => {
+    const template = contractTemplate();
+    const blocks = template.blocks.map((block) =>
+      block.id === "p7"
+        ? {
+            ...block,
+            text: "Definitions",
+            styleId: "Article",
+            styleName: "Heading article",
+          }
+        : block,
+    );
+    const tailed = { ...template, blocks };
+    const profile = inferTemplateProfile(tailed);
+    expect(profile.regions.contents).toEqual(["p4", "p5", "p6"]);
+    expect(profile.regions.filler).toContain("p7");
+    // The field kept without its last block is no field kept in part.
+    expect(validateTemplateProfile(profile, tailed)).toEqual([]);
+    // An empty last paragraph of the field stays with the contents.
+    expect(inferTemplateProfile(template).regions.contents).toEqual([
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+    ]);
+  });
+
+  test("a heading style that starts a page says so in the health", () => {
+    const template = contractTemplate();
+    const paged = {
+      ...template,
+      styles: template.styles.map((style) =>
+        style.styleId === "Article"
+          ? { ...style, pageBreakBefore: true }
+          : style,
+      ),
+    };
+    const profile = inferTemplateProfile(paged);
+    expect(profile.health).toContainEqual({
+      kind: "headingStartsPage",
+      role: "articleHeading",
+      styleId: "Article",
+    });
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    expect(
+      inferTemplateProfile(template).health?.some(
+        ({ kind }) => kind === "headingStartsPage",
+      ),
+    ).toBe(false);
+  });
+
   test("a table in front of the sample is kept; sample parties and signatures are slots", () => {
     const { regions, slots } = inferTemplateProfile(
       contractTemplate({ front: LETTERHEAD }),
@@ -239,6 +310,99 @@ describe("inferTemplateProfile", () => {
     expect(regions.keepBefore).toEqual(["t90"]);
     expect(slots.party).toEqual({ blockIds: ["p3"] });
     expect(slots.signature).toEqual({ blockIds: ["t13"] });
+  });
+
+  test("a filled document's prose, headings and tables below them are no letterhead", () => {
+    const prose = "The parties agree as follows. ".repeat(8);
+    const signatures = { id: "t95", cells: ["p96"] };
+    const signer = {
+      id: "p96",
+      text: "Signed for the Supplier",
+      styleId: "Normal",
+    };
+    // Prose in front of a later table: only the letterhead above it is kept.
+    const withProse = inferTemplateProfile(
+      contractTemplate({
+        front: [
+          ...LETTERHEAD,
+          { id: "p93", text: prose, styleId: "Normal" },
+          signatures,
+          signer,
+        ],
+      }),
+    );
+    expect(withProse.regions.keepBefore).toEqual(["t90"]);
+    // A heading the template writes in its article style, even without a
+    // number, starts the body as well.
+    const withHeading = inferTemplateProfile(
+      contractTemplate({
+        front: [
+          ...LETTERHEAD,
+          { id: "p93", text: "Definitions", styleId: "Article" },
+          signatures,
+          signer,
+        ],
+      }),
+    );
+    expect(withHeading.regions.keepBefore).toEqual(["t90"]);
+    expect(withHeading.regions.filler).toContain("t95");
+  });
+
+  test("a template that shows no heading or clause style in use says so in its health", () => {
+    const template = contractTemplate();
+    // A filled document: its styles carry no list, its numbers are typed.
+    const filled = {
+      ...template,
+      styles: template.styles.map((style) => ({ ...style, numPr: null })),
+      blocks: template.blocks.map((block) => ({
+        ...block,
+        label: null,
+        numbering: null,
+      })),
+    };
+    const profile = inferTemplateProfile(filled);
+    expect(profile.health?.at(0)).toEqual({
+      kind: "rolesNotRead",
+      roles: ["articleHeading", "clause1"],
+    });
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    expect(
+      inferTemplateProfile(template).health?.some(
+        ({ kind }) => kind === "rolesNotRead",
+      ),
+    ).toBe(false);
+  });
+
+  test("a template that ends with sections after its body's says so in its health", () => {
+    const template = contractTemplate();
+    // The signature table and the annex stand in a section of their own.
+    const sectioned = {
+      ...template,
+      blocks: template.blocks.map((block) =>
+        ["t13", "p14", "p15", "p16"].includes(block.id)
+          ? { ...block, sectionIndex: 1 }
+          : block,
+      ),
+    };
+    const profile = inferTemplateProfile(sectioned);
+    expect(profile.health).toContainEqual({
+      kind: "lastSectionNotBody",
+      bodySection: 0,
+      lastSection: 1,
+    });
+    // The output is built from the body's section.
+    expect(profile.bodySection).toBe(0);
+    expect(parseTemplateProfile(structuredClone(profile)).unwrap()).toEqual(
+      profile,
+    );
+    expect(
+      inferTemplateProfile(template).health?.some(
+        ({ kind }) => kind === "lastSectionNotBody",
+      ),
+    ).toBe(false);
+    expect(inferTemplateProfile(template).bodySection).toBeUndefined();
   });
 
   test("fields that prompt or change on open are frozen, the rest stay live", () => {

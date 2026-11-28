@@ -7,7 +7,6 @@ import previewNumberSeries from "@/api/handlers/number-series/preview";
 import updateNumberSeries from "@/api/handlers/number-series/update";
 import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const numberSeriesRoute = routes(
   {
@@ -19,9 +18,7 @@ export const numberSeriesRoute = routes(
   },
   {
     prefix: "/number-series",
-    middleware: [
-      deploymentFeatureGate("FEATURE_TIME_BILLING"),
-      featureAccessGate("time-billing"),
-    ],
+    deployment: { type: "flag", flag: "FEATURE_TIME_BILLING" },
+    middleware: [featureAccessGate("time-billing")],
   },
 );

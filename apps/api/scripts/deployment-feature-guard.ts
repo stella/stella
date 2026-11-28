@@ -500,19 +500,37 @@ const loadMountedRoutes = async (
     deploymentFeatureGateFlag,
     localDevelopmentGate,
   } = await import("../src/lib/deployment-feature-route");
-  return apiRoutes.map((entry) => ({
-    method: entry.method,
-    path: entry.path,
+  return apiRoutes.map((entry) => {
     // A gate with one admitted exception still stands for its flag.
-    gateFlags: entry.middleware.flatMap((middleware) => {
+    const middlewareFlags = entry.middleware.flatMap((middleware) => {
       const flag =
         deploymentFeatureGateFlag(middleware) ??
         deploymentFeatureGateExceptionFlag(middleware);
       return flag === undefined ? [] : [flag];
-    }),
-    localDevelopment: entry.middleware.includes(localDevelopmentGate),
-    capability: capabilityByDefinition.get(entry.definition),
-  }));
+    });
+    const deploymentFlag =
+      entry.deployment?.type === "flag" ||
+      entry.deployment?.type === "flag-except"
+        ? entry.deployment.flag
+        : undefined;
+    const gateFlags =
+      deploymentFlag === undefined || middlewareFlags.includes(deploymentFlag)
+        ? middlewareFlags
+        : [deploymentFlag, ...middlewareFlags];
+    return {
+      method: entry.method,
+      path: entry.path,
+      gateFlags,
+      localDevelopment:
+        entry.deployment?.type === "local-dev" ||
+        entry.middleware.includes(localDevelopmentGate),
+      alwaysOnReason:
+        entry.deployment?.type === "always-on"
+          ? entry.deployment.reason
+          : undefined,
+      capability: capabilityByDefinition.get(entry.definition),
+    };
+  });
 };
 
 /** The real tree, as the scanner's input. Each file is read from disk once. */

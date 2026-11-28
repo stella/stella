@@ -10,6 +10,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import {
@@ -17,7 +18,6 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 

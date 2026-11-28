@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
-import type { SourceFieldInventory } from "@/api/lib/legal-search/ingestion-types";
-import { publisherFieldRetentionAudit } from "@/api/lib/legal-search/source-exclusion-census";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
+import type { SourceFieldInventory } from "@stll/case-law-ingestion-core/ingestion-types";
+import { publisherFieldRetentionAudit } from "@stll/case-law-ingestion-core/source-exclusion-census";
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
 
 type AuditRetainedPublisherFieldsOptions = {
   inventory: SourceFieldInventory;

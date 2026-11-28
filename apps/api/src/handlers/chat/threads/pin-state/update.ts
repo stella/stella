@@ -18,7 +18,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { broadcastToUser } from "@/api/lib/sse";
 
@@ -46,6 +45,11 @@ const config = {
   body: v.object({
     pinState: v.picklist(Object.values(CHAT_THREAD_PIN_STATE)),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Transitions one caller-owned chat thread conditionally on its pin state and records its audit row; no other row reads or depends on it.",
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -151,11 +155,5 @@ const updateChatThreadPinState = createSafeRootHandler(
     return Result.ok({ pinState });
   },
 );
-
-declareAggregateMutation(updateChatThreadPinState, {
-  type: "independent",
-  reason:
-    "Transitions one caller-owned chat thread conditionally on its pin state and records its audit row; no other row reads or depends on it.",
-});
 
 export default updateChatThreadPinState;

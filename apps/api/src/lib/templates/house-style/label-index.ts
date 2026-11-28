@@ -85,6 +85,10 @@ export type LabelIndex = {
    *  (`Article 4` of a model contract behind an agreement): the label is
    *  the heading's own name, no citation of another provision. */
   ownLabelLengths: ReadonlyMap<string, number>;
+  /** Headings that name a part of the document above its articles
+   *  (`IV. Short form Terms` over `4 The Buyer's obligations`); they head
+   *  no article. */
+  partHeadingBlockIds: ReadonlySet<string>;
 };
 
 const HEADING_TITLE_MAX = 160;
@@ -105,6 +109,79 @@ const ANNEX_LIST_INTRO =
 /** A line that heads a table of contents and says nothing else. */
 const CONTENTS_CAPTION =
   /^(?:obsah|contents?|table of contents?|inhalt|inhaltsverzeichnis)[ \u00A0]*:?$/iu;
+
+/** The longest caption of a group of lines inside a table of contents. */
+const CONTENTS_GROUP_MAX = 40;
+
+/** The column heads over the lines of a table of contents: `Clause⇥Page`. */
+const CONTENTS_COLUMNS =
+  /^[\p{L} .]{1,24}\t+(?:page|pages|strana|str\.|seite|s\.)[ \u00A0]*$/iu;
+
+/** Of the lines with text in front of a table of contents, the caption and
+ *  the column heads that head it, nearest first. */
+const contentsHeadsOf = (lines: readonly DocxBlock[]): DocxBlock[] => {
+  const heads: DocxBlock[] = [];
+  for (const line of lines.toReversed()) {
+    const text = line.text.trim();
+    const columns = CONTENTS_COLUMNS.test(text);
+    if (columns || CONTENTS_CAPTION.test(text)) {
+      heads.push(line);
+    }
+    if (!columns) {
+      break;
+    }
+  }
+  return heads;
+};
+
+/**
+ * The caption of a group of lines inside a table of contents: the one short
+ * line between two runs of its lines (`Schedule` over the schedules), which
+ * is neither a heading nor the caption of contents of its own.
+ */
+const groupCaptionOf = (lines: readonly DocxBlock[]): DocxBlock | null => {
+  const [line] = lines;
+  return lines.length === 1 &&
+    line !== undefined &&
+    !isHeadingStyled(line) &&
+    line.pageBreakBefore === undefined &&
+    line.text.trim().length <= CONTENTS_GROUP_MAX &&
+    !CONTENTS_CAPTION.test(line.text.trim())
+    ? line
+    : null;
+};
+
+/**
+ * The lines of the source's tables of contents, with the caption and the
+ * column heads over each (alone they head nothing) and a short caption
+ * between two runs of its lines (`Schedule` over the schedules).
+ */
+const contentsBlockIdsOf = (blocks: readonly DocxBlock[]): Set<string> => {
+  const ids = new Set<string>();
+  /** The last paragraphs with text in front of the block, while they may be
+   *  the caption and the column heads of the contents that follow. */
+  let captions: DocxBlock[] = [];
+  /** Whether the lines in `captions` follow a line of contents. */
+  let inContents = false;
+  for (const block of blocks) {
+    if (block.kind === "paragraph" && isContentsBlock(block)) {
+      ids.add(block.id);
+      const group = inContents ? groupCaptionOf(captions) : null;
+      for (const line of group === null ? contentsHeadsOf(captions) : [group]) {
+        ids.add(line.id);
+      }
+      captions = [];
+      inContents = true;
+    } else if (block.kind !== "paragraph") {
+      captions = [];
+      inContents = false;
+    } else if (block.text.trim() !== "") {
+      inContents &&= captions.length === 0;
+      captions = [...captions.slice(-2), block];
+    }
+  }
+  return ids;
+};
 
 /** Whether the block is a line of the source's table of contents. */
 const isContentsBlock = ({
@@ -439,6 +516,9 @@ type Walk = {
   articleMentions: ReadonlySet<number>;
   /** Positions of numbered list items that only list the headings. */
   listedHeadings: ReadonlySet<number>;
+  /** Positions of headings over the articles (the parts of a pack: order
+   *  form, terms, annexes), which head no article. */
+  partHeadings: ReadonlySet<number>;
   article: LabelEntry | null;
   clauses: LabelEntry[];
   letter: LabelEntry | null;
@@ -562,6 +642,47 @@ const numberedArticleOrdinals = (
     }
   }
   return ordinals;
+};
+
+/** Bare numbered headings it takes to show that bare numbers head the
+ *  articles. */
+const NUMBERED_HEADINGS_MIN = 2;
+
+/**
+ * Headings above the articles: roman-numbered headings (`IV. Short form
+ * Terms`) at a higher outline level than automatic bare numbers that head
+ * articles of their own (`4 The Buyer's obligations` over `4.1`). Such a
+ * heading names a part of the document, not an article; the articles are
+ * the bare numbers under it. Empty where no bare numbers head at a lower
+ * level, as in a contract whose roman articles hold numbered clauses.
+ */
+const partHeadingPositions = (
+  labelled: readonly LabelledRow[],
+): Set<number> => {
+  const bareLevels = labelled.flatMap(({ raw, block }) =>
+    raw.origin === "auto" &&
+    raw.shape.keyword === null &&
+    raw.shape.path?.length === 1 &&
+    raw.shape.close === "" &&
+    block.outlineLevel !== null
+      ? [block.outlineLevel]
+      : [],
+  );
+  if (bareLevels.length < NUMBERED_HEADINGS_MIN) {
+    return new Set();
+  }
+  const articleLevel = Math.min(...bareLevels);
+  return new Set(
+    labelled
+      .filter(
+        (row) =>
+          row.raw.shape.keyword === null &&
+          isNamedArticle(row) &&
+          row.block.outlineLevel !== null &&
+          row.block.outlineLevel < articleLevel,
+      )
+      .map(({ position }) => position),
+  );
 };
 
 /** A list of headings runs at least this long without text between. */
@@ -934,6 +1055,9 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
   if (shape.keyword === "annex") {
     return isAnnexRow(row) ? openAnnex(walk, row) : null;
   }
+  if (walk.partHeadings.has(row.position)) {
+    return null;
+  }
   if (isNamedArticle(row)) {
     if (walk.annex === null && walk.articleMentions.has(row.position)) {
       return null;
@@ -1207,8 +1331,11 @@ export const buildLabelIndex = ({
   // Mentions say nothing about how the document numbers itself. A heading
   // that only counts on from one still says how its part is numbered: it
   // stays among the rows the schemes are read from.
+  const partHeadings = partHeadingPositions(labelled);
   const structural = labelled.filter(
-    (row) => !isArticleMention(numberedArticles, row),
+    (row) =>
+      !isArticleMention(numberedArticles, row) &&
+      !partHeadings.has(row.position),
   );
   const listedAnnexes = listedAnnexPositions(rows, structural);
   const firstAnnex =
@@ -1237,6 +1364,7 @@ export const buildLabelIndex = ({
       listedAnnexes,
       articleMentions,
       listedHeadings,
+      partHeadings,
       schemes,
       article: spanning?.article ?? null,
       clauses: [],
@@ -1253,24 +1381,9 @@ export const buildLabelIndex = ({
 
   const entries: LabelEntry[] = [];
   const contextByBlockId = new Map<string, BlockContext>();
-  const contentsBlockIds = new Set<string>();
-  /** The last paragraph with text in front of the row, while it may be the
-   *  caption of the contents that follow. */
-  let caption: DocxBlock | null = null;
+  const contentsBlockIds = contentsBlockIdsOf(rows.map(({ block }) => block));
   for (const row of rows) {
     const { block } = row;
-    if (block.kind === "paragraph" && isContentsBlock(block)) {
-      contentsBlockIds.add(block.id);
-      // The caption goes with the lines it heads: alone it heads nothing.
-      if (caption !== null && CONTENTS_CAPTION.test(caption.text.trim())) {
-        contentsBlockIds.add(caption.id);
-      }
-      caption = null;
-    } else if (block.kind !== "paragraph") {
-      caption = null;
-    } else if (block.text.trim() !== "") {
-      caption = block;
-    }
     const walk = walkOf(block);
     const entry = isLabelled(row) ? classify(walk, row) : null;
     if (entry !== null) {
@@ -1317,6 +1430,11 @@ export const buildLabelIndex = ({
             !entries.some(({ blockId }) => blockId === block.id),
         )
         .map(({ block, raw }) => [block.id, raw.manualLength]),
+    ),
+    partHeadingBlockIds: new Set(
+      labelled
+        .filter(({ position }) => partHeadings.has(position))
+        .map(({ block }) => block.id),
     ),
   };
 };

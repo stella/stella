@@ -2,6 +2,19 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  observePublisherDocumentFetch,
+  withDocumentStageObserver,
+  withDocumentStageWindow,
+} from "@stll/case-law-ingestion-core/document-stage-observation";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
+import {
+  EMPTY_AST,
+  type IngestionResult,
+  PUBLISHER_REQUEST,
+  type SyncPage,
+  toPlainTextIngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
@@ -11,21 +24,8 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  EMPTY_AST,
-  type IngestionResult,
-  PUBLISHER_REQUEST,
-  type SyncPage,
-  toPlainTextIngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
-import {
-  observePublisherDocumentFetch,
-  withDocumentStageObserver,
-  withDocumentStageWindow,
-} from "./document-stage-observation";
 import { SkDocumentNonPdfError } from "./sk-document-fetch-diagnostics";
 
 const decision = (fulltext: string): IngestionResult =>

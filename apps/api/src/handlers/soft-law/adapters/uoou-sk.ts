@@ -1,17 +1,17 @@
 import { Result } from "better-result";
 
+import {
+  excludedSourceSurface,
+  storedSourceSurface,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  SourceFieldDisposition,
+  SourceSurfaceDisposition,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { load } from "@stll/html";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import {
-  excludedSourceSurface,
-  storedSourceSurface,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  SourceFieldDisposition,
-  SourceSurfaceDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
 import { extractSoftLawPdfText } from "@/api/lib/legal-search/soft-law-document-text";
 import {
   type SoftLawEntry,

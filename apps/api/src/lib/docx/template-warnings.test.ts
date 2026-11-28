@@ -1,18 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
-
-import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { testDocxFile } from "@/api/tests/helpers/scanned-file";
-
-import { discoverTemplate } from "./discover-template";
 import {
   fieldOverlayWarnings,
   inlineBytesIgnoredWarning,
   type RegistryAvailabilityLoader,
   TEMPLATE_WARNING_CODES,
   type TemplateWarningCode,
-} from "./template-warnings";
+} from "@stll/docx-engine/template-warnings";
+
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
+import { discoverTemplate } from "./discover-template";
 
 const WRAP = (body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

@@ -1,3 +1,5 @@
+import { decodeSourceRawEnvelope } from "@stll/case-law-ingestion-core/source-raw-envelope";
+
 /**
  * Retention projection for the Slovak Constitutional Court.
  *
@@ -20,7 +22,6 @@ import {
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { htmlParagraphs } from "@/api/handlers/case-law/ingestion/retention/sources/html-paragraphs";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 /** The envelope part the content endpoint's XHTML is stored under. */
 const DOCUMENT_PART = "document";

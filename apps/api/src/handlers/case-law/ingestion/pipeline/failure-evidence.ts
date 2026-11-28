@@ -1,5 +1,10 @@
 import { panic, Result } from "better-result";
 
+import type {
+  DecisionSupplement,
+  IngestionResult,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { isPlainTextQuarantineSourceDocumentId } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { RejectedCaseLawIngestionRecord } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
@@ -7,11 +12,6 @@ import {
   INGESTION_FAILURE_IDENTITY_KIND,
   type IngestionFailureIdentityKind,
 } from "@/api/lib/case-law/ingestion-failure-identity";
-import type {
-  DecisionSupplement,
-  IngestionResult,
-} from "@/api/lib/legal-search/ingestion-types";
-import { isPlainTextQuarantineSourceDocumentId } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 const validFailureIdentity = (value: string | undefined): value is string =>

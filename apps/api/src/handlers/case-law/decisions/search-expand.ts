@@ -11,6 +11,12 @@ import {
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
+import { corpusMorphologyLanguage } from "@stll/legal-morphology/corpus-language";
+import {
+  functionWordKey,
+  functionWordsFor,
+} from "@stll/legal-morphology/function-words";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db-types";
@@ -30,7 +36,6 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import {
   type CorpusQueryToken,
   formatCorpusQueryTokens,
@@ -42,11 +47,6 @@ import {
   type LegalAlternatives,
   normalizeLegalAlternatives,
 } from "@/api/lib/legal-search/legal-alternatives";
-import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
-import {
-  functionWordKey,
-  functionWordsFor,
-} from "@/api/lib/legal-search/morphology/function-words";
 import {
   readPublicLawCountry,
   tPublicLawCountry,

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
+
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   czUsAdapter,
@@ -8,10 +13,6 @@ import {
 import { plNcourtAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { plNsaAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { plUokikAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
 
 const risIdentityPayloads = ["JUT_20260101_1", "JUT_20260101_2"].map((id) => ({
   Data: { Metadaten: { Technisch: { ID: id } } },

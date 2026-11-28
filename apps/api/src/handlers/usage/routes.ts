@@ -8,7 +8,6 @@ import listPolicies from "@/api/handlers/usage/list-policies";
 import listSeatAssignments from "@/api/handlers/usage/list-seat-assignments";
 import unassignSeat from "@/api/handlers/usage/unassign-seat";
 import { routes } from "@/api/http/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 // Operator-driven admin endpoints (manual entitlement upsert,
 // discretionary usage allocations) are deliberately NOT mounted here. They
@@ -36,6 +35,6 @@ export const usageRoute = routes(
   },
   {
     prefix: "/usage",
-    middleware: [deploymentFeatureGate("FEATURE_USAGE")],
+    deployment: { type: "flag", flag: "FEATURE_USAGE" },
   },
 );

@@ -36,6 +36,11 @@ import {
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { SSE_HEARTBEAT_INTERVAL_MS } from "@stll/api-contract/sse-heartbeat";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+import {
+  CASE_LAW_HEADNOTE_KEYWORDS,
+  CASE_LAW_HEADNOTE_MAX_CHARS,
+  MCP_CASE_LAW_HEADNOTE_MAX_CHARS,
+} from "@stll/case-law-ingestion-core/decision-headnote";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
@@ -866,15 +871,15 @@ export const LIMITS = {
    */
   caseLawYearFacetLimit: 200,
   /** One-row budget for the headnote a list row shows under the case number. */
-  caseLawHeadnoteMaxChars: 240,
-  mcpCaseLawHeadnoteMaxChars: 4000,
+  caseLawHeadnoteMaxChars: CASE_LAW_HEADNOTE_MAX_CHARS,
+  mcpCaseLawHeadnoteMaxChars: MCP_CASE_LAW_HEADNOTE_MAX_CHARS,
   mcpCaseLawSearchPageMaxChars: 60_000,
   /**
    * Terms of a publisher's classification one row draws as tags. A subject
    * index runs to dozens of terms on some sources, and a row is a hook, not
    * the index.
    */
-  caseLawHeadnoteKeywords: 8,
+  caseLawHeadnoteKeywords: CASE_LAW_HEADNOTE_KEYWORDS,
   /** Courts on the browse page's "newest decisions" shelf, by corpus size. */
   caseLawLatestCourts: 4,
   caseLawLatestPerCourt: 5,

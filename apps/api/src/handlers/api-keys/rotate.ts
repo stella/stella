@@ -26,6 +26,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: rotateApiKeyBody,
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "Rotates a single organization API key row with no cross-table aggregate invariant.",
+  },
 } satisfies HandlerConfig;
 
 /**

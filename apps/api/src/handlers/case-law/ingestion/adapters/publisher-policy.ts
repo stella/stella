@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: the cz-isir adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -27,6 +28,10 @@
 import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+} from "@stll/case-law-ingestion-core/ingestion-constants";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -35,10 +40,6 @@ import {
   PublisherPacingStopped,
   type PublisherRequestGateDependencies,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
-import {
-  ADAPTER_KEYS,
-  type AdapterKey,
-} from "@/api/lib/legal-search/ingestion-constants";
 import {
   PUBLISHER_GATES,
   type PublisherGateId,

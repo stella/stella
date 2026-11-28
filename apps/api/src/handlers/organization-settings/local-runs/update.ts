@@ -7,7 +7,6 @@ import { CHAT_LOCAL_RUN_APPROVAL_CEILINGS } from "@stll/api-contract/chat-run-ta
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { updateLocalRunApprovalCeiling } from "@/api/lib/chat/local-run-approval-ceiling";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -24,6 +23,11 @@ const config = {
   body: v.strictObject({
     maxApprovals: v.picklist(CHAT_LOCAL_RUN_APPROVAL_CEILINGS),
   }),
+  aggregateMutation: {
+    type: "independent",
+    reason:
+      "One column of the organization's settings row, written only while it still holds the value read; a concurrent save fails instead of overwriting it.",
+  },
 } satisfies HandlerConfig;
 
 const updateLocalRunApprovalCeilingRoute = createSafeRootHandler(
@@ -57,11 +61,5 @@ const updateLocalRunApprovalCeilingRoute = createSafeRootHandler(
     }
   },
 );
-
-declareAggregateMutation(updateLocalRunApprovalCeilingRoute, {
-  type: "independent",
-  reason:
-    "One column of the organization's settings row, written only while it still holds the value read; a concurrent save fails instead of overwriting it.",
-});
 
 export default updateLocalRunApprovalCeilingRoute;

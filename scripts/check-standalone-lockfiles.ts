@@ -25,6 +25,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { failCheck } from "../packages/scripts/src/check-failure";
 import {
   type InstallPolicy,
   readInstallPolicy,
@@ -599,8 +600,15 @@ const main = () => {
   // throwing through better-result.
   const listed = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
   if (listed.exitCode !== 0) {
-    console.error(`git ls-files failed: ${listed.stderr.toString()}`);
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-standalone-lockfiles",
+        summary: `git ls-files failed: ${listed.stderr.toString().trim()}`,
+        remediation:
+          "Ensure git is available and run this check from a valid repository checkout.",
+        rerunCommand: "bun run check:standalone-lockfiles",
+      }),
+    );
   }
   const trackedFiles = listed.stdout.toString().split("\0").filter(Boolean);
   if (Bun.argv[2] === "--list-lockfiles") {
@@ -609,8 +617,16 @@ const main = () => {
   }
   const result = checkStandaloneLockfiles({ root, trackedFiles });
   if (result.errors.length > 0) {
-    console.error(result.errors.join("\n\n"));
-    process.exit(1);
+    process.exit(
+      failCheck({
+        check: "check-standalone-lockfiles",
+        summary: `${result.errors.length} standalone lockfile safety-net violation(s) found`,
+        details: result.errors,
+        remediation:
+          'Remove unsupported lockfiles, ensure every standalone bun.lock satisfies all safety nets (or document a reasoned ALLOWLIST entry in scripts/check-standalone-lockfiles.ts), and keep `[install] auto = "disable"` in every tracked bunfig.toml.',
+        rerunCommand: "bun run check:standalone-lockfiles",
+      }),
+    );
   }
   const list =
     result.covered.length > 0 ? ` (${result.covered.join(", ")})` : "";

@@ -22,6 +22,15 @@ import {
 } from "bun:test";
 
 import { InvalidNumericTokenError } from "@stll/agent-input/numeric-token";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 
 import {
   assembleCzRegionalDecision,
@@ -52,15 +61,6 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-} from "@/api/lib/legal-search/ingestion-types";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   faultedResponse,

@@ -44,6 +44,11 @@ export type DocxBlock = {
   /** Pictures, drawings and embedded objects anchored in the block; a block
    *  that holds one is not empty even without text. */
   inlineObjects?: number;
+  /** How many of them are drawn shapes fixed to the page: single floating
+   *  shapes without a picture and without text of their own (a rule, a dot,
+   *  a line) whose horizontal place is counted from the page or a margin.
+   *  Absent without one, and from an engine that does not count them. */
+  pageShapes?: number;
   /** Page breaks among the paragraph's runs; a paragraph without text can
    *  hold one. */
   pageBreaks?: number;
@@ -70,6 +75,18 @@ export type DocxBlock = {
    *  Absent when it states neither, and from an engine that does not
    *  report it. What its style gives is not here. */
   spacing?: TemplatePlanSpacing;
+  /** The space in effect in front of the paragraph and behind it, in
+   *  twentieths of a point: each side its own, else its style's, else the
+   *  document defaults', else none. A side set to auto spacing or counted
+   *  in lines is left out. The line spacing resolved the same way, single
+   *  where nothing states one. Absent from an engine that does not report
+   *  it. */
+  spacingInEffect?: {
+    before?: number;
+    after?: number;
+    line?: number;
+    lineRule?: TemplatePlanLineRule;
+  };
   /** The indent in effect, in twentieths of a point: where the
    *  paragraph's lines start, and what its first line adds to that
    *  (negative for a hanging indent). Absent when nothing states one, and
@@ -121,6 +138,10 @@ export type DocxSection = {
     left: number | null;
   };
   columns: number;
+  /** The section shows a header or footer of its own: other content than
+   *  the section before it shows on those pages. Absent from an engine
+   *  that does not report it. */
+  ownHeaders?: true;
 };
 
 export type DocxBlockManifest = {
@@ -143,12 +164,20 @@ export type DocxBlockManifest = {
   /** The view the manifest was read in and what was resolved for it:
    *  every block, label and hash is that view's. */
   trackedChangesResolved?: TrackedChanges & { view: TrackedChangesView };
+  /** What the manifest keeps, when it was read with the changes kept:
+   *  every block, label and hash is the accepted view's, and the blocks
+   *  say where their changes sit. */
+  trackedChangesKept?: TrackedChanges;
   warnings: string[];
 };
 
 /** One of the two texts a document with tracked changes holds: with every
  *  change accepted, or with every change rejected. */
 export type TrackedChangesView = "accept" | "reject";
+
+/** What to do with a document's tracked changes: format one view of it,
+ *  or keep the changes as changes in the output. */
+export type TrackedChangesChoice = TrackedChangesView | "keep";
 
 /** The tracked changes of a document's main story and notes, by kind. */
 export type TrackedChanges = {
@@ -206,6 +235,10 @@ export type TemplateStyle = {
   size?: number | null;
   /** Whether the style keeps its paragraph with the next one. */
   keepNext?: boolean;
+  /** Whether the style starts its paragraphs on a new page, inheritance
+   *  and the document's defaults resolved. Absent from an inspection read
+   *  before it was reported. */
+  pageBreakBefore?: boolean;
   /** The left indent the style gives its paragraphs, in twentieths of a
    *  point; null when none states one. Absent from an inspection read
    *  before it was reported. */
@@ -283,7 +316,18 @@ export type TemplatePlanAlignment = "left" | "center" | "right" | "both";
 
 /** The space in front of a paragraph and behind it, in twentieths of a
  *  point: at least one side. */
-export type TemplatePlanSpacing = { before?: number; after?: number };
+/** How a line spacing is counted: `auto` in 240ths of a line, `exact` and
+ *  `atLeast` in twentieths of a point. */
+type TemplatePlanLineRule = "auto" | "exact" | "atLeast";
+
+export type TemplatePlanSpacing = {
+  before?: number;
+  after?: number;
+  /** The spacing of the paragraph's lines, counted by `lineRule` (`auto`
+   *  when left out). Left out by an engine that does not know it. */
+  line?: number;
+  lineRule?: TemplatePlanLineRule;
+};
 
 export type TemplatePlanNestedParagraph = {
   blockId: string;
@@ -292,6 +336,10 @@ export type TemplatePlanNestedParagraph = {
   stripLabel?: string;
   /** As on a source item. */
   labelAsText?: boolean;
+  /** As on a source item. */
+  dropPageShapes?: boolean;
+  /** As on a source item. */
+  indent?: TemplatePlanIndent;
   /** As on a source item. */
   alignment?: TemplatePlanAlignment;
   /** The paragraph's own space in front of it and behind it, over its
@@ -341,6 +389,10 @@ export type TemplatePlanSourceItem = {
    *  the file is opened: not a bullet glyph, not a number a language
    *  spells. */
   labelAsText?: boolean;
+  /** Write the paragraph without its drawn shapes that are fixed to the
+   *  page (`pageShapes` of the block). Everything else it holds is placed.
+   *  Left out by an engine that does not know it. */
+  dropPageShapes?: boolean;
   /** Joins the next plan item, a bare source paragraph, into this one. */
   mergeNext?: TemplatePlanMerge;
   /** Starts the paragraph on a new page. Not for a table, nor for a block
@@ -434,12 +486,39 @@ export type TemplatePlan = {
   /** The section the body ends with, when its page is another than the
    *  template's. */
   lastSection?: TemplatePlanSection;
+  /** The template section, counted from 0, the output's pages and headers
+   *  are built from; left out, the template's last. */
+  bodySection?: number;
   /** Paragraphs inside kept template tables written without their text.
    *  An engine that does not know the option leaves them as they are. */
   emptyTemplateBlockIds?: string[];
-  /** The view of a source with tracked changes the plan is made for. The
-   *  output carries no revision. */
-  trackedChanges?: TrackedChangesView;
+  /** What the plan does with the tracked changes of its source: it is made
+   *  for one view, and the output carries no revision; or it keeps them,
+   *  and the output carries each as the change it is. */
+  trackedChanges?: TrackedChangesChoice;
+  /** Whether the output's headers and footers keep the source's: their
+   *  content after the template's own, in the header or footer for the
+   *  same pages. An engine that does not know the option gives the
+   *  template's alone. */
+  sourceHeaders?: "drop" | "keep";
+};
+
+/** What the output's headers and footers carry of the source's. */
+export type SourceHeadersReport = {
+  kept: {
+    family: "header" | "footer";
+    kind: "first" | "default" | "even";
+    part: string;
+    paragraphs: number;
+    /** The template had none for those pages: a new part holds them. */
+    created: boolean;
+  }[];
+  leftOut: {
+    firstPageParts: number;
+    evenPageParts: number;
+    sharedParts: number;
+    unsupportedObjects: number;
+  };
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -478,7 +557,12 @@ export type TemplatePlanReport = {
     sourceFields: { kind: string; count: number }[];
     internalHyperlinks: number;
     sectionBreaks: number;
+    /** Drawn shapes fixed to the page that placed paragraphs were written
+     *  without. Absent from an engine that drops none. */
+    pageShapes?: number;
   };
+  /** Present when the plan kept the source's headers and footers. */
+  sourceHeaders?: SourceHeadersReport;
 };
 
 /** Why the engine refused; the codes a plan can be repaired after. Any
@@ -525,11 +609,12 @@ type TemplateLayoutSignals = { pages: number };
  *  not depend on the package release that carries it. */
 export type TemplatePlanEngine = {
   /** With `trackedChanges`, the manifest of that view of a document with
-   *  tracked changes. An engine that cannot read a view answers as if none
-   *  was asked for. */
+   *  tracked changes, or of its accepted view with the changes kept. An
+   *  engine that cannot read a view answers as if none was asked for; one
+   *  that cannot keep what the document tracks refuses by name. */
   analyze: (
     docx: Uint8Array,
-    options?: { trackedChanges?: TrackedChangesView },
+    options?: { trackedChanges?: TrackedChangesChoice },
   ) => Promise<Result<DocxBlockManifest, TemplateEngineError>>;
   inspect: (
     docx: Uint8Array,
@@ -623,6 +708,7 @@ const blockSchema = v.strictObject({
   outlineLevel: v.nullable(v.pipe(v.number(), v.integer())),
   sectionIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
   hash: v.string(),
+  pageShapes: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   inlineObjects: v.exactOptional(
     v.pipe(v.number(), v.integer(), v.minValue(0)),
   ),
@@ -661,6 +747,14 @@ const blockSchema = v.strictObject({
     v.strictObject({
       before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
       after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    }),
+  ),
+  spacingInEffect: v.exactOptional(
+    v.strictObject({
+      before: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      after: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      line: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+      lineRule: v.exactOptional(v.picklist(["auto", "exact", "atLeast"])),
     }),
   ),
   indent: v.exactOptional(
@@ -702,6 +796,7 @@ const sectionSchema = v.strictObject({
     left: twips,
   }),
   columns: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  ownHeaders: v.exactOptional(v.literal(true)),
 });
 
 const count = v.pipe(v.number(), v.integer(), v.minValue(0));
@@ -736,6 +831,7 @@ const manifestSchema = v.strictObject({
       view: v.picklist(["accept", "reject"]),
     }),
   ),
+  trackedChangesKept: v.exactOptional(trackedChangesSchema),
   warnings: v.array(v.string()),
 });
 

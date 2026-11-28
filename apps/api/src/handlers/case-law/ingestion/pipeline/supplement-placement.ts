@@ -1,6 +1,11 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
+import type {
+  DecisionSupplement,
+  IngestionResult,
+  StoredRawReadError,
+} from "@stll/case-law-ingestion-core/ingestion-types";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
@@ -40,11 +45,6 @@ import {
   replayWriteOutcome,
 } from "@/api/lib/case-law/replay-write";
 import { errorSystemFields } from "@/api/lib/errors/utils";
-import type {
-  DecisionSupplement,
-  IngestionResult,
-  StoredRawReadError,
-} from "@/api/lib/legal-search/ingestion-types";
 import {
   classifyCaseLawRawKey,
   deleteRawKeys,

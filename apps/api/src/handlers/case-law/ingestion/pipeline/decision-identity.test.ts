@@ -11,6 +11,9 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { EMPTY_AST } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+
 import { observeDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DecisionCourtIdentityError } from "@/api/lib/case-law/decision-court-identity";
@@ -19,8 +22,6 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { fallbackDecisionIdentityKey } from "@/api/lib/case-law/fallback-decision-identity";
-import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const sourceId = createSafeId<"caseLawSource">();
 

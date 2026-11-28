@@ -21,7 +21,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   releaseChatQueueOnTx,
   wasSentOnTx,
@@ -37,6 +36,10 @@ const config = {
     "is released. A turn that runs is stopped; a turn that waits on you " +
     "(a question, an approval) is ended and replaced by this message.",
   params: chatQueuedMessageParams,
+  aggregateMutation: {
+    type: "aggregate",
+    aggregates: ["chatThread"],
+  },
 } satisfies HandlerConfig;
 
 /**
@@ -176,9 +179,5 @@ const sendQueuedChatMessageNow = createSafeRootHandler(
 
 // Every queue change locks the member's thread first, the row its turns
 // lock, and writes only that thread's queue.
-declareAggregateMutation(sendQueuedChatMessageNow, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default sendQueuedChatMessageNow;

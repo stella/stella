@@ -264,10 +264,13 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/db-load-gate/src/**/*.ts",
   "packages/decision-reader/src/**/*.{ts,tsx}",
   "packages/docx-authoring/src/**/*.ts",
+  "packages/case-law-ingestion-core/src/**/*.ts",
+  "packages/docx-engine/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
   "packages/invoicing/src/**/*.ts",
+  "packages/legal-morphology/src/**/*.ts",
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
   "packages/parameter-store/src/**/*.ts",
@@ -297,7 +300,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/browser-page/src/page-script.ts",
   // Adapter definitions return typed stored-read failures; the existing replay
   // callback protocol consumes those failures through Promise rejection.
-  "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
+  "packages/case-law-ingestion-core/src/stored-raw-reparse-boundary.ts",
   // MCP request handlers translate typed gateway failures into SDK protocol errors.
   "apps/api/src/mcp/server-core.ts",
   // The tools/call callback observer preserves the SDK's result/rejection contract;

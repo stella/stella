@@ -20,6 +20,9 @@ import { describe, expect, test } from "bun:test";
 
 import { resolveDecisionIdentity } from "@stll/api-contract/decision-query-intent";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
+import { decisionDocketGrammarForCountry } from "@stll/case-law-ingestion-core/adapter-manifest";
+import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
+import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifierType,
@@ -34,10 +37,7 @@ import { normalizeDecisionIdentifierValueIn } from "@/api/handlers/case-law/inge
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { plannedIdentifiers } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import { decisionResolveIntent } from "@/api/handlers/legal-resolve/decision-constraints";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
-import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -30,14 +31,14 @@
 import { panic } from "better-result";
 
 import type { DecisionTextFieldKey } from "@stll/api-contract/case-law-text-field";
-import { listRisDocumentContentTypes } from "@stll/case-law-parsers/at-ris";
-
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/case-law-consts";
 import type {
   SourceFieldDisposition,
   SourceFieldInventory,
   SourceRawParts,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@stll/case-law-ingestion-core/ingestion-types";
+import { listRisDocumentContentTypes } from "@stll/case-law-parsers/at-ris";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 /** The envelope part each payload of a decision is stored under. */

@@ -13,6 +13,9 @@ import type { Result as ResultType } from "better-result";
 import * as v from "valibot";
 
 import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
+import { omitSourceBoundValues } from "@stll/docx-engine/ai-visible-values";
+import { isAiConditionField } from "@stll/docx-engine/resolve-ai-conditions";
+import type { FieldMeta, TemplateManifest } from "@stll/docx-engine/types";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -33,12 +36,9 @@ import {
   SKILL_CATALOG_LOAD_SINK,
   type SkillToolsContext,
 } from "@/api/lib/docx/ai-skill-tools";
-import { omitSourceBoundValues } from "@/api/lib/docx/ai-visible-values";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { discoverContainerFields } from "@/api/lib/docx/discover-template";
-import { isAiConditionField } from "@/api/lib/docx/resolve-ai-conditions";
 import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

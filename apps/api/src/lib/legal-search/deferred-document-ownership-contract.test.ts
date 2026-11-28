@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ADAPTER_MANIFESTS } from "@stll/case-law-ingestion-core/adapter-manifest";
 import {
   type ModuleExportName,
   type Node,
@@ -12,7 +13,6 @@ import {
   walk,
 } from "@stll/scripts/src/syntax-tree";
 
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DEFERRED_DOCUMENT_WRITER_CAPABILITIES } from "@/api/lib/legal-search/deferred-document-writer-contract";
 
 import { canonicalModuleId } from "../../../../../.oxlint-plugins/module-id";

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { LOOKUP_REGISTRIES } from "@stll/docx-engine/types";
+
 import { templateLookupFormats } from "@/api/db/schema";
 import {
   FORMAT_LIMITS,
@@ -10,7 +12,6 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { displayNameSchema } from "@/api/lib/custom-schema";
-import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 

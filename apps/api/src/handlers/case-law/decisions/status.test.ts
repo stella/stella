@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { ADAPTER_KEYS } from "@stll/case-law-ingestion-core/ingestion-constants";
 import { DAY_IN_MS } from "@stll/time";
 
 import { COVERAGE_CURRENT_WITHIN_MS } from "@/api/handlers/case-law/decisions/coverage-health";
@@ -11,7 +12,6 @@ import {
 } from "@/api/handlers/case-law/decisions/status";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 
 /**

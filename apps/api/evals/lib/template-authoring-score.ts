@@ -18,6 +18,7 @@
  * day.
  */
 
+import { parseInlineConditions } from "@stll/docx-engine/inline-conditions";
 import {
   assertNever,
   blockDirectiveLinePattern,
@@ -29,7 +30,6 @@ import {
   type ScannedMarker,
 } from "@stll/template-conditions";
 
-import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
 import { conditionReferencesOnlySelf } from "@/api/lib/templates/configure-field-input";
 
 /**
