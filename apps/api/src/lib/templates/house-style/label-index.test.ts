@@ -611,10 +611,12 @@ describe("buildLabelIndex", () => {
       "Section II",
       "Contents",
       { text: "A. General\t6", styleName: "toc 2" },
+      { text: "Part B", styleName: "heading 1" },
+      { text: "B. Price\t7", styleName: "toc 2" },
     ]);
     const { contentsBlockIds } = buildLabelIndex(manifest);
     // Two lines between runs are a part of the document and the caption of
-    // the next contents, not a group of the first.
+    // the next contents, not a group of the first; nor is a heading.
     expect([...contentsBlockIds].toSorted()).toEqual([
       "p0",
       "p1",
@@ -622,6 +624,7 @@ describe("buildLabelIndex", () => {
       "p3",
       "p5",
       "p6",
+      "p8",
     ]);
   });
 

@@ -142,7 +142,8 @@ const contentsHeadsOf = (lines: readonly DocxBlock[]): DocxBlock[] => {
 const groupCaptionOf = (lines: readonly DocxBlock[]): DocxBlock | null => {
   const [line] = lines;
   return lines.length === 1 &&
-    line?.outlineLevel === null &&
+    line !== undefined &&
+    !isHeadingStyled(line) &&
     line.pageBreakBefore === undefined &&
     line.text.trim().length <= CONTENTS_GROUP_MAX &&
     !CONTENTS_CAPTION.test(line.text.trim())
