@@ -521,9 +521,12 @@ type Context = {
    *  placed last at that level is numbered on, as placed. */
   sourceLevels: Map<number, Map<number, ProfileListLevel | null>>;
   /** The levels the paragraphs of each source level ended up on in an
-   *  earlier build, spare levels included: read in place of
-   *  `sourceLevels` where given. */
-  levelHints: ReadonlyMap<number, ReadonlyMap<number, ProfileListLevel>> | null;
+   *  earlier build, spare levels included, and the paragraphs that read
+   *  them in place of `sourceLevels`. */
+  levelHints: {
+    levels: ReadonlyMap<number, ReadonlyMap<number, ProfileListLevel>>;
+    blockIds: ReadonlySet<string>;
+  } | null;
   topLevel: readonly DocxBlock[];
   /** The source's sections; empty when the manifest does not report them. */
   sections: readonly DocxSection[];
@@ -800,14 +803,15 @@ const levelTextPatternOf = (
     numbering === null ||
     lvlText === undefined ||
     numFmt === undefined ||
-    (ownLevel === null && levelHints === null) ||
+    (ownLevel === null && levelHints?.blockIds.has(block.id) !== true) ||
     lvlText.includes(OWN_COUNTER)
   ) {
     return null;
   }
-  const above =
-    levelHints?.get(numbering.abstractNumId) ??
-    sourceLevels.get(numbering.abstractNumId);
+  const hinted = levelHints?.blockIds.has(block.id) === true;
+  const above = hinted
+    ? levelHints?.levels.get(numbering.abstractNumId)
+    : sourceLevels.get(numbering.abstractNumId);
   // With the settled levels of an earlier build, a paragraph without a
   // level of its own counts on a spare level of its parents' list.
   let list = ownLevel?.abstractNumId ?? null;
@@ -4608,35 +4612,33 @@ export const buildTemplatePlan = (options: BuildOptions): BuiltPlan => {
   if (options.mode !== "keepSource") {
     return first.built;
   }
-  let best = first.built;
-  let last = first;
-  // The levels settle within a few builds: a build that numbers more
-  // labels can move the spare levels the one before handed out.
-  for (let build = 1; build < SETTLING_BUILDS_MAX; build += 1) {
-    const retry = last.placements.some(
-      ({ numbered, keptReason, block }) =>
-        !numbered &&
-        keptReason !== null &&
-        SETTLED_RETRY_REASONS.has(keptReason) &&
-        block.numbering?.lvlText !== undefined,
-    );
-    if (!retry) {
-      break;
-    }
-    last = buildOnce(options, settledLevelsOf(last.placements));
-    if (
-      last.built.labelsNotKept.length === 0 &&
-      last.built.note.counts.labelsConvertedToText <
-        best.note.counts.labelsConvertedToText
-    ) {
-      best = last.built;
-    }
+  const unsettled = new Set(
+    first.placements
+      .filter(
+        ({ numbered, keptReason, block }) =>
+          !numbered &&
+          keptReason !== null &&
+          SETTLED_RETRY_REASONS.has(keptReason) &&
+          block.numbering?.lvlText !== undefined,
+      )
+      .map(({ block }) => block.id),
+  );
+  if (unsettled.size === 0) {
+    return first.built;
   }
-  return best;
+  // One more build in which the labels the first left as text read their
+  // level's text through the levels their parents ended up on (a spare
+  // level a parent was moved to); every other paragraph reads as before.
+  const second = buildOnce(options, {
+    levels: settledLevelsOf(first.placements),
+    blockIds: unsettled,
+  });
+  return second.built.labelsNotKept.length === 0 &&
+    second.built.note.counts.labelsConvertedToText <=
+      first.built.note.counts.labelsConvertedToText
+    ? second.built
+    : first.built;
 };
-
-/** Builds of one document at most, the first included. */
-const SETTLING_BUILDS_MAX = 3;
 
 /** Labels kept as text that the levels a build settled on may answer. */
 const SETTLED_RETRY_REASONS: ReadonlySet<LabelKeptReason> = new Set([
