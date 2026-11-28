@@ -717,6 +717,18 @@ const styleTarget = (
  *  answers it; likelier ones are asked about but not noted. */
 const ROLE_NOTE_BELOW = 0.5;
 
+type RoleUncertainItem = Extract<FormattingNoteItem, { kind: "roleUncertain" }>;
+
+/** Whether a paragraph carries the same doubt as the item before it. */
+const continuesRun = (
+  run: RoleUncertainItem | null,
+  next: Pick<RoleUncertainItem, "role" | "alternative" | "styleId">,
+): run is RoleUncertainItem =>
+  run !== null &&
+  run.role === next.role &&
+  run.alternative === next.alternative &&
+  run.styleId === next.styleId;
+
 const noteUncertainRoles = (
   context: Context,
   placements: readonly Placement[],
@@ -732,7 +744,7 @@ const noteUncertainRoles = (
       .map((item) => [item.blockId, item]),
   );
   // Paragraphs in a row with the same doubt are one item.
-  let run: Extract<FormattingNoteItem, { kind: "roleUncertain" }> | null = null;
+  let run: RoleUncertainItem | null = null;
   for (const { block, role, styleId } of placements) {
     const item = open.get(block.id);
     const alternative = item?.options.find(
@@ -750,11 +762,7 @@ const noteUncertainRoles = (
       run = null;
       continue;
     }
-    if (
-      run?.role === role &&
-      run.alternative === alternative &&
-      run.styleId === styleId
-    ) {
+    if (continuesRun(run, { role, alternative, styleId })) {
       run.lastBlockId = block.id;
       run.blocks += 1;
       continue;
