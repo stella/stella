@@ -1609,7 +1609,8 @@ const labelledLine = (
  * a tab ends at the next default stop and every value starts where its
  * label happens to end. A block is the paragraphs in one style that follow
  * each other; a table, a paragraph a list numbers and another style end
- * it. The text stays as it is.
+ * it, but for a line of a label and a value right behind it. The text
+ * stays as it is.
  */
 const alignPartyLines = (context: Context, placed: Placed): void => {
   let run: LabelledLine[] = [];
@@ -1642,15 +1643,17 @@ const alignPartyLines = (context: Context, placed: Placed): void => {
       }
       continue;
     }
+    const line = labelledLine(context, placement);
+    // A line of a label and a value in another style right behind the
+    // block (`[Další přílohy:⇥…]` under a list of annexes) belongs to it.
     if (
-      placement.styleId !== style ||
+      (placement.styleId !== style && (line === null || run.length === 0)) ||
       placement.numbered ||
       block.label !== null
     ) {
       close();
-      style = placement.styleId;
     }
-    const line = labelledLine(context, placement);
+    style = placement.styleId;
     if (line !== null) {
       run.push(line);
     }
