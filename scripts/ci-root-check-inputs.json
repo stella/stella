@@ -791,7 +791,8 @@
       "@stll/fetch",
       "@stll/docx-utils",
       "@stll/locales",
-      "@stll/case-law-parsers"
+      "@stll/case-law-parsers",
+      "@stll/docx-engine"
     ],
     "Test projection-totality classification": [
       "@stll/api",
@@ -822,7 +823,8 @@
       "@stll/text-normalize",
       "@stll/uuid-codec",
       "scripts/**",
-      "@stll/case-law-parsers"
+      "@stll/case-law-parsers",
+      "@stll/docx-engine"
     ],
     "Test aggregate inventories": [
       "scripts/**",

@@ -16,6 +16,7 @@ import {
 } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 import type { CountryCode } from "@stll/country-codes";
+import type { TemplateManifest } from "@stll/docx-engine/types";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DecisionSection, EmptyAst } from "@stll/legal-ast/document-types";
@@ -120,7 +121,6 @@ import type {
   DocumentSource,
   ImportDocumentSource,
 } from "@/api/lib/document-source";
-import type { TemplateManifest } from "@/api/lib/docx/types";
 import type { AgendaAttendeeType } from "@/api/lib/entity-constants";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type { CentsAmount } from "@/api/lib/money";

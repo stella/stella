@@ -25,12 +25,11 @@ import { panic } from "better-result";
 import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import {
   filtersFromFieldConfig,
   renderValueMarker,
 } from "@stll/template-conditions";
-
-import type { FieldMeta } from "@/api/lib/docx/types";
 
 /** The report's two AI-drafted fields. The generator receives the whole report
  *  data object as JSON context, so neither needs the rendered document text. */

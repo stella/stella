@@ -3,6 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { DATE_FORMAT_SPEC_HINT } from "@stll/agent-input";
 import { ZipArchive } from "@stll/docx-core/zip";
 import {
+  FIELD_META_FILTERS,
+  fieldMetaFromFilters,
+} from "@stll/docx-engine/field-filters";
+import type { FieldMeta } from "@stll/docx-engine/types";
+import {
   classifyMarker,
   filtersFromFieldConfig,
   renderValueMarker,
@@ -14,8 +19,6 @@ import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { deriveManifest } from "./derived-manifest";
 import { discoverTemplate } from "./discover-template";
-import { FIELD_META_FILTERS, fieldMetaFromFilters } from "./field-filters";
-import type { FieldMeta } from "./types";
 
 const WRAP = (body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

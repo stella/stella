@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta, TemplateManifest } from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type {
@@ -14,7 +15,6 @@ import {
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";

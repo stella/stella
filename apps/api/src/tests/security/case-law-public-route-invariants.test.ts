@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 import { DECISION_LIST_SORTS } from "@stll/api-contract/search";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@stll/legal-morphology/dictionary";
 import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { createTestState } from "@stll/test-state";
@@ -75,7 +76,6 @@ import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
-import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,

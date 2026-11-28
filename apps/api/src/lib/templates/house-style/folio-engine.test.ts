@@ -537,4 +537,50 @@ describe("folioTemplatePlanEngine", () => {
     expect(await textOf()).toContain("Kept inserted.");
     expect(await textOf("reject")).toContain("Kept deleted.");
   });
+
+  test("formats a document with its tracked changes kept: the output is the same redline", async () => {
+    const tracked = await docx({
+      body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,
+      styles: "",
+      numbering: "",
+    });
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: tracked,
+        template: await template(),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+        trackedChanges: "keep",
+      })
+    ).unwrap();
+    expect(formatted.plan.trackedChanges).toBe("keep");
+    expect(formatted.note.items.at(0)).toMatchObject({
+      kind: "trackedChangesKept",
+      insertions: 1,
+      deletions: 1,
+    });
+    // The output tracks what the source tracks, and reads as the source
+    // does in either view.
+    const kept = (
+      await folioTemplatePlanEngine.analyze(formatted.docx, {
+        trackedChanges: "keep",
+      })
+    ).unwrap();
+    expect(kept.trackedChangesKept).toMatchObject({
+      insertions: 1,
+      deletions: 1,
+      authors: ["A"],
+    });
+    const textsOf = async (view: "accept" | "reject") =>
+      (
+        await folioTemplatePlanEngine.analyze(formatted.docx, {
+          trackedChanges: view,
+        })
+      )
+        .unwrap()
+        .blocks.map(({ text }) => text);
+    expect(await textsOf("accept")).toContain("Kept inserted.");
+    expect(await textsOf("reject")).toContain("Kept deleted.");
+  });
 });

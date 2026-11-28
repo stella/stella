@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { mergeManifestWithDiscovery } from "@stll/docx-engine/template-manifest";
+
 import {
   buildPrefillTargets,
   mapPrefillResults,
@@ -27,7 +29,6 @@ import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { readZipNameCodePage } from "@/api/lib/files/organization-zip-name-code-page";

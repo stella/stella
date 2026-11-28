@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import type { FieldMeta } from "@stll/docx-engine/types";
 import {
   arrayFiltersFromFieldConfig,
   filtersFromFieldConfig,
@@ -10,7 +11,6 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { discoverTemplate } from "./discover-template";
-import type { FieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
 const WRAP = (body: string) =>

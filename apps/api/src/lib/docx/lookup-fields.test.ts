@@ -10,6 +10,13 @@ import type { EdgarCompany } from "@stll/business-registries/edgar";
 import { KrsValidationError } from "@stll/business-registries/krs";
 import type { OrsrCompany } from "@stll/business-registries/orsr";
 import { ZipArchive } from "@stll/docx-core/zip";
+import { patchXmlPart } from "@stll/docx-engine/rich-patch";
+import { mergeManifestWithDiscovery } from "@stll/docx-engine/template-manifest";
+import type {
+  FieldMeta,
+  TemplateData,
+  TemplateManifest,
+} from "@stll/docx-engine/types";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -40,9 +47,6 @@ import {
 } from "./lookup-fields";
 import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { fillTemplate } from "./patch-template";
-import { patchXmlPart } from "./rich-patch";
-import { mergeManifestWithDiscovery } from "./template-manifest";
-import type { FieldMeta, TemplateData, TemplateManifest } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
 const permit = grantThirdPartyOutboundPermit();

@@ -22,7 +22,9 @@ if (import.meta.main) {
           for (const entry of entries) {
             const file = entry.id.split("::").at(0);
             if (file === undefined || !existsSync(path.join(REPO_ROOT, file))) {
-              panic(`Remove stale contract domain site ${entry.id}`);
+              panic(
+                `Remove stale contract domain site ${entry.id} from ${LEDGER_REL}, then re-run \`bun scripts/check-contract-domain-ledger.ts\`.`,
+              );
             }
           }
         }
@@ -32,7 +34,7 @@ if (import.meta.main) {
         relocateLedgerEntries({ ...options, repoRoot: REPO_ROOT }),
       label: "contract-domain",
       remediation:
-        "import the contract domain or limit instead of listing a new site",
+        "import the contract domain or limit instead of listing a new site, then re-run `bun scripts/check-contract-domain-ledger.ts`",
     }),
   );
 }

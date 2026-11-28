@@ -4,13 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  createRustTestBaseline,
   discoverRustTestFiles,
   evaluateRustTestBaseline,
   parseReviewedRustBoundaries,
   RUST_TEST_DISCOVERY_INPUTS,
 } from "./check-rust-test-determinism.ts";
-import { parseTestBaseline } from "./check-test-state-baseline.ts";
 import { planCheck, PLUGIN_FIXTURE_INPUTS } from "./code-check-affected.ts";
 import { scanRustTestDeterminism } from "./rust-test-determinism-scan.ts";
 
@@ -182,53 +180,29 @@ test("reasoned escapes remain counted and record same-line or preceding-line own
 });
 
 const FILE = "crates/example/src/lib.rs";
-const metadata = { owner: "guards", reason: "Replace legacy nondeterminism" };
 const hits = scanRustTestDeterminism({
   source: "#[test] fn example() { Instant::now(); thread::sleep(duration); }",
   integrationTest: false,
 });
 
-test("baseline counts accept exact budgets and reject growth, shrinkage and stale files", () => {
+test("unreviewed nondeterminism findings fail unconditionally", () => {
   expect(hits).toHaveLength(2);
-  const files = new Map([[FILE, hits]]);
-  const evaluate = (count: number) =>
-    evaluateRustTestBaseline({
-      files,
-      baselineText: JSON.stringify({ [FILE]: { ...metadata, count } }),
-    });
-  expect(evaluate(2)).toEqual([]);
-  expect(evaluate(1)).toEqual([
+  expect(evaluateRustTestBaseline({ files: new Map([[FILE, hits]]) })).toEqual([
+    expect.objectContaining({
+      file: FILE,
+      line: 1,
+      message: expect.stringContaining("Rust test clock:"),
+    }),
     expect.objectContaining({
       file: FILE,
       line: 1,
       message: expect.stringContaining("Rust test sleep:"),
     }),
   ]);
-  expect(evaluate(3)).toEqual([
-    expect.objectContaining({
-      file: FILE,
-      line: 1,
-      message: expect.stringContaining("count 2 is below baseline 3"),
-    }),
-  ]);
-  expect(
-    evaluateRustTestBaseline({
-      files: new Map(),
-      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 2 } }),
-    }),
-  ).toEqual([
-    expect.objectContaining({
-      file: FILE,
-      line: 1,
-      message: expect.stringContaining("count 0 is below baseline 2"),
-    }),
-  ]);
-  expect(evaluateRustTestBaseline({ files, baselineText: "{}" })).not.toEqual(
-    [],
-  );
+  expect(evaluateRustTestBaseline({ files: new Map() })).toEqual([]);
 });
 
-test("escaped occurrences consume their per-file baseline budget", () => {
+test("unlisted escaped occurrences fail unconditionally", () => {
   const escapedHits = scanRustTestDeterminism({
     source:
       "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline",
@@ -236,40 +210,16 @@ test("escaped occurrences consume their per-file baseline budget", () => {
   });
   expect(escapedHits).toEqual([{ line: 1, kind: "clock", escaped: true }]);
   expect(
-    evaluateRustTestBaseline({
-      files: new Map([[FILE, escapedHits]]),
-      baselineText: "{}",
-    }),
+    evaluateRustTestBaseline({ files: new Map([[FILE, escapedHits]]) }),
   ).toEqual([
     expect.objectContaining({
       file: FILE,
       line: 1,
       message: expect.stringContaining(
-        "Escaped occurrences still need a baseline slot",
+        "Escaped occurrences must be listed in scripts/rust-test-determinism-reviewed-boundaries.json",
       ),
     }),
   ]);
-  expect(
-    evaluateRustTestBaseline({
-      files: new Map([[FILE, escapedHits]]),
-      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
-    }),
-  ).toEqual([]);
-  const mixedHits = scanRustTestDeterminism({
-    source:
-      "#[test] fn example() {\n Instant::now(); // kit-allow: exercise deadline\n\n thread::sleep(duration);\n}",
-    integrationTest: false,
-  });
-  expect(mixedHits).toEqual([
-    { line: 2, kind: "clock", escaped: true },
-    { line: 4, kind: "sleep", escaped: false },
-  ]);
-  expect(
-    evaluateRustTestBaseline({
-      files: new Map([[FILE, mixedHits]]),
-      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
-    }),
-  ).toEqual([expect.objectContaining({ file: FILE, line: 4 })]);
 });
 
 test("a listed reasoned kit-allow is reviewed without consuming the budget", () => {
@@ -288,7 +238,6 @@ test("a listed reasoned kit-allow is reviewed without consuming the budget", () 
     evaluateRustTestBaseline({
       files: new Map([[FILE, escapedHits]]),
       sources: new Map([[FILE, source]]),
-      baselineText: "{}",
       reviewedBoundaryText: JSON.stringify([boundary]),
     }),
   ).toEqual([]);
@@ -312,7 +261,6 @@ test("a reviewed boundary repeated in its file reviews none of its copies", () =
     evaluateRustTestBaseline({
       files,
       sources,
-      baselineText: "{}",
       reviewedBoundaryText,
     }),
   ).toEqual([
@@ -335,20 +283,9 @@ test("a reviewed boundary repeated in its file reviews none of its copies", () =
         ],
       ]),
       sources: new Map([[FILE, single]]),
-      baselineText: "{}",
       reviewedBoundaryText,
     }),
   ).toEqual([]);
-  expect(
-    createRustTestBaseline({
-      sources: [{ file: FILE, crate: "crates/example" }],
-      files,
-      sourceText: sources,
-      reviewedBoundaryText,
-    }),
-  ).toEqual({
-    [FILE]: expect.objectContaining({ count: 2 }),
-  });
 });
 
 test("an unescaped copy of a reviewed line also repeats the boundary", () => {
@@ -365,57 +302,21 @@ test("an unescaped copy of a reviewed line also repeats the boundary", () => {
   const files = new Map([[FILE, copies]]);
   const sources = new Map([[FILE, source]]);
   expect(
-    createRustTestBaseline({
-      sources: [{ file: FILE, crate: "crates/example" }],
-      files,
-      sourceText: sources,
-      reviewedBoundaryText,
-    }),
-  ).toEqual({
-    [FILE]: expect.objectContaining({ count: 2 }),
-  });
-  expect(
     evaluateRustTestBaseline({
       files,
       sources,
-      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
       reviewedBoundaryText,
     }),
   ).toEqual([
+    expect.objectContaining({
+      line: 3,
+      message: expect.stringContaining("repeated in its file"),
+    }),
     expect.objectContaining({
       line: 6,
       message: expect.stringContaining("repeated in its file"),
     }),
   ]);
-});
-
-test("a baseline write followed by a check ignores reviewed boundaries", () => {
-  const source =
-    "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
-  const escapedHits = scanRustTestDeterminism({
-    source,
-    integrationTest: false,
-  });
-  const reviewedBoundaryText = JSON.stringify([
-    { file: FILE, line: source, reason: "exercise deadline" },
-  ]);
-  const files = new Map([[FILE, escapedHits]]);
-  const sources = new Map([[FILE, source]]);
-  const baseline = createRustTestBaseline({
-    sources: [{ file: FILE, crate: "crates/example" }],
-    files,
-    sourceText: sources,
-    reviewedBoundaryText,
-  });
-  expect(baseline).toEqual({});
-  expect(
-    evaluateRustTestBaseline({
-      files,
-      sources,
-      baselineText: JSON.stringify(baseline),
-      reviewedBoundaryText,
-    }),
-  ).toEqual([]);
 });
 
 test("an indented reviewed boundary matches its source hit", () => {
@@ -427,7 +328,6 @@ test("an indented reviewed boundary matches its source hit", () => {
         [FILE, scanRustTestDeterminism({ source, integrationTest: false })],
       ]),
       sources: new Map([[FILE, source]]),
-      baselineText: "{}",
       reviewedBoundaryText: JSON.stringify([
         {
           file: FILE,
@@ -457,13 +357,12 @@ test("an unlisted reasoned kit-allow still fails the determinism guard", () => {
         [FILE, scanRustTestDeterminism({ source, integrationTest: false })],
       ]),
       sources: new Map([[FILE, source]]),
-      baselineText: "{}",
       reviewedBoundaryText: "[]",
     }),
   ).toEqual([
     expect.objectContaining({
       message: expect.stringContaining(
-        "Escaped occurrences still need a baseline slot",
+        "Escaped occurrences must be listed in scripts/rust-test-determinism-reviewed-boundaries.json",
       ),
     }),
   ]);
@@ -480,137 +379,12 @@ test("a reasonless kit-allow cannot become a reviewed boundary", () => {
     evaluateRustTestBaseline({
       files: new Map([[FILE, reasonlessHits]]),
       sources: new Map([[FILE, source]]),
-      baselineText: "{}",
       reviewedBoundaryText: "[]",
     }),
   ).toEqual([
     expect.objectContaining({
       message: expect.stringContaining("Rust test clock"),
     }),
-  ]);
-});
-
-test.each([
-  ["escaped before plain", [true, false], 4],
-  ["plain before escaped", [false, true], 2],
-] as const)(
-  "reports the plain excess hit with %s",
-  (_name, escapes, expectedLine) => {
-    const source = [
-      "#[test] fn example() {",
-      ...escapes.flatMap((escaped) => [
-        `  Instant::now();${escaped ? " // kit-allow: exercise deadline" : ""}`,
-        "",
-      ]),
-      "}",
-    ].join("\n");
-    const orderedHits = scanRustTestDeterminism({
-      source,
-      integrationTest: false,
-    });
-    expect(orderedHits.map(({ escaped }) => escaped)).toEqual([...escapes]);
-    expect(
-      evaluateRustTestBaseline({
-        files: new Map([[FILE, orderedHits]]),
-        baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
-      }),
-    ).toEqual([
-      expect.objectContaining({
-        file: FILE,
-        line: expectedLine,
-        message: expect.stringContaining("Rust test clock:"),
-      }),
-    ]);
-  },
-);
-
-test("plain hits use excess slots before escaped hits regardless of source order", () => {
-  const mixedHits = scanRustTestDeterminism({
-    source:
-      "#[test] fn example() {\n Instant::now(); // kit-allow: exercise deadline\n\n SystemTime::now();\n thread::sleep(duration); // kit-allow: exercise timer\n}",
-    integrationTest: false,
-  });
-  expect(mixedHits.map(({ escaped }) => escaped)).toEqual([true, false, true]);
-  expect(
-    evaluateRustTestBaseline({
-      files: new Map([[FILE, mixedHits]]),
-      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
-    }),
-  ).toEqual([
-    expect.objectContaining({
-      file: FILE,
-      line: 4,
-      message: expect.stringContaining("Rust test clock:"),
-    }),
-    expect.objectContaining({
-      file: FILE,
-      line: 5,
-      message: expect.stringContaining(
-        "Escaped occurrences still need a baseline slot",
-      ),
-    }),
-  ]);
-});
-
-test("all escaped hits still report exactly their excess count", () => {
-  const escapedHits = scanRustTestDeterminism({
-    source:
-      "#[test] fn example() {\n Instant::now(); // kit-allow: exercise deadline\n SystemTime::now(); // kit-allow: exercise wall clock\n thread::sleep(duration); // kit-allow: exercise timer\n}",
-    integrationTest: false,
-  });
-  expect(escapedHits.map(({ escaped }) => escaped)).toEqual([true, true, true]);
-  const diagnostics = evaluateRustTestBaseline({
-    files: new Map([[FILE, escapedHits]]),
-    baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
-  });
-  expect(diagnostics).toEqual([
-    expect.objectContaining({
-      file: FILE,
-      line: 3,
-      message: expect.stringContaining(
-        "Escaped occurrences still need a baseline slot",
-      ),
-    }),
-    expect.objectContaining({
-      file: FILE,
-      line: 4,
-      message: expect.stringContaining(
-        "Escaped occurrences still need a baseline slot",
-      ),
-    }),
-  ]);
-});
-
-test("escaped hits exactly within budget produce no diagnostics", () => {
-  const escapedHits = scanRustTestDeterminism({
-    source:
-      "#[test] fn example() {\n Instant::now(); // kit-allow: exercise deadline\n SystemTime::now(); // kit-allow: exercise wall clock\n}",
-    integrationTest: false,
-  });
-  expect(escapedHits).toHaveLength(2);
-  expect(escapedHits.every(({ escaped }) => escaped)).toBe(true);
-  expect(
-    evaluateRustTestBaseline({
-      files: new Map([[FILE, escapedHits]]),
-      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 2 } }),
-    }),
-  ).toEqual([]);
-});
-
-test("all plain excess hits retain the latest source-line policy", () => {
-  const plainHits = scanRustTestDeterminism({
-    source:
-      "#[test] fn example() {\n Instant::now();\n SystemTime::now();\n thread::sleep(duration);\n}",
-    integrationTest: false,
-  });
-  expect(
-    evaluateRustTestBaseline({
-      files: new Map([[FILE, plainHits]]),
-      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
-    }),
-  ).toEqual([
-    expect.objectContaining({ file: FILE, line: 3 }),
-    expect.objectContaining({ file: FILE, line: 4 }),
   ]);
 });
 
@@ -693,49 +467,6 @@ test("enumeration discovers newly added crates and assigns files to their neares
   }
 });
 
-test.each([
-  "/absolute.rs",
-  "../outside.rs",
-  "crates/./lib.rs",
-  "crates//lib.rs",
-  "crates\\lib.rs",
-  "C:/lib.rs",
-  "crates/lib.rs/",
-  "crates/lib.txt",
-])("rejects invalid Rust baseline repository path %s", (file) => {
-  expect(() =>
-    parseTestBaseline(
-      JSON.stringify({ [file]: { ...metadata, count: 1 } }),
-      "baseline",
-    ),
-  ).toThrow("must be a repository-relative test filename");
-});
-
-test.each([
-  ["count", { ...metadata, count: 0 }],
-  ["count", { ...metadata, count: 1.5 }],
-  ["count", { ...metadata, count: Number.MAX_SAFE_INTEGER + 1 }],
-  ["count", metadata],
-  ["owner", { ...metadata, count: 1, owner: " " }],
-  ["reason", { ...metadata, count: 1, reason: " " }],
-] as const)(
-  "Rust entries share baseline %s metadata validation",
-  (field, entry) => {
-    expect(() =>
-      parseTestBaseline(JSON.stringify({ [FILE]: entry }), "baseline"),
-    ).toThrow(`${FILE} ${field}`);
-  },
-);
-
-test("Rust baseline parser expands each count into stable occurrence membership", () => {
-  expect(
-    parseTestBaseline(
-      JSON.stringify({ [FILE]: { ...metadata, count: 2 } }),
-      "baseline",
-    ),
-  ).toEqual([`${FILE}::1`, `${FILE}::2`]);
-});
-
 test("a test scope ends at its matching brace despite nested blocks and string braces", () => {
   const source = `#[test] fn example() {
   if true { let value = "}"; Instant::now(); }
@@ -760,7 +491,6 @@ test("`test` markers inside non-test conditional attributes do not activate scop
 test.each([
   "crates/new-engine/src/lib.rs",
   "crates/new-engine/Cargo.toml",
-  "scripts/rust-test-determinism-baseline.json",
   "scripts/rust-test-determinism-reviewed-boundaries.json",
   "scripts/rust-test-determinism-scan.ts",
   "scripts/check-rust-test-determinism.ts",
@@ -787,7 +517,6 @@ test.each([
   "crates/new-engine/src/lib.rs",
   "Cargo.toml",
   "crates/new-engine/Cargo.toml",
-  "scripts/rust-test-determinism-baseline.json",
   "scripts/rust-test-determinism-reviewed-boundaries.json",
 ])("baseline runner cache inputs cover changed or deleted %s", (file) => {
   expect(
@@ -806,7 +535,6 @@ test("discovery and runner cache inputs share the Rust file enumeration", () => 
 test("baseline runner selection inputs include scanner and baseline owners", () => {
   expect(PLUGIN_FIXTURE_INPUTS).toEqual(
     expect.arrayContaining([
-      "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
       "$TURBO_ROOT$/scripts/rust-test-determinism-reviewed-boundaries.json",
       "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
       "$TURBO_ROOT$/scripts/check-rust-test-determinism.ts",

@@ -1,0 +1,343 @@
+import { describe, expect, test } from "bun:test";
+
+import { isFieldMeta, isTemplateDataValue } from "./types";
+
+const createNestedObject = (depth: number): unknown => {
+  let value: unknown = "leaf";
+
+  for (let index = 0; index < depth; index += 1) {
+    value = { nested: value };
+  }
+
+  return value;
+};
+
+describe("isTemplateDataValue", () => {
+  test("rejects excessively deep nested values instead of recursing forever", () => {
+    expect(isTemplateDataValue(createNestedObject(128))).toBe(false);
+  });
+
+  test("accepts ordinary nested values within the depth budget", () => {
+    expect(
+      isTemplateDataValue({
+        matter: {
+          client: {
+            name: "Ada",
+          },
+        },
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("isFieldMeta", () => {
+  const validLookup = {
+    registry: "krs",
+    formats: [{ key: "full", template: "[name]" }],
+  };
+
+  test("rejects unknown metadata keys at every owned object boundary", () => {
+    expect(isFieldMeta({ path: "client.name", lable: "Client" })).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { ...validLookup, registry: "krs", extra: "no" },
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts optionsFrom holding a field path", () => {
+    expect(
+      isFieldMeta({
+        path: "lead_party",
+        inputType: "select",
+        optionsFrom: "parties.name",
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects optionsFrom outside the field-path grammar", () => {
+    expect(
+      isFieldMeta({ path: "lead_party", optionsFrom: "parties[0].name" }),
+    ).toBe(false);
+    expect(isFieldMeta({ path: "lead_party", optionsFrom: 7 })).toBe(false);
+  });
+
+  test("accepts a lookup with a supported registry and at least one format", () => {
+    expect(
+      isFieldMeta({
+        path: "buyer_krs",
+        lookup: {
+          registry: "krs",
+          formats: [{ key: "output_1", template: "[name], KRS [number]" }],
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a lookup with an unsupported registry, bad shape, or no format", () => {
+    expect(
+      isFieldMeta({
+        path: "buyer_krs",
+        lookup: {
+          registry: "unknown",
+          formats: [{ key: "output_1", template: "x" }],
+        },
+      }),
+    ).toBe(false);
+    expect(isFieldMeta({ path: "buyer_krs", lookup: { registry: 7 } })).toBe(
+      false,
+    );
+    expect(isFieldMeta({ path: "buyer_krs", lookup: "krs" })).toBe(false);
+    // The formats list is the sole carrier of renderings: an empty or absent
+    // list is not a valid lookup.
+    expect(
+      isFieldMeta({ path: "buyer_krs", lookup: { registry: "krs" } }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "buyer_krs",
+        lookup: { registry: "krs", formats: [] },
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts a lookup with named output formats", () => {
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: {
+          registry: "krs",
+          formats: [
+            { key: "full", template: "[company name], [seat]" },
+            { key: "short", template: "[company name]" },
+          ],
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects lookup formats with a dotted key, bad shape, or past the cap", () => {
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { registry: "krs", formats: [{ key: "a.b", template: "x" }] },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { registry: "krs", formats: [{ key: "full" }] },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { registry: "krs", formats: "full" },
+      }),
+    ).toBe(false);
+    const tooMany = Array.from({ length: 11 }, (_, i) => ({
+      key: `f${i}`,
+      template: "x",
+    }));
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { registry: "krs", formats: tooMany },
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts a formula field", () => {
+    expect(isFieldMeta({ path: "rent_annual", formula: "rent * 12" })).toBe(
+      true,
+    );
+  });
+
+  test("rejects a non-string formula", () => {
+    expect(isFieldMeta({ path: "rent_annual", formula: 12 })).toBe(false);
+  });
+
+  test("rejects a formula combined with another value source", () => {
+    expect(
+      isFieldMeta({ path: "x", formula: "rent * 12", aiPrompt: "draft it" }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({ path: "x", formula: "rent * 12", aiAdapt: true }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        formula: "rent * 12",
+        lookup: validLookup,
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects multiple active derived source modes", () => {
+    expect(
+      isFieldMeta({ path: "x", aiPrompt: "draft it", aiAdapt: false }),
+    ).toBe(true);
+    expect(
+      isFieldMeta({ path: "x", aiPrompt: "draft it", aiAdapt: true }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        aiPrompt: "draft it",
+        lookup: validLookup,
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts a contact-sourced field", () => {
+    expect(
+      isFieldMeta({
+        path: "client_name",
+        source: { kind: "contact", field: "displayName" },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a malformed or unknown data binding", () => {
+    // Unknown field key for the kind.
+    expect(
+      isFieldMeta({ path: "x", source: { kind: "contact", field: "ssn" } }),
+    ).toBe(false);
+    // Unknown source kind.
+    expect(
+      isFieldMeta({
+        path: "x",
+        source: { kind: "unknown", field: "displayName" },
+      }),
+    ).toBe(false);
+    // A party source with an invalid role.
+    expect(
+      isFieldMeta({
+        path: "x",
+        source: { kind: "party", role: "not_a_role", field: "email" },
+      }),
+    ).toBe(false);
+    // A party source missing its role.
+    expect(
+      isFieldMeta({ path: "x", source: { kind: "party", field: "email" } }),
+    ).toBe(false);
+    // A non-object source.
+    expect(isFieldMeta({ path: "x", source: "displayName" })).toBe(false);
+  });
+
+  test("rejects a data binding combined with another value source", () => {
+    const source = { kind: "contact", field: "displayName" } as const;
+    expect(isFieldMeta({ path: "x", source, formula: "rent * 12" })).toBe(
+      false,
+    );
+    expect(isFieldMeta({ path: "x", source, aiPrompt: "draft it" })).toBe(
+      false,
+    );
+    expect(
+      isFieldMeta({ path: "x", source, lookup: { registry: "krs" } }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({ path: "x", source, condition: 'client_type == "company"' }),
+    ).toBe(false);
+  });
+
+  test("accepts a boolean field with a condition rule", () => {
+    expect(
+      isFieldMeta({
+        path: "is_company",
+        inputType: "boolean",
+        condition: 'client_type == "company"',
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a non-string condition", () => {
+    expect(isFieldMeta({ path: "is_company", condition: 7 })).toBe(false);
+  });
+
+  test("rejects a condition combined with another value source", () => {
+    expect(
+      isFieldMeta({
+        path: "x",
+        inputType: "boolean",
+        condition: "a == b",
+        aiPrompt: "decide it",
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        inputType: "boolean",
+        condition: "a == b",
+        formula: "rent * 12",
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        inputType: "boolean",
+        condition: "a == b",
+        aiAdapt: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts a string hint and rejects a non-string one", () => {
+    expect(isFieldMeta({ path: "company.krs", hint: "10 digits" })).toBe(true);
+    expect(isFieldMeta({ path: "company.krs", hint: 10 })).toBe(false);
+  });
+
+  test("accepts a date field with a dateFormat", () => {
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        inputType: "date",
+        dateFormat: { locale: "cs", style: "long" },
+      }),
+    ).toBe(true);
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        inputType: "date",
+        dateFormat: { locale: "pt-BR", style: "iso" },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a dateFormat with an unknown style or bad shape", () => {
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        dateFormat: { locale: "cs", style: "fancy" },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({ path: "signature_date", dateFormat: { locale: "cs" } }),
+    ).toBe(false);
+    expect(isFieldMeta({ path: "signature_date", dateFormat: "long" })).toBe(
+      false,
+    );
+  });
+
+  test("rejects a dateFormat whose locale is not a plausible BCP-47 tag", () => {
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        dateFormat: { locale: "not a locale", style: "long" },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        dateFormat: { locale: "", style: "long" },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        dateFormat: { locale: 7, style: "long" },
+      }),
+    ).toBe(false);
+  });
+});

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { stemSlovakUpstream } from "@stll/legal-morphology/slovak";
+import { stemCorpusText } from "@stll/legal-morphology/stem-text";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -15,8 +17,6 @@ import {
   tokenizeCorpusFreeText,
 } from "./corpus-query";
 import type { CorpusIndexQueryVariant } from "./corpus-query-variant-policy";
-import { stemSlovakUpstream } from "./morphology/slovak";
-import { stemCorpusText } from "./morphology/stem-text";
 
 const slovakOptions = {
   ...caseLawCorpusQueryFields({

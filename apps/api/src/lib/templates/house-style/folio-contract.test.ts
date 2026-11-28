@@ -12,6 +12,27 @@ describe("parseDocxBlockManifest", () => {
     expect(parseDocxBlockManifest(manifest).unwrap()).toEqual(manifest);
   });
 
+  test("accepts a section that shows headers of its own", () => {
+    const manifest = czechContract("Text.");
+    const section = {
+      index: 1,
+      start: "nextPage" as const,
+      orientation: "portrait" as const,
+      size: { width: 11_906, height: 16_838 },
+      margins: { top: null, right: null, bottom: null, left: null },
+      columns: 1,
+      ownHeaders: true as const,
+    };
+    const parsed = parseDocxBlockManifest({
+      ...manifest,
+      sections: [{ ...section, index: 0, ownHeaders: undefined }, section].map(
+        ({ ownHeaders, ...rest }) =>
+          ownHeaders === undefined ? rest : { ...rest, ownHeaders },
+      ),
+    });
+    expect(parsed.isOk() && parsed.value.sections?.[1]?.ownHeaders).toBe(true);
+  });
+
   test("accepts a table with its cells", () => {
     const [block] = manifestOf(["buňka"]).blocks;
     const table = {

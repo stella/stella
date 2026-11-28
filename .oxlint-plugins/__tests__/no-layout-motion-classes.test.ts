@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { lintSingleRule } from "./lint-single-rule.ts";
+import { lintSingleRule, runSingleRule } from "./lint-single-rule.ts";
 
 const RULE_NAME = "no-layout-motion-classes";
 
@@ -195,5 +195,19 @@ describe.serial(RULE_NAME, () => {
     ].join("\n");
 
     expect(await lint(source)).toEqual([]);
+  });
+
+  test("autofixes provable viewport and hover:none utilities in className", async () => {
+    const source =
+      'export const _a = () => <div className="min-h-screen [@media(hover:none)]:opacity-100" />;\n';
+    const fixed = await runSingleRule(RULE_NAME, source, {
+      sourcePath: "motion-surface.tsx",
+      fix: true,
+    });
+    expect(fixed).toEqual({
+      lines: [],
+      source:
+        'export const _a = () => <div className="min-h-dvh pointer-coarse:opacity-100" />;\n',
+    });
   });
 });

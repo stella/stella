@@ -431,6 +431,40 @@ describe("buildTemplatePlan, a letter on a template with a letterhead", () => {
     });
   });
 
+  test("a head with a tracked paragraph mark the output keeps stays in the body", () => {
+    const letter = manifestOf([
+      "Alfa Dodávky s.r.o.",
+      "Dlouhá 12",
+      "110 00 Praha 1",
+      "V Brně dne 6. 1. 2026",
+      "Vážená paní,",
+      "obracíme se na Vás ve věci neuhrazené faktury.",
+    ]);
+    const street = letter.blocks[1];
+    if (street !== undefined) {
+      street.revisions = [
+        {
+          kind: "insertion",
+          start: street.text.length,
+          end: street.text.length,
+          author: "First Author",
+          date: "2026-01-05T10:00:00Z",
+          paragraphMark: true,
+        },
+      ];
+    }
+    const { plan, note } = build(letter, "keepSource", { profile: letterhead });
+    expect(slotsOf(plan)).toEqual([]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual(
+      letter.blocks.map(({ id }) => id),
+    );
+    expect(note.items).toContainEqual({
+      kind: "letterheadFilled",
+      filled: [],
+      left: ["addressee", "date", "reference"],
+    });
+  });
+
   test("more lines than sample lines end up in the last one; a document that is no letter leaves every cell", () => {
     const long = manifestOf([
       "Beta Holdings Ltd",
@@ -797,6 +831,57 @@ describe("buildTemplatePlan, list instances", () => {
       hanging: step,
     });
     expect(levelOf("druhá odrážka")).toBe(levelOf("odrážka pod odstavcem"));
+  });
+
+  test("a bullet hangs from its clause where the template's bullet level stands elsewhere", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s výčtem:", 1),
+      numbered("•", "odrážka pod odstavcem", 5),
+    ]);
+    const clauseText = PROFILE.roles.clause1?.numbering?.indent.left ?? 0;
+    const bulletRole = (left: number) => ({
+      styleId: "Body",
+      alignment: null,
+      numbering: {
+        numId: 9,
+        ilvl: 0,
+        abstractNumId: 9,
+        numFmt: "bullet",
+        lvlText: "•",
+        start: 1,
+        indent: { left, hanging: 360, firstLine: null },
+      },
+      confidence: 0.7,
+      evidence: ["listLevel" as const],
+    });
+    // A level whose mark stands far right of the clause's text.
+    const far = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, bullet: bulletRole(clauseText + 1211) },
+      },
+    }).plan;
+    const farItem = itemOf(far, manifest, "odrážka");
+    expect(farItem?.numbering).not.toMatchObject({ numId: 9 });
+    expect(
+      far.numberingPatches?.find(
+        ({ ilvl, abstractNumId }) =>
+          abstractNumId !== 9 && ilvl === farItem?.numbering?.ilvl,
+      )?.indent,
+    ).toEqual({ left: clauseText + 360, hanging: 360 });
+    // A level whose mark stands at the clause's text stays as it is.
+    const near = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, bullet: bulletRole(clauseText + 360) },
+      },
+    }).plan;
+    expect(itemOf(near, manifest, "odrážka")?.numbering).toMatchObject({
+      numId: 9,
+      ilvl: 0,
+    });
   });
 
   test("a bullet takes a level outside the outline list where the template has one", () => {
@@ -2914,6 +2999,203 @@ describe("buildTemplatePlan, drawn marks fixed to the source's page", () => {
           blockId === cells.find(({ text }) => text === "Cena")?.id,
       ),
     ).toMatchObject({ dropPageShapes: true });
+  });
+});
+
+describe("buildTemplatePlan, a source read with its tracked changes kept", () => {
+  const BY = { author: "First Author", date: "2026-01-05T10:00:00Z" };
+  const KEPT = {
+    insertions: 2,
+    deletions: 1,
+    moves: 0,
+    paragraphMarks: 1,
+    tableRows: 0,
+    formattingChanges: 0,
+    authors: [BY.author],
+    first: BY.date,
+    last: BY.date,
+  };
+  const citingText = "Viz čl. II odst. 2 písm. d) této smlouvy.";
+  const tracked = (): DocxBlockManifest => {
+    const manifest = czechContract(citingText);
+    const blockOf = (start: string) => {
+      const block = manifest.blocks.find(
+        ({ id }) => id === blockIdOf(manifest, start),
+      );
+      if (block === undefined) {
+        throw new Error(start);
+      }
+      return block;
+    };
+    // Somebody rewrote the article the citation names.
+    blockOf("Viz čl. II").revisions = [
+      {
+        kind: "insertion",
+        start: citingText.indexOf("II"),
+        end: citingText.indexOf("II") + 2,
+        ...BY,
+      },
+    ];
+    // A typed label with a deletion in it, and a heading whose paragraph
+    // mark is an inserted one.
+    blockOf("Článek III.").revisions = [
+      { kind: "deletion", start: 3, end: 3, ...BY },
+    ];
+    const first = blockOf("Článek I.");
+    first.revisions = [
+      {
+        kind: "insertion",
+        start: first.text.length,
+        end: first.text.length,
+        paragraphMark: true,
+        ...BY,
+      },
+    ];
+    return { ...manifest, trackedChangesKept: KEPT };
+  };
+
+  test("the plan keeps the changes and the note leads with what the source tracks", () => {
+    const { plan, note } = build(tracked());
+    expect(plan.trackedChanges).toBe("keep");
+    expect(note.items.at(0)).toEqual({
+      kind: "trackedChangesKept",
+      notCarried: 0,
+      ...KEPT,
+    });
+  });
+
+  test("a citation a change touches stays text; the ones beside it become fields", () => {
+    const manifest = tracked();
+    // With the changes rejected the clauses carry the numbers they carry
+    // now.
+    const { plan, note } = build(manifest, "keepSource", {
+      rejectedView: czechContract(citingText),
+    });
+    const citing = blockIdOf(manifest, "Viz čl. II");
+    expect(
+      (plan.references ?? [])
+        .filter(({ blockId }) => blockId === citing)
+        .map(({ start, end }) => citingText.slice(start, end)),
+    ).toEqual(["2", "d)"]);
+    expect(note.items).toContainEqual(
+      expect.objectContaining({
+        kind: "referenceUnlinked",
+        blockId: citing,
+        reason: "trackedChange",
+      }),
+    );
+  });
+
+  test("a citation whose target has another number with the changes rejected stays text", () => {
+    // Somebody inserted the first clause of article II, in front of the
+    // clause the citation names: rejected, that clause is number 1.
+    const kept = czechContract(citingText);
+    const inserted = kept.blocks.find(({ text }) =>
+      text.startsWith("První ujednání, oddíl II."),
+    );
+    if (inserted === undefined) {
+      throw new Error("no clause to insert");
+    }
+    inserted.revisions = [
+      { kind: "insertion", start: 0, end: inserted.text.length, ...BY },
+    ];
+    const manifest = { ...kept, trackedChangesKept: KEPT };
+    const without = czechContract(citingText);
+    const rejectedView = {
+      ...without,
+      blocks: without.blocks
+        .filter(({ text }) => !text.startsWith("První ujednání, oddíl II."))
+        .map((block, position) => {
+          const renumbered = new Map([
+            ["Druhé ujednání, oddíl II:", "1."],
+            ["Třetí ujednání, oddíl II.", "2."],
+          ]).get(block.text);
+          // The other reading names its blocks by its own count.
+          return {
+            ...block,
+            id: `r${String(position)}`,
+            label: renumbered ?? block.label,
+          };
+        }),
+    };
+    const citing = blockIdOf(manifest, "Viz čl. II");
+    const { plan, note } = build(manifest, "keepSource", { rejectedView });
+    // The letter under it is letter d) either way and becomes a field.
+    expect(
+      (plan.references ?? [])
+        .filter(({ blockId }) => blockId === citing)
+        .map(({ start, end }) => citingText.slice(start, end)),
+    ).toEqual(["II", "d)"]);
+    expect(
+      note.items.filter(
+        (item) => item.kind === "referenceUnlinked" && item.blockId === citing,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        reason: "renumberedWhenRejected",
+        start: citingText.indexOf("2"),
+      }),
+    ]);
+    // Read without the other view, no target is known to keep its number.
+    expect(
+      (build(manifest).plan.references ?? []).filter(
+        ({ blockId }) => blockId === citing,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a typed label with a change in it stays as it is written", () => {
+    const manifest = tracked();
+    const { plan, note } = build(manifest);
+    const changed = itemOf(plan, manifest, "Článek III.");
+    expect(changed).not.toHaveProperty("stripLabel");
+    expect(changed?.numbering ?? null).toBeNull();
+    expect(note.items).toContainEqual({
+      kind: "labelKeptAsText",
+      blockId: blockIdOf(manifest, "Článek III."),
+      reason: "trackedChange",
+    });
+    // Its neighbour without a change is numbered by the template's list.
+    expect(itemOf(plan, manifest, "Článek IV.")).toHaveProperty("stripLabel");
+  });
+
+  test("a heading that ends in an inserted paragraph mark is not joined to its title", () => {
+    const manifest = tracked();
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "Článek I.")).not.toHaveProperty("mergeNext");
+    expect(itemOf(plan, manifest, "Úvodní ustanovení")).toBeDefined();
+    // Without the change the two are one paragraph.
+    const plain = czechContract(citingText);
+    expect(itemOf(build(plain).plan, plain, "Článek I.")).toHaveProperty(
+      "mergeNext",
+    );
+  });
+
+  test("a blank line somebody inserted is left out and counted; one that shows deleted text is placed", () => {
+    const manifest = manifestOf([
+      "SMLOUVA O DODÁVCE",
+      "",
+      "",
+      "Článek I.\nPředmět",
+      numbered("1.", "Dodavatel dodá zboží.", 10),
+    ]);
+    const [, inserted, deleted] = manifest.blocks;
+    if (inserted === undefined || deleted === undefined) {
+      throw new Error("fixture");
+    }
+    inserted.revisions = [
+      { kind: "insertion", start: 0, end: 0, paragraphMark: true, ...BY },
+    ];
+    deleted.revisions = [{ kind: "deletion", start: 0, end: 0, ...BY }];
+    const { plan, note } = build({ ...manifest, trackedChangesKept: KEPT });
+    expect(plan.omit).toEqual([{ blockId: inserted.id, reason: "empty" }]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toContain(
+      deleted.id,
+    );
+    expect(note.items.at(0)).toMatchObject({
+      kind: "trackedChangesKept",
+      notCarried: 1,
+    });
   });
 });
 

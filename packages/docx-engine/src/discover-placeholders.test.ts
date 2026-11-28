@@ -1,0 +1,114 @@
+import { describe, expect, test } from "bun:test";
+
+import { ZipArchive } from "@stll/docx-core/zip";
+
+import { discoverPlaceholders } from "./discover-placeholders";
+
+/** Build a minimal DOCX buffer with the given document.xml. */
+const makeDocx = async (documentXml: string): Promise<Buffer> => {
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+</Types>`,
+  );
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
+  return Buffer.from(buf);
+};
+
+const WRAP = (body: string) =>
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>${body}</w:body></w:document>`;
+
+describe("discoverPlaceholders", () => {
+  test("finds placeholders in a single run", async () => {
+    const xml = WRAP(
+      "<w:p><w:r><w:t>Hello {{name}}, welcome.</w:t></w:r></w:p>",
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverPlaceholders(buf);
+
+    expect(result).toEqual([{ name: "name", count: 1 }]);
+  });
+
+  test("tolerates whitespace inside the braces", async () => {
+    const xml = WRAP(
+      "<w:p><w:r><w:t>Hello {{ name }}, owed {{  amount  }}.</w:t></w:r></w:p>",
+    );
+    const result = await discoverPlaceholders(await makeDocx(xml));
+
+    // Names are captured clean (no padding), sorted alphabetically.
+    expect(result).toEqual([
+      { name: "amount", count: 1 },
+      { name: "name", count: 1 },
+    ]);
+  });
+
+  test("finds placeholders split across runs", async () => {
+    const xml = WRAP(
+      `<w:p>
+        <w:r><w:t>Price: {{</w:t></w:r>
+        <w:r><w:t>amount</w:t></w:r>
+        <w:r><w:t>}} EUR</w:t></w:r>
+      </w:p>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverPlaceholders(buf);
+
+    expect(result).toEqual([{ name: "amount", count: 1 }]);
+  });
+
+  test("counts multiple occurrences", async () => {
+    const xml = WRAP(
+      `<w:p><w:r><w:t>{{x}} and {{x}}</w:t></w:r></w:p>
+       <w:p><w:r><w:t>also {{x}}</w:t></w:r></w:p>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverPlaceholders(buf);
+
+    expect(result).toEqual([{ name: "x", count: 3 }]);
+  });
+
+  test("returns empty for no placeholders", async () => {
+    const xml = WRAP("<w:p><w:r><w:t>No tags here.</w:t></w:r></w:p>");
+    const buf = await makeDocx(xml);
+    const result = await discoverPlaceholders(buf);
+
+    expect(result).toEqual([]);
+  });
+
+  test("results are sorted alphabetically", async () => {
+    const xml = WRAP(
+      "<w:p><w:r><w:t>{{zebra}} {{alpha}} {{mid}}</w:t></w:r></w:p>",
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverPlaceholders(buf);
+
+    expect(result.map((p) => p.name)).toEqual(["alpha", "mid", "zebra"]);
+  });
+
+  test("discovers placeholders across a multi-clause agreement document", async () => {
+    const buf = await makeDocx(
+      WRAP(
+        `<w:p><w:r><w:t>SHARE PURCHASE AGREEMENT dated {{contract_date}}</w:t></w:r></w:p>` +
+          `<w:p><w:r><w:t>Buyer: {{buyer_name}} ({{buyer_reg_no}}), address {{buyer_address}}</w:t></w:r></w:p>` +
+          `<w:p><w:r><w:t>Seller 1: {{seller_1_name}}: Share Price: {{price_share_1}}</w:t></w:r></w:p>` +
+          `<w:p><w:r><w:t>Seller 2: {{seller_2_name}}: Share Price: {{price_share_2}}</w:t></w:r></w:p>` +
+          `<w:p><w:r><w:t>Closing Date: {{closing_date}} in {{governing_law}}</w:t></w:r></w:p>`,
+      ),
+    );
+    const result = await discoverPlaceholders(buf);
+
+    const names = result.map((p) => p.name);
+    expect(names).toContain("price_share_1");
+    expect(names).toContain("contract_date");
+    expect(names).toContain("buyer_name");
+    expect(names).toContain("seller_1_name");
+    expect(result.length).toBeGreaterThanOrEqual(8);
+  });
+});
