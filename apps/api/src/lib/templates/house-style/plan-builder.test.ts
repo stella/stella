@@ -4057,8 +4057,10 @@ describe("buildTemplatePlan, labelled lines under an item with indents of their 
     const second = itemOf(plan, manifest, "Příloha č. 2");
     const third = itemOf(plan, manifest, "Příloha č. 3");
     expect(first?.indent?.hanging).toBeGreaterThan(0);
-    // The flush line's stop is where the hanging lines' values start.
-    const shared = Math.max(first?.indent?.left ?? 0, third?.indent?.left ?? 0);
+    // The flush line's stop is where the hanging lines' values start: the
+    // nearer of two hanging indents a point apart, which each hanging
+    // line's own stop does not stand in front of.
+    const shared = Math.min(first?.indent?.left ?? 0, third?.indent?.left ?? 0);
     expect(second?.tabStops).toEqual([shared]);
     expect(itemOf(plan, manifest, "Další přílohy")?.tabStops).toEqual([shared]);
   });

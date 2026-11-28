@@ -1693,6 +1693,9 @@ const continuesBulletList = (
 ): boolean =>
   before?.pattern?.numFmt === "bullet" &&
   shownLabelOf(line.block) === null &&
+  // A provision with a label of its own, typed or numbered, ends the run.
+  line.entry === null &&
+  !line.numbered &&
   next?.kind === "paragraph" &&
   isBulleted(next) &&
   next.numbering?.numId === before.block.numbering?.numId;
@@ -1847,6 +1850,9 @@ const labelledLine = (
  * each other; a table, a paragraph a list numbers and another style end
  * it. The text stays as it is.
  */
+/** Hanging indents this close, in twentieths of a point, stand at one place. */
+const HANGING_SAME = 20;
+
 const alignPartyLines = (context: Context, placed: Placed): void => {
   let run: LabelledLine[] = [];
   let style: string | null = null;
@@ -1859,9 +1865,25 @@ const alignPartyLines = (context: Context, placed: Placed): void => {
       const hangs = run.flatMap(({ hangingLeft }) =>
         hangingLeft === null ? [] : [hangingLeft],
       );
+      // A paragraph's hanging indent is a stop of its own, so the shared
+      // stop is a hanging one only where every such line hangs at one place
+      // (within a point), the nearest of them, and only where each line's
+      // stops all stand beyond its label.
+      const hanging =
+        hangs.length > 0 &&
+        Math.max(...hangs) - Math.min(...hangs) <= HANGING_SAME &&
+        Math.min(...hangs) >= widest
+          ? Math.min(...hangs)
+          : undefined;
+      const clearsLabels = (stop: number): boolean =>
+        run.every(
+          ({ labelEnd, tabs }) =>
+            stop - (Math.min(Math.max(tabs, 1), TAB_STOPS_MAX) - 1) * TAB_STEP >
+            labelEnd,
+        );
       const first =
-        hangs.length > 0 && Math.min(...hangs) >= widest
-          ? Math.max(...hangs)
+        hanging !== undefined && clearsLabels(hanging)
+          ? hanging
           : widest + LABEL_GAP;
       for (const { blockId, tabs } of run) {
         // As many stops as the line has tabs, the last one the shared one.
