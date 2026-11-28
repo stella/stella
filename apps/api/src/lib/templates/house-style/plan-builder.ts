@@ -724,6 +724,10 @@ const styleIdOf = (context: Context, role: HouseStyleRole): string | null => {
  * set it in another style: what a person should look at. Two readings that
  * share a style look the same and are not noted.
  */
+/** A reading the rules give less than even odds is noted when nobody
+ *  answers it; likelier ones are asked about but not noted. */
+const ROLE_NOTE_BELOW = 0.5;
+
 const noteUncertainRoles = (
   context: Context,
   placements: readonly Placement[],
@@ -731,7 +735,11 @@ const noteUncertainRoles = (
 ): void => {
   const open = new Map(
     roleItems
-      .filter(({ id }) => !context.decisions.has(id))
+      .filter(
+        ({ id, options }) =>
+          !context.decisions.has(id) &&
+          (options[0]?.confidence ?? 0) < ROLE_NOTE_BELOW,
+      )
       .map((item) => [item.blockId, item]),
   );
   // Paragraphs in a row with the same doubt are one item.

@@ -267,7 +267,7 @@ describe("buildTemplatePlan, roles nobody decided", () => {
       kind: "blockRole" as const,
       blockId: id,
       options: [
-        { role: "clause1" as const, confidence: 0.6 },
+        { role: "clause1" as const, confidence: 0.45 },
         { role: "body" as const, confidence: 0.1 },
       ],
     });
@@ -277,6 +277,19 @@ describe("buildTemplatePlan, roles nobody decided", () => {
     expect(uncertain(note.items)).toMatchObject([
       { blockId: first, lastBlockId: second, blocks: 2, alternative: "body" },
     ]);
+    // A reading with even odds or better is asked about, not noted.
+    const likely = {
+      ...doubt(first),
+      options: [
+        { role: "clause1" as const, confidence: 0.6 },
+        { role: "body" as const, confidence: 0.1 },
+      ],
+    };
+    expect(
+      uncertain(
+        build(manifest, "keepSource", { roleItems: [likely] }).note.items,
+      ),
+    ).toEqual([]);
   });
 
   test("an answered one is not", () => {
