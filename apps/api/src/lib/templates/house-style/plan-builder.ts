@@ -1070,11 +1070,43 @@ const plannedSection = (
  * those cannot carry it (it is a line of the source's contents, or joins
  * its heading), no section is kept and the note lists what was lost.
  */
+/** Roles that open the body of a document, behind its front matter. */
+const BODY_OPENING_ROLES: ReadonlySet<string> = new Set([
+  "articleHeading",
+  "recital",
+  "heading",
+  ...CLAUSE_ROLES,
+]);
+
 const sectionsToKeep = (context: Context): KeptSections => {
   const { sections, topLevel, index, proposalById } = context;
   const base = sections.at(0);
   const differs = sections.map((section) => pageDiffersFrom(base, section));
-  if (!differs.includes(true)) {
+  // A section that begins on a new page with a header or footer of its own
+  // (an annex's header, a signature page's footer) stays one too: that
+  // content has a place only in a section. The section before it ends.
+  // Not in the front matter: the template's own contents and cover come
+  // in front of the first article, and a section ended there would leave
+  // them where the source's section began.
+  const bodyOpens = topLevel.findIndex((block) =>
+    BODY_OPENING_ROLES.has(proposalById.get(block.id)?.role ?? "other"),
+  );
+  const ownHeaders = sections.map((section, position) => {
+    const ending = topLevel.findIndex(
+      (block) =>
+        block.kind === "paragraph" &&
+        block.endsSection === true &&
+        block.sectionIndex === position - 1,
+    );
+    return (
+      position > 0 &&
+      section.ownHeaders === true &&
+      NEW_PAGE_STARTS.has(section.start) &&
+      bodyOpens !== -1 &&
+      ending > bodyOpens
+    );
+  });
+  if (!differs.includes(true) && !ownHeaders.includes(true)) {
     return NO_KEPT_SECTIONS;
   }
   const ends = new Map<string, TemplatePlanSection>();
@@ -1089,7 +1121,11 @@ const sectionsToKeep = (context: Context): KeptSections => {
       const last = plannedSection(page, opened?.start);
       return { ends, last: Object.keys(last).length === 0 ? undefined : last };
     }
-    if (!(differs[position] === true || differs[position + 1] === true)) {
+    if (!(
+      differs[position] === true ||
+      differs[position + 1] === true ||
+      ownHeaders[position + 1] === true
+    )) {
       continue;
     }
     const carrier = topLevel.find(
