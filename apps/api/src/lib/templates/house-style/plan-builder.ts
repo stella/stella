@@ -1647,19 +1647,23 @@ const alignPartyLines = (context: Context, placed: Placed): void => {
       }
       continue;
     }
+    const line = labelledLine(
+      context,
+      placement,
+      placed.itemIndents.get(block.id),
+    );
+    // A labelled line right behind others of a block stays in it in
+    // another style too (a note line of a list of annexes read as text of
+    // its own).
+    const continues = line !== null && run.length > 0;
     if (
-      placement.styleId !== style ||
+      (placement.styleId !== style && !continues) ||
       placement.numbered ||
       block.label !== null
     ) {
       close();
       style = placement.styleId;
     }
-    const line = labelledLine(
-      context,
-      placement,
-      placed.itemIndents.get(block.id),
-    );
     if (line !== null) {
       run.push(line);
     }

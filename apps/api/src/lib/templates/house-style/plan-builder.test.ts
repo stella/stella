@@ -3707,6 +3707,7 @@ describe("buildTemplatePlan, labelled lines under an item with indents of their 
       "Příloha č. 1:\tMapový zákres záměru",
       "Příloha č. 2:\tStudie záměru",
       "Příloha č. 3:\tVyčíslení plnění",
+      "Další přílohy:\tPodle obsahu Smlouvy",
     ]);
     const indents: Record<number, { left: number; firstLine: number }> = {
       2: { left: 567, firstLine: -567 },
@@ -3735,7 +3736,15 @@ describe("buildTemplatePlan, labelled lines under an item with indents of their 
       alternatives: [],
       mergedIntoBlockId: null,
     });
+    const { body } = PROFILE.roles;
+    if (body === null) {
+      throw new Error("The contract template has a body style.");
+    }
     const { plan } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, body: { ...body, indentLeft: 0 } },
+      },
       roles: [
         reading("p0", "title"),
         reading("p1", "articleHeading"),
@@ -3743,6 +3752,8 @@ describe("buildTemplatePlan, labelled lines under an item with indents of their 
         reading("p3", "continuation"),
         reading("p4", "continuation"),
         reading("p5", "continuation"),
+        // Read as text of its own: another style, the same block.
+        reading("p6", "body"),
       ],
     });
     const first = itemOf(plan, manifest, "Příloha č. 1");
@@ -3750,9 +3761,9 @@ describe("buildTemplatePlan, labelled lines under an item with indents of their 
     const third = itemOf(plan, manifest, "Příloha č. 3");
     expect(first?.indent?.hanging).toBeGreaterThan(0);
     // The flush line's stop is where the hanging lines' values start.
-    expect(second?.tabStops).toEqual([
-      Math.max(first?.indent?.left ?? 0, third?.indent?.left ?? 0),
-    ]);
+    const shared = Math.max(first?.indent?.left ?? 0, third?.indent?.left ?? 0);
+    expect(second?.tabStops).toEqual([shared]);
+    expect(itemOf(plan, manifest, "Další přílohy")?.tabStops).toEqual([shared]);
   });
 });
 
