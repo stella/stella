@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
@@ -34,6 +35,7 @@ import { queryView } from "@/lib/query-view.logic";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
@@ -144,7 +146,11 @@ export const DocumentAiSourceBar = ({
   const shouldGenerateBoxes = Boolean(
     justificationId && isActiveTab && hasBoundingBoxCitations && !boundingBoxes,
   );
-  const generateBoundingBoxes = useQuery({
+  const generateBoundingBoxes = useResourceQuery({
+    resourceReads: {
+      resources: [RESOURCE_TYPE.FLOW_RUN, RESOURCE_TYPE.WORKSPACE],
+      scope: { type: "workspace", workspaceId },
+    },
     queryKey: [
       ...workspaceKeys.justifications(workspaceId),
       "generate-bounding-boxes",
@@ -208,7 +214,11 @@ export const DocumentAiSourceBar = ({
     setIsAnswerExpanded(false);
   }
 
-  useQuery({
+  useResourceQuery({
+    resourceReads: {
+      resources: [RESOURCE_TYPE.FLOW_RUN, RESOURCE_TYPE.WORKSPACE],
+      scope: { type: "workspace", workspaceId },
+    },
     queryKey: [
       ...workspaceKeys.justifications(workspaceId),
       "bounding-box-poll",

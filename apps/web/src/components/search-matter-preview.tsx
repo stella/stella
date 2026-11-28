@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -26,6 +26,7 @@ import {
   MEDIUM_DATE_SHORT_TIME_FORMAT,
   UTC_MEDIUM_DATE_FORMAT,
 } from "@/lib/relative-time";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
 
 const ICON_CLASS_NAME = "text-muted-foreground mt-0.5 size-4 shrink-0";
@@ -125,8 +126,12 @@ export const SearchMatterPreview = ({
 const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const { data, isError, isFetching, refetch } = useQuery({
+  const { data, isError, isFetching, refetch } = useResourceQuery({
     queryKey: [...workspacesKeys.byId(workspaceId), "search-preview"],
+    resourceReads: {
+      resources: [RESOURCE_TYPE.WORKSPACE, RESOURCE_TYPE.ENTITY],
+      scope: { type: "workspace", workspaceId },
+    },
     queryFn: async ({ signal }) => {
       const workspaceApi = api.workspaces({ workspaceId });
       return unwrapApiResponse(

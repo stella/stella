@@ -20,6 +20,7 @@ const validSources = [
 import { RESOURCE_TYPE } from "@stll/api-contract";
 export const resourceMutation = (options: { mutationFn: () => unknown }) => options.mutationFn;
 export const useResourceMutation = (options: { resource: unknown; mutationFn: () => unknown }) => options;
+export const useResourceQuery = (options: { queryKey: unknown; queryFn?: () => unknown; resourceReads: unknown }) => options;
 export const resourceQueryOptions = (options: unknown) => options;
 export const RESOURCE_MUTATION_CONTRACTS = {
   renameEntity: {
@@ -1955,6 +1956,88 @@ test("useResourceMutation rejects missing, malformed, or mismatched resource dec
 import { resourceMutation, useResourceMutation } from "@/lib/workspace-realtime";
 import { api } from "@/lib/api";
 const queryClient = {};
+${body}
+`,
+      },
+    ];
+    assertInvalidCannotBeBaselined(violations(sources));
+  }
+});
+
+test("useResourceQuery validates resourceReads metadata and independent declarations natively", () => {
+  const sources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { useResourceQuery } from "@/lib/workspace-realtime";
+import { api } from "@/lib/api";
+export const useEntities = (workspaceId: string) => useResourceQuery({
+  queryKey: ["entities", workspaceId],
+  queryFn: () => api.entities({ workspaceId }).get(),
+  resourceReads: {
+    resources: [RESOURCE_TYPE.ENTITY],
+    scope: { type: "workspace", workspaceId },
+    keptCurrentBy: ["renameEntity"],
+  },
+});
+export const usePreview = () => useResourceQuery({
+  queryKey: ["preview"],
+  queryFn: () => Promise.resolve("ok"),
+  resourceReads: { type: "independent" },
+});
+export const useWrappedEntities = (workspaceId: string) => useEntities(workspaceId);
+`,
+    },
+  ];
+  expect(violations(sources)).toEqual([]);
+});
+
+test("useResourceQuery rejects missing, malformed, unknown-contract, or nested resourceQueryOptions declarations without baselining", () => {
+  for (const body of [
+    `export const missing = (workspaceId: string) => useResourceQuery({
+      queryKey: ["entities", workspaceId],
+      queryFn: () => api.entities({ workspaceId }).get(),
+    });`,
+    `export const emptyResources = (workspaceId: string) => useResourceQuery({
+      queryKey: ["entities", workspaceId],
+      queryFn: () => api.entities({ workspaceId }).get(),
+      resourceReads: { resources: [], scope: { type: "workspace", workspaceId } },
+    });`,
+    `export const unknownKeptCurrent = (workspaceId: string) => useResourceQuery({
+      queryKey: ["entities", workspaceId],
+      queryFn: () => api.entities({ workspaceId }).get(),
+      resourceReads: {
+        resources: [RESOURCE_TYPE.ENTITY],
+        scope: { type: "workspace", workspaceId },
+        keptCurrentBy: ["unknownContract"],
+      },
+    });`,
+    `export const nestedHelper = (workspaceId: string) => useResourceQuery({
+      ...resourceQueryOptions(
+        {
+          queryKey: ["entities", workspaceId],
+          queryFn: () => api.entities({ workspaceId }).get(),
+        },
+        { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "workspace", workspaceId } },
+      ),
+      resourceReads: { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "workspace", workspaceId } },
+    });`,
+    `export const dynamicReads = (workspaceId: string, reads: unknown) => useResourceQuery({
+      queryKey: ["entities", workspaceId],
+      queryFn: () => api.entities({ workspaceId }).get(),
+      resourceReads: reads,
+    });`,
+  ]) {
+    const sources = [
+      ...validSources.slice(0, 2),
+      {
+        file: "apps/web/src/features.ts",
+        text: `
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions, useResourceQuery } from "@/lib/workspace-realtime";
+import { api } from "@/lib/api";
 ${body}
 `,
       },
