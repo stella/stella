@@ -1,3 +1,4 @@
+import "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 

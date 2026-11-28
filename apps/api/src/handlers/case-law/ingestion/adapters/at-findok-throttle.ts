@@ -1,3 +1,5 @@
+// parser-output-unchanged: registers the host publisher request gate before throttling requests; parsed output is unchanged.
+import "./publisher-request-gate";
 // parser-output-unchanged: extracted pure adapter runtime, PL, and AT-RIS modules into @stll/case-law-adapters; parsed output is unchanged.
 // parser-output-unchanged: pure helper and publisher-gate hook imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
