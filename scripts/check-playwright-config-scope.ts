@@ -25,6 +25,8 @@ import * as v from "valibot";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
+import { failCheck } from "../packages/scripts/src/check-failure";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const PLAYWRIGHT_BIN = path.join(REPO_ROOT, "node_modules/.bin/playwright");
 const CONFIG_NAME = /^playwright(\.[\w-]+)?\.config\.(ts|mts|js|mjs|cjs)$/u;
@@ -252,14 +254,14 @@ const main = (): number => {
   const configs = trackedConfigs();
   const problems = configs.flatMap(listConfig);
   if (problems.length > 0) {
-    console.error("Playwright configs must load and stay in their package:\n");
-    for (const problem of problems) {
-      console.error(`- ${problem}`);
-    }
-    console.error(
-      "\nGive the other package its own Playwright config instead of pointing a project at it.",
-    );
-    return 1;
+    return failCheck({
+      check: "check-playwright-config-scope",
+      summary: `${problems.length} Playwright config scope issue(s) found`,
+      details: problems,
+      remediation:
+        "Ensure every Playwright config loads cleanly and collects specs only from its own workspace package; give other packages their own Playwright config instead.",
+      rerunCommand: "bun run check:playwright-config-scope",
+    });
   }
   console.log(
     `Playwright config scope OK: ${configs.length} configs list only their own package's specs.`,

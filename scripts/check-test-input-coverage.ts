@@ -27,6 +27,7 @@ import ts from "typescript6";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
+import { failCheck } from "../packages/scripts/src/check-failure";
 import { readStringLiterals, readTestInputs } from "./test-input-readers";
 
 export { readStringLiterals, readTestInputs } from "./test-input-readers";
@@ -684,11 +685,14 @@ export const checkTestInputCoverage = (root: string): readonly string[] => {
 const main = (): number => {
   const errors = checkTestInputCoverage(REPO_ROOT);
   if (errors.length > 0) {
-    console.error("Cross-package test reads are not declared in turbo.json:\n");
-    for (const error of errors) {
-      console.error(`- ${error}\n`);
-    }
-    return 1;
+    return failCheck({
+      check: "check-test-input-coverage",
+      summary: `${errors.length} cross-package test input coverage issue(s) found`,
+      details: errors,
+      remediation:
+        "Declare every cross-package test read under `$TURBO_ROOT$/...` in the package's `test.inputs` in turbo.json, and remove stale entries.",
+      rerunCommand: "bun run check:test-input-coverage",
+    });
   }
   console.log(
     "test input coverage: OK (every cross-package test read is a declared test input).",

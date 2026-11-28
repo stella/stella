@@ -19,6 +19,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { SAFE_HANDLER_FACTORIES } from "../apps/api/src/lib/safe-handler-factories";
 import { RAW_WRITE_CONTRACTS } from "../apps/api/src/lib/write-contract/raw-write-contracts";
+import { failCheck } from "../packages/scripts/src/check-failure";
 import {
   type ArrowFunctionExpression,
   type BlockStatement,
@@ -2709,14 +2710,18 @@ if (import.meta.main) {
       previous,
       debtIds: readWriteContractDebtIds(load),
     });
-    for (const error of errors) {
-      process.stderr.write(`${error}\n`);
-    }
     process.stdout.write(
       `Write contracts: ${registrations.length} surfaces, ${baseline.length} deferred entries\n`,
     );
     if (errors.length !== 0) {
-      process.exitCode = 1;
+      process.exitCode = failCheck({
+        check: "check-write-contracts",
+        summary: `${errors.length} write contract violation(s) found`,
+        details: errors,
+        remediation:
+          "Declare `patch` or `replace` write contracts (with matching preconditions and handler enforcement) for every mutation route, and keep the shrink-only baseline and owner debt IDs in sync.",
+        rerunCommand: "bun run check:write-contracts",
+      });
     }
   }
   // The route table's modules open Redis clients at import (the rate
