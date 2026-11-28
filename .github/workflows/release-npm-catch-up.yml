@@ -7,49 +7,87 @@ defaults:
 # Stable CLI publication runs when the final release run completes, and it
 # refuses until the release pull request has landed on main. When that pull
 # request lands later, nothing else retries the publication and the next
-# release cut stops at its npm-publish-lag gate. Once a release pull request
-# merges and its final tag exists, this dispatches the manual CLI publication
-# for that tag if npm does not serve the tag's CLI version yet. Before the final
-# tag exists, the final release run publishes on its own.
+# release cut stops at its npm-publish-lag gate. This dispatches the manual
+# CLI publication only for that case: the release's own publication finished
+# having refused at its source check, the release pull request has merged, and
+# npm still lacks the tag's CLI version (scripts/release-npm-catch-up.mjs).
+# While the release run or its publication is still going, that publication is
+# the one path; its completion runs this decision again, as does the merge.
 on:
   pull_request:
     branches: [main]
     types: [closed]
+  workflow_run: # zizmor: ignore[dangerous-triggers] reads run metadata only; checks out this repository's own default-branch script
+    workflows: ["Publish npm packages"]
+    types: [completed]
 
-# A pull request closes once, so cancelling a superseded run never drops one.
+# One decision at a time, so a merge and a publication finishing together
+# cannot both dispatch; a queued decision sees the first one's dispatch.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 permissions: {}
 
 jobs:
   publish-cli:
     if: >-
-      github.event.pull_request.merged == true
+      (github.event_name == 'pull_request'
+      && github.event.pull_request.merged == true
       && github.event.pull_request.head.repo.full_name == github.repository
-      && startsWith(github.event.pull_request.head.ref, 'release/v')
+      && startsWith(github.event.pull_request.head.ref, 'release/v'))
+      || (github.event_name == 'workflow_run'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/publish-npm.yml'
+      && github.event.workflow_run.event == 'workflow_run')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: write
       contents: read
+      pull-requests: read
     steps:
+      # main, not the pull request's revision: this job can dispatch.
+      - name: Checkout the catch-up decision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: .catch-up
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/release-npm-catch-up.mjs
+          sparse-checkout-cone-mode: false
+
       - name: Dispatch the CLI publication when npm lacks it
         timeout-minutes: 3
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || '' }}
+          PUBLICATION_CREATED_AT: ${{ github.event.workflow_run.created_at || '' }}
         with:
           retries: 3
           script: |
-            // scripts/release-branch.sh owns this name.
-            const match = /^release\/v(\d+\.\d+\.\d+)$/u.exec(process.env.HEAD_REF ?? "");
-            if (match === null) {
-              core.info(`${process.env.HEAD_REF} is not a release branch.`);
+            const { pathToFileURL } = require("node:url");
+            const { resolve } = require("node:path");
+            const { collectCatchUpState, decideCatchUp, resolvePublicationTag } = await import(
+              pathToFileURL(resolve(".catch-up/scripts/release-npm-catch-up.mjs")).href
+            );
+            let tag = null;
+            if (context.eventName === "pull_request") {
+              // scripts/release-branch.sh owns this name.
+              const match = /^release\/(v\d+\.\d+\.\d+)$/u.exec(process.env.HEAD_REF ?? "");
+              tag = match?.[1] ?? null;
+            } else {
+              tag = await resolvePublicationTag({
+                github,
+                context,
+                createdAt: process.env.PUBLICATION_CREATED_AT,
+              });
+            }
+            if (tag === null) {
+              core.info("No final release tag belongs to this event.");
               return;
             }
-            const tag = `v${match[1]}`;
             try {
               await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` });
             } catch (error) {
@@ -59,33 +97,23 @@ jobs:
               }
               throw error;
             }
-            const { data: manifest } = await github.rest.repos.getContent({
-              ...context.repo,
-              path: "packages/cli/package.json",
-              ref: `refs/tags/${tag}`,
-            });
-            const { version } = JSON.parse(
-              Buffer.from(manifest.content, manifest.encoding).toString("utf8"),
-            );
-            if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/u.test(version)) {
-              throw new Error(`${tag} carries no stable CLI version.`);
-            }
-            const registry = `https://registry.npmjs.org/@stll%2fcli/${version}`;
-            let status = 0;
-            for (let attempt = 1; attempt <= 3; attempt += 1) {
-              const response = await fetch(registry, {
-                signal: AbortSignal.timeout(20_000),
-              }).catch(() => null);
-              status = response?.status ?? 0;
-              if (status === 200 || status === 404) break;
-              await new Promise((resolve) => setTimeout(resolve, attempt * 5_000));
-            }
-            if (status === 200) {
-              core.info(`npm already serves @stll/cli@${version} (${tag}).`);
+            const fetchStatus = async (url) => {
+              let status = 0;
+              for (let attempt = 1; attempt <= 3; attempt += 1) {
+                const response = await fetch(url, {
+                  signal: AbortSignal.timeout(20_000),
+                }).catch(() => null);
+                status = response?.status ?? 0;
+                if (status === 200 || status === 404) break;
+                await new Promise((done) => setTimeout(done, attempt * 5_000));
+              }
+              return status;
+            };
+            const state = await collectCatchUpState({ github, context, tag, fetchStatus });
+            const { dispatch, reason } = decideCatchUp(state);
+            core.info(`${tag} (@stll/cli@${state.version}): ${reason}`);
+            if (!dispatch) {
               return;
-            }
-            if (status !== 404) {
-              throw new Error(`npm did not answer for @stll/cli@${version} (status ${status}).`);
             }
             await github.rest.actions.createWorkflowDispatch({
               ...context.repo,
@@ -93,4 +121,19 @@ jobs:
               ref: "main",
               inputs: { package: "cli", publish: "true", release_ref: tag },
             });
-            core.notice(`Dispatched the @stll/cli@${version} publication for ${tag}.`);
+            // Hold the concurrency slot until the dispatched run is listed, so
+            // the next queued decision sees it as a publication in flight.
+            const dispatchedAt = Date.now();
+            for (let attempt = 0; attempt < 12; attempt += 1) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo,
+                workflow_id: "publish-npm.yml",
+                event: "workflow_dispatch",
+                per_page: 5,
+              });
+              if (data.workflow_runs.some((run) => Date.parse(run.created_at) >= dispatchedAt - 30_000)) {
+                break;
+              }
+              await new Promise((done) => setTimeout(done, 5_000));
+            }
+            core.notice(`Dispatched the @stll/cli@${state.version} publication for ${tag}.`);
