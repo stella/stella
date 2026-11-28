@@ -52,6 +52,7 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
+import type { ApiRefusalCode } from "@stll/api-contract/refusal-codes";
 import {
   SHAREPOINT_REFUSAL_CODE,
   type SharepointRefusalCode,
@@ -417,7 +418,10 @@ const USAGE_REJECTION_REASON_KEYS = {
   usage_limit_exceeded: CODE_ERROR_KEYS.usage_limit_exceeded,
 } as const satisfies Record<string, TranslationKey>;
 
-const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
+type AssertApiRefusalCode<T extends ApiRefusalCode> = T;
+type KnownErrorCode = AssertApiRefusalCode<keyof typeof CODE_ERROR_KEYS>;
+
+const isKnownErrorCode = (code: string): code is KnownErrorCode =>
   Object.hasOwn(CODE_ERROR_KEYS, code);
 const isUsageRejectionReason = (
   reason: string,

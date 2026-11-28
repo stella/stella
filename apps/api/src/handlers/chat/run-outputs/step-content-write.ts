@@ -35,6 +35,7 @@ import type {
   StepWriter,
 } from "@/api/lib/desktop-runner/step-contents";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerErrorCode } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitLocalRunStepContentMetric } from "@/api/lib/observability/request-metrics";
@@ -105,7 +106,7 @@ const noSuchRun = () =>
 type Refusal = Extract<StepContentSettlement, { type: "refused" }>["reason"];
 
 /** The code a refused write answers with: the reason itself where it has one. */
-const refusalCode = (reason: Refusal): string => {
+const refusalCode = (reason: Refusal): HandlerErrorCode => {
   switch (reason) {
     case "other_run":
     case "different_content":

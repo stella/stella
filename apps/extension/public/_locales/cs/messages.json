@@ -50,27 +50,6 @@
   "statusConnected": {
     "message": "Připojeno"
   },
-  "statusNotConnected": {
-    "message": "Nepřipojeno"
-  },
-  "statusWebsiteAccessNeeded": {
-    "message": "Je potřeba přístup k webům"
-  },
-  "statusOpenStella": {
-    "message": "Pro připojení otevřete stellu"
-  },
-  "allowAndConnect": {
-    "message": "Povolit přístup k webům a připojit"
-  },
-  "allowWebsiteAccess": {
-    "message": "Povolit přístup k webům"
-  },
-  "connectStella": {
-    "message": "Připojit stellu"
-  },
-  "openStella": {
-    "message": "Otevřít stellu"
-  },
   "adoptTab": {
     "message": "Použít tuto kartu se stellou"
   },
@@ -80,28 +59,25 @@
   "revokeAccess": {
     "message": "Odebrat přístup"
   },
-  "checkingAccess": {
-    "message": "Kontrola připojení…"
-  },
-  "statusConnectedElsewhere": {
-    "message": "Připojeno jinde"
-  },
-  "connectStellaInstead": {
-    "message": "Připojit stellu tady"
-  },
-  "allowDesktop": {
-    "message": "Používat se stella desktop"
-  },
-  "desktopConnected": {
-    "message": "stella desktop: připojeno"
-  },
-  "desktopNotRunning": {
-    "message": "stella desktop: neběží"
-  },
   "desktopUpdateNeeded": {
     "message": "Aktualizujte stella desktop a toto rozšíření"
   },
-  "desktopConnecting": {
-    "message": "Připojování k aplikaci stella desktop…"
+  "lineWebsite": {
+    "message": "Web stelly"
+  },
+  "lineDesktop": {
+    "message": "Aplikace stella desktop"
+  },
+  "lineConnect": {
+    "message": "Připojit"
+  },
+  "lineConnecting": {
+    "message": "Připojování…"
+  },
+  "lineOpenApp": {
+    "message": "Otevřete aplikaci"
+  },
+  "lineUpdateApp": {
+    "message": "Aktualizujte aplikaci"
   }
 }

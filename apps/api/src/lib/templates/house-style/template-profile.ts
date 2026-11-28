@@ -218,6 +218,11 @@ export type TemplateProfile = {
   /** What the template could have mended at its source. Absent from a
    *  profile inferred before the template was read for it. */
   health?: TemplateHealthFinding[];
+  /** The section of the template, counted from 0, its sample body stands
+   *  in, where later sections (an annex, a signature page) follow it: the
+   *  output's pages are built from it. Absent where the body's section is
+   *  the last. */
+  bodySection?: number;
   /** What becomes of a level the template sets apart from its siblings
    *  (`levelSetApart`): `even`, the default, places it in a sibling's
    *  style; `asTemplate` keeps the style the template gives it. */
@@ -1503,27 +1508,9 @@ const inferHealth = (
     }
   }
   const unread = STRUCTURAL_ROLES.filter((role) => roles[role] === null);
-  // The body's section: that of the first paragraph in a heading or
-  // clause style of the template.
-  const bodyStyles = new Set(
-    BODY_START_ROLES.flatMap((role) => {
-      const styleId = roles[role]?.styleId;
-      return styleId === undefined ? [] : [styleId];
-    }),
-  );
-  const bodySection = inspection.blocks.find(({ styleId }) =>
-    bodyStyles.has(styleId ?? ""),
-  )?.sectionIndex;
-  const lastSection = Math.max(
-    0,
-    ...inspection.blocks.map(({ sectionIndex }) => sectionIndex),
-  );
-  if (bodySection !== undefined && bodySection < lastSection) {
-    findings.set("sections", {
-      kind: "lastSectionNotBody",
-      bodySection,
-      lastSection,
-    });
+  const sections = bodySectionOf(inspection, roles);
+  if (sections !== null) {
+    findings.set("sections", { kind: "lastSectionNotBody", ...sections });
   }
   const health = [...findings.values()];
   // First, so the cap never drops it: it says more than any other.
@@ -1532,6 +1519,33 @@ const inferHealth = (
       ? [{ kind: "rolesNotRead" as const, roles: unread }, ...health]
       : health
   ).slice(0, HEALTH_FINDINGS_MAX);
+};
+
+/**
+ * The section of the template its sample body stands in (that of its first
+ * paragraph in a heading or clause style), where later sections follow it:
+ * null where the body's section is the last, or none is read.
+ */
+const bodySectionOf = (
+  { blocks }: TemplateInspection,
+  roles: TemplateProfile["roles"],
+): { bodySection: number; lastSection: number } | null => {
+  const bodyStyles = new Set(
+    BODY_START_ROLES.flatMap((role) => {
+      const styleId = roles[role]?.styleId;
+      return styleId === undefined ? [] : [styleId];
+    }),
+  );
+  const bodySection = blocks.find(({ styleId }) =>
+    bodyStyles.has(styleId ?? ""),
+  )?.sectionIndex;
+  const lastSection = Math.max(
+    0,
+    ...blocks.map(({ sectionIndex }) => sectionIndex),
+  );
+  return bodySection !== undefined && bodySection < lastSection
+    ? { bodySection, lastSection }
+    : null;
 };
 
 /**
@@ -1741,6 +1755,7 @@ export const inferTemplateProfile = (
     roles.articleHeading,
   );
   const kinds = [...new Set(inspection.fields.map(({ kind }) => kind))];
+  const bodySections = bodySectionOf(inspection, roles);
   const structural = STRUCTURAL_ROLES.map(
     (role) => roles[role]?.confidence ?? 0,
   );
@@ -1781,6 +1796,7 @@ export const inferTemplateProfile = (
         ({ type, isDefault }) => type === "paragraph" && isDefault,
       )?.alignment ?? null,
     health: inferHealth(inspection, roles),
+    ...(bodySections === null ? {} : { bodySection: bodySections.bodySection }),
     // A template without sample text shows no role in use, and one whose
     // body runs in columns is not filled by column yet.
     confidence:
@@ -2266,6 +2282,7 @@ const profileSchema = v.strictObject({
     ),
   ),
   levelLooks: v.exactOptional(v.picklist(["even", "asTemplate"])),
+  bodySection: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
   confidence: confidenceSchema,
 });
 

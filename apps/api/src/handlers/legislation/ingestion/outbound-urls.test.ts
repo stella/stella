@@ -1,5 +1,7 @@
 import { expect, expectTypeOf, test } from "bun:test";
 
+import type { OutboundHostPolicy } from "@stll/case-law-ingestion-core/restrict-outbound-url";
+
 import {
   LEGISLATION_URL_FIELDS,
   restrictLegislationDocumentUrls,
@@ -11,7 +13,6 @@ import type {
 } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
-import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
 
 const sourceId = createSafeId<"legislationSource">();
 

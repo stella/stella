@@ -32,7 +32,7 @@ import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-del
 import { authorizeOrganizationReplay } from "./organization-replay-authorization";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const REQUEST_FAILURE_CODE = "request_unavailable";
+const REQUEST_FAILURE_CODE = "service_unavailable";
 const ORIGINAL_BODY = { name: "Original" };
 
 const fingerprint = (body: unknown) =>

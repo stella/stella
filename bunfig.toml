@@ -86,7 +86,6 @@ minimumReleaseAgeExcludes = [
   # Taken early for the url 2.5.9 patch release in the desktop Cargo.lock;
   # form_urlencoded 1.2.3 ships with it and is required by it.
   # Taken early for the cookie 0.18.3 patch release in the desktop Cargo.lock.
-  "cargo:cookie", # quarantine-expires: 2026-11-28T07:45:48.068Z
 ]
 
 [fmt]

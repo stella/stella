@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { documentNamePatternProblem } from "@stll/api-contract/document-name";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
@@ -31,6 +32,7 @@ import {
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
 import { queryView } from "@/lib/query-view.logic";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 import {
   MatterNumberingCardFrame,
   MatterNumberingCardPending,
@@ -112,7 +114,14 @@ const MatterNumberingCardBody = ({
   );
   const [debouncedPattern] = useDebounce(pattern, 300);
   const [debouncedPadding] = useDebounce(padding, 300);
-  const previewQuery = useQuery({
+  const previewQuery = useResourceQuery({
+    resourceReads: {
+      resources: [RESOURCE_TYPE.ORGANIZATION, RESOURCE_TYPE.NUMBER_SERIES],
+      scope: {
+        type: "organization",
+        organizationId: activeOrganizationId,
+      },
+    },
     queryKey: [
       ...organizationSettingsKeys.byOrganization(activeOrganizationId),
       "matter-number-preview",

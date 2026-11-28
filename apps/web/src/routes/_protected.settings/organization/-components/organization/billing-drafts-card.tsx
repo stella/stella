@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { MarkdownHybridEditor } from "@stll/markdown-editor";
 import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -35,6 +35,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 import {
@@ -68,22 +69,30 @@ type KnowledgeFile = Extract<
 >["items"][number];
 type KnowledgeSave = { file: KnowledgeFile; source: string };
 
-export const BillingDraftsCard = () => {
-  const t = useTranslations();
-  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const canEdit = usePermissions({ organizationSettings: ["update"] });
-  const [client, setClient] = useState<{
-    id: NonNullable<BillingConfigurationUpdate["clientId"]>;
-    displayName: string;
-  } | null>(null);
-  const [search, setSearch] = useState("");
-  const [cursor, setCursor] = useState<string | undefined>();
-  const [editing, setEditing] = useState<KnowledgeFile | null>(null);
-  const editorHandle = useRef<MarkdownHybridEditorHandle>(null);
-  const [editorRevision, setEditorRevision] = useState(0);
-  const [content, setContent] = useState<string | undefined>();
-  const clientId = client?.id;
-  const config = useQuery({
+const useBillingDraftsQueries = ({
+  activeOrganizationId,
+  userId,
+  clientId,
+  search,
+  cursor,
+  editingId,
+}: {
+  activeOrganizationId: string;
+  userId: string;
+  clientId: NonNullable<BillingConfigurationUpdate["clientId"]> | undefined;
+  search: string;
+  cursor: string | undefined;
+  editingId: KnowledgeFile["id"] | undefined;
+}) => {
+  const config = useResourceQuery({
+    resourceReads: {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: {
+        type: "organization",
+        organizationId: activeOrganizationId,
+        userId,
+      },
+    },
     queryKey: [
       ...billingDraftKeys.all(),
       activeOrganizationId,
@@ -98,7 +107,18 @@ export const BillingDraftsCard = () => {
         }),
       ),
   });
-  const files = useQuery({
+  const files = useResourceQuery({
+    resourceReads: {
+      resources: [
+        RESOURCE_TYPE.ORGANIZATION,
+        RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
+      ],
+      scope: {
+        type: "organization",
+        organizationId: activeOrganizationId,
+        userId,
+      },
+    },
     queryKey: [
       ...billingDraftKeys.all(),
       "files",
@@ -117,8 +137,18 @@ export const BillingDraftsCard = () => {
         }),
       ),
   });
-  const editingId = editing?.id;
-  const editor = useQuery({
+  const editor = useResourceQuery({
+    resourceReads: {
+      resources: [
+        RESOURCE_TYPE.ORGANIZATION,
+        RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
+      ],
+      scope: {
+        type: "organization",
+        organizationId: activeOrganizationId,
+        userId,
+      },
+    },
     queryKey: [
       ...billingDraftKeys.all(),
       "editor",
@@ -126,7 +156,7 @@ export const BillingDraftsCard = () => {
       userId,
       editingId,
     ],
-    enabled: editing !== null,
+    enabled: editingId !== undefined,
     queryFn: async ({ signal }) => {
       if (!editingId) {
         return panic("Knowledge editor query requires a file");
@@ -137,6 +167,31 @@ export const BillingDraftsCard = () => {
         await filesRoute({ resourceId: editingId }).get({ fetch: { signal } }),
       );
     },
+  });
+  return { config, files, editor };
+};
+
+export const BillingDraftsCard = () => {
+  const t = useTranslations();
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const canEdit = usePermissions({ organizationSettings: ["update"] });
+  const [client, setClient] = useState<{
+    id: NonNullable<BillingConfigurationUpdate["clientId"]>;
+    displayName: string;
+  } | null>(null);
+  const [search, setSearch] = useState("");
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [editing, setEditing] = useState<KnowledgeFile | null>(null);
+  const editorHandle = useRef<MarkdownHybridEditorHandle>(null);
+  const [editorRevision, setEditorRevision] = useState(0);
+  const [content, setContent] = useState<string | undefined>();
+  const { config, files, editor } = useBillingDraftsQueries({
+    activeOrganizationId,
+    userId,
+    clientId: client?.id,
+    search,
+    cursor,
+    editingId: editing?.id,
   });
   const mutation = useSettingsMutation({
     exceptionScope: {

@@ -6,6 +6,7 @@ import {
 
 import { hasAllSiteAccess } from "./access";
 import { readControlOwner } from "./control-holder";
+import { tabAddress } from "./open-stella";
 import {
   readStellaTabs,
   rememberStellaTab,
@@ -136,8 +137,9 @@ export type PairStellaTabResult =
   | { status: "unsupported-tab" };
 
 /**
- * Connects stella on the origin of the tab the popup was opened on. A
- * connection on another origin ends.
+ * Connects stella on the origin of a stella tab: the one the popup was
+ * opened on, or the one it just opened or brought forward. A tab still
+ * loading counts by where it is going. A connection on another origin ends.
  */
 export const pairStellaTab = async (
   tabId: number,
@@ -146,7 +148,7 @@ export const pairStellaTab = async (
   if (tab === null) {
     return { status: "unsupported-tab" };
   }
-  const origin = tab.url ? trustedStellaOriginFromUrl(tab.url) : null;
+  const origin = trustedStellaOriginFromUrl(tabAddress(tab));
   if (tab.id === undefined || origin === null) {
     return { status: "unsupported-tab" };
   }
@@ -161,8 +163,8 @@ export const pairStellaTab = async (
   });
   await chrome.storage.session.remove([...CONTROLLER_DATA_STORAGE_KEYS]);
   await releaseContainedTabs();
-  // Its URL was read just now, so the tab is on `origin` even if its page
-  // has not messaged the extension yet.
+  // Its address was read just now, so the tab is on `origin` even if its
+  // page has not loaded or messaged the extension yet.
   await rememberStellaTab(tab.id, { documentId: null, origin });
   if (previous && previous.origin !== controller.origin) {
     await notifyStellaTabs(previous.origin, {

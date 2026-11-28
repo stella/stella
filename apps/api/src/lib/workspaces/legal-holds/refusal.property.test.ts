@@ -163,7 +163,12 @@ describe("legal hold refusal projection properties", () => {
     assertProperty(
       "legalHoldRefusalForViewer leaves non-legal-hold HandlerErrors untouched",
       fc.property(
-        fc.constantFrom("NOT_FOUND", "FORBIDDEN", "BAD_REQUEST", "CONFLICT"),
+        fc.constantFrom(
+          "not_found",
+          "forbidden",
+          "validation_error",
+          "conflict",
+        ),
         fc.string({ minLength: 1, maxLength: 40 }),
         viewerArb,
         (code, message, viewer) => {

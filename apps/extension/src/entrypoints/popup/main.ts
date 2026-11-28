@@ -9,28 +9,23 @@ import {
 import { readBrowserController } from "../../lib/controller";
 import { readDesktopLinkState } from "../../lib/desktop-link";
 import { downloadNoticeMessage } from "../../lib/download-guard";
-import { openOrFocusStella } from "../../lib/open-stella";
 import { parseControllableUrl } from "../../lib/origin-policy";
 import { type PopupTab, runPopupAction } from "../../lib/popup-actions";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import {
-  connectedOrigin,
   containedTabRows,
-  desktopLinkView,
-  handedTabView,
+  desktopLineStatus,
   type PopupAction,
   type PopupActiveTab,
+  type PopupLineStatus,
   type PopupMessageKey,
-  type PopupSecondaryAction,
   type PopupView,
   popupView,
+  websiteLineStatus,
 } from "../../lib/popup-view";
 import { BROWSER_DESKTOP_LINK_STORAGE_KEY } from "../../lib/storage-keys";
 import { containedTabIds, readContainedTabs } from "../../lib/tab-containment";
-import {
-  STELLA_START_ORIGIN,
-  trustedStellaOriginFromUrl,
-} from "../../lib/trusted-origin";
+import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
 
 const element = <T extends Element>(selector: string, type: new () => T): T => {
   const found = document.querySelector(selector);
@@ -40,19 +35,22 @@ const element = <T extends Element>(selector: string, type: new () => T): T => {
 };
 
 const titleElement = element("#title", HTMLHeadingElement);
-const statusElement = element("#status", HTMLParagraphElement);
-const statusText = element("#status-text", HTMLSpanElement);
-const statusOrigin = element("#status-origin", HTMLSpanElement);
 const purposeElement = element("#purpose", HTMLParagraphElement);
 const noticeElement = element("#notice", HTMLParagraphElement);
+const websiteName = element("#website-name", HTMLSpanElement);
+const websiteConnect = element("#website-connect", HTMLButtonElement);
+const websiteStatus = element("#website-status", HTMLSpanElement);
+const websiteStatusText = element("#website-status-text", HTMLSpanElement);
+const websiteOrigin = element("#website-origin", HTMLSpanElement);
+const desktopName = element("#desktop-name", HTMLSpanElement);
+const desktopConnect = element("#desktop-connect", HTMLButtonElement);
+const desktopStatus = element("#desktop-status", HTMLSpanElement);
+const desktopStatusText = element("#desktop-status-text", HTMLSpanElement);
 const containedTabsElement = element("#contained-tabs", HTMLDivElement);
 const containedTabsLabel = element("#contained-tabs-label", HTMLSpanElement);
 const containedTabList = element("#contained-tab-list", HTMLUListElement);
-const primaryButton = element("#primary", HTMLButtonElement);
-const secondaryActions = element("#secondary-actions", HTMLDivElement);
-const desktopStatus = element("#desktop-status", HTMLParagraphElement);
-const desktopStatusText = element("#desktop-status-text", HTMLSpanElement);
-const desktopAllowButton = element("#desktop-allow", HTMLButtonElement);
+const adoptButton = element("#adopt", HTMLButtonElement);
+const footerElement = element("#footer", HTMLDivElement);
 
 const message = (
   name: PopupMessageKey | "@@bidi_dir",
@@ -64,8 +62,12 @@ document.documentElement.dir = message("@@bidi_dir");
 document.title = message("extensionName");
 titleElement.textContent = message("extensionName");
 purposeElement.textContent = message("connectionPurpose");
+websiteName.textContent = message("lineWebsite");
+desktopName.textContent = message("lineDesktop");
+websiteConnect.textContent = message("lineConnect");
+desktopConnect.textContent = message("lineConnect");
+adoptButton.textContent = message("adoptTab");
 containedTabsLabel.textContent = message("usingTabs");
-statusText.textContent = message("checkingAccess");
 
 const readActiveTab = async (): Promise<PopupTab | null> =>
   (await chrome.tabs.query({ active: true, currentWindow: true })).at(0) ??
@@ -125,50 +127,76 @@ const renderFailure = (key: PopupMessageKey): void => {
   renderNotice(message(key));
 };
 
-const renderSecondaryAction = (
-  action: PopupSecondaryAction,
-): HTMLButtonElement => {
-  const button = document.createElement("button");
-  button.className = action.appearance === "link" ? "link" : "secondary";
-  button.type = "button";
-  button.textContent = message(action.messageKey);
-  button.addEventListener("click", () => execute(button, action.action));
-  return button;
+/**
+ * Shows a line's Connect button, or its status. Both start hidden, so a
+ * line never flashes a state it is not in.
+ */
+const renderLine = (
+  line: PopupLineStatus,
+  button: HTMLButtonElement,
+  status: HTMLSpanElement,
+  statusText: HTMLSpanElement,
+): void => {
+  button.hidden = line.type !== "connect";
+  status.hidden = line.type !== "status";
+  if (line.type === "status") {
+    status.dataset["tone"] = line.tone;
+    statusText.textContent = message(line.messageKey);
+  } else {
+    delete status.dataset["tone"];
+    statusText.textContent = "";
+  }
+  if (line.type === "status" && line.detailKey !== undefined) {
+    status.title = message(line.detailKey);
+  } else {
+    status.removeAttribute("title");
+  }
 };
+let renderedView: PopupView | null = null;
 
 const render = (
   view: PopupView,
   containedTabs: readonly chrome.tabs.Tab[],
 ): void => {
-  statusElement.dataset["state"] = view.state.type;
-  statusText.textContent = message(view.statusMessageKey);
+  renderedView = view;
+  renderLine(
+    websiteLineStatus(view),
+    websiteConnect,
+    websiteStatus,
+    websiteStatusText,
+  );
   // The address is a tooltip on screen and read out to screen readers.
-  const origin = connectedOrigin(view);
-  statusOrigin.textContent = origin ?? "";
+  const origin = view.website.type === "connected" ? view.website.origin : null;
+  websiteOrigin.textContent = origin ?? "";
   if (origin === null) {
-    statusElement.removeAttribute("title");
+    websiteStatus.removeAttribute("title");
   } else {
-    statusElement.title = origin;
+    websiteStatus.title = origin;
   }
-  purposeElement.hidden = !view.showPurpose;
   renderContainedTabs(origin === null ? [] : containedTabs);
-  primaryButton.hidden = view.primary === null;
-  if (view.primary !== null) {
-    primaryButton.textContent = message(view.primary.messageKey);
-    primaryButton.dataset["action"] = view.primary.action;
-  } else {
-    delete primaryButton.dataset["action"];
-  }
-  secondaryActions.replaceChildren(
-    ...view.secondary.map(renderSecondaryAction),
+  adoptButton.hidden = !view.offerTab;
+  footerElement.replaceChildren(
+    ...view.footer.map((link) => {
+      const button = document.createElement("button");
+      button.className = "link";
+      button.type = "button";
+      button.textContent = message(link.messageKey);
+      button.addEventListener("click", () =>
+        execute(button, { action: link.action }),
+      );
+      return button;
+    }),
   );
 };
 
-const pairActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
-  const result =
-    activeTab?.id !== undefined
-      ? await sendPopupRequest({ tabId: activeTab.id, type: "pair" })
-      : ({ status: "unsupported-tab" } as const);
+/**
+ * Connects the stella tab in front, or has the worker open or find one and
+ * connect it: that brings another tab forward, which closes the popup.
+ */
+const connectWebsite = async (tabId: number | null): Promise<void> => {
+  const result = await sendPopupRequest(
+    tabId === null ? { type: "open-and-pair" } : { tabId, type: "pair" },
+  );
   if (result.status !== "done") {
     renderFailure(
       result.status === "failed" ? "accessUpdateFailed" : "unsupportedTab",
@@ -200,56 +228,23 @@ const adoptActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
     renderFailure(adoptFailureMessage[result.status]);
     return;
   }
-  const [controller, containedTabs] = await Promise.all([
-    readBrowserController(),
-    readContainedTabsList(),
-  ]);
-  if (controller === null) {
-    await renderAccess();
-    return;
-  }
-  render(handedTabView(controller.origin), containedTabs);
+  await renderAccess({ handedTab: true });
 };
 
-const openStella = async (): Promise<void> => {
-  const result = await openOrFocusStella(
-    {
-      activateTab: async (tabId) =>
-        await chrome.tabs.update(tabId, { active: true }),
-      createTab: async (url) => await chrome.tabs.create({ url }),
-      focusWindow: async (windowId) =>
-        await chrome.windows.update(windowId, { focused: true }),
-      queryTabs: async () => await chrome.tabs.query({}),
-    },
-    {
-      originFromUrl: trustedStellaOriginFromUrl,
-      startOrigin: STELLA_START_ORIGIN,
-    },
-  );
-  if (result.status === "no-origin") {
-    renderFailure("unsupportedTab");
-  }
-};
-
-const execute = (
-  button: HTMLButtonElement,
-  action: PopupAction["action"] | PopupSecondaryAction["action"],
-): void => {
+const execute = (button: HTMLButtonElement, action: PopupAction): void => {
   button.disabled = true;
   runPopupAction(action, {
-    renderedTab,
     requestAccess: requestAllSiteAccess,
     readActiveTab,
-    pair: pairActiveTab,
+    connectWebsite,
     adopt: adoptActiveTab,
-    openStella,
     disconnect: async () => {
       await sendPopupRequest({ type: "disconnect" });
     },
     revoke: async () => {
       await sendPopupRequest({ type: "revoke" });
     },
-    render: renderAccess,
+    render: async () => await renderAccess(),
   })
     .catch(() => renderFailure("accessUpdateFailed"))
     .finally(() => {
@@ -257,17 +252,14 @@ const execute = (
     });
 };
 
-primaryButton.addEventListener("click", () => {
-  const action = primaryButton.dataset["action"];
-  if (
-    action === "adopt" ||
-    action === "connect" ||
-    action === "grant" ||
-    action === "grant-and-connect" ||
-    action === "open-stella"
-  ) {
-    execute(primaryButton, action);
+websiteConnect.addEventListener("click", () => {
+  if (renderedView?.website.type === "connect") {
+    execute(websiteConnect, renderedView.website.connect);
   }
+});
+
+adoptButton.addEventListener("click", () => {
+  execute(adoptButton, { action: "adopt" });
 });
 
 /** The latest desktop render; an older one that finishes later is dropped. */
@@ -283,13 +275,12 @@ const renderDesktopLink = async (): Promise<void> => {
   if (thisRender !== desktopRender) {
     return;
   }
-  const view = desktopLinkView({ allowed, state });
-  desktopAllowButton.hidden = view.type !== "allow";
-  desktopStatus.hidden = view.type === "allow";
-  desktopStatus.dataset["state"] = view.type;
-  const text = message(view.messageKey);
-  desktopAllowButton.textContent = view.type === "allow" ? text : "";
-  desktopStatusText.textContent = view.type === "allow" ? "" : text;
+  renderLine(
+    desktopLineStatus({ allowed, state }),
+    desktopConnect,
+    desktopStatus,
+    desktopStatusText,
+  );
 };
 
 // The link connects and drops while the popup is open.
@@ -299,8 +290,8 @@ chrome.storage.session.onChanged.addListener((changes) => {
   }
 });
 
-desktopAllowButton.addEventListener("click", () => {
-  desktopAllowButton.disabled = true;
+desktopConnect.addEventListener("click", () => {
+  desktopConnect.disabled = true;
   // Asked for within the click's user gesture, before anything else awaits.
   requestDesktopLinkAccess()
     .then(async () => {
@@ -309,27 +300,54 @@ desktopAllowButton.addEventListener("click", () => {
     })
     .catch(() => renderFailure("accessUpdateFailed"))
     .finally(() => {
-      desktopAllowButton.disabled = false;
+      desktopConnect.disabled = false;
     });
 });
 
-let renderedTab: PopupTab | null = null;
+/** The latest website render; an older one that finishes later is dropped. */
+let accessRender = 0;
 
-const renderAccess = async (): Promise<void> => {
+const renderAccess = async ({
+  handedTab = false,
+}: { handedTab?: boolean } = {}): Promise<void> => {
+  accessRender += 1;
+  const thisRender = accessRender;
   const [granted, controller, activeTab, containedTabs] = await Promise.all([
     hasAllSiteAccess(),
     readBrowserController(),
     readActiveTab(),
     readContainedTabsList(),
   ]);
-  renderedTab = activeTab;
+  if (thisRender !== accessRender) {
+    return;
+  }
   render(
-    popupView({ activeTab: activeTabKind(activeTab), controller, granted }),
+    popupView({
+      activeTab: activeTabKind(activeTab),
+      controller,
+      granted,
+      handedTab,
+    }),
     containedTabs,
   );
 };
 
-await Promise.all([renderAccess(), renderDesktopLink()]);
+const renderAll = async (): Promise<void> => {
+  await Promise.all([renderAccess(), renderDesktopLink()]);
+};
+
+// Website access also allows stella desktop, and either can be granted or
+// removed from Chrome's own settings while the popup is open.
+for (const event of [
+  chrome.permissions.onAdded,
+  chrome.permissions.onRemoved,
+]) {
+  event.addListener(() => {
+    renderAll().catch(() => renderFailure("accessUpdateFailed"));
+  });
+}
+
+await renderAll();
 const taken = await sendPopupRequest({ type: "take-download-notices" });
 const downloadNotice =
   taken.status === "download-notices" ? downloadNoticeMessage(taken) : null;

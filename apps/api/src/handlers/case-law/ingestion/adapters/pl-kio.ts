@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -17,6 +18,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -50,6 +52,7 @@ import type {
   SyncPage,
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import { plainTextIngestionResult } from "@stll/case-law-ingestion-core/plain-text-assembly";
+import { restrictOutboundUrl } from "@stll/case-law-ingestion-core/restrict-outbound-url";
 import { parsePlDecisionContent } from "@stll/case-law-parsers/pl-courts";
 import { readPlKioLayout } from "@stll/case-law-parsers/pl-kio-layout";
 import {
@@ -131,8 +134,6 @@ import {
   decisionCourtExceedsStorage,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { logger } from "@/api/lib/observability/logger";
-import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
@@ -145,6 +146,8 @@ import {
   type PlKioResponseKind,
   readPlKioHtml,
 } from "./pl-kio-response-budget";
+
+const diagnostics = getIngestionDiagnosticsSink();
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -768,7 +771,7 @@ const plKioDecisionType = (form: string | undefined): string | undefined => {
     (type) => lowered === type || lowered.startsWith(`${type} `),
   );
   if (matched === undefined) {
-    logger.warn("case_law.ingestion.decision_type_unmapped", {
+    diagnostics.warn("case_law.ingestion.decision_type_unmapped", {
       adapterKey: ADAPTER_KEYS.PL_KIO,
       decisionForm: form,
     });
@@ -985,7 +988,7 @@ const plKioCourtStorage = ({
   sourceDocumentId,
 }: PlKioCourtStorageOptions) => {
   if (statedCourt === undefined) {
-    logger.warn("case_law.ingestion.court_not_stated", {
+    diagnostics.warn("case_law.ingestion.court_not_stated", {
       adapterKey: ADAPTER_KEYS.PL_KIO,
       sourceDocumentId,
     });
@@ -1087,7 +1090,7 @@ export const assemblePlKioDecision = ({
           ].filter(([label]) => !isSourceField(label)),
         );
   for (const label of Object.keys(unmapped)) {
-    logger.warn("case_law.ingestion.source_field_unmapped", {
+    diagnostics.warn("case_law.ingestion.source_field_unmapped", {
       adapterKey: ADAPTER_KEYS.PL_KIO,
       field: label,
     });

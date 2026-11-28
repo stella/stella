@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -18,6 +19,7 @@ import {
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
 import type { AdapterKey } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -78,7 +80,6 @@ import {
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
@@ -1335,7 +1336,7 @@ export const assembleAtRisDecision = (
   }
   const parsed = parseResult.value;
   if (parsed.unknownElements.length > 0) {
-    logger.warn(RIS_UNKNOWN_ELEMENT, {
+    getIngestionDiagnosticsSink().warn(RIS_UNKNOWN_ELEMENT, {
       adapterKey: source.key,
       caseNumber: data.caseNumber,
       elements: parsed.unknownElements.join(","),
@@ -1343,7 +1344,7 @@ export const assembleAtRisDecision = (
   }
 
   if (parsed.textFidelity !== undefined) {
-    logger.error(AST_CONTENT_LOST, {
+    getIngestionDiagnosticsSink().error(AST_CONTENT_LOST, {
       parser: source.key,
       caseNumber: data.caseNumber,
       language: LANGUAGE,

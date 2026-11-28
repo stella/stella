@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic } from "better-result";
@@ -6,20 +7,13 @@ import {
   type AdapterKey,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/ingestion-constants";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@stll/case-law-ingestion-core/ingestion-types";
 import type { IngestionResult } from "@stll/case-law-ingestion-core/ingestion-types";
 import { classifyFailure } from "@stll/errors";
-
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
-
-const itemBuildFailed = failureSink({
-  event: "case_law.ingestion.item_build_failed",
-  expected: [],
-});
 
 type PlainTextItemOptions<T> = {
   adapterKey: AdapterKey;
@@ -53,10 +47,10 @@ export const buildPlainTextItem = async <T>({
       decision.plainTextOutcome satisfies never;
       return panic("Unhandled plain-text item outcome");
   }
-  observeFailure(
+  getIngestionDiagnosticsSink().observeFailure(
     classifyFailure(decision.plainTextOutcome.error, "response_invalid"),
     {
-      sink: itemBuildFailed,
+      event: "case_law.ingestion.item_build_failed",
       ctx: {
         adapterKey,
         ...(decision.sourceDocumentId === undefined

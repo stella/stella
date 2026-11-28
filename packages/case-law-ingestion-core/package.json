@@ -99,6 +99,18 @@
       "types": "./src/publisher-field-coverage.ts",
       "import": "./src/publisher-field-coverage.ts"
     },
+    "./publisher-gates": {
+      "types": "./src/publisher-gates.ts",
+      "import": "./src/publisher-gates.ts"
+    },
+    "./publisher-request-gate-hook": {
+      "types": "./src/publisher-request-gate-hook.ts",
+      "import": "./src/publisher-request-gate-hook.ts"
+    },
+    "./restrict-outbound-url": {
+      "types": "./src/restrict-outbound-url.ts",
+      "import": "./src/restrict-outbound-url.ts"
+    },
     "./sk-collection-enrichment": {
       "types": "./src/sk-collection-enrichment.ts",
       "import": "./src/sk-collection-enrichment.ts"
@@ -114,6 +126,10 @@
     "./source-raw-envelope": {
       "types": "./src/source-raw-envelope.ts",
       "import": "./src/source-raw-envelope.ts"
+    },
+    "./stored-document-replay": {
+      "types": "./src/stored-document-replay.ts",
+      "import": "./src/stored-document-replay.ts"
     },
     "./stored-raw-reparse-boundary": {
       "types": "./src/stored-raw-reparse-boundary.ts",
@@ -138,13 +154,13 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
     "@stll/sha256": "workspace:*",
+    "@stll/time": "0.4.3",
     "better-result": "catalog:",
     "entities": "^9.0.0",
     "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
-    "@stll/time": "0.4.3",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"

@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
@@ -18,6 +19,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -90,25 +92,13 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
-
-const itemBuildFailed = failureSink({
-  event: "case_law.ingestion.item_build_failed",
-  expected: [],
-});
 
 const COMMON_HEADERS = {
   "User-Agent": INGESTION_USER_AGENT,
 } as const;
 
 /** One entry's detail or print page read failed. */
-const detailReadFailed = failureSink({
-  event: "case_law.ingestion.detail_fetch_failed",
-  expected: [],
-});
-
 /**
  * Czech Supreme Court adapter.
  *
@@ -1969,7 +1959,7 @@ export const czNsAdapter = defineSourceAdapter({
           const entry = entries.at(i);
           if (!isDominoViewEntry(entry)) {
             refused += 1;
-            observeFailure(
+            getIngestionDiagnosticsSink().observeFailure(
               classifyFailure(
                 new AdapterFetchError({
                   adapterKey: ADAPTER_KEYS.CZ_NS,
@@ -1979,7 +1969,7 @@ export const czNsAdapter = defineSourceAdapter({
                 "upstream_unavailable",
               ),
               {
-                sink: itemBuildFailed,
+                event: "case_law.ingestion.item_build_failed",
                 ctx: {
                   adapterKey: ADAPTER_KEYS.CZ_NS,
                   documentId: String(start + i),
@@ -2033,15 +2023,18 @@ export const czNsAdapter = defineSourceAdapter({
                   adapterKey: ADAPTER_KEYS.CZ_NS,
                   cursor,
                 });
-                observeFailure(classifyFailure(error, "upstream_unavailable"), {
-                  sink: detailReadFailed,
-                  ctx: { adapterKey: ADAPTER_KEYS.CZ_NS, documentId: unid },
-                });
+                getIngestionDiagnosticsSink().observeFailure(
+                  classifyFailure(error, "upstream_unavailable"),
+                  {
+                    event: "case_law.ingestion.detail_fetch_failed",
+                    ctx: { adapterKey: ADAPTER_KEYS.CZ_NS, documentId: unid },
+                  },
+                );
                 break;
               }
               case "unkeyable": {
                 refused += 1;
-                observeFailure(
+                getIngestionDiagnosticsSink().observeFailure(
                   classifyFailure(
                     new AdapterFetchError({
                       adapterKey: ADAPTER_KEYS.CZ_NS,
@@ -2051,7 +2044,7 @@ export const czNsAdapter = defineSourceAdapter({
                     "upstream_unavailable",
                   ),
                   {
-                    sink: itemBuildFailed,
+                    event: "case_law.ingestion.item_build_failed",
                     ctx: {
                       adapterKey: ADAPTER_KEYS.CZ_NS,
                       documentId: String(start + i),

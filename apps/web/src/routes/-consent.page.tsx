@@ -42,6 +42,7 @@ import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignm
 import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { useResourceQuery } from "@/lib/workspace-realtime";
 import {
   consentCompletion,
   isConsentAllowDisabled,
@@ -99,9 +100,10 @@ export function ConsentPage() {
     roleView.refetchError === undefined &&
     hasOrganizationManagementAccess(roleView.items);
 
-  const clientQuery = useQuery({
+  const clientQuery = useResourceQuery({
     enabled: clientId !== null,
     queryKey: ["oauth-consent-info", clientId],
+    resourceReads: { type: "independent" },
     queryFn: async ({ signal }) => {
       if (!clientId) {
         return null;

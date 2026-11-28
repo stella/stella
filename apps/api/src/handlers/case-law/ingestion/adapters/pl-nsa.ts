@@ -1,3 +1,4 @@
+// parser-output-unchanged: diagnostics and pure helper imports moved to @stll/case-law-ingestion-core; parser output unchanged.
 // parser-output-unchanged: imports moved to @stll/case-law-ingestion-core; runtime behavior unchanged.
 // parser-output-unchanged: jurisdiction parser imports moved to @stll/case-law-parsers.
 // parser-output-unchanged: imports moved unchanged to @stll/case-law-parsers.
@@ -33,6 +34,7 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@stll/case-law-ingestion-core/case-law-consts";
+import { getIngestionDiagnosticsSink } from "@stll/case-law-ingestion-core/ingestion-diagnostics-sink";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -113,7 +115,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
@@ -679,14 +680,17 @@ export const plNsaCourt = (
   }
   const fromName = courtOfName(published);
   if (fromName === null) {
-    logger.warn("case_law.ingestion.court_unrecognised", {
-      adapterKey: ADAPTER_KEYS.PL_NSA,
-      court: published,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.court_unrecognised",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NSA,
+        court: published,
+      },
+    );
     return { name: published, level: "unrecognised", statedBy: "court-name" };
   }
   if (fromForm !== null && fromForm.name !== fromName.name) {
-    logger.warn("case_law.ingestion.court_conflict", {
+    getIngestionDiagnosticsSink().warn("case_law.ingestion.court_conflict", {
       adapterKey: ADAPTER_KEYS.PL_NSA,
       court: published,
       decisionForm: decisionForm ?? "",
@@ -745,10 +749,13 @@ export const plNsaDecisionKind = (label: string | null): PlNsaDecisionKind => {
   const first = label?.split(" ").at(0) ?? "";
   const type = isDecisionKindWord(first) ? DECISION_KINDS[first] : undefined;
   if (type === undefined && label !== null) {
-    logger.warn("case_law.ingestion.decision_type_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_NSA,
-      decisionForm: label,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.decision_type_unmapped",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NSA,
+        decisionForm: label,
+      },
+    );
   }
   const bench =
     label === null
@@ -971,7 +978,7 @@ const quarantined = ({
   source,
   sourceRaw,
 }: QuarantineOptions): IngestionResult => {
-  logger.warn("case_law.ingestion.row_quarantined", {
+  getIngestionDiagnosticsSink().warn("case_law.ingestion.row_quarantined", {
     adapterKey: ADAPTER_KEYS.PL_NSA,
     reason,
     documentId: identity.id,
@@ -1072,11 +1079,14 @@ export const assemblePlNsaDecision = ({
   const row = normalizePlNsaRow(source);
   const identity = plNsaIdentityOf(source);
   if (identity.kind !== "portal") {
-    logger.warn("case_law.ingestion.document_id_unrecognised", {
-      adapterKey: ADAPTER_KEYS.PL_NSA,
-      documentId: identity.id,
-      identityKind: identity.kind,
-    });
+    getIngestionDiagnosticsSink().warn(
+      "case_law.ingestion.document_id_unrecognised",
+      {
+        adapterKey: ADAPTER_KEYS.PL_NSA,
+        documentId: identity.id,
+        identityKind: identity.kind,
+      },
+    );
   }
 
   const snapshotPart: SnapshotPart = {
