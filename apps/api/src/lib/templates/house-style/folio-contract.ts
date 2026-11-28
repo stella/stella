@@ -557,6 +557,10 @@ export type SourceHeadersReport = {
      *  section's alone. */
     laterSectionParts?: number;
   };
+  /** Output headers and footers that show two page numbers: the
+   *  template's and the source's. Absent from an engine that does not
+   *  count them. */
+  pageNumbersTwice?: number;
 };
 
 /** The part of the engine's report the plan is repaired and the formatting

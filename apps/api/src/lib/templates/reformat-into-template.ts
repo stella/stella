@@ -400,6 +400,14 @@ const noteItemsOf = (
             ? []
             : [{ kind: "source_header_left_out", reason, count }],
       ),
+      ...((item.pageNumbersTwice ?? 0) === 0
+        ? []
+        : [
+            {
+              kind: "source_header_page_number_twice" as const,
+              count: item.pageNumbersTwice,
+            },
+          ]),
     ];
   }
   // The comments kept, and those that had no place.

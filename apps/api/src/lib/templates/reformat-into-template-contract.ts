@@ -77,6 +77,10 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
    *  heading) show as plain text in the output: they no longer jump.
    *  Check them against the document. */
   "internal_links_as_text",
+  /** `count` headers or footers of the output show two page numbers: the
+   *  template's own and the document's, which came along with its header
+   *  or footer. Delete the one that is not wanted. */
+  "source_header_page_number_twice",
   /** `count` comments of the document are in the output on the text they
    *  were made on. */
   "comments_kept",
