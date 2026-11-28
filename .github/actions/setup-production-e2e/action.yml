@@ -13,32 +13,20 @@ inputs:
     description: Optional Docker Hub token for image pulls
     required: false
     default: ""
-  scheduled-jobs-mode:
-    description: API SCHEDULED_JOBS_MODE (enabled or disabled); route-smoke / network-baseline runs disable background writers so scheduled tasks do not emit SSE invalidations during measurement
+  pause-native-extraction:
+    description: Pause documentProcessing.dispatchNativeExtraction.twoMinute while measuring route-smoke network baselines so uploaded fixture documents do not broadcast entity SSE invalidations mid-route
     required: false
-    default: "enabled"
+    default: "false"
 
 runs:
   using: composite
   steps:
     - name: Prepare environment
       shell: bash
-      env:
-        SCHEDULED_JOBS_MODE: ${{ inputs.scheduled-jobs-mode }}
       run: |
         cp apps/api/.env.example apps/api/.env
         # The route baseline measures the enabled usage endpoint's query budget.
         echo 'FEATURE_USAGE=true' >> apps/api/.env
-        case "$SCHEDULED_JOBS_MODE" in
-          enabled) ;;
-          disabled)
-            echo 'SCHEDULED_JOBS_MODE=disabled' >> apps/api/.env
-            ;;
-          *)
-            echo "::error::Unsupported scheduled-jobs-mode: $SCHEDULED_JOBS_MODE"
-            exit 1
-            ;;
-        esac
         cp apps/web/.env.example apps/web/.env
 
     - name: Start docker stack and API server
@@ -47,6 +35,23 @@ runs:
       with:
         dockerhub-username: ${{ inputs.dockerhub-username }}
         dockerhub-token: ${{ inputs.dockerhub-token }}
+
+    - name: Pause inline document extraction for network measurement
+      if: steps.stack.outcome == 'success' && inputs.pause-native-extraction == 'true'
+      shell: bash
+      run: |
+        for i in {1..60}; do
+          if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/ready > /dev/null 2>&1; then
+            break
+          fi
+          if [[ "$i" -eq 60 ]]; then
+            echo "::error::API never became ready before pausing scheduler job"
+            tail -200 /tmp/api.log || true
+            exit 1
+          fi
+          sleep 1
+        done
+        NODE_ENV=development STELLA_LOCAL_DEV=1 bun run --cwd apps/api scheduler:job-pause --           pause           --job documentProcessing.dispatchNativeExtraction.twoMinute           --for 1h           --reason "route-smoke network measurement"           --actor route-smoke           --apply
 
     - name: Install Playwright browsers
       if: steps.stack.outcome == 'success'

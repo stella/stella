@@ -5951,11 +5951,11 @@ test("route smoke consumes the production build and fails when its stack cannot 
   );
   const setup = rawSteps.find(({ id }) => id === "e2e-stack");
   expect(setup?.["uses"]).toBe("./.github/actions/setup-production-e2e");
-  expect(setup?.["with"]).toMatchObject({ "scheduled-jobs-mode": "disabled" });
+  expect(setup?.["with"]).toMatchObject({ "pause-native-extraction": "true" });
   expect(smoke?.if ?? "").not.toContain("always()");
 });
 
-test("network-baseline stacks disable API background writers while general E2E shards keep them enabled", () => {
+test("network-baseline stacks pause inline native extraction while general E2E shards keep it active", () => {
   const e2eShard = ciJobs["e2e-production-shard"];
   const shardSteps = flattenWorkflowSteps(
     typeof e2eShard === "object" && e2eShard !== null && "steps" in e2eShard
@@ -5965,7 +5965,7 @@ test("network-baseline stacks disable API background writers while general E2E s
   const shardSetup = shardSteps.find(({ id }) => id === "e2e-stack");
   expect(shardSetup?.["uses"]).toBe("./.github/actions/setup-production-e2e");
   expect(shardSetup?.["with"]).toMatchObject({
-    "scheduled-jobs-mode": `\${{ matrix.shard == 'network-baseline' && 'disabled' || 'enabled' }}`,
+    "pause-native-extraction": `\${{ matrix.shard == 'network-baseline' && 'true' || 'false' }}`,
   });
 
   for (const relPath of [
@@ -5995,7 +5995,7 @@ test("network-baseline stacks disable API background writers while general E2E s
       .find(({ uses }) => uses === "./.github/actions/setup-production-e2e");
     expect(stackStep, relPath).toBeDefined();
     expect(stackStep?.["with"], relPath).toMatchObject({
-      "scheduled-jobs-mode": "disabled",
+      "pause-native-extraction": "true",
     });
   }
 });
